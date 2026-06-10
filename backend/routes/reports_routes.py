@@ -260,6 +260,7 @@ async def get_sales_report(
         "delivery_company_name": 1,
         "driver_id": 1,
         "driver_name": 1,
+        "delivery_fee": 1,
         "packaging_cost": 1,
         "customer_name": 1,
         "created_at": 1,
@@ -405,6 +406,17 @@ async def get_sales_report(
     total_delivery_commission = sum(app["total_commission"] for app in by_app.values())
     total_delivery_net = sum(app["net_amount"] for app in by_app.values())
 
+    # 🚗 خدمة التوصيل الداخلية: أجور التوصيل المحصلة لسائقي المطعم (قيمها ضمن إجمالي المبيعات والنقدي)
+    _internal_delivery = [
+        o for o in paid_orders
+        if o.get("order_type") == "delivery"
+        and o.get("driver_id")
+        and not (o.get("is_delivery_company") or o.get("delivery_app") or o.get("delivery_app_name"))
+        and _sn(o.get("delivery_fee")) > 0
+    ]
+    internal_delivery_fees = sum(_sn(o.get("delivery_fee")) for o in _internal_delivery)
+    internal_delivery_orders_count = len(_internal_delivery)
+
     # ⭐ المجاميع موحّدة مع cost_breakdown_by_product (مصدر واحد للحقيقة)
     total_materials_cost = sum(v.get("materials_cost", 0) for v in by_product.values())
     total_packaging_cost = sum(v.get("packaging_cost", 0) for v in by_product.values())
@@ -421,6 +433,9 @@ async def get_sales_report(
         "total_orders": total_orders,
         "average_order_value": avg_order_value,
         "by_payment_method": by_payment,
+        # 🚗 خدمة التوصيل الداخلية (أجور التوصيل) — مدمجة ضمن النقدي وإجمالي المبيعات
+        "internal_delivery_fees": internal_delivery_fees,
+        "internal_delivery_orders_count": internal_delivery_orders_count,
         "by_order_type": by_type,
         "by_delivery_app": by_app,
         "delivery_summary": {

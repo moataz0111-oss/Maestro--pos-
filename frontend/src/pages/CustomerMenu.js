@@ -48,7 +48,7 @@ import {
   Bookmark,
   MessageSquare
 } from 'lucide-react';
-import { MapContainer, TileLayer, Marker, useMapEvents } from 'react-leaflet';
+import { MapContainer, TileLayer, Marker, Popup, Polyline, useMapEvents } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
 import L from 'leaflet';
 import { showApiError } from '../utils/apiError';
@@ -183,6 +183,10 @@ export default function CustomerMenu() {
   const [showAddressSuggestions, setShowAddressSuggestions] = useState(false);
   const [deliveryNotes, setDeliveryNotes] = useState('');
   const [deliveryLocation, setDeliveryLocation] = useState(null);
+  const [quotedFee, setQuotedFee] = useState(null);
+  const [quotedKm, setQuotedKm] = useState(null);
+  const [outOfRange, setOutOfRange] = useState(false);
+  const [maxKm, setMaxKm] = useState(0);
   const [paymentMethod, setPaymentMethod] = useState('cash');
   const [selectedBranch, setSelectedBranch] = useState(null);
   const [submitting, setSubmitting] = useState(false);
@@ -254,6 +258,42 @@ export default function CustomerMenu() {
       console.error('Payment status error:', error);
     }
   };
+  // تحديث الطلب الحالي تلقائياً أثناء التتبع (لإظهار أجور التوصيل وأي تغييرات على الفاتورة)
+  useEffect(() => {
+    if (step !== 'tracking' || !currentOrder?.id || !tenantId) return;
+    const iv = setInterval(async () => {
+      try {
+        const res = await axios.get(`${API}/customer/order/${tenantId}/${currentOrder.id}`);
+        if (res.data?.order) setCurrentOrder(res.data.order);
+      } catch (e) { /* noop */ }
+    }, 15000);
+    return () => clearInterval(iv);
+  }, [step, currentOrder?.id, tenantId]);
+  // تسعير أجور التوصيل تلقائياً حسب موقع الزبون (إن كانت أجور المسافة مفعلة)
+  useEffect(() => {
+    if (!deliveryLocation || !tenantId) { setQuotedFee(null); setQuotedKm(null); setOutOfRange(false); return; }
+    let cancelled = false;
+    axios.get(`${API}/customer/delivery-fee/${tenantId}`, {
+      params: { lat: deliveryLocation[0], lng: deliveryLocation[1], branch_id: selectedBranch || undefined }
+    }).then(res => {
+      if (cancelled) return;
+      if (res.data?.out_of_range) {
+        setOutOfRange(true);
+        setMaxKm(res.data.max_km || 0);
+        setQuotedKm(res.data.distance_km ?? null);
+        setQuotedFee(null);
+      } else if (res.data?.distance_based && res.data.fee != null) {
+        setOutOfRange(false);
+        setQuotedFee(res.data.fee);
+        setQuotedKm(res.data.distance_km);
+      } else {
+        setOutOfRange(false);
+        setQuotedFee(null);
+        setQuotedKm(null);
+      }
+    }).catch(() => {});
+    return () => { cancelled = true; };
+  }, [deliveryLocation, tenantId, selectedBranch]);
   // PWA Install handling - تحديث manifest للعملاء
   useEffect(() => {
     // تغيير manifest link لاستخدام manifest العملاء الجديد
@@ -764,7 +804,7 @@ export default function CustomerMenu() {
   };
   const cartTotal = cart.reduce((sum, item) => sum + (item.price * item.quantity), 0);
   const cartCount = cart.reduce((sum, item) => sum + item.quantity, 0);
-  const deliveryFee = restaurant?.delivery_fee || 0;
+  const deliveryFee = quotedFee !== null ? quotedFee : (restaurant?.delivery_fee || 0);
   const grandTotal = cartTotal + deliveryFee;
   // Save customer info
   const saveCustomerInfo = () => {
@@ -1092,7 +1132,7 @@ export default function CustomerMenu() {
       <div className="min-h-screen bg-gradient-to-br from-orange-50 to-red-50" dir="rtl">
         {/* Header مع شعار المطعم */}
         <header className="bg-gradient-to-r from-orange-500 to-red-500 text-white shadow-lg">
-          <div className="max-w-lg mx-auto px-4 py-6">
+          <div className="max-w-lg md:max-w-2xl lg:max-w-4xl mx-auto px-4 py-6">
             <div className="flex items-center gap-4">
               {/* شعار المطعم - يجلب من بيانات المطعم أو يعرض شعار افتراضي */}
               <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-amber-400 to-yellow-500 flex items-center justify-center shadow-lg border-2 border-white/30 overflow-hidden">
@@ -1124,7 +1164,7 @@ export default function CustomerMenu() {
         {/* Install Banner */}
         {showInstallBanner && (
           <div className="bg-gradient-to-r from-blue-500 to-purple-500 text-white px-4 py-3">
-            <div className="max-w-lg mx-auto flex items-center justify-between">
+            <div className="max-w-lg md:max-w-2xl lg:max-w-4xl mx-auto flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <Smartphone className="h-5 w-5" />
                 <span className="text-sm">{t('ثبّت التطبيق للوصول السريع')}</span>
@@ -1142,7 +1182,7 @@ export default function CustomerMenu() {
           </div>
         )}
         {/* Branch List */}
-        <main className="max-w-lg mx-auto px-4 py-6">
+        <main className="max-w-lg md:max-w-2xl lg:max-w-4xl mx-auto px-4 py-6">
           <h2 className="text-xl font-bold text-gray-800 mb-4 flex items-center gap-2">
             <Store className="h-6 w-6 text-orange-500" />
             الفروع المتاحة
@@ -1192,7 +1232,7 @@ export default function CustomerMenu() {
       <div className="min-h-screen bg-gray-50 pb-24" dir="rtl">
         {/* Header مع شعار المطعم */}
         <header className="sticky top-0 z-40 bg-gradient-to-r from-orange-500 to-red-500 text-white shadow-lg">
-          <div className="max-w-lg mx-auto px-4 py-4">
+          <div className="max-w-lg md:max-w-2xl lg:max-w-4xl mx-auto px-4 py-4">
             <div className="flex items-center gap-3">
               {/* شعار المطعم */}
               <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-amber-400 to-yellow-500 flex items-center justify-center shadow-md border border-white/30 overflow-hidden">
@@ -1278,7 +1318,7 @@ export default function CustomerMenu() {
         {/* Install Banner */}
         {showInstallBanner && (
           <div className="bg-gradient-to-r from-blue-500 to-purple-500 text-white px-4 py-2">
-            <div className="max-w-lg mx-auto flex items-center justify-between">
+            <div className="max-w-lg md:max-w-2xl lg:max-w-4xl mx-auto flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <Download className="h-4 w-4" />
                 <span className="text-sm">{t('ثبّت التطبيق')}</span>
@@ -1292,7 +1332,7 @@ export default function CustomerMenu() {
         )}
         {/* Search */}
         <div className="sticky top-[72px] z-30 bg-white border-b px-4 py-2 shadow-sm">
-          <div className="max-w-lg mx-auto relative">
+          <div className="max-w-lg md:max-w-2xl lg:max-w-4xl mx-auto relative">
             <Search className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
             <Input
               placeholder={t('ابحث عن منتج')}
@@ -1305,7 +1345,7 @@ export default function CustomerMenu() {
         </div>
         {/* Categories */}
         <div className="sticky top-[128px] z-30 bg-white border-b shadow-sm">
-          <div className="max-w-lg mx-auto px-4 py-3 overflow-x-auto">
+          <div className="max-w-lg md:max-w-2xl lg:max-w-4xl mx-auto px-4 py-3 overflow-x-auto">
             <div className="flex gap-2" style={{scrollBehavior: 'smooth'}}>
               <Button
                 variant="default"
@@ -1338,13 +1378,13 @@ export default function CustomerMenu() {
           </div>
         </div>
         {/* Products */}
-        <main className="max-w-lg mx-auto px-4 py-4">
+        <main className="max-w-lg md:max-w-2xl lg:max-w-4xl mx-auto px-4 py-4">
           {filteredProducts.length === 0 ? (
             <div className="text-center py-12 text-gray-500">
               <p>{t('لا توجد منتجات')}</p>
             </div>
           ) : (
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
               {filteredProducts.map(product => (
                 <Card key={product.id} className="overflow-hidden hover:shadow-lg transition-shadow" data-testid={`product-${product.id}`}>
                   <div className="aspect-square relative bg-gray-100">
@@ -1398,7 +1438,7 @@ export default function CustomerMenu() {
         {/* Cart Button */}
         {cart.length > 0 && (
           <div className="fixed bottom-0 left-0 right-0 p-4 bg-white border-t shadow-lg z-50">
-            <div className="max-w-lg mx-auto">
+            <div className="max-w-lg md:max-w-2xl lg:max-w-4xl mx-auto">
               <Button 
                 className="w-full h-14 text-lg gap-2 bg-gradient-to-r from-orange-500 to-red-500 hover:from-orange-600 hover:to-red-600" 
                 onClick={() => setStep('cart')}
@@ -1422,7 +1462,7 @@ export default function CustomerMenu() {
       <div className="min-h-screen bg-gray-50" dir="rtl">
         {/* Header */}
         <header className="sticky top-0 z-40 bg-white border-b shadow-sm">
-          <div className="max-w-lg mx-auto px-4 py-4 flex items-center gap-3">
+          <div className="max-w-lg md:max-w-2xl lg:max-w-4xl mx-auto px-4 py-4 flex items-center gap-3">
             <Button variant="ghost" size="icon" onClick={() => setStep('menu')}>
               <ArrowRight className="h-5 w-5" />
             </Button>
@@ -1433,7 +1473,7 @@ export default function CustomerMenu() {
             <Badge className="bg-orange-500">{cartCount}</Badge>
           </div>
         </header>
-        <main className="max-w-lg mx-auto px-4 py-4 pb-32">
+        <main className="max-w-lg md:max-w-2xl lg:max-w-4xl mx-auto px-4 py-4 pb-32">
           {cart.length === 0 ? (
             <div className="text-center py-12 text-gray-500">
               <ShoppingCart className="h-16 w-16 mx-auto mb-4 text-gray-300" />
@@ -1487,13 +1527,13 @@ export default function CustomerMenu() {
         {/* Bottom Actions */}
         {cart.length > 0 && (
           <div className="fixed bottom-0 left-0 right-0 bg-white border-t shadow-lg p-4">
-            <div className="max-w-lg mx-auto space-y-3">
+            <div className="max-w-lg md:max-w-2xl lg:max-w-4xl mx-auto space-y-3">
               <div className="flex justify-between text-sm">
                 <span>{t('المجموع الفرعي')}</span>
                 <span>{formatPrice(cartTotal)}</span>
               </div>
               <div className="flex justify-between text-sm">
-                <span>{t('رسوم التوصيل')}</span>
+                <span>{t('رسوم التوصيل')}{quotedKm !== null && <span className="text-xs text-blue-500"> ({quotedKm} {t('كم')} 🗺️)</span>}</span>
                 <span>{formatPrice(deliveryFee)}</span>
               </div>
               <div className="flex justify-between font-bold text-lg pt-2 border-t">
@@ -1532,14 +1572,14 @@ export default function CustomerMenu() {
       <div className="min-h-screen bg-gray-50" dir="rtl">
         {/* Header */}
         <header className="sticky top-0 z-40 bg-white border-b shadow-sm">
-          <div className="max-w-lg mx-auto px-4 py-4 flex items-center gap-3">
+          <div className="max-w-lg md:max-w-2xl lg:max-w-4xl mx-auto px-4 py-4 flex items-center gap-3">
             <Button variant="ghost" size="icon" onClick={() => setStep('cart')}>
               <ArrowRight className="h-5 w-5" />
             </Button>
             <h1 className="text-xl font-bold">{t('إتمام الطلب')}</h1>
           </div>
         </header>
-        <main className="max-w-lg mx-auto px-4 py-4 pb-32">
+        <main className="max-w-lg md:max-w-2xl lg:max-w-4xl mx-auto px-4 py-4 pb-32">
           <div className="space-y-4">
             {/* Customer Info */}
             <Card>
@@ -1848,7 +1888,7 @@ export default function CustomerMenu() {
                       <span>{formatPrice(cartTotal)}</span>
                     </div>
                     <div className="flex justify-between">
-                      <span>{t('التوصيل')}</span>
+                      <span>{t('التوصيل')}{quotedKm !== null && <span className="text-xs text-blue-500"> ({quotedKm} {t('كم')} 🗺️)</span>}</span>
                       <span>{formatPrice(deliveryFee)}</span>
                     </div>
                     <div className="flex justify-between font-bold text-lg mt-2 pt-2 border-t">
@@ -1863,11 +1903,17 @@ export default function CustomerMenu() {
         </main>
         {/* Submit Button */}
         <div className="fixed bottom-0 left-0 right-0 bg-white border-t shadow-lg p-4">
-          <div className="max-w-lg mx-auto">
+          <div className="max-w-lg md:max-w-2xl lg:max-w-4xl mx-auto">
+            {outOfRange && (
+              <div className="mb-2 p-3 rounded-xl bg-red-50 border border-red-300 text-red-600 text-sm text-center font-medium" data-testid="out-of-range-alert">
+                ⚠️ {t('عذراً، موقعك خارج نطاق التوصيل')}
+                {quotedKm !== null && <span> ({quotedKm} {t('كم')} — {t('الحد الأقصى')} {maxKm} {t('كم')})</span>}
+              </div>
+            )}
             <Button 
               className="w-full h-14 text-lg bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700"
               onClick={handleSubmitOrder}
-              disabled={submitting || processingPayment}
+              disabled={submitting || processingPayment || outOfRange}
               data-testid="submit-order-btn"
             >
               {submitting || processingPayment ? (
@@ -1923,7 +1969,7 @@ export default function CustomerMenu() {
       <div className="min-h-screen bg-gray-50" dir="rtl">
         {/* Header */}
         <header className="sticky top-0 z-40 bg-gradient-to-r from-blue-500 to-purple-500 text-white shadow-lg">
-          <div className="max-w-lg mx-auto px-4 py-4">
+          <div className="max-w-lg md:max-w-2xl lg:max-w-4xl mx-auto px-4 py-4">
             <div className="flex items-center gap-3">
               <button
                 onClick={() => setStep('menu')}
@@ -1939,7 +1985,7 @@ export default function CustomerMenu() {
             </div>
           </div>
         </header>
-        <main className="max-w-lg mx-auto px-4 py-4 space-y-3">
+        <main className="max-w-lg md:max-w-2xl lg:max-w-4xl mx-auto px-4 py-4 space-y-3">
           {orderHistory.length === 0 ? (
             <div className="text-center py-12">
               <Package className="h-16 w-16 text-gray-300 mx-auto mb-4" />
@@ -2070,6 +2116,42 @@ export default function CustomerMenu() {
         const interval = setInterval(fetchDriverInfo, 10000);
         return () => clearInterval(interval);
       }, []);
+
+      const [contactOpen, setContactOpen] = React.useState(false);
+      const [chatOpen, setChatOpen] = React.useState(false);
+      const [chatMessages, setChatMessages] = React.useState([]);
+      const [chatText, setChatText] = React.useState('');
+      const [routeLine, setRouteLine] = React.useState([]);
+
+      // خط السير الدقيق على الطرق (OSRM مجاني)
+      React.useEffect(() => {
+        const cl = driverInfo?.driver?.current_location;
+        const dl = driverInfo?.delivery_location;
+        if (!cl?.latitude || !cl?.longitude || !dl?.latitude || !dl?.longitude) { setRouteLine([]); return; }
+        const url = `https://router.project-osrm.org/route/v1/driving/${cl.longitude},${cl.latitude};${dl.longitude},${dl.latitude}?overview=full&geometries=geojson`;
+        let active = true;
+        fetch(url).then(r => r.json()).then(data => {
+          if (!active) return;
+          const coords = data?.routes?.[0]?.geometry?.coordinates;
+          if (coords) setRouteLine(coords.map(c => [c[1], c[0]]));
+        }).catch(() => {});
+        return () => { active = false; };
+      }, [driverInfo?.driver?.current_location?.latitude, driverInfo?.driver?.current_location?.longitude, driverInfo?.delivery_location?.latitude, driverInfo?.delivery_location?.longitude]);
+
+      // محادثة داخل التطبيق (تحديث كل ٣ ثوانٍ عند الفتح)
+      React.useEffect(() => {
+        if (!chatOpen) return;
+        const load = async () => {
+          try {
+            const res = await axios.get(`${API}/order-chat/${currentOrder.id}`);
+            setChatMessages(res.data.messages || []);
+          } catch (e) { /* noop */ }
+        };
+        load();
+        const iv = setInterval(load, 3000);
+        return () => clearInterval(iv);
+      }, [chatOpen]);
+
       if (loadingDriver) {
         return (
           <div className="flex items-center justify-center py-8">
@@ -2088,6 +2170,32 @@ export default function CustomerMenu() {
       }
       const driver = driverInfo.driver;
       const hasLocation = driver.current_location?.latitude && driver.current_location?.longitude;
+      const digits = (driver.phone || '').replace(/\D/g, '');
+      const waPhone = digits.startsWith('964') ? digits : '964' + digits.replace(/^0/, '');
+
+      const sendChat = async () => {
+        const text = chatText.trim();
+        if (!text) return;
+        setChatText('');
+        try {
+          await axios.post(`${API}/order-chat/${currentOrder.id}`, {
+            sender: 'customer',
+            sender_name: currentOrder.customer_name || 'الزبون',
+            text
+          });
+          const res = await axios.get(`${API}/order-chat/${currentOrder.id}`);
+          setChatMessages(res.data.messages || []);
+        } catch (e) { toast.error('تعذّر إرسال الرسالة'); }
+      };
+
+      const contactOptions = [
+        { key: 'inapp-chat', label: 'رسالة داخل التطبيق', icon: '💬', action: () => { setContactOpen(false); setChatOpen(true); } },
+        { key: 'inapp-call', label: 'اتصال داخل التطبيق', icon: '🎙️', action: () => { setContactOpen(false); toast('ميزة الاتصال الصوتي داخل التطبيق قادمة قريباً', { icon: '🔜' }); } },
+        { key: 'call', label: 'اتصال عادي', icon: '📞', href: `tel:${driver.phone}` },
+        { key: 'sms', label: 'رسالة نصية (SMS)', icon: '✉️', href: `sms:${driver.phone}` },
+        { key: 'wa-call', label: 'اتصال واتساب', icon: '🟢', href: `https://wa.me/${waPhone}` },
+        { key: 'wa-msg', label: 'رسالة واتساب', icon: '🟩', href: `https://wa.me/${waPhone}?text=${encodeURIComponent('مرحباً، بخصوص طلبي رقم #' + (currentOrder.order_number || ''))}` },
+      ];
       return (
         <div className="space-y-4">
           {/* معلومات السائق */}
@@ -2104,12 +2212,14 @@ export default function CustomerMenu() {
                 </p>
               )}
             </div>
-            <a
-              href={`tel:${driver.phone}`}
+            <button
+              type="button"
+              onClick={() => setContactOpen(true)}
+              data-testid="driver-contact-btn"
               className="w-12 h-12 rounded-full bg-green-500 hover:bg-green-600 flex items-center justify-center text-white shadow-lg transition-transform hover:scale-110"
             >
               <Phone className="h-5 w-5" />
-            </a>
+            </button>
           </div>
           {/* خريطة تتبع السائق */}
           {hasLocation && (
@@ -2176,6 +2286,11 @@ export default function CustomerMenu() {
                     </Popup>
                   </Marker>
                   
+                  {/* خط السير الدقيق على الطرق */}
+                  {routeLine.length > 0 && (
+                    <Polyline positions={routeLine} pathOptions={{ color: '#3b82f6', weight: 5, opacity: 0.85 }} />
+                  )}
+
                   {/* موقع التوصيل */}
                   {driverInfo.delivery_location && (
                     <Marker 
@@ -2240,6 +2355,74 @@ export default function CustomerMenu() {
               <p className="text-sm text-yellow-600">سيتم تحديث الموقع عند تحركه</p>
             </div>
           )}
+
+          {/* قائمة التواصل مع السائق */}
+          {contactOpen && (
+            <div className="fixed inset-0 z-[1000] flex items-end justify-center bg-black/50" onClick={() => setContactOpen(false)} data-testid="driver-contact-sheet">
+              <div className="w-full max-w-md bg-white rounded-t-3xl p-4 pb-8" onClick={(e) => e.stopPropagation()}>
+                <div className="w-12 h-1.5 bg-gray-300 rounded-full mx-auto mb-4"></div>
+                <div className="flex items-center gap-3 mb-4">
+                  <div className="w-12 h-12 rounded-full bg-gradient-to-br from-blue-500 to-green-500 flex items-center justify-center text-white text-lg font-bold">{driver.name?.[0] || '🚚'}</div>
+                  <div>
+                    <p className="font-bold text-gray-800">{driver.name}</p>
+                    <p className="text-sm text-gray-500">{driver.phone}</p>
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  {contactOptions.map(opt => opt.href ? (
+                    <a key={opt.key} href={opt.href} target="_blank" rel="noreferrer" onClick={() => setContactOpen(false)} data-testid={`contact-opt-${opt.key}`}
+                       className="flex items-center gap-2 p-3 rounded-xl bg-gray-50 hover:bg-gray-100 border border-gray-200 transition-colors">
+                      <span className="text-2xl">{opt.icon}</span>
+                      <span className="text-sm font-medium text-gray-700">{opt.label}</span>
+                    </a>
+                  ) : (
+                    <button key={opt.key} type="button" onClick={opt.action} data-testid={`contact-opt-${opt.key}`}
+                       className="flex items-center gap-2 p-3 rounded-xl bg-gray-50 hover:bg-gray-100 border border-gray-200 transition-colors text-right">
+                      <span className="text-2xl">{opt.icon}</span>
+                      <span className="text-sm font-medium text-gray-700">{opt.label}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* غرفة المحادثة داخل التطبيق */}
+          <Dialog open={chatOpen} onOpenChange={setChatOpen}>
+            <DialogContent className="max-w-md p-0 gap-0 h-[80vh] flex flex-col" data-testid="driver-chat-dialog">
+              <DialogTitle className="sr-only">محادثة السائق</DialogTitle>
+              <div className="flex items-center justify-between gap-2 p-3 bg-gradient-to-r from-blue-600 to-green-500 text-white rounded-t-lg">
+                <div className="flex items-center gap-2">
+                  <div className="w-9 h-9 rounded-full bg-white/20 flex items-center justify-center font-bold">{driver.name?.[0] || '🚚'}</div>
+                  <div>
+                    <p className="font-bold text-sm">{driver.name}</p>
+                    <p className="text-xs text-blue-100">السائق</p>
+                  </div>
+                </div>
+                <a href={`tel:${driver.phone}`} className="w-9 h-9 rounded-full bg-white/20 hover:bg-white/30 flex items-center justify-center" data-testid="chat-call-btn">
+                  <Phone className="h-4 w-4" />
+                </a>
+              </div>
+              <div className="flex-1 overflow-y-auto p-3 space-y-2 bg-gray-50">
+                {chatMessages.length === 0 ? (
+                  <p className="text-center text-sm text-gray-400 py-8">ابدأ المحادثة مع السائق</p>
+                ) : chatMessages.map(m => (
+                  <div key={m.id} className={`flex ${m.sender === 'customer' ? 'justify-end' : 'justify-start'}`}>
+                    <div className={`max-w-[75%] px-3 py-2 rounded-2xl text-sm ${m.sender === 'customer' ? 'bg-green-500 text-white rounded-br-sm' : 'bg-white border rounded-bl-sm'}`}>
+                      {m.text}
+                    </div>
+                  </div>
+                ))}
+              </div>
+              <div className="p-3 border-t flex items-center gap-2 bg-white rounded-b-lg">
+                <Input value={chatText} onChange={(e) => setChatText(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') sendChat(); }}
+                  placeholder="اكتب رسالة..." data-testid="chat-input" />
+                <Button type="button" onClick={sendChat} data-testid="chat-send-btn" className="bg-green-500 hover:bg-green-600">
+                  <ArrowLeft className="h-4 w-4" />
+                </Button>
+              </div>
+            </DialogContent>
+          </Dialog>
         </div>
       );
     };
@@ -2247,15 +2430,31 @@ export default function CustomerMenu() {
       <div className="min-h-screen bg-gradient-to-br from-green-50 to-blue-50" dir="rtl">
         {/* Header */}
         <header className="bg-gradient-to-r from-green-500 to-green-600 text-white shadow-lg">
-          <div className="max-w-lg mx-auto px-4 py-6 text-center">
+          <div className="max-w-lg md:max-w-2xl lg:max-w-4xl mx-auto px-4 py-6 text-center">
             <CheckCircle className="h-12 w-12 mx-auto mb-2" />
             <h1 className="text-2xl font-bold">تم استلام طلبك!</h1>
             <p className="text-green-100">رقم الطلب: #{currentOrder.order_number}</p>
+            <button
+              type="button"
+              data-testid="share-tracking-link"
+              onClick={() => {
+                const link = `${window.location.origin}/track/${currentOrder.id}`;
+                if (navigator.share) {
+                  navigator.share({ title: 'تتبّع طلبي', text: `تابع طلبي #${currentOrder.order_number}`, url: link }).catch(() => {});
+                } else {
+                  navigator.clipboard?.writeText(link);
+                  toast.success('تم نسخ رابط التتبّع');
+                }
+              }}
+              className="mt-3 inline-flex items-center gap-2 bg-white/20 hover:bg-white/30 text-white text-sm px-4 py-2 rounded-full transition-colors"
+            >
+              <Navigation className="h-4 w-4" /> مشاركة رابط التتبّع
+            </button>
           </div>
         </header>
-        <main className="max-w-lg mx-auto px-4 py-6 space-y-4">
-          {/* Driver Tracking - يظهر عندما يكون الطلب في مرحلة التوصيل */}
-          {(currentOrder.status === 'out_for_delivery' || currentOrder.driver_id) && (
+        <main className="max-w-lg md:max-w-2xl lg:max-w-4xl mx-auto px-4 py-6 space-y-4">
+          {/* Driver Tracking - يظهر لطلبات التوصيل (يتحدّث تلقائياً عند إسناد السائق) */}
+          {(currentOrder.order_type === 'delivery' || currentOrder.status === 'out_for_delivery' || currentOrder.driver_id) && (
             <Card className="border-2 border-green-200">
               <CardContent className="p-4">
                 <h2 className="font-bold mb-4 flex items-center gap-2">
@@ -2307,8 +2506,14 @@ export default function CustomerMenu() {
             <CardContent className="p-4 space-y-3">
               <h2 className="font-bold">تفاصيل الطلب</h2>
               <div className="text-sm space-y-2">
+                {Number(currentOrder.delivery_fee) > 0 && (
+                  <div className="flex justify-between" data-testid="order-delivery-fee">
+                    <span className="text-gray-500">🚗 {t('رسوم خدمة التوصيل')}</span>
+                    <span className="font-medium text-blue-600">{formatPrice(currentOrder.delivery_fee)}</span>
+                  </div>
+                )}
                 <div className="flex justify-between">
-                  <span className="text-gray-500">المجموع</span>
+                  <span className="text-gray-500">{Number(currentOrder.delivery_fee) > 0 ? t('المجموع الكلي (شامل التوصيل)') : t('المجموع')}</span>
                   <span className="font-bold text-orange-600">{formatPrice(currentOrder.total)}</span>
                 </div>
                 <div className="flex justify-between">

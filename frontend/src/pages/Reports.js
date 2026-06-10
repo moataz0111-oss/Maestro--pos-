@@ -477,6 +477,12 @@ const ComprehensiveReportTab = ({
           color="orange"
         />
         <StatBox 
+          icon={Truck} 
+          label={t('خدمة توصيل داخلية')} 
+          value={formatPrice(salesReport?.internal_delivery_fees || 0)} 
+          color="green"
+        />
+        <StatBox 
           icon={ShoppingCart} 
           label={t('المشتريات')} 
           value={formatPrice(purchasesReport?.total_purchases || 0)} 
@@ -1486,7 +1492,8 @@ const CashRegisterClosingTab = ({ t, formatPrice, selectedBranchId, branches, ge
         <div class="section">
           <div class="section-title">حسب طريقة الدفع</div>
           <div class="row"><span class="row-label">نقدي</span><span class="row-value green">${formatPrice(report?.by_payment_method?.cash?.total || 0)}</span></div>
-          ${(report?.by_payment_method?.driver_cash?.total || 0) > 0 ? `<div class="row"><span class="row-label">نقدي السائقين</span><span class="row-value green">${formatPrice(report.by_payment_method.driver_cash.total)}</span></div>` : ''}
+          ${(report?.by_payment_method?.driver_cash?.total || 0) > 0 ? `<div class="row"><span class="row-label">توصيل داخلي</span><span class="row-value green">${formatPrice(report.by_payment_method.driver_cash.total)}</span></div>` : ''}
+          ${(report?.by_payment_method?.internal_delivery_fees?.total || 0) > 0 ? `<div class="row"><span class="row-label">خدمة توصيل داخلية (ضمن النقدي)</span><span class="row-value green">${formatPrice(report.by_payment_method.internal_delivery_fees.total)}</span></div>` : ''}
           <div class="row"><span class="row-label">بطاقة</span><span class="row-value blue">${formatPrice(report?.by_payment_method?.card?.total || 0)}</span></div>
           <div class="row"><span class="row-label">آجل</span><span class="row-value orange">${formatPrice(report?.by_payment_method?.credit?.total || 0)}</span></div>
           ${Object.entries(report?.delivery_apps || {}).map(([name, data]) => 
@@ -2066,9 +2073,17 @@ const CashRegisterClosingTab = ({ t, formatPrice, selectedBranchId, branches, ge
                 {(report.by_payment_method?.driver_cash?.total || 0) > 0 && (
                   <div className="flex justify-between items-center p-2 rounded bg-gray-800/30">
                     <span className="text-gray-300 flex items-center gap-2">
-                      <Truck className="h-4 w-4 text-emerald-400" /> {t('نقدي السائقين')}
+                      <Truck className="h-4 w-4 text-emerald-400" /> {t('توصيل داخلي')}
                     </span>
                     <span className="font-bold text-emerald-400" data-testid="driver-cash-total">{formatPrice(report.by_payment_method.driver_cash.total)}</span>
+                  </div>
+                )}
+                {(report.by_payment_method?.internal_delivery_fees?.total || 0) > 0 && (
+                  <div className="flex justify-between items-center p-2 rounded bg-emerald-900/20 border border-emerald-700/30">
+                    <span className="text-emerald-300 flex items-center gap-2 text-sm">
+                      <Truck className="h-4 w-4 text-emerald-400" /> {t('خدمة توصيل داخلية')} <span className="text-[10px] text-gray-400">({t('ضمن النقدي')})</span>
+                    </span>
+                    <span className="font-bold text-emerald-400" data-testid="internal-delivery-fees-total">{formatPrice(report.by_payment_method.internal_delivery_fees.total)}</span>
                   </div>
                 )}
                 <div className="flex justify-between items-center p-2 rounded bg-gray-800/30">
@@ -4256,6 +4271,20 @@ export default function Reports() {
                             </div>
                           );
                         })}
+                        {/* 🚗 خدمة التوصيل الداخلية (أجور التوصيل) — مدمجة ضمن النقدي/توصيل داخلي */}
+                        {(salesReport?.internal_delivery_fees || 0) > 0 && (
+                          <div
+                            className="mt-2 p-2 rounded-md bg-emerald-500/10 border border-emerald-500/30 flex justify-between items-center"
+                            data-testid="internal-delivery-fees-row"
+                          >
+                            <span className="text-xs font-bold text-emerald-700 dark:text-emerald-400">
+                              🚗 {t('خدمة توصيل داخلية')} ({salesReport.internal_delivery_orders_count} {t('طلب')}) <span className="opacity-70">({t('ضمن النقدي')})</span>
+                            </span>
+                            <span className="font-bold text-emerald-700 dark:text-emerald-400 tabular-nums">
+                              {formatPrice(salesReport.internal_delivery_fees)}
+                            </span>
+                          </div>
+                        )}
                         {/* ⭐ ملخّص الطلبات المعلقة منفصل عن طرق الدفع (لتطابق تقرير إغلاق الصندوق) */}
                         {salesReport?.pending_orders_summary?.count > 0 && (
                           <div

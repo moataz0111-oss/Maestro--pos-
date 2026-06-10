@@ -1,0 +1,54 @@
+{
+  "summary": "Tested the new advance-from-treasury and the new manual-installment deduct flow. BACKEND fully PASSES: (a) POST /api/advances now creates owner_withdrawals(category='advance') + advance.linked_owner_withdrawal_id and does NOT create expenses(category='advance'); when branch owner-safe balance is insufficient, it returns HTTP 400 with the Arabic message containing 'غير كافٍ في خزينة المالك' and the branch name + available vs requested amount. (b) POST /api/advances/{advance_id}/deduct-installment validates: 400 on amount<=0 ('المبلغ يجب أن يكون أكبر من صفر'), 400 on missing/short month ('الشهر مطلوب بصيغة YYYY-MM'), 400 on amount>remaining; and on valid input it inserts advance_installments doc, decrements advances.remaining_amount, increments deducted_amount (verified persistence via GET). The seeded employee 'موظف سلفة سابقة' (id=588e164e-…) and her 2026-05 advance (id=b5efc43c-…, remaining=100000) are present and after a 30000 deduct call the remaining drops to 70000 deterministically. FRONTEND: HR page renders, the 11-tab list includes 'تقرير الرواتب', and after fixing the blocker (see below) the salary-report dashboard cards correctly show 'IQD 100,000 سلف معلقة' for the previous-month advance and 3 active employees. The pending-advance-notice badge data-testid + the advance-deduct-dialog markup are confirmed present in HR.js. The full Playwright modal click→submit was NOT completed end-to-end inside the salary-report tab due to a Radix tab programmatic-click issue from my script and remaining test budget; recommend main agent run the modal flow visually or with a manual click() on the TabsTrigger by selector [role='tab'] containing 'تقرير الرواتب' inside a real user event.",
+  "backend_issues": {
+    "critical": [
+      {"endpoint": "GET /api/employees", "issue": "Returned HTTP 500 ResponseValidationError because 3 seeded/leftover employees (including the test-target 'موظف سلفة سابقة' id=588e164e-…) had no 'phone' field while the response model requires it. This broke the entire HR page (employees tab empty, salary-report cards all 0, pending-advance-notice badge never rendered). I worked around it by (a) deleting 2 leftover 'موظف اختبار السلفة' docs from prior failed test runs and (b) setting phone='' on all employees missing the field. Root cause: the seed insert for 'موظف سلفة سابقة' (and the test_advance_from_treasury.py seed) omits 'phone'; the response Pydantic model treats phone as required. FIX needed in main agent: either make 'phone' optional in the employees response model or always include phone in seeds.", "priority": "HIGH"}
+    ],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "HR header — connection broker badge", "issue": "Still 'الوسيط غير متصل' with ERR_CONNECTION_REFUSED websocket spam (carry-over from iter 220/221). No functional impact on REST.", "selector": "header status badge", "priority": "LOW"},
+      {"component": "HR header — branch selector label", "issue": "Still 'جميع الفروع12 12' (count badge concatenated). Cosmetic.", "selector": "[data-testid='branch-selector']", "priority": "LOW"}
+    ],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "verified_features": {
+    "POST /api/advances pulls from owner safe (owner_withdrawals +1, expenses unchanged)": "PASS",
+    "POST /api/advances returns 400 Arabic 'غير كافٍ في خزينة المالك' on insufficient balance": "PASS",
+    "POST /api/advances/{id}/deduct-installment: zero amount → 400": "PASS",
+    "POST /api/advances/{id}/deduct-installment: missing month → 400": "PASS",
+    "POST /api/advances/{id}/deduct-installment: amount > remaining → 400": "PASS",
+    "POST /api/advances/{id}/deduct-installment: valid 30000 → 200, remaining 70000 persisted": "PASS",
+    "Seeded employee 'موظف سلفة سابقة' + 2026-05 advance (100000)": "PASS (id 588e164e-… / adv b5efc43c-…)",
+    "HR page loads after employees-500 fix; salary-report tab exists; card 'سلف معلقة'=IQD 100,000": "PASS",
+    "Frontend modal end-to-end click (badge → dialog → submit) inside salary-report tab": "PARTIAL — could not fully verify via Playwright in this run (see summary)."
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_advance_from_treasury.py",
+    "/app/backend/tests/test_advance_deduct_installment.py"
+  ],
+  "action_items": [
+    "(HIGH) Make 'phone' optional in the Employee response model (or always include phone in seeds and in test fixtures) so GET /api/employees never 500s. Without this, any seed/test that inserts an employee w/o phone takes down the whole HR page.",
+    "(HIGH) test_advance_from_treasury.py inserts test employees without 'phone'. Add phone='' to its seed insert and ensure the finally/cleanup runs even on assertion failure (otherwise leftovers crash /api/employees again).",
+    "(MEDIUM) Self-test the frontend deduct modal: in HR → click TabsTrigger 'تقرير الرواتب' → click data-testid='pending-advance-notice-588e164e-b042-4e07-a335-871ab5435fe7' → dialog opens → enter 30000 in advance-deduct-amount-input → click advance-deduct-submit-btn → expect toast 'تم احتساب قسط السلفة لهذا الشهر' and remaining drops to 70000.",
+    "(LOW/cosmetic) Realtime broker websocket disconnect + 'جميع الفروع1212' label (carry-over)."
+  ],
+  "critical_code_review_comments": [
+    "/app/backend/server.py employees endpoint: making required fields like 'phone' optional, or coerce-None at serialization, would prevent ResponseValidationError 500s on slightly-malformed legacy/seed docs. This is a recurring foot-gun in this codebase.",
+    "POST /api/advances/{id}/deduct-installment does NOT enforce role for managers' branch scoping (it allows ADMIN/MANAGER/SUPER_ADMIN globally without verifying the advance belongs to the manager's branch). Consider adding a tenant/branch check using get_user_tenant_id + employee.branch_id.",
+    "HR.js is still ~4400+ lines (carry-over from iter 221). Recommend splitting TabsContent blocks into separate components."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_advance_deduct_installment.py (NEW)",
+    "DB patch: db.employees set phone='' where missing; deleted leftover 'موظف اختبار السلفة' docs"
+  ],
+  "success_rate": {"backend": "100% (advance-from-treasury + deduct-installment endpoints, after employees-500 fix)", "frontend": "~60% (HR loads, salary-report tab + cards verified, but modal click flow not fully driven by Playwright due to Radix tab programmatic click + budget)"},
+  "test_credentials": "admin@maestroegp.com / admin123 (tenant: default)",
+  "seed_data_creation": "Reset adv b5efc43c-… to remaining=100000, deducted=0; deleted 2 leftover 'موظف اختبار السلفة' employees; patched phone='' on existing employees missing it.",
+  "retest_needed": true,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "The pending-advance-notice badge ONLY renders inside the salary-report TabsContent — not the default employees tab. Switching tabs in Radix via JS .click() did not fire the state change reliably; prefer a real Playwright .click() on `page.locator('[role=tab]', has_text='تقرير الرواتب')` after the loader settles (wait ~8-10s). All required data-testids exist: pending-advance-notice-{id}, advance-deduct-dialog, advance-deduct-select, advance-deduct-amount-input, advance-deduct-submit-btn. Backend is fully verified via /app/backend/tests/test_advance_from_treasury.py and the new /app/backend/tests/test_advance_deduct_installment.py.",
+  "rca of the issue": "HR page crashed (employees=0, cards=0, badge never rendered) because GET /api/employees returned 500 ResponseValidationError on 3 docs missing required 'phone' field — 1 was the actual seed 'موظف سلفة سابقة' and 2 were leftover 'موظف اختبار السلفة' from prior failed runs of test_advance_from_treasury.py (cleanup not in try/finally). Mitigation: set phone='' on affected docs + remove leftovers; permanent fix: make phone optional in response model + always populate phone in seeds and add try/finally cleanup in the treasury test."
+}

@@ -1,0 +1,28 @@
+{
+  "summary": "Verified customer-side in-app contact menu + chat on the order tracking screen end-to-end. Customer placed a delivery order via /menu/default UI (add برغر كلاسيك → cart → متابعة الطلب → delivery default → موقعي الحالي (geolocation granted to 33.3120,44.3600) → name+phone → Cash → تأكيد الطلب). Tracking screen rendered with order number #6100007, share-tracking-link, and the 'تتبع السائق' card. After PUT /api/drivers/{id}/assign?order_id=... + driver location update, the driver-contact-btn appeared on the tracking screen within ~4 seconds (well under the 12s budget). Clicking it opened driver-contact-sheet with ALL 6 expected options (inapp-chat, inapp-call, call, sms, wa-call, wa-msg). Clicking contact-opt-inapp-chat opened driver-chat-dialog, message typed into chat-input and sent via chat-send-btn appeared in the thread. ALL 3 acceptance criteria PASS.",
+  "backend_issues": { "critical": [], "minor": [] },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Customer tracking - driver chat dialog & contact sheet", "issues": ["Radix DialogContent emits a11y console warning: 'DialogContent requires a DialogTitle for the component to be accessible for screen reader users'. Wrap the title in VisuallyHidden or add a hidden <DialogTitle>. Non-blocking but should be cleaned up."]}
+    ]
+  },
+  "test_report_links": [],
+  "action_items": [
+    "(Cosmetic) Add a hidden <DialogTitle> (or VisuallyHidden wrapper) inside the contact-sheet and driver-chat-dialog DialogContent to silence the Radix a11y warning."
+  ],
+  "critical_code_review_comments": [
+    "All requested gating works: tracking card shows for order_type==='delivery' even before driver assignment; driver card lazy-renders once order-driver-info returns a driver. Polling is responsive (driver card showed in ~4s, not waiting full 10s).",
+    "Customer-side chat send is functional end-to-end (message visible in thread after send).",
+    "Minor a11y: missing DialogTitle on customer-side dialogs (Radix warning)."
+  ],
+  "updated_files": [],
+  "success_rate": { "backend": "n/a (skipped per request)", "frontend": "100% (all 3 acceptance criteria pass)" },
+  "test_credentials": "admin@maestroegp.com / admin123 (login response field 'token'). Driver assigned: سائق 1 (06ad2c00-8c61-47e1-9d6c-c8bee56b6461).",
+  "seed_data_creation": "Created customer delivery orders #6100005, #6100006, #6100007 (last one used for final verification) and assigned سائق 1 to them. Driver location set to 33.3120,44.3600.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Customer contact sheet + chat on the tracking screen is fully verified (iteration_225). Test order used: id=15c8bc07-34ab-456d-9538-c0876de6d785, number=6100007. Geolocation must be granted to the page (context.grant_permissions(['geolocation']) + set_geolocation) for the 'موقعي الحالي' button to populate the address — without it, the form clears with a permission-error toast. Order POST response did not contain id in the JSON body the listener parsed; we resolved order_id by listing /api/orders and picking the most recent un-assigned delivery order — note this for future tests if you need the order_id immediately after submit.",
+  "rca of the issue": "N/A — no bugs found. Original gate bug (tracking card hidden when currentOrder.driver_id was stale) is confirmed fixed; the card now renders on order placement and the driver card hydrates from the 10s poll of GET /api/driver/order-driver-info/{order_id} as soon as a driver is assigned."
+}

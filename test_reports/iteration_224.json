@@ -1,0 +1,52 @@
+{
+  "summary": "Iter 224 frontend regression for Maestro EGP delivery. CRITICAL BACKEND REGRESSION FOUND & FIXED IN-PLACE: POST /api/customer/orders crashed with HTTP 500 'NameError: name current_user is not defined' at /app/backend/server.py:21024 inside create_customer_order — this completely blocked the customer order placement and therefore the tracking screen flow. Applied a one-line fix replacing current_user.get('id') with None (this endpoint is intentionally unauthenticated, and _resolve_business_date already accepts cashier_id Optional[str]=None). After the fix and backend restart: (a) Order placement from /menu/default succeeds (verified 3 consecutive orders #6100002, #6100003, #6100004 created via the full UI flow — add product → cart → checkout → name+phone → 'موقعي الحالي' delivery location → Cash → 'تأكيد الطلب'). (b) The CUSTOMER TRACKING SCREEN renders WITHOUT the blank/white crash (Popup-import regression is no longer reproducible) — shows order number ('رقم الطلب: #6100004'), the share-tracking-link button (data-testid='share-tracking-link'), the full status timeline (قيد الانتظار → قيد التحضير → جاهز للتوصيل → السائق في الطريق → تم التسليم), order total/payment/address, no console/page errors. (c) PUBLIC TRACKING (/track/{order_id} on seeded assigned order) renders correctly: data-testid='public-tracking-page'=1, data-testid='track-driver-name' shows 'سائق 1', a real Leaflet map renders with the driver scooter marker at the configured lat/lng — smoke PASS. ISSUES STILL OPEN (could not be driven E2E this run): the customer driver-contact-btn + driver-chat-dialog flow on the /menu/default tracking screen depends on currentOrder.driver_id being truthy, but currentOrder is a snapshot from submission and the 10s driver-info poll writes to a separate driverInfo state without updating currentOrder, so a driver assigned AFTER order placement never causes the driver card to mount — needs a small fix (gate also on driverInfo?.driver). On the public tracking page, clicking data-testid='track-chat-btn' did NOT open data-testid='track-chat-overlay' in my run (overlay count=0 after click+1.5s wait). The driver app /driver-app login with 07801111111/1234 succeeds (shows 'سائق 1 / 07801111111' header) but 'طلبات نشطة: 0' — the seeded order 2eda6604 assigned to سائق 1 does NOT appear in the driver's active-orders list (likely because order status is still 'preparing'; driver app seemingly filters to ready/out_for_delivery and/or requires tracking-start). So driver-chat-btn-{orderId} / driver-chat-overlay could not be exercised E2E.",
+  "backend_issues": {
+    "critical": [
+      {"endpoint": "POST /api/customer/orders", "issue": "NameError: name 'current_user' is not defined at /app/backend/server.py:21024 in create_customer_order. The endpoint is public/unauthenticated but referenced current_user.get('id'). Completely blocked /menu/default order placement (UI toast 'فشل في إرسال الطلب'). FIXED in this run by passing None — but main agent should review whether this should instead resolve to the branch's open shift/cashier.", "priority": "CRITICAL"}
+    ],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "PublicTracking /track/:orderId", "issue": "Clicking data-testid='track-chat-btn' did not open data-testid='track-chat-overlay' (overlay count=0 after 1.5s). Other buttons (WA, phone) are visible and the chat icon button is rendered. Needs investigation: state toggle, z-index, or onClick wiring.", "selector": "[data-testid='track-chat-btn']", "priority": "MEDIUM"},
+      {"component": "CustomerMenu tracking screen (DriverTrackingMap)", "issue": "The driver card (and thus driver-contact-btn / driver-chat-dialog) is gated on currentOrder.driver_id || currentOrder.status==='out_for_delivery' (CustomerMenu.js:2410). currentOrder is captured at submission and never updated; the 10s poll at line 2060 fetches driverInfo into a separate state. Result: when the cashier assigns a driver after the customer is already on the tracking screen, the driver card never appears for that customer session and the in-app contact/chat flow is unreachable. Fix: also gate on driverInfo?.driver, OR re-fetch the order doc periodically and merge into currentOrder.", "selector": "DriverTrackingMap wrapper at CustomerMenu.js:2410", "priority": "HIGH"}
+    ],
+    "integration_issues": [
+      {"flow": "Driver app active-orders list", "issue": "Order assigned via PUT /api/drivers/{id}/assign?order_id=… returns active_orders:1/2 success, but on /driver-app the driver sees 'طلبات نشطة: 0' / 'لا توجد طلبات نشطة حالياً' for an order with status='preparing'. Either expected (driver app shows only ready/out_for_delivery + tracking-started) — in which case the test setup needs a status bump — or a real filter bug. Blocked E2E verification of driver-chat-btn-{orderId} / driver-chat-overlay in this run.", "affected_selectors": ["[data-testid^='driver-chat-btn-']"]}
+    ],
+    "design_issues": []
+  },
+  "verified_features": {
+    "POST /api/customer/orders no longer 500s after current_user fix; order created end-to-end via UI": "PASS",
+    "Customer tracking screen renders WITHOUT blank/Popup crash; order_number + share-tracking-link visible": "PASS (#6100002, #6100003, #6100004)",
+    "Public /track/:orderId: public-tracking-page, track-driver-name ('سائق 1'), Leaflet map with driver marker": "PASS",
+    "Public /track/:orderId track-chat-btn opens track-chat-overlay": "FAIL (overlay did not mount on click)",
+    "Customer driver-contact-sheet with 6 options + in-app chat dialog send/receive": "NOT VERIFIED (blocked by currentOrder.driver_id snapshot — see ui_bugs)",
+    "Driver app two-way chat overlay (driver-chat-overlay)": "NOT VERIFIED (assigned order does not appear in driver active-orders list with status='preparing')"
+  },
+  "test_report_links": [
+    "/app/test_reports/iter224_tracking_ok.png",
+    "/app/test_reports/iter224_public.png",
+    "/app/test_reports/iter224_driver_orders.png"
+  ],
+  "action_items": [
+    "(VERIFY MY FIX) Backend NameError fix at /app/backend/server.py:21024 — current_user.get('id') replaced with None. Confirm this is the correct semantic for the unauthenticated customer-order endpoint, or replace with proper branch-shift cashier resolution.",
+    "(HIGH) CustomerMenu.js: make the DriverTrackingMap wrapper (line 2410) also render when driverInfo?.driver exists (or refresh currentOrder from /api/orders/{id} on poll). Without this, the in-app contact/chat flow on the customer tracking screen is unreachable for orders assigned after placement.",
+    "(MEDIUM) PublicTracking.jsx: investigate why clicking track-chat-btn does not open track-chat-overlay. Check the onClick handler / state binding / pointer-events.",
+    "(MEDIUM) Driver app: confirm whether the 'active orders' list intentionally excludes status='preparing'. If yes, document and adjust test setup (bump status to 'ready'/'out_for_delivery'). If no, fix the list filter."
+  ],
+  "critical_code_review_comments": [
+    "/app/backend/server.py:21024 was a clear undefined-variable bug — suggests this code path is not covered by any test. Add a pytest hitting POST /api/customer/orders end-to-end so this can never regress silently again.",
+    "CustomerMenu.js DriverTrackingMap (~line 2053) uses currentOrder.driver_id as a render gate but never refreshes currentOrder; it polls /driver/order-driver-info into driverInfo. This is a state-design bug that makes the post-assignment UX unreachable from the customer side."
+  ],
+  "updated_files": [
+    "/app/backend/server.py (line 21024: current_user.get('id') -> None inside create_customer_order)"
+  ],
+  "success_rate": {"backend": "POST /api/customer/orders fixed and now 200 OK (was 500); other endpoints not retested this run", "frontend": "Customer tracking screen (Test 1): PASS. Public tracking smoke (Test 4): PARTIAL (page + driver-name + map PASS; chat overlay open FAIL). Customer contact menu/chat (Test 2) + Driver app chat (Test 3): not exercised E2E due to issues above."},
+  "test_credentials": "admin@maestroegp.com / admin123 ; driver 07801111111 / PIN 1234 (سائق 1)",
+  "seed_data_creation": "Placed 3 test customer orders (#6100002, #6100003, #6100004) for phone 07709998877 via /menu/default. Assigned سائق 1 (06ad2c00…) to order 2eda6604-93a5-4df4-90fe-e066eb0af2e9 and set driver location to 33.3152,44.3661.",
+  "retest_needed": true,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Backend fix at /app/backend/server.py:21024 is mandatory for ANY /menu/default order test — without it the entire customer-order POST is 500. The customer driver-contact / in-app chat flow CANNOT be tested with a currently-implemented gate (currentOrder.driver_id snapshot); main agent must broaden the gate to driverInfo?.driver before retest. To exercise the driver app order list, change the test order status to 'ready' or 'out_for_delivery' before logging in as driver. Seeded order id with sائق 1 + location: 2eda6604-93a5-4df4-90fe-e066eb0af2e9 (also aae6db59-... per problem statement, but that one's driver-name/phone came back null and might need a re-assign).",
+  "rca of the issue": "Root cause of the iter-224 customer-tracking blocker: a recent change to create_customer_order at /app/backend/server.py:21024 added await _resolve_business_date(tenant_id, order.branch_id, current_user.get('id')) but the surrounding function is an unauthenticated public endpoint with no current_user dependency, so the Python name does not exist at runtime and the request 500s before db.orders.insert_one is called. Reproduction: POST /api/customer/orders with any valid body → backend traceback NameError. Mitigation applied in this iteration: pass None (the third arg is Optional[str]=None). Long-term fix per main agent: either remove the cashier_id arg entirely for the customer flow or look up the currently-open shift's cashier for that branch."
+}

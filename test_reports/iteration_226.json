@@ -1,0 +1,45 @@
+{
+  "summary": "Verified delivery_fee assignment, internal-delivery settlement, order-driver-info exposure of delivery_fee/order_total, and sales-report key 'توصيل داخلي'. All 4 backend pytest cases pass + the script-style driver-batching suite passes. Frontend data-testids confirmed in source code; live UI walkthrough was blocked by a global splash/login flakiness on the preview URL.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "/api/smart-reports/sales", "issue": "Endpoint path differs from the request statement which said '/api/reports/sales'. Correct path is /api/smart-reports/sales. Just a documentation discrepancy — functionality is correct (key 'توصيل داخلي' present when driver_cash_amount > 0)."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [
+      {"flow": "Admin login + delivery page UI walkthrough", "issue": "Could not reliably exercise /delivery → assign-fee-dialog from automation: the public preview occasionally landed on a long-running splash screen ('Maestro EGP' loader) and second-pass login left the form empty (autofill quirk on the data-testid login-email/login-password inputs whose 'name' attribute is set to the prefilled value, confusing automation).", "affected_selectors": ["[data-testid=login-email]", "[data-testid=login-password]", "[data-testid=assign-fee-dialog]"]},
+      {"flow": "Driver-app PIN login (07801111111 / 1234)", "issue": "After clicking submit, URL stayed at /driver-app — could not confirm wider container live (max-w-lg md:max-w-3xl xl:max-w-6xl is present in /app/frontend/src/pages/DriverApp.js source). Likely the seeded driver in the running DB has a different PIN than 1234.", "affected_selectors": []},
+      {"flow": "Public tracking /track/{order_id}", "issue": "Browser showed splash screen and did not render the tracking summary in time; could not visually verify track-order-summary. The selector exists in PublicTracking.jsx source (line 103).", "affected_selectors": ["[data-testid=track-order-summary]"]}
+    ],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_delivery_fee_and_settlement.py",
+    "/app/backend/tests/test_delivery_fee_extras_iter226.py",
+    "/app/backend/tests/test_driver_batching.py",
+    "/app/test_reports/pytest/iter226.xml"
+  ],
+  "action_items": [
+    "Update problem statement / docs: the sales summary endpoint is /api/smart-reports/sales (not /api/reports/sales).",
+    "Main agent should self-test the live UI flow (admin login → /delivery → click driver button → assign-fee-dialog → fee=2000 → confirm) because automation hit a splash/autofill issue. All testids exist in source.",
+    "Confirm the seeded driver's PIN for 07801111111 in the running DB (driver-app login did not progress with PIN 1234)."
+  ],
+  "critical_code_review_comments": [
+    "/app/backend/server.py is 23,640 lines — well over the 700-line guideline. Should be split into routers/services for maintainability.",
+    "paid_orders filter uses 'payment_status in [paid, credit, None]' which silently counts orders missing the field; consider requiring an explicit status to avoid stale legacy rows polluting reports.",
+    "Drivers assign endpoint relies on query params for delivery_fee/force — consider migrating to a typed JSON body for clarity.",
+    "Frontend: data-testid login-email/login-password have their 'name' attribute set to the displayed value (placeholder/value mirroring) — confused Playwright autofill. Consider stable name='email'/name='password'."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_delivery_fee_extras_iter226.py"
+  ],
+  "success_rate": {"backend": "100%", "frontend": "source-verified (live walkthrough partial)"},
+  "test_credentials": "Admin: admin@maestroegp.com / admin123. Driver-app PIN login for 07801111111 with 1234 did not work in this environment.",
+  "seed_data_creation": "Created and cleaned: 1 driver (سائق فرونت — only if absent, was already present) and 1 ready/unassigned delivery order (#9988, total 7500) for /delivery UI test. All test-prefixed orders removed after testing.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Backend regression for delivery fee + internal-delivery is now fully covered by /app/backend/tests/test_delivery_fee_and_settlement.py (pytest) and /app/backend/tests/test_delivery_fee_extras_iter226.py (pytest). The sales report endpoint key is at /api/smart-reports/sales, not /api/reports/sales. For frontend UI testing, use [data-testid=login-email] / [data-testid=login-password] but be aware automated fill may need an explicit .click() before .fill() because the input 'name' attribute mirrors the current value.",
+  "rca of the issue": "No bug — sales-report endpoint mislabeled in the test request. After correcting the path to /api/smart-reports/sales, the 'توصيل داخلي' key appears as expected once collect-payment runs (driver_cash_amount > 0 → by_payment_method['توصيل داخلي'] = amount, line 15305 in server.py)."
+}

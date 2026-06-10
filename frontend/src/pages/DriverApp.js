@@ -31,7 +31,9 @@ import {
   Wifi,
   WifiOff,
   History,
-  TrendingUp
+  TrendingUp,
+  MessageCircle,
+  Send
 } from 'lucide-react';
 import { toast, Toaster } from 'sonner';
 import { MapContainer, TileLayer, Marker, Popup, useMap } from 'react-leaflet';
@@ -77,6 +79,10 @@ export default function DriverApp() {
   const [driver, setDriver] = useState(null);
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(false);
+  // محادثة السائق مع الزبون
+  const [chatOrder, setChatOrder] = useState(null);
+  const [chatMessages, setChatMessages] = useState([]);
+  const [chatText, setChatText] = useState('');
   const [currentLocation, setCurrentLocation] = useState(null);
   const [isTracking, setIsTracking] = useState(false);
   const [watchId, setWatchId] = useState(null);
@@ -125,8 +131,19 @@ export default function DriverApp() {
 
   // Register Service Worker for PWA and check install
   useEffect(() => {
+    // اربط مانيفست السائق ولون الواجهة (يجعل التطبيق قابلاً للتثبيت باسم "تطبيق السائق")
+    try {
+      const manifestLink = document.querySelector('link[rel="manifest"]');
+      if (manifestLink) manifestLink.href = '/manifest-driver.json?v=' + Date.now();
+      const themeColor = document.querySelector('meta[name="theme-color"]');
+      if (themeColor) themeColor.content = '#16a34a';
+      const appleTitle = document.querySelector('meta[name="apple-mobile-web-app-title"]');
+      if (appleTitle) appleTitle.content = 'تطبيق السائق';
+      document.title = 'تطبيق السائق - التوصيل';
+    } catch (e) { /* noop */ }
+
     if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.register('/sw.js').catch(console.log);
+      navigator.serviceWorker.register('/sw-driver.js', { scope: '/driver-app' }).catch(console.log);
     }
 
     const handleBeforeInstallPrompt = (e) => {
@@ -323,6 +340,35 @@ export default function DriverApp() {
     }
   };
 
+  // محادثة السائق مع الزبون (تحديث كل ٣ ثوانٍ عند الفتح)
+  useEffect(() => {
+    if (!chatOrder) return;
+    const load = async () => {
+      try {
+        const res = await axios.get(`${API}/order-chat/${chatOrder.id}`);
+        setChatMessages(res.data.messages || []);
+      } catch (e) { /* noop */ }
+    };
+    load();
+    const iv = setInterval(load, 3000);
+    return () => clearInterval(iv);
+  }, [chatOrder]);
+
+  const sendDriverChat = async () => {
+    const text = chatText.trim();
+    if (!text || !chatOrder) return;
+    setChatText('');
+    try {
+      await axios.post(`${API}/order-chat/${chatOrder.id}`, {
+        sender: 'driver',
+        sender_name: driver?.name || 'السائق',
+        text
+      });
+      const res = await axios.get(`${API}/order-chat/${chatOrder.id}`);
+      setChatMessages(res.data.messages || []);
+    } catch (e) { toast.error(t('تعذّر إرسال الرسالة')); }
+  };
+
   // تسجيل الخروج
   const logout = () => {
     stopTracking();
@@ -501,7 +547,7 @@ export default function DriverApp() {
       
       {/* Header */}
       <header className="sticky top-0 z-40 bg-gradient-to-r from-blue-500 to-green-500 text-white shadow-lg">
-        <div className="max-w-lg mx-auto px-4 py-4">
+        <div className="max-w-lg md:max-w-3xl xl:max-w-6xl mx-auto px-4 py-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
               <div className="w-12 h-12 rounded-full bg-white/20 flex items-center justify-center">
@@ -549,7 +595,7 @@ export default function DriverApp() {
         </div>
       </header>
 
-      <main className="max-w-lg mx-auto px-4 py-4 space-y-4">
+      <main className="max-w-lg md:max-w-3xl xl:max-w-6xl mx-auto px-4 py-4 space-y-4">
         {/* إحصائيات سريعة */}
         <div className="grid grid-cols-2 gap-3">
           <div className="bg-white rounded-xl p-4 shadow-sm border">
@@ -631,9 +677,9 @@ export default function DriverApp() {
 
         {/* محتوى التبويب */}
         {activeTab === 'orders' && (
-          <div className="space-y-3">
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
             {activeOrders.length === 0 ? (
-              <div className="text-center py-12">
+              <div className="text-center py-12 col-span-full">
                 <Package className="h-16 w-16 mx-auto text-gray-300 mb-4" />
                 <p className="text-gray-500">لا توجد طلبات نشطة حالياً</p>
                 <Button onClick={() => fetchOrders()} variant="outline" className="mt-4">
@@ -671,6 +717,11 @@ export default function DriverApp() {
                         {order.payment_method === 'cash' ? 'نقدي' : 'إلكتروني'}
                       </Badge>
                     </div>
+                    {Number(order.delivery_fee) > 0 && (
+                      <p className="text-xs text-blue-600 mb-3 -mt-2" data-testid={`order-fee-${order.id}`}>
+                        🚗 منها أجور توصيل: {formatPrice(order.delivery_fee)}
+                      </p>
+                    )}
 
                     {/* الأزرار */}
                     <div className="flex gap-2">
@@ -683,6 +734,18 @@ export default function DriverApp() {
                       >
                         <Phone className="h-4 w-4 ml-1" />
                         اتصال
+                      </Button>
+
+                      {/* زر المحادثة */}
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => { setChatMessages([]); setChatOrder(order); }}
+                        className="flex-1"
+                        data-testid={`driver-chat-btn-${order.id}`}
+                      >
+                        <MessageCircle className="h-4 w-4 ml-1" />
+                        محادثة
                       </Button>
                       
                       {/* زر الملاحة */}
@@ -786,9 +849,9 @@ export default function DriverApp() {
         )}
 
         {activeTab === 'history' && (
-          <div className="space-y-3">
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
             {completedOrders.length === 0 ? (
-              <div className="text-center py-12">
+              <div className="text-center py-12 col-span-full">
                 <History className="h-16 w-16 mx-auto text-gray-300 mb-4" />
                 <p className="text-gray-500">لا توجد طلبات مكتملة اليوم</p>
               </div>
@@ -833,6 +896,47 @@ export default function DriverApp() {
           </Card>
         )}
       </main>
+
+      {/* غرفة المحادثة مع الزبون */}
+      {chatOrder && (
+        <div className="fixed inset-0 z-[2000] flex flex-col bg-black/50" onClick={() => setChatOrder(null)} data-testid="driver-chat-overlay">
+          <div className="mt-auto w-full max-w-md mx-auto bg-white rounded-t-2xl flex flex-col h-[80vh]" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between gap-2 p-3 bg-gradient-to-r from-blue-600 to-green-500 text-white rounded-t-2xl">
+              <div className="flex items-center gap-2">
+                <User className="h-5 w-5" />
+                <div>
+                  <p className="font-bold text-sm">{chatOrder.customer_name || 'الزبون'}</p>
+                  <p className="text-xs text-blue-100">طلب #{chatOrder.order_number || chatOrder.id?.slice(-6)}</p>
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                <a href={`tel:${chatOrder.customer_phone || chatOrder.phone}`} className="w-9 h-9 rounded-full bg-white/20 hover:bg-white/30 flex items-center justify-center">
+                  <Phone className="h-4 w-4" />
+                </a>
+                <button onClick={() => setChatOrder(null)} className="w-9 h-9 rounded-full bg-white/20 hover:bg-white/30 flex items-center justify-center">✕</button>
+              </div>
+            </div>
+            <div className="flex-1 overflow-y-auto p-3 space-y-2 bg-gray-50">
+              {chatMessages.length === 0 ? (
+                <p className="text-center text-sm text-gray-400 py-8">لا توجد رسائل بعد</p>
+              ) : chatMessages.map(m => (
+                <div key={m.id} className={`flex ${m.sender === 'driver' ? 'justify-end' : 'justify-start'}`}>
+                  <div className={`max-w-[75%] px-3 py-2 rounded-2xl text-sm ${m.sender === 'driver' ? 'bg-blue-500 text-white rounded-br-sm' : 'bg-white border rounded-bl-sm'}`}>
+                    {m.text}
+                  </div>
+                </div>
+              ))}
+            </div>
+            <div className="p-3 border-t flex items-center gap-2 bg-white">
+              <Input value={chatText} onChange={(e) => setChatText(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') sendDriverChat(); }}
+                placeholder="اكتب رسالة..." data-testid="driver-chat-input" />
+              <Button type="button" onClick={sendDriverChat} data-testid="driver-chat-send-btn" className="bg-blue-500 hover:bg-blue-600">
+                <Send className="h-4 w-4" />
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

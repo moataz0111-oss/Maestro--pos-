@@ -24,6 +24,7 @@ from PIL import Image
 import pillow_heif  # دعم صور HEIC/HEIF من iPhone
 pillow_heif.register_heif_opener()  # تسجيل دعم HEIC/HEIF
 import io
+import math
 import base64
 import aiofiles
 import asyncio
@@ -1421,6 +1422,9 @@ class BranchResponse(BaseModel):
     email: Optional[str] = None
     is_active: bool = True
     created_at: Optional[str] = None
+    # إحداثيات الفرع (لأجور التوصيل حسب المسافة)
+    latitude: Optional[float] = None
+    longitude: Optional[float] = None
     # التكاليف الثابتة الشهرية
     rent_cost: float = 0.0
     water_cost: float = 0.0
@@ -1861,14 +1865,14 @@ class EmployeeResponse(BaseModel):
     model_config = ConfigDict(extra="ignore")
     id: str
     name: str
-    phone: str
+    phone: Optional[str] = ""
     email: Optional[str] = None
     national_id: Optional[str] = None
-    position: str
+    position: Optional[str] = ""
     department: Optional[str] = None
     branch_id: Optional[str] = None
     hire_date: Optional[str] = None
-    salary: float
+    salary: float = 0
     salary_type: str = "monthly"
     work_hours_per_day: float = 8.0
     user_id: Optional[str] = None
@@ -1879,7 +1883,7 @@ class EmployeeResponse(BaseModel):
     break_end: Optional[str] = None
     work_days: Optional[list] = None
     is_active: bool = True
-    created_at: str
+    created_at: Optional[str] = None
     tenant_id: Optional[str] = None
     face_photo: Optional[str] = None
     face_photo_updated_at: Optional[str] = None
@@ -3835,26 +3839,54 @@ async def create_advance(advance: AdvanceCreate, current_user: dict = Depends(ge
         "created_by": current_user["id"],
         "created_at": datetime.now(timezone.utc).isoformat()
     }
+    # السلفة تُصرف من خزينة المالك (مثل دفعات الراتب) — وليست مصروفاً نقدياً من شفت الكاشير.
+    # تحقّق من رصيد الفرع المتاح في خزينة المالك (إيداعاته - سحوباته - تحويلاته).
+    branch_name = None
+    if advance_branch:
+        _br = await db.branches.find_one({"id": advance_branch}, {"_id": 0, "name": 1})
+        branch_name = (_br or {}).get("name")
+        branch_q = {"branch_id": advance_branch}
+        if advance_tenant:
+            branch_q["tenant_id"] = advance_tenant
+        _deps = await db.owner_deposits.find(branch_q, {"_id": 0}).to_list(5000)
+        _wds = await db.owner_withdrawals.find(branch_q, {"_id": 0}).to_list(5000)
+        _tfs = await db.owner_profit_transfers.find(branch_q, {"_id": 0}).to_list(5000)
+        branch_balance = (
+            sum(d.get("amount", 0) for d in _deps)
+            - sum(w.get("amount", 0) for w in _wds)
+            - sum(t.get("amount", 0) for t in _tfs)
+        )
+        if float(advance.amount) > branch_balance:
+            raise HTTPException(
+                status_code=400,
+                detail=f"رصيد فرع \"{branch_name or advance_branch}\" غير كافٍ في خزينة المالك. المتاح: {branch_balance:,.0f} IQD، المطلوب: {float(advance.amount):,.0f} IQD"
+            )
+
+    # ربط السحب بالسلفة قبل الإدراج
+    withdrawal_id = str(uuid.uuid4())
+    advance_doc["linked_owner_withdrawal_id"] = withdrawal_id
     await db.advances.insert_one(advance_doc)
-    
-    # إضافة السلفة كمصروف
-    expense_doc = {
-        "id": str(uuid.uuid4()),
-        "category": "advance",
-        "description": f"سلفة للموظف {employee.get('name')}",
-        "amount": advance.amount,
-        "payment_method": "cash",
-        "branch_id": advance_branch,
-        "employee_id": advance.employee_id,
-        "advance_id": advance_doc["id"],
+
+    # سحب موازٍ من خزينة المالك (مرتبط بالفرع لاستقطاع من إيداعاته) — بدل مصروف الكاشير النقدي
+    withdrawal_doc = {
+        "id": withdrawal_id,
         "tenant_id": advance_tenant,
+        "amount": round(float(advance.amount), 2),
         "date": advance_doc["date"],
         "business_date": advance_biz_date,
-        "created_by": current_user["id"],
-        "created_at": datetime.now(timezone.utc).isoformat()
+        "beneficiary": f"سلفة: {employee.get('name')}",
+        "description": f"سلفة للموظف {employee.get('name')}" + (f" — {advance.reason}" if advance.reason else ""),
+        "category": "advance",
+        "branch_id": advance_branch,
+        "branch_name": branch_name,
+        "employee_id": advance.employee_id,
+        "advance_id": advance_doc["id"],
+        "linked_advance_id": advance_doc["id"],
+        "created_by": current_user.get("full_name") or current_user.get("username") or current_user["id"],
+        "created_at": datetime.now(timezone.utc).isoformat(),
     }
-    await db.expenses.insert_one(expense_doc)
-    
+    await db.owner_withdrawals.insert_one(withdrawal_doc)
+
     del advance_doc["_id"]
     return advance_doc
 
@@ -4243,6 +4275,16 @@ async def get_payroll_summary_report(
         "status": "approved",
         "remaining_amount": {"$gt": 0}
     }, {"_id": 0}).to_list(5000)
+
+    # 💰 أقساط السلف المُحتسبة يدوياً لهذا الشهر (للسلف السابقة — المالك يحدّد المبلغ)
+    all_advance_installments = await db.advance_installments.find({
+        "employee_id": {"$in": employee_ids},
+        "month": month
+    }, {"_id": 0}).to_list(5000)
+    manual_installments_by_emp = {}
+    for ins in all_advance_installments:
+        eid = ins.get("employee_id")
+        manual_installments_by_emp[eid] = manual_installments_by_emp.get(eid, 0) + _sn(ins.get("amount"))
     
     # جلب جميع الحضور دفعة واحدة
     all_attendance = await db.attendance.find({
@@ -4360,10 +4402,17 @@ async def get_payroll_summary_report(
         bonuses = bonuses_by_emp.get(emp_id, [])
         emp_bonuses = sum(_sn(b.get("amount")) for b in bonuses)
         
-        # السلف
+        # السلف:
+        #  - سلفة الشهر الحالي (تاريخها ضمن الشهر): تُخصم تلقائياً (القسط الشهري المحدّد)
+        #  - سلفة شهر سابق: لا تُخصم تلقائياً — تظهر كإشعار، ويُخصم فقط ما يحتسبه المالك يدوياً (أقساط)
         advances = advances_by_emp.get(emp_id, [])
-        emp_advances = sum(_sn(a.get("monthly_deduction", 0)) for a in advances)
-        pending_advances = sum(_sn(a.get("remaining_amount", 0)) for a in advances)
+        current_month_advances = [a for a in advances if (a.get("date") or "")[:7] == month]
+        previous_advances = [a for a in advances if (a.get("date") or "")[:7] < month]
+        emp_advances_auto = sum(_sn(a.get("monthly_deduction", 0)) for a in current_month_advances)
+        emp_advances_manual = round(manual_installments_by_emp.get(emp_id, 0), 2)
+        emp_advances = round(emp_advances_auto + emp_advances_manual, 2)
+        # الإشعار: رصيد السلف السابقة المتبقّي فقط (يحتاج قراراً يدوياً من المالك)
+        pending_advances = sum(_sn(a.get("remaining_amount", 0)) for a in previous_advances)
         
         # 👑 المدير العام/الأونر: لا يُحتسب عليه الحضور/السلف/الخصومات (راتب كامل بلا أي خصم)
         if bool(emp.get("is_general_manager")):
@@ -4427,6 +4476,83 @@ async def get_payroll_summary_report(
         "employees": employee_data,
         "totals": totals
     }
+
+
+@api_router.post("/advances/{advance_id}/deduct-installment")
+async def deduct_advance_installment(advance_id: str, payload: dict, current_user: dict = Depends(get_current_user)):
+    """احتساب قسط من سلفة سابقة يدوياً في شهر محدّد (المالك يحدّد المبلغ).
+    يُنشئ سجل قسط (advance_installments) ويُنقص الرصيد المتبقّي للسلفة."""
+    if current_user["role"] not in [UserRole.ADMIN, UserRole.MANAGER, UserRole.SUPER_ADMIN]:
+        raise HTTPException(status_code=403, detail="غير مصرح")
+    tenant_id = get_user_tenant_id(current_user)
+    advance = await db.advances.find_one({"id": advance_id}, {"_id": 0})
+    if not advance:
+        raise HTTPException(status_code=404, detail="السلفة غير موجودة")
+    month = (payload.get("month") or "").strip()
+    if not month or len(month) != 7:
+        raise HTTPException(status_code=400, detail="الشهر مطلوب بصيغة YYYY-MM")
+    amount = _sn(payload.get("amount"))
+    remaining = _sn(advance.get("remaining_amount"))
+    if amount <= 0:
+        raise HTTPException(status_code=400, detail="المبلغ يجب أن يكون أكبر من صفر")
+    if amount > remaining:
+        raise HTTPException(status_code=400, detail=f"المبلغ ({amount:,.0f}) أكبر من الرصيد المتبقّي ({remaining:,.0f})")
+    installment = {
+        "id": str(uuid.uuid4()),
+        "advance_id": advance_id,
+        "employee_id": advance.get("employee_id"),
+        "employee_name": advance.get("employee_name"),
+        "tenant_id": advance.get("tenant_id") or tenant_id,
+        "month": month,
+        "amount": round(amount, 2),
+        "notes": payload.get("notes", ""),
+        "date": f"{month}-28",
+        "created_by": current_user["id"],
+        "created_at": datetime.now(timezone.utc).isoformat(),
+    }
+    await db.advance_installments.insert_one(installment)
+    new_remaining = round(remaining - amount, 2)
+    update = {
+        "remaining_amount": new_remaining,
+        "deducted_amount": round(_sn(advance.get("deducted_amount")) + amount, 2),
+    }
+    if new_remaining <= 0:
+        update["status"] = "paid"
+    await db.advances.update_one({"id": advance_id}, {"$set": update})
+    installment.pop("_id", None)
+    return {"success": True, "installment": installment, "remaining_amount": new_remaining}
+
+
+@api_router.get("/advances/installments")
+async def list_advance_installments(month: str, employee_id: str = None, current_user: dict = Depends(get_current_user)):
+    """قائمة أقساط السلف المُحتسبة يدوياً لشهر/موظف معيّن."""
+    q = {"month": month}
+    if employee_id:
+        q["employee_id"] = employee_id
+    items = await db.advance_installments.find(q, {"_id": 0}).sort("created_at", -1).to_list(2000)
+    return {"installments": items}
+
+
+@api_router.delete("/advances/installments/{installment_id}")
+async def delete_advance_installment(installment_id: str, current_user: dict = Depends(get_current_user)):
+    """التراجع عن احتساب قسط سلفة (يُعيد المبلغ للرصيد المتبقّي)."""
+    if current_user["role"] not in [UserRole.ADMIN, UserRole.MANAGER, UserRole.SUPER_ADMIN]:
+        raise HTTPException(status_code=403, detail="غير مصرح")
+    ins = await db.advance_installments.find_one({"id": installment_id}, {"_id": 0})
+    if not ins:
+        raise HTTPException(status_code=404, detail="القسط غير موجود")
+    await db.advance_installments.delete_one({"id": installment_id})
+    adv = await db.advances.find_one({"id": ins.get("advance_id")}, {"_id": 0})
+    if adv:
+        restored = round(_sn(adv.get("remaining_amount")) + _sn(ins.get("amount")), 2)
+        upd = {
+            "remaining_amount": restored,
+            "deducted_amount": max(0, round(_sn(adv.get("deducted_amount")) - _sn(ins.get("amount")), 2)),
+        }
+        if restored > 0 and adv.get("status") == "paid":
+            upd["status"] = "approved"
+        await db.advances.update_one({"id": ins.get("advance_id")}, {"$set": upd})
+    return {"success": True}
 
 # ==================== 💰 Salary Payments + Daily Payroll Summary ====================
 
@@ -15178,9 +15304,9 @@ async def get_sales_report(
     if cash_amount > 0:
         by_payment_method["نقدي"] = cash_amount
     
-    # نقدي السائقين (كاش محصّل من التوصيل) — سطر منفصل للتدقيق
+    # توصيل داخلي (كاش محصّل من سائقي المطعم) — سطر منفصل للتدقيق
     if driver_cash_amount > 0:
-        by_payment_method["نقدي السائقين"] = driver_cash_amount
+        by_payment_method["توصيل داخلي"] = driver_cash_amount
     
     # إضافة البطاقة فقط إذا كانت أكبر من 0
     if card_amount > 0:
@@ -15195,14 +15321,27 @@ async def get_sales_report(
         if amount > 0:
             by_payment_method[app_name] = amount
     
-    # إضافة توصيل السائقين (إذا وجد)
+    # إضافة توصيل السائقين غير المحصّل (إذا وجد)
     if driver_delivery_amount > 0:
-        by_payment_method["توصيل سائقين"] = driver_delivery_amount
+        by_payment_method["توصيل داخلي (بذمة السائقين)"] = driver_delivery_amount
 
     # ⚠️ الطلبات المعلقة (pending) لا تُحتسب كمبيعات/طريقة دفع — هي طلبات لم تُدفع بعد
     # نعرضها كملخّص منفصل لتطابق تقرير إغلاق الصندوق (الذي يستثني المعلق)
     pending_amount = sum(_sn(o.get("total")) for o in pending_orders)
     pending_count = len(pending_orders)
+    
+    # خدمة التوصيل الداخلية: أجور التوصيل المحصلة لسائقي المطعم (قيمها ضمن إجمالي المبيعات والنقدي)
+    _internal_delivery_orders = [
+        o for o in paid_orders
+        if o.get("order_type") == "delivery"
+        and o.get("driver_id")
+        and not o.get("is_delivery_company")
+        and not o.get("delivery_app")
+        and not o.get("delivery_app_name")
+        and _sn(o.get("delivery_fee")) > 0
+    ]
+    internal_delivery_fees = sum(_sn(o.get("delivery_fee")) for o in _internal_delivery_orders)
+    internal_delivery_orders_count = len(_internal_delivery_orders)
     
     return {
         "period": period,
@@ -15215,6 +15354,9 @@ async def get_sales_report(
             "delivery": delivery_amount
         },
         "by_payment_method": by_payment_method,
+        # خدمة التوصيل الداخلية (أجور التوصيل) — قيمها مدمجة ضمن النقدي/توصيل داخلي وإجمالي المبيعات
+        "internal_delivery_fees": internal_delivery_fees,
+        "internal_delivery_orders_count": internal_delivery_orders_count,
         "by_payment": {
             "cash": cash_orders_count,
             "card": card_orders_count,
@@ -15484,6 +15626,16 @@ async def get_cash_register_closing_report(
     card_total = sum(_sn(o.get("total")) for o in orders if o.get("payment_method") == "card")
     credit_total = sum(_sn(o.get("total")) for o in orders if o.get("payment_method") == "credit" and not o.get("delivery_app") and o.get("order_type") != "delivery")
     
+    # خدمة التوصيل الداخلية: أجور التوصيل المحصلة (قيمها ضمن النقدي/توصيل داخلي أعلاه)
+    internal_delivery_fees_total = sum(
+        _sn(o.get("delivery_fee")) for o in orders
+        if o.get("order_type") == "delivery"
+        and o.get("driver_id")
+        and not o.get("is_delivery_company")
+        and not o.get("delivery_app")
+        and not o.get("delivery_app_name")
+    )
+    
     # شركات التوصيل
     delivery_apps_total = {}
     for o in orders:
@@ -15663,7 +15815,8 @@ async def get_cash_register_closing_report(
         },
         "by_payment_method": {
             "cash": {"total": cash_total, "label": "نقدي"},
-            "driver_cash": {"total": driver_cash_total, "label": "نقدي السائقين"},
+            "driver_cash": {"total": driver_cash_total, "label": "توصيل داخلي"},
+            "internal_delivery_fees": {"total": internal_delivery_fees_total, "label": "خدمة توصيل داخلية"},
             "card": {"total": card_total, "label": "بطاقة"},
             "credit": {"total": credit_total, "label": "آجل"}
         },
@@ -20874,6 +21027,22 @@ async def create_customer_order(
         branch = await db.branches.find_one({"is_active": {"$ne": False}}, {"id": 1})
         branch_id = branch["id"] if branch else None
     
+    # أجور توصيل حسب المسافة (إن مفعلة وتوفر موقع الزبون وموقع الفرع)
+    try:
+        _cust_loc = order.delivery_location.model_dump() if getattr(order, 'delivery_location', None) else None
+        _df = await _distance_fee_for(tenant_id, branch_id, _cust_loc)
+        if _df is not None:
+            if _df["out_of_range"]:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"عذراً، موقعك خارج نطاق التوصيل (المسافة {_df['km']} كم والحد الأقصى {int(_df['max_km'])} كم)"
+                )
+            delivery_fee = _df["fee"]
+    except HTTPException:
+        raise
+    except Exception as _e:
+        logger.warning(f"distance fee calc failed: {_e}")
+    
     # إنشاء الطلب
     order_doc = {
         "id": str(uuid.uuid4()),
@@ -20899,7 +21068,7 @@ async def create_customer_order(
         "status": "pending",
         "order_type": "delivery",
         "source": "customer_app",
-        "business_date": await _resolve_business_date(tenant_id, order.branch_id, current_user.get("id")),
+        "business_date": await _resolve_business_date(tenant_id, order.branch_id, None),
         "created_at": datetime.now(timezone.utc).isoformat()
     }
     
@@ -21401,7 +21570,7 @@ async def get_menu_link(request: Request, current_user: dict = Depends(get_curre
         base_url = f"{parsed.scheme}://{parsed.netloc}"
     else:
         # fallback للـ environment variable
-        base_url = os.environ.get('REACT_APP_BACKEND_URL', 'https://pos-inventory-sync-7.preview.emergentagent.com')
+        base_url = os.environ.get('REACT_APP_BACKEND_URL', 'https://offline-pos-system-18.preview.emergentagent.com')
     
     menu_url = f"{base_url}/menu/{tenant.get('menu_slug', tenant_id)}"
     
@@ -21639,13 +21808,15 @@ async def get_driver_orders(driver_id: str):
     orders = await db.orders.find(
         {
             "driver_id": driver_id,
-            "status": {"$in": ["ready", "out_for_delivery"]}
+            "status": {"$in": ["pending", "preparing", "ready", "out_for_delivery"]}
         },
         {"_id": 0}
     ).sort("created_at", -1).to_list(50)
     
     # إضافة status_label
     status_labels = {
+        'pending': 'بانتظار التحضير',
+        'preparing': 'قيد التحضير',
         'ready': 'جاهز للتوصيل',
         'out_for_delivery': 'في الطريق'
     }
@@ -21670,6 +21841,9 @@ async def update_order_status(order_id: str, status: str):
         "status": status,
         "updated_at": datetime.now(timezone.utc).isoformat()
     }
+    
+    if status == 'out_for_delivery':
+        update_data["out_for_delivery_at"] = datetime.now(timezone.utc).isoformat()
     
     if status == 'delivered':
         update_data["delivered_at"] = datetime.now(timezone.utc).isoformat()
@@ -21712,13 +21886,20 @@ async def get_order_driver_info(order_id: str, phone: str = None):
     if not driver:
         return {"driver": None, "message": "السائق غير متاح"}
     
-    # إضافة موقع التوصيل
+    # إضافة موقع التوصيل (توحيد الحقول lat/lng -> latitude/longitude)
     delivery_location = order.get("delivery_location")
+    if delivery_location:
+        delivery_location = {
+            "latitude": delivery_location.get("latitude", delivery_location.get("lat")),
+            "longitude": delivery_location.get("longitude", delivery_location.get("lng")),
+        }
     
     return {
         "driver": driver,
         "delivery_location": delivery_location,
-        "order_status": order.get("status")
+        "order_status": order.get("status"),
+        "delivery_fee": order.get("delivery_fee", 0),
+        "order_total": order.get("total", 0)
     }
 
 
@@ -21775,6 +21956,9 @@ async def driver_update_order_status(order_id: str, status: str, driver_id: str)
         "updated_at": datetime.now(timezone.utc).isoformat()
     }
     
+    if status == 'out_for_delivery':
+        update_data["out_for_delivery_at"] = datetime.now(timezone.utc).isoformat()
+    
     if status == 'delivered':
         update_data["delivered_at"] = datetime.now(timezone.utc).isoformat()
         # تحرير السائق
@@ -21810,12 +21994,58 @@ async def get_driver_info_for_customer(order_id: str):
         {"_id": 0, "id": 1, "name": 1, "phone": 1, "current_location": 1, "last_location_update": 1}
     )
     
+    dloc = order.get("delivery_location")
+    if dloc:
+        dloc = {
+            "latitude": dloc.get("latitude", dloc.get("lat")),
+            "longitude": dloc.get("longitude", dloc.get("lng")),
+        }
     return {
         "driver": driver,
-        "delivery_location": order.get("delivery_location"),
+        "delivery_location": dloc,
         "order_status": order.get("status"),
-        "delivery_address": order.get("delivery_address")
+        "delivery_address": order.get("delivery_address"),
+        "delivery_fee": order.get("delivery_fee", 0),
+        "order_total": order.get("total", 0)
     }
+
+# ==================== ORDER CHAT (محادثة الزبون مع السائق - بدون مصادقة) ====================
+class OrderChatMessage(BaseModel):
+    sender: str  # "customer" | "driver"
+    sender_name: Optional[str] = None
+    text: str
+
+@api_router.get("/order-chat/{order_id}")
+async def get_order_chat(order_id: str, after: Optional[str] = None):
+    """جلب رسائل محادثة الطلب (يستخدمها الزبون والسائق) - بدون مصادقة"""
+    query = {"order_id": order_id}
+    if after:
+        query["created_at"] = {"$gt": after}
+    msgs = await db.order_chats.find(query, {"_id": 0}).sort("created_at", 1).to_list(500)
+    return {"messages": msgs}
+
+@api_router.post("/order-chat/{order_id}")
+async def send_order_chat(order_id: str, msg: OrderChatMessage):
+    """إرسال رسالة في محادثة الطلب - بدون مصادقة"""
+    order = await db.orders.find_one({"id": order_id}, {"_id": 0, "id": 1, "driver_id": 1, "customer_name": 1})
+    if not order:
+        raise HTTPException(status_code=404, detail="الطلب غير موجود")
+    text = (msg.text or "").strip()
+    if not text:
+        raise HTTPException(status_code=400, detail="الرسالة فارغة")
+    sender = msg.sender if msg.sender in ("customer", "driver") else "customer"
+    doc = {
+        "id": str(uuid.uuid4()),
+        "order_id": order_id,
+        "sender": sender,
+        "sender_name": msg.sender_name or ("الزبون" if sender == "customer" else "السائق"),
+        "text": text[:1000],
+        "created_at": datetime.now(timezone.utc).isoformat(),
+    }
+    await db.order_chats.insert_one(doc)
+    doc.pop("_id", None)
+    return doc
+
 
 # ==================== PUSH NOTIFICATIONS ROUTES ====================
 
@@ -22221,6 +22451,14 @@ class PaymentSettingsUpdate(BaseModel):
     cash_enabled: Optional[bool] = True
     delivery_fee: Optional[int] = 5000
     min_order_amount: Optional[int] = 10000
+    # أجور التوصيل حسب المسافة (تلقائي)
+    distance_fee_enabled: Optional[bool] = None
+    fee_base: Optional[int] = None        # الأجرة الأساسية (تغطي أول fee_base_km)
+    fee_base_km: Optional[float] = None   # عدد الكيلومترات المشمولة بالأجرة الأساسية
+    fee_per_km: Optional[int] = None      # أجرة كل كم إضافي
+    fee_max: Optional[int] = None         # سقف الأجرة (0 = بلا سقف)
+    fee_round_to: Optional[int] = None    # التقريب لأقرب (250/500/1000)
+    max_distance_km: Optional[float] = None  # أقصى مسافة توصيل (0 = بلا حدود)
 
 @api_router.get("/payment-settings")
 async def get_payment_settings(current_user: dict = Depends(get_current_user)):
@@ -22287,6 +22525,141 @@ async def update_payment_settings(
     )
     
     return {"success": True, "message": "تم حفظ الإعدادات بنجاح"}
+
+# ==================== أجور التوصيل حسب المسافة ====================
+
+def _srv_haversine_km(lat1: float, lng1: float, lat2: float, lng2: float) -> float:
+    """المسافة بالكيلومتر بين نقطتين (Haversine)"""
+    R = 6371.0
+    dlat = math.radians(lat2 - lat1)
+    dlng = math.radians(lng2 - lng1)
+    a = math.sin(dlat / 2) ** 2 + math.cos(math.radians(lat1)) * math.cos(math.radians(lat2)) * math.sin(dlng / 2) ** 2
+    return 2 * R * math.asin(math.sqrt(a))
+
+
+def _compute_distance_fee(s: dict, km: float) -> int:
+    """حساب أجور التوصيل من إعدادات المسافة"""
+    base = float(s.get("fee_base") or 0)
+    base_km = float(s.get("fee_base_km") or 0)
+    per_km = float(s.get("fee_per_km") or 0)
+    fee_max = float(s.get("fee_max") or 0)
+    round_to = int(s.get("fee_round_to") or 0)
+    fee = base + max(0.0, km - base_km) * per_km
+    if fee_max > 0:
+        fee = min(fee, fee_max)
+    if round_to > 0:
+        fee = math.ceil(fee / round_to) * round_to
+    return int(fee)
+
+
+async def _distance_fee_for(tenant_id: str, branch_id: Optional[str], loc: Optional[dict]):
+    """ترجع dict {km, fee, out_of_range, max_km} إن أمكن الحساب، وإلا None"""
+    s = await db.payment_settings.find_one({"tenant_id": tenant_id or "default"}, {"_id": 0}) or {}
+    if not s.get("distance_fee_enabled"):
+        return None
+    if not loc:
+        return None
+    lat = loc.get("latitude", loc.get("lat"))
+    lng = loc.get("longitude", loc.get("lng"))
+    if lat is None or lng is None:
+        return None
+    branch = None
+    if branch_id:
+        branch = await db.branches.find_one({"id": branch_id}, {"_id": 0, "latitude": 1, "longitude": 1})
+    if not branch or branch.get("latitude") is None or branch.get("longitude") is None:
+        return None
+    km = _srv_haversine_km(float(branch["latitude"]), float(branch["longitude"]), float(lat), float(lng))
+    max_km = float(s.get("max_distance_km") or 0)
+    return {
+        "km": round(km, 2),
+        "fee": _compute_distance_fee(s, km),
+        "out_of_range": max_km > 0 and km > max_km,
+        "max_km": max_km
+    }
+
+
+class BranchLocationUpdate(BaseModel):
+    latitude: float
+    longitude: float
+
+
+@api_router.put("/branches/{branch_id}/location")
+async def update_branch_location(branch_id: str, loc: BranchLocationUpdate, current_user: dict = Depends(get_current_user)):
+    """تحديد إحداثيات الفرع (لحساب أجور التوصيل بالمسافة)"""
+    if current_user["role"] not in [UserRole.ADMIN, UserRole.MANAGER, UserRole.SUPER_ADMIN]:
+        raise HTTPException(status_code=403, detail="غير مصرح")
+    query = build_tenant_query(current_user, {"id": branch_id})
+    result = await db.branches.update_one(query, {"$set": {
+        "latitude": loc.latitude,
+        "longitude": loc.longitude,
+        "location_updated_at": datetime.now(timezone.utc).isoformat()
+    }})
+    if result.matched_count == 0:
+        raise HTTPException(status_code=404, detail="الفرع غير موجود")
+    return {"message": "تم حفظ موقع الفرع", "latitude": loc.latitude, "longitude": loc.longitude}
+
+
+@api_router.get("/delivery-fee/suggest")
+async def suggest_delivery_fee(order_id: str, current_user: dict = Depends(get_current_user)):
+    """اقتراح أجور التوصيل لطلب حسب المسافة (للكاشير/إدارة التوصيل)"""
+    tenant_id = get_user_tenant_id(current_user) or "default"
+    s = await db.payment_settings.find_one({"tenant_id": tenant_id}, {"_id": 0}) or {}
+    if not s.get("distance_fee_enabled"):
+        return {"enabled": False, "suggested_fee": None, "reason": "أجور المسافة غير مفعلة في الإعدادات"}
+    order = await db.orders.find_one({"id": order_id}, {"_id": 0, "delivery_location": 1, "branch_id": 1})
+    if not order:
+        raise HTTPException(status_code=404, detail="الطلب غير موجود")
+    loc = order.get("delivery_location") or {}
+    lat = loc.get("latitude", loc.get("lat"))
+    lng = loc.get("longitude", loc.get("lng"))
+    if lat is None or lng is None:
+        return {"enabled": True, "suggested_fee": None, "reason": "لا يوجد موقع GPS للزبون على هذا الطلب"}
+    branch = await db.branches.find_one({"id": order.get("branch_id")}, {"_id": 0, "latitude": 1, "longitude": 1})
+    if not branch or branch.get("latitude") is None or branch.get("longitude") is None:
+        return {"enabled": True, "suggested_fee": None, "reason": "حدّد موقع الفرع في الإعدادات أولاً"}
+    km = _srv_haversine_km(float(branch["latitude"]), float(branch["longitude"]), float(lat), float(lng))
+    max_km = float(s.get("max_distance_km") or 0)
+    out_of_range = max_km > 0 and km > max_km
+    resp = {
+        "enabled": True,
+        "distance_km": round(km, 2),
+        "suggested_fee": _compute_distance_fee(s, km),
+        "out_of_range": out_of_range,
+        "max_km": max_km
+    }
+    if out_of_range:
+        resp["reason"] = f"الزبون خارج نطاق التوصيل ({round(km, 1)} كم > {int(max_km)} كم)"
+    return resp
+
+
+@api_router.get("/customer/delivery-fee/{tenant_id}")
+async def customer_delivery_fee_quote(tenant_id: str, lat: float, lng: float, branch_id: Optional[str] = None):
+    """تسعير أجور التوصيل للزبون حسب موقعه - بدون مصادقة"""
+    s = await db.payment_settings.find_one({"tenant_id": tenant_id}, {"_id": 0}) or {}
+    if not s.get("distance_fee_enabled"):
+        return {"distance_based": False, "fee": None}
+    branch = None
+    if branch_id:
+        branch = await db.branches.find_one({"id": branch_id}, {"_id": 0, "latitude": 1, "longitude": 1})
+    if not branch or branch.get("latitude") is None:
+        branch = await db.branches.find_one(
+            {"tenant_id": tenant_id, "is_active": {"$ne": False}, "latitude": {"$ne": None}},
+            {"_id": 0, "latitude": 1, "longitude": 1}
+        )
+    if not branch or branch.get("latitude") is None or branch.get("longitude") is None:
+        return {"distance_based": False, "fee": None, "reason": "لم يُحدد موقع الفرع"}
+    km = _srv_haversine_km(float(branch["latitude"]), float(branch["longitude"]), float(lat), float(lng))
+    max_km = float(s.get("max_distance_km") or 0)
+    if max_km > 0 and km > max_km:
+        return {
+            "distance_based": True,
+            "out_of_range": True,
+            "distance_km": round(km, 2),
+            "max_km": max_km,
+            "fee": None
+        }
+    return {"distance_based": True, "distance_km": round(km, 2), "fee": _compute_distance_fee(s, km)}
+
 
 @api_router.post("/payment-settings/zaincash-qr")
 async def upload_zaincash_qr(

@@ -10,7 +10,7 @@ const CustomerInstall = () => {
     // تغيير manifest
     const manifestLink = document.querySelector('link[rel="manifest"]');
     if (manifestLink) {
-      manifestLink.href = '/manifest-customer.json?v=' + Date.now();
+      manifestLink.href = '/manifest-menu.json?v=' + Date.now();
     }
 
     // تحديث meta tags

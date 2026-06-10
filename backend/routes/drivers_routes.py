@@ -4,9 +4,10 @@ Drivers Routes - إدارة السائقين والتوصيل
 from fastapi import APIRouter, Depends, HTTPException, Body
 from pydantic import BaseModel, ConfigDict
 from typing import Optional, List, Dict, Any
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 import uuid
 import logging
+import math
 
 from .shared import (
     get_database, get_current_user, get_user_tenant_id,
@@ -96,6 +97,123 @@ async def get_drivers(branch_id: Optional[str] = None, include_orders: bool = Fa
                         "status": order.get("status")
                     }
     return drivers
+
+
+@router.get("/performance")
+async def drivers_performance(period: str = "today", branch_id: Optional[str] = None, current_user: dict = Depends(get_current_user)):
+    """تقرير أداء السائقين: عدد التوصيلات، الأجور المحققة، متوسط زمن التوصيل، المسافة التقديرية"""
+    db = get_database()
+
+    now = datetime.now(timezone.utc)
+    if period == "week":
+        start = now - timedelta(days=7)
+    elif period == "month":
+        start = now - timedelta(days=30)
+    else:  # today
+        start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+
+    def _sn(v):
+        try:
+            return float(v) if v is not None else 0.0
+        except (TypeError, ValueError):
+            return 0.0
+
+    # طلبات التوصيل الداخلية (سائقي المطعم) خلال الفترة
+    oq = build_tenant_query(current_user, {
+        "order_type": "delivery",
+        "driver_id": {"$nin": [None, ""]},
+        "created_at": {"$gte": start.isoformat()},
+        "status": {"$nin": ["cancelled", "refunded"]},
+    })
+    if branch_id:
+        oq["branch_id"] = branch_id
+    orders = await db.orders.find(oq, {
+        "_id": 0, "driver_id": 1, "driver_name": 1, "status": 1, "total": 1, "delivery_fee": 1,
+        "created_at": 1, "delivered_at": 1, "out_for_delivery_at": 1, "delivery_location": 1,
+        "branch_id": 1, "is_delivery_company": 1, "delivery_app": 1, "delivery_app_name": 1
+    }).to_list(10000)
+
+    # إحداثيات الفروع (للمسافة التقديرية فرع→زبون)
+    branches = await db.branches.find({}, {"_id": 0, "id": 1, "latitude": 1, "longitude": 1}).to_list(200)
+    bmap = {b["id"]: b for b in branches if b.get("latitude") is not None and b.get("longitude") is not None}
+
+    # كل سائقي المطعم (حتى من ليس له طلبات في الفترة)
+    dq = build_tenant_query(current_user)
+    if branch_id:
+        dq["branch_id"] = branch_id
+    drivers = await db.drivers.find(dq, {"_id": 0, "id": 1, "name": 1, "phone": 1, "is_active": 1, "is_available": 1}).to_list(500)
+
+    perf = {}
+    def _row(did, name, phone="", is_active=True, is_available=True):
+        return {
+            "driver_id": did, "name": name, "phone": phone,
+            "is_active": is_active, "is_available": is_available,
+            "deliveries": 0, "active_orders": 0,
+            "total_fees": 0.0, "total_collected": 0.0,
+            "_times": [], "distance_km": 0.0
+        }
+    for d in drivers:
+        perf[d["id"]] = _row(d["id"], d.get("name") or "سائق", d.get("phone") or "", d.get("is_active", True), d.get("is_available", True))
+
+    for o in orders:
+        # استبعاد شركات التوصيل
+        if o.get("is_delivery_company") or o.get("delivery_app") or o.get("delivery_app_name"):
+            continue
+        did = o["driver_id"]
+        if did not in perf:
+            perf[did] = _row(did, o.get("driver_name") or "سائق محذوف", is_active=False)
+        p = perf[did]
+        if o.get("status") == "delivered":
+            p["deliveries"] += 1
+            p["total_fees"] += _sn(o.get("delivery_fee"))
+            p["total_collected"] += _sn(o.get("total"))
+            # متوسط زمن التوصيل: من الانطلاق (أو إنشاء الطلب) حتى التسليم
+            end_ts = o.get("delivered_at")
+            start_ts = o.get("out_for_delivery_at") or o.get("created_at")
+            if end_ts and start_ts:
+                try:
+                    mins = (datetime.fromisoformat(end_ts) - datetime.fromisoformat(start_ts)).total_seconds() / 60
+                    if 0 < mins < 24 * 60:
+                        p["_times"].append(mins)
+                except (ValueError, TypeError):
+                    pass
+            # مسافة تقديرية: فرع → موقع الزبون
+            loc = o.get("delivery_location") or {}
+            lat = loc.get("latitude", loc.get("lat"))
+            lng = loc.get("longitude", loc.get("lng"))
+            br = bmap.get(o.get("branch_id"))
+            if br and lat is not None and lng is not None:
+                try:
+                    p["distance_km"] += _haversine_km(float(br["latitude"]), float(br["longitude"]), float(lat), float(lng))
+                except (ValueError, TypeError):
+                    pass
+        elif o.get("status") in ("preparing", "ready", "out_for_delivery"):
+            p["active_orders"] += 1
+
+    rows = []
+    for p in perf.values():
+        times = p.pop("_times")
+        p["avg_delivery_minutes"] = round(sum(times) / len(times), 1) if times else None
+        p["distance_km"] = round(p["distance_km"], 1)
+        p["total_fees"] = round(p["total_fees"])
+        p["total_collected"] = round(p["total_collected"])
+        rows.append(p)
+    rows.sort(key=lambda r: (r["deliveries"], r["total_fees"]), reverse=True)
+
+    all_times = [r["avg_delivery_minutes"] for r in rows if r["avg_delivery_minutes"] is not None]
+    return {
+        "period": period,
+        "start": start.isoformat(),
+        "drivers": rows,
+        "totals": {
+            "deliveries": sum(r["deliveries"] for r in rows),
+            "total_fees": sum(r["total_fees"] for r in rows),
+            "total_collected": sum(r["total_collected"] for r in rows),
+            "distance_km": round(sum(r["distance_km"] for r in rows), 1),
+            "avg_delivery_minutes": round(sum(all_times) / len(all_times), 1) if all_times else None
+        }
+    }
+
 
 class DriverUpdate(BaseModel):
     name: Optional[str] = None
@@ -194,19 +312,87 @@ async def get_driver_with_current_order(driver_id: str, current_user: dict = Dep
     return driver
 
 # ==================== DRIVER OPERATIONS ====================
+def _haversine_km(lat1, lng1, lat2, lng2):
+    """المسافة بالكيلومتر بين نقطتين (Haversine)"""
+    try:
+        R = 6371.0
+        dlat = math.radians(lat2 - lat1)
+        dlng = math.radians(lng2 - lng1)
+        a = math.sin(dlat / 2) ** 2 + math.cos(math.radians(lat1)) * math.cos(math.radians(lat2)) * math.sin(dlng / 2) ** 2
+        return 2 * R * math.asin(math.sqrt(a))
+    except Exception:
+        return 9999.0
+
+NEAR_RADIUS_KM = 2.0  # نصف القطر الذي يُعتبر "قريباً/على نفس المسار"
+
 @router.put("/{driver_id}/assign")
-async def assign_driver(driver_id: str, order_id: str, current_user: dict = Depends(get_current_user)):
-    """تعيين سائق لطلب"""
+async def assign_driver(driver_id: str, order_id: str, force: bool = False, delivery_fee: Optional[float] = None, current_user: dict = Depends(get_current_user)):
+    """تعيين سائق لطلب — مع دعم تجميع عدة طلبات على نفس السائق.
+    القواعد:
+    - إذا لم يغادر السائق المطعم بعد (لا يوجد طلب out_for_delivery): يُسمح بالإضافة دائماً.
+    - إذا غادر: لا يُسمح إلا إذا كان الطلب الجديد قريباً (ضمن NEAR_RADIUS_KM) من أحد طلباته الحالية / مساره.
+    - force=true يتجاوز القيود (للمالك/المدير).
+    - delivery_fee: أجور التوصيل (اختياري) — تُضاف لفاتورة الطلب وتظهر للزبون.
+    """
     db = get_database()
+    driver = await db.drivers.find_one({"id": driver_id})
+    if not driver:
+        raise HTTPException(status_code=404, detail="السائق غير موجود")
+    new_order = await db.orders.find_one({"id": order_id})
+    if not new_order:
+        raise HTTPException(status_code=404, detail="الطلب غير موجود")
+
+    active = await db.orders.find(
+        {"driver_id": driver_id, "status": {"$in": [OrderStatus.PENDING, OrderStatus.PREPARING, OrderStatus.READY, "out_for_delivery"]}},
+        {"_id": 0, "id": 1, "status": 1, "delivery_location": 1}
+    ).to_list(100)
+    # استبعد الطلب نفسه إن كان موجوداً
+    active = [o for o in active if o.get("id") != order_id]
+    departed = any(o.get("status") == "out_for_delivery" for o in active)
+
+    new_loc = new_order.get("delivery_location") or {}
+
+    def _near_existing():
+        if not (new_loc.get("latitude") and new_loc.get("longitude")):
+            return False
+        for o in active:
+            ol = o.get("delivery_location") or {}
+            if ol.get("latitude") and ol.get("longitude"):
+                if _haversine_km(new_loc["latitude"], new_loc["longitude"], ol["latitude"], ol["longitude"]) <= NEAR_RADIUS_KM:
+                    return True
+        return False
+
+    if active and not force and departed and not _near_existing():
+        raise HTTPException(
+            status_code=409,
+            detail="السائق غادر المطعم ولا يوجد طلب قريب من مساره — لا يمكن إضافة هذا الطلب إليه"
+        )
+
     await db.drivers.update_one(
         {"id": driver_id},
-        {"$set": {"is_available": False, "current_order_id": order_id}}
+        {"$set": {"is_available": False, "current_order_id": driver.get("current_order_id") or order_id}}
     )
-    await db.orders.update_one(
-        {"id": order_id},
-        {"$set": {"driver_id": driver_id, "status": OrderStatus.PREPARING}}
-    )
-    return {"message": "تم تعيين السائق"}
+    order_update = {
+        "driver_id": driver_id,
+        "driver_name": driver.get("name", ""),
+        "driver_phone": driver.get("phone", ""),
+        "status": OrderStatus.PREPARING,
+    }
+    # أجور التوصيل: تُضاف لإجمالي الفاتورة (مع الحفاظ على عدم التكرار إن أُعيد التعيين)
+    if delivery_fee is not None and delivery_fee >= 0:
+        old_fee = float(new_order.get("delivery_fee") or 0)
+        new_total = float(new_order.get("total") or 0) - old_fee + float(delivery_fee)
+        order_update["delivery_fee"] = float(delivery_fee)
+        order_update["total"] = new_total
+    await db.orders.update_one({"id": order_id}, {"$set": order_update})
+    return {
+        "message": "تم تعيين السائق",
+        "batched": len(active) > 0,
+        "departed": departed,
+        "active_orders": len(active) + 1,
+        "delivery_fee": order_update.get("delivery_fee"),
+        "new_total": order_update.get("total")
+    }
 
 @router.put("/{driver_id}/complete")
 async def complete_delivery(driver_id: str, order_id: Optional[str] = None, current_user: dict = Depends(get_current_user)):
@@ -313,6 +499,7 @@ async def collect_driver_payment(driver_id: str, amount: float = 0, current_user
         {"$set": {
             "payment_status": "paid",
             "payment_method": "cash",
+            "payment_source": "internal_delivery",  # صفة "توصيل داخلي" في التقارير
             "payment_settled_from_driver_at": datetime.now(timezone.utc).isoformat(),
         }}
     )

@@ -373,9 +373,18 @@ export default function Settings() {
     zaincash_qr_image: '',
     cash_enabled: true,
     delivery_fee: 5000,
-    min_order_amount: 10000
+    min_order_amount: 10000,
+    distance_fee_enabled: false,
+    fee_base: 2000,
+    fee_base_km: 3,
+    fee_per_km: 500,
+    fee_max: 0,
+    fee_round_to: 250,
+    max_distance_km: 0
   });
   const [paymentSaving, setPaymentSaving] = useState(false);
+  const [branchLocSaving, setBranchLocSaving] = useState('');
+  const [branchCoords, setBranchCoords] = useState({});
   
   // إعدادات المخزون
   const [inventorySettings, setInventorySettings] = useState({
@@ -1141,7 +1150,14 @@ export default function Settings() {
       setPaymentSaving(true);
       await axios.post(`${API}/payment-settings`, {
         delivery_fee: paymentSettings.delivery_fee,
-        min_order_amount: paymentSettings.min_order_amount
+        min_order_amount: paymentSettings.min_order_amount,
+        distance_fee_enabled: !!paymentSettings.distance_fee_enabled,
+        fee_base: Number(paymentSettings.fee_base) || 0,
+        fee_base_km: Number(paymentSettings.fee_base_km) || 0,
+        fee_per_km: Number(paymentSettings.fee_per_km) || 0,
+        fee_max: Number(paymentSettings.fee_max) || 0,
+        fee_round_to: Number(paymentSettings.fee_round_to) || 0,
+        max_distance_km: Number(paymentSettings.max_distance_km) || 0
       });
       toast.success(t('تم الحفظ بنجاح'));
     } catch (error) {
@@ -1149,6 +1165,41 @@ export default function Settings() {
     } finally {
       setPaymentSaving(false);
     }
+  };
+
+  // حفظ موقع الفرع (لأجور المسافة)
+  const saveBranchLocation = async (branchId) => {
+    const coords = branchCoords[branchId];
+    if (!coords?.lat || !coords?.lng) {
+      toast.error(t('أدخل خط الطول والعرض أو استخدم موقعك الحالي'));
+      return;
+    }
+    try {
+      setBranchLocSaving(branchId);
+      await axios.put(`${API}/branches/${branchId}/location`, {
+        latitude: Number(coords.lat),
+        longitude: Number(coords.lng)
+      });
+      toast.success(t('تم حفظ موقع الفرع'));
+    } catch (error) {
+      toast.error(t('فشل في حفظ موقع الفرع'));
+    } finally {
+      setBranchLocSaving('');
+    }
+  };
+
+  const captureMyLocationForBranch = (branchId) => {
+    if (!navigator.geolocation) {
+      toast.error(t('المتصفح لا يدعم تحديد الموقع'));
+      return;
+    }
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        setBranchCoords(prev => ({ ...prev, [branchId]: { lat: pos.coords.latitude.toFixed(6), lng: pos.coords.longitude.toFixed(6) } }));
+        toast.success(t('تم التقاط موقعك — اضغط حفظ'));
+      },
+      () => toast.error(t('تعذر الحصول على الموقع'))
+    );
   };
 
   // رفع صورة QR لزين كاش
@@ -6632,6 +6683,118 @@ export default function Settings() {
                             className="bg-muted/30"
                           />
                         </div>
+                      </div>
+                      
+                      {/* أجور توصيل تلقائية حسب المسافة */}
+                      <div className="mt-4 p-3 rounded-lg border border-amber-500/30 bg-amber-500/5" data-testid="distance-fee-section">
+                        <div className="flex items-center justify-between gap-3 mb-3">
+                          <div>
+                            <p className="font-medium text-foreground">{t('أجور توصيل تلقائية حسب المسافة')} 🗺️</p>
+                            <p className="text-xs text-muted-foreground">{t('يحسب النظام الأجور تلقائياً من موقع الزبون على الخريطة وتنزل على الفاتورة وتظهر في التطبيق')}</p>
+                          </div>
+                          <Switch
+                            checked={!!paymentSettings.distance_fee_enabled}
+                            onCheckedChange={(c) => setPaymentSettings(prev => ({...prev, distance_fee_enabled: c}))}
+                            data-testid="distance-fee-toggle"
+                          />
+                        </div>
+                        {paymentSettings.distance_fee_enabled && (
+                          <>
+                            <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                              <div>
+                                <Label className="text-foreground mb-1 block text-xs">{t('الأجرة الأساسية (د.ع)')}</Label>
+                                <Input type="number" value={paymentSettings.fee_base ?? 0}
+                                  onChange={(e) => setPaymentSettings(prev => ({...prev, fee_base: parseInt(e.target.value) || 0}))}
+                                  className="bg-muted/30" data-testid="fee-base-input" />
+                              </div>
+                              <div>
+                                <Label className="text-foreground mb-1 block text-xs">{t('تشمل أول (كم)')}</Label>
+                                <Input type="number" step="0.5" value={paymentSettings.fee_base_km ?? 0}
+                                  onChange={(e) => setPaymentSettings(prev => ({...prev, fee_base_km: parseFloat(e.target.value) || 0}))}
+                                  className="bg-muted/30" data-testid="fee-base-km-input" />
+                              </div>
+                              <div>
+                                <Label className="text-foreground mb-1 block text-xs">{t('أجرة كل كم إضافي (د.ع)')}</Label>
+                                <Input type="number" value={paymentSettings.fee_per_km ?? 0}
+                                  onChange={(e) => setPaymentSettings(prev => ({...prev, fee_per_km: parseInt(e.target.value) || 0}))}
+                                  className="bg-muted/30" data-testid="fee-per-km-input" />
+                              </div>
+                              <div>
+                                <Label className="text-foreground mb-1 block text-xs">{t('سقف الأجرة (0 = بلا سقف)')}</Label>
+                                <Input type="number" value={paymentSettings.fee_max ?? 0}
+                                  onChange={(e) => setPaymentSettings(prev => ({...prev, fee_max: parseInt(e.target.value) || 0}))}
+                                  className="bg-muted/30" data-testid="fee-max-input" />
+                              </div>
+                              <div>
+                                <Label className="text-foreground mb-1 block text-xs">{t('التقريب لأقرب')}</Label>
+                                <select
+                                  value={paymentSettings.fee_round_to ?? 250}
+                                  onChange={(e) => setPaymentSettings(prev => ({...prev, fee_round_to: parseInt(e.target.value)}))}
+                                  className="w-full h-10 rounded-md border border-input bg-muted/30 px-3 text-sm text-foreground"
+                                  data-testid="fee-round-select"
+                                >
+                                  <option value="0">{t('بدون تقريب')}</option>
+                                  <option value="250">250</option>
+                                  <option value="500">500</option>
+                                  <option value="1000">1000</option>
+                                </select>
+                              </div>
+                              <div>
+                                <Label className="text-foreground mb-1 block text-xs">{t('أقصى مسافة توصيل (كم)')} <span className="text-muted-foreground">(0 = {t('بلا حدود')})</span></Label>
+                                <Input type="number" step="0.5" min="0" value={paymentSettings.max_distance_km ?? 0}
+                                  onChange={(e) => setPaymentSettings(prev => ({...prev, max_distance_km: parseFloat(e.target.value) || 0}))}
+                                  className="bg-muted/30 border-red-300/50" data-testid="max-distance-input" />
+                                <p className="text-[10px] text-red-400 mt-0.5">{t('الزبون الأبعد من هذه المسافة يظهر له تنبيه أنه خارج نطاق التوصيل')}</p>
+                              </div>
+                            </div>
+                            <p className="text-xs text-amber-500 mt-2">
+                              {t('مثال')}: {t('زبون على بعد 5 كم')} = {(() => {
+                                const base = Number(paymentSettings.fee_base) || 0;
+                                const bkm = Number(paymentSettings.fee_base_km) || 0;
+                                const per = Number(paymentSettings.fee_per_km) || 0;
+                                const mx = Number(paymentSettings.fee_max) || 0;
+                                const rnd = Number(paymentSettings.fee_round_to) || 0;
+                                let f = base + Math.max(0, 5 - bkm) * per;
+                                if (mx > 0) f = Math.min(f, mx);
+                                if (rnd > 0) f = Math.ceil(f / rnd) * rnd;
+                                return f.toLocaleString();
+                              })()} {t('د.ع')}
+                            </p>
+                            
+                            {/* مواقع الفروع */}
+                            <div className="mt-4 pt-3 border-t border-border/50">
+                              <p className="text-sm font-medium text-foreground mb-2">📍 {t('موقع الفروع (مطلوب لحساب المسافة)')}</p>
+                              <div className="space-y-2">
+                                {branches.map(b => {
+                                  const saved = b.latitude != null && b.longitude != null;
+                                  const c = branchCoords[b.id] || {};
+                                  return (
+                                    <div key={b.id} className="flex flex-wrap items-center gap-2 p-2 rounded-lg bg-muted/30 border border-border/50">
+                                      <span className="text-sm font-medium text-foreground min-w-[100px]">
+                                        {b.name} {saved && <span className="text-green-500 text-xs">✓ {t('محدد')}</span>}
+                                      </span>
+                                      <Input placeholder={t('خط العرض')} value={c.lat ?? b.latitude ?? ''}
+                                        onChange={(e) => setBranchCoords(prev => ({ ...prev, [b.id]: { ...prev[b.id], lat: e.target.value, lng: prev[b.id]?.lng ?? b.longitude ?? '' } }))}
+                                        className="w-32 h-8 text-xs bg-background" data-testid={`branch-lat-${b.id}`} />
+                                      <Input placeholder={t('خط الطول')} value={c.lng ?? b.longitude ?? ''}
+                                        onChange={(e) => setBranchCoords(prev => ({ ...prev, [b.id]: { ...prev[b.id], lng: e.target.value, lat: prev[b.id]?.lat ?? b.latitude ?? '' } }))}
+                                        className="w-32 h-8 text-xs bg-background" data-testid={`branch-lng-${b.id}`} />
+                                      <Button size="sm" variant="outline" className="h-8 text-xs"
+                                        onClick={() => captureMyLocationForBranch(b.id)} data-testid={`branch-use-location-${b.id}`}>
+                                        📍 {t('موقعي الحالي')}
+                                      </Button>
+                                      <Button size="sm" className="h-8 text-xs bg-green-600 hover:bg-green-700 text-white"
+                                        disabled={branchLocSaving === b.id}
+                                        onClick={() => saveBranchLocation(b.id)} data-testid={`branch-save-location-${b.id}`}>
+                                        {branchLocSaving === b.id ? '...' : t('حفظ الموقع')}
+                                      </Button>
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            </div>
+                          </>
+                        )}
                       </div>
                       
                       <Button 

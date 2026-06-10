@@ -33,28 +33,49 @@
         <script src="https://assets.emergent.sh/scripts/emergent-main.js"></script>
         
         <script>
-            // تبديل manifest للزبائن إذا كان المسار /menu
+            // ⭐ توجيه التطبيقات المثبّتة (PWA) إلى وجهتها الصحيحة عند فتحها من الشاشة الرئيسية
+            // عند فتح التطبيق المثبّت يبدأ أحياناً من "/" (بسبب التقاط iOS لمانيفست المشرف)،
+            // فنُعيد توجيه السائق/الزبون لشاشته الصحيحة بدل صفحة دخول الموظفين.
             (function() {
-                var isCustomerPath = window.location.pathname.startsWith('/menu');
-                if (isCustomerPath) {
-                    // تحديث manifest link
-                    var manifestLink = document.querySelector('link[rel="manifest"]');
-                    if (manifestLink) {
-                        manifestLink.href = '/manifest-customer.json?v=' + Date.now();
+                try {
+                    var path = window.location.pathname;
+                    var isRoot = path === '/' || path === '/index.html';
+                    var isStandalone = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
+                    var hasStaff = localStorage.getItem('token') || localStorage.getItem('cached_user');
+                    if (isRoot && isStandalone && !hasStaff) {
+                        var driverSession = localStorage.getItem('driver_app_session');
+                        var savedRestaurant = localStorage.getItem('customer_restaurant');
+                        if (driverSession) {
+                            window.location.replace('/driver-app');
+                            return;
+                        }
+                        if (savedRestaurant) {
+                            window.location.replace('/menu/' + savedRestaurant);
+                            return;
+                        }
                     }
-                    // تحديث theme color
-                    var themeColor = document.querySelector('meta[name="theme-color"]');
+                } catch (e) {}
+            })();
+
+            // تبديل manifest حسب المسار (زبائن / سائق) — مبكراً قبل قراءة المتصفح للمانيفست عند التثبيت
+            (function() {
+                var path = window.location.pathname;
+                var manifestLink = document.querySelector('link[rel="manifest"]');
+                var themeColor = document.querySelector('meta[name="theme-color"]');
+                var appleTitle = document.querySelector('meta[name="apple-mobile-web-app-title"]');
+                var appleIcons = document.querySelectorAll('link[rel="apple-touch-icon"]');
+                if (path.startsWith('/menu')) {
+                    if (manifestLink) manifestLink.href = '/manifest-menu.json?v=' + Date.now();
                     if (themeColor) themeColor.content = '#f97316';
-                    // تحديث apple icons
-                    var appleIcons = document.querySelectorAll('link[rel="apple-touch-icon"]');
-                    appleIcons.forEach(function(icon) {
-                        icon.href = icon.href.replace('admin-icon', 'customer-icon');
-                    });
-                    // تحديث apple title
-                    var appleTitle = document.querySelector('meta[name="apple-mobile-web-app-title"]');
+                    appleIcons.forEach(function(icon) { icon.href = icon.href.replace('admin-icon', 'customer-icon'); });
                     if (appleTitle) appleTitle.content = 'قائمة الطعام';
-                    // تحديث عنوان الصفحة
                     document.title = 'قائمة الطعام - اطلب الآن';
+                } else if (path.startsWith('/driver-app')) {
+                    if (manifestLink) manifestLink.href = '/manifest-driver.json?v=' + Date.now();
+                    if (themeColor) themeColor.content = '#16a34a';
+                    appleIcons.forEach(function(icon) { icon.href = icon.href.replace('admin-icon', 'icon'); });
+                    if (appleTitle) appleTitle.content = 'تطبيق السائق';
+                    document.title = 'تطبيق السائق - التوصيل';
                 }
             })();
             

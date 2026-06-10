@@ -78,6 +78,7 @@ const RestaurantSelector = lazy(() => import("./pages/RestaurantSelector"));
 const PurchasesPage = lazy(() => import("./pages/PurchasesPage"));
 const Ratings = lazy(() => import("./pages/Ratings"));
 const DriverApp = lazy(() => import("./pages/DriverApp"));
+const PublicTracking = lazy(() => import("./pages/PublicTracking"));
 const InventoryReports = lazy(() => import("./pages/InventoryReports"));
 const SystemContact = lazy(() => import("./pages/SystemContact"));
 const BreakEvenReport = lazy(() => import("./pages/BreakEvenReport"));
@@ -88,6 +89,7 @@ const ExternalBranchesManagement = lazy(() => import("./pages/ExternalBranchesMa
 
 // Components
 import IncomingCallPopup from "./components/IncomingCallPopup";
+import { IncomingOrderCall } from "./components/IncomingOrderCall";
 
 // Check if initial auth check is done (stored in sessionStorage)
 const isAuthChecked = () => sessionStorage.getItem('auth_checked') === 'true';
@@ -595,6 +597,8 @@ function AppRoutes() {
       <Route path="/install-app" element={<CustomerInstall />} />
       {/* تطبيق السائق - بدون حماية */}
       <Route path="/driver-app" element={<DriverApp />} />
+      {/* تتبّع الطلب العام - رابط يُرسَل للزبون بدون تثبيت/تسجيل دخول */}
+      <Route path="/track/:orderId" element={<PublicTracking />} />
       {/* صفحة التواصل للنظام - بدون حماية */}
       <Route path="/contact" element={<SystemContact />} />
       <Route path="*" element={<Navigate to="/" />} />
@@ -682,6 +686,8 @@ function App() {
                       <Toaster position="top-center" richColors />
                       {/* Incoming Call Popup - يظهر في جميع الصفحات */}
                       <IncomingCallPopup />
+                      {/* إشعار طلب جديد للكاشير على شكل مكالمة واردة */}
+                      <IncomingOrderCall />
                       {/* PWA Install Prompt */}
                       <InstallPWA />
                     </BrowserRouter>

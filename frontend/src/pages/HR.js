@@ -207,6 +207,13 @@ export default function HR() {
   const [employeeDialogOpen, setEmployeeDialogOpen] = useState(false);
   const [attendanceDialogOpen, setAttendanceDialogOpen] = useState(false);
   const [advanceDialogOpen, setAdvanceDialogOpen] = useState(false);
+  // احتساب قسط سلفة سابقة يدوياً في الشهر الحالي
+  const [advanceDeductOpen, setAdvanceDeductOpen] = useState(false);
+  const [advanceDeductEmployee, setAdvanceDeductEmployee] = useState(null);
+  const [advanceDeductList, setAdvanceDeductList] = useState([]);
+  const [advanceDeductId, setAdvanceDeductId] = useState('');
+  const [advanceDeductAmount, setAdvanceDeductAmount] = useState('');
+  const [advanceDeductSubmitting, setAdvanceDeductSubmitting] = useState(false);
   const [deductionDialogOpen, setDeductionDialogOpen] = useState(false);
   const [resetDeductionsDialogOpen, setResetDeductionsDialogOpen] = useState(false);
   const [resetEligibility, setResetEligibility] = useState(null);
@@ -1250,6 +1257,43 @@ export default function HR() {
     }
   };
 
+  // فتح نافذة احتساب قسط من سلفة سابقة (المالك يحدّد المبلغ المُستقطع هذا الشهر)
+  const openAdvanceDeductDialog = (emp) => {
+    const prev = advances.filter(a =>
+      a.employee_id === emp.id &&
+      a.status === 'approved' &&
+      (a.remaining_amount || 0) > 0 &&
+      (a.date || '').slice(0, 7) < selectedMonth
+    );
+    setAdvanceDeductEmployee(emp);
+    setAdvanceDeductList(prev);
+    setAdvanceDeductId(prev.length > 0 ? prev[0].id : '');
+    setAdvanceDeductAmount('');
+    setAdvanceDeductOpen(true);
+  };
+
+  const submitAdvanceDeduct = async () => {
+    if (!advanceDeductId) { toast.error(t('اختر السلفة')); return; }
+    const amt = parseFloat(advanceDeductAmount);
+    if (!amt || amt <= 0) { toast.error(t('أدخل مبلغاً صحيحاً')); return; }
+    setAdvanceDeductSubmitting(true);
+    try {
+      const token = localStorage.getItem('token');
+      await axios.post(`${API}/advances/${advanceDeductId}/deduct-installment`, {
+        month: selectedMonth,
+        amount: amt,
+        notes: t('احتساب يدوي لسلفة سابقة')
+      }, { headers: { Authorization: `Bearer ${token}` } });
+      toast.success(t('تم احتساب قسط السلفة لهذا الشهر'));
+      setAdvanceDeductOpen(false);
+      fetchData();
+    } catch (error) {
+      showApiError(error, t('فشل في احتساب القسط'));
+    } finally {
+      setAdvanceDeductSubmitting(false);
+    }
+  };
+
   // Deduction handlers
   // فتح حوار تصفير الخصومات - يفحص الأهلية من السيرفر أولاً
   const handleOpenResetDeductions = async () => {
@@ -1908,6 +1952,7 @@ export default function HR() {
     monthlyBonuses: bonuses.reduce((sum, b) => sum + b.amount, 0),
     netPayable: payrollSummary?.totals?.net_payable || 0,
     paidAmount: payrollSummary?.totals?.paid_amount || 0,
+    overtimePay: payrollSummary?.totals?.overtime_pay || 0,
     remaining: payrollSummary?.totals?.remaining != null ? payrollSummary.totals.remaining : (payrollSummary?.totals?.net_payable || 0)
   };
 
@@ -2334,7 +2379,7 @@ export default function HR() {
 
       {/* Stats */}
       <div className="container mx-auto px-4 py-6">
-        <div className="grid grid-cols-2 md:grid-cols-7 gap-4 mb-6">
+        <div className="grid grid-cols-2 md:grid-cols-8 gap-4 mb-6">
           <Card className="bg-blue-500/10 border-blue-500/20">
             <CardContent className="p-4 text-center">
               <Users className="h-8 w-8 text-blue-500 mx-auto mb-2" />
@@ -2382,18 +2427,25 @@ export default function HR() {
               <p className="text-sm text-muted-foreground">{t('مكافآت الشهر')}</p>
             </CardContent>
           </Card>
-          <Card className="bg-cyan-500/10 border-cyan-500/20">
-            <CardContent className="p-4 text-center">
-              <DollarSign className="h-8 w-8 text-cyan-500 mx-auto mb-2" />
-              <p className="text-lg font-bold text-cyan-500">{formatPrice(stats.netPayable)}</p>
-              <p className="text-sm text-muted-foreground">{t('المستحقات')}</p>
-            </CardContent>
-          </Card>
           <Card className="bg-purple-500/10 border-purple-500/20" data-testid="top-card-paid">
             <CardContent className="p-4 text-center">
               <Banknote className="h-8 w-8 text-purple-500 mx-auto mb-2" />
               <p className="text-lg font-bold text-purple-500">{formatPrice(stats.paidAmount)}</p>
               <p className="text-sm text-muted-foreground">{t('الدفعات المصروفة')}</p>
+            </CardContent>
+          </Card>
+          <Card className="bg-blue-500/10 border-blue-500/20" data-testid="top-card-overtime">
+            <CardContent className="p-4 text-center">
+              <Clock className="h-8 w-8 text-blue-500 mx-auto mb-2" />
+              <p className="text-lg font-bold text-blue-500">{formatPrice(stats.overtimePay)}</p>
+              <p className="text-sm text-muted-foreground">{t('قيمة الأوقات الإضافية')}</p>
+            </CardContent>
+          </Card>
+          <Card className="bg-cyan-500/10 border-cyan-500/20" data-testid="top-card-net-payable">
+            <CardContent className="p-4 text-center">
+              <DollarSign className="h-8 w-8 text-cyan-500 mx-auto mb-2" />
+              <p className="text-lg font-bold text-cyan-500">{formatPrice(stats.netPayable)}</p>
+              <p className="text-sm text-muted-foreground">{t('المستحقات')}</p>
             </CardContent>
           </Card>
         </div>
@@ -2752,7 +2804,7 @@ export default function HR() {
                 {payrollSummary ? (
                   <>
                     {/* ملخص الإجماليات */}
-                    <div className="grid grid-cols-2 md:grid-cols-6 gap-4 mb-6">
+                    <div className="grid grid-cols-2 md:grid-cols-7 gap-4 mb-6">
                       <Card className="bg-blue-500/10">
                         <CardContent className="p-4 text-center">
                           <p className="text-sm text-muted-foreground">{t('الرواتب الأساسية')}</p>
@@ -2763,6 +2815,12 @@ export default function HR() {
                         <CardContent className="p-4 text-center">
                           <p className="text-sm text-muted-foreground">{t('المكافآت')}</p>
                           <p className="text-xl font-bold text-green-500">{formatPrice(payrollSummary.totals?.total_bonuses || 0)}</p>
+                        </CardContent>
+                      </Card>
+                      <Card className="bg-blue-500/10" data-testid="card-total-overtime">
+                        <CardContent className="p-4 text-center">
+                          <p className="text-sm text-muted-foreground">{t('قيمة الأوقات الإضافية')}</p>
+                          <p className="text-xl font-bold text-blue-600">{formatPrice(payrollSummary.totals?.overtime_pay || 0)}</p>
                         </CardContent>
                       </Card>
                       <Card className="bg-red-500/10">
@@ -2800,10 +2858,12 @@ export default function HR() {
                             <th className="p-3 text-right">{t('الموظف')}</th>
                             <th className="p-3 text-right">{t('الفرع')}</th>
                             <th className="p-3 text-right">{t('الوظيفة')}</th>
+                            <th className="p-3 text-right">{t('ساعات العمل')}</th>
                             <th className="p-3 text-right">{t('الراتب الأساسي')}</th>
                             <th className="p-3 text-right">{t('المكافآت')}</th>
                             <th className="p-3 text-right">{t('الخصومات')}</th>
                             <th className="p-3 text-right">{t('السلف')}</th>
+                            <th className="p-3 text-right text-blue-600">{t('الأوقات الإضافية')}</th>
                             <th className="p-3 text-right">{t('صافي الراتب')}</th>
                             <th className="p-3 text-right text-purple-600">{t('مدفوع نقداً')}</th>
                             <th className="p-3 text-right text-cyan-600">{t('المتبقي')}</th>
@@ -2821,22 +2881,26 @@ export default function HR() {
                                     <Badge className="bg-amber-500/15 text-amber-700 border-amber-300 text-[10px]">{t('مدير عام')}</Badge>
                                   )}
                                   {(emp.pending_advances || 0) > 0 && (
-                                    <span
-                                      className="inline-flex items-center gap-1 text-[10px] text-orange-600 bg-orange-500/10 border border-orange-300 rounded-full px-1.5 py-0.5"
-                                      title={t('سلف معلّقة (رصيد متبقٍّ)')}
+                                    <button
+                                      type="button"
+                                      onClick={() => openAdvanceDeductDialog(emp)}
+                                      className="inline-flex items-center gap-1 text-[10px] text-orange-700 bg-orange-500/10 hover:bg-orange-500/20 border border-orange-300 rounded-full px-1.5 py-0.5 cursor-pointer transition-colors"
+                                      title={t('سلفة سابقة — اضغط لاحتساب مبلغ في هذا الشهر')}
                                       data-testid={`pending-advance-notice-${emp.id}`}
                                     >
-                                      <Bell className="h-3 w-3" /> {t('سلفة معلّقة')}: {formatPrice(emp.pending_advances)}
-                                    </span>
+                                      <Bell className="h-3 w-3" /> {t('سلفة سابقة')}: {formatPrice(emp.pending_advances)}
+                                    </button>
                                   )}
                                 </div>
                               </td>
                               <td className="p-3">{emp.branch_name || '-'}</td>
                               <td className="p-3">{emp.position}</td>
+                              <td className="p-3 font-medium" data-testid={`worked-hours-${emp.id}`}>{(emp.total_worked_hours || 0).toLocaleString()} {t('ساعة')}</td>
                               <td className="p-3">{formatPrice(emp.basic_salary)}</td>
                               <td className="p-3 text-green-600">{formatPrice(emp.bonuses)}</td>
                               <td className="p-3 text-red-600">{formatPrice(emp.deductions)}</td>
                               <td className="p-3 text-yellow-600">{formatPrice(emp.advances_deduction)}</td>
+                              <td className="p-3 text-blue-600">{formatPrice(emp.overtime_pay || 0)} <span className="text-[10px] text-muted-foreground">({(emp.overtime_hours || 0).toLocaleString()} {t('ساعة')})</span></td>
                               <td className="p-3 font-bold text-cyan-600">{formatPrice(emp.net_payable)}</td>
                               <td className="p-3 text-purple-600 font-medium" data-testid={`paid-${emp.id}`}>{formatPrice(emp.paid_amount || 0)}</td>
                               <td className="p-3 text-cyan-700 font-bold" data-testid={`remaining-${emp.id}`}>{formatPrice(emp.remaining != null ? emp.remaining : emp.net_payable)}</td>
@@ -2882,10 +2946,12 @@ export default function HR() {
                         <tfoot className="bg-muted/50 font-bold">
                           <tr>
                             <td colSpan="4" className="p-3">{t('الإجمالي')}</td>
+                            <td className="p-3 font-medium">{(payrollSummary.employees?.reduce((s, e) => s + (e.total_worked_hours || 0), 0) || 0).toLocaleString()} {t('ساعة')}</td>
                             <td className="p-3">{formatPrice(payrollSummary.totals?.basic_salary || 0)}</td>
                             <td className="p-3 text-green-600">{formatPrice(payrollSummary.totals?.total_bonuses || 0)}</td>
                             <td className="p-3 text-red-600">{formatPrice(payrollSummary.totals?.total_deductions || 0)}</td>
                             <td className="p-3 text-yellow-600">{formatPrice(payrollSummary.totals?.total_advances || 0)}</td>
+                            <td className="p-3 text-blue-600">{formatPrice(payrollSummary.totals?.overtime_pay || 0)}</td>
                             <td className="p-3 text-cyan-600">{formatPrice(payrollSummary.totals?.net_payable || 0)}</td>
                             <td className="p-3 text-purple-600">{formatPrice(payrollSummary.totals?.paid_amount || 0)}</td>
                             <td className="p-3 text-cyan-700">{formatPrice(payrollSummary.totals?.remaining != null ? payrollSummary.totals.remaining : (payrollSummary.totals?.net_payable || 0))}</td>
@@ -2903,10 +2969,66 @@ export default function HR() {
                 )}
               </CardContent>
             </Card>
+
+            {/* نافذة احتساب قسط سلفة سابقة يدوياً */}
+            <Dialog open={advanceDeductOpen} onOpenChange={setAdvanceDeductOpen}>
+              <DialogContent data-testid="advance-deduct-dialog">
+                <DialogHeader>
+                  <DialogTitle>{t('احتساب قسط سلفة سابقة')}</DialogTitle>
+                </DialogHeader>
+                <div className="space-y-4">
+                  <p className="text-sm text-muted-foreground">
+                    {t('الموظف')}: <span className="font-semibold text-foreground">{advanceDeductEmployee?.name}</span>
+                    {' — '}{t('الشهر')}: <span className="font-semibold text-foreground">{selectedMonth}</span>
+                  </p>
+                  {advanceDeductList.length === 0 ? (
+                    <p className="text-sm text-amber-600">{t('لا توجد سلف سابقة بمتبقٍّ لهذا الموظف')}</p>
+                  ) : (
+                    <>
+                      <div>
+                        <Label>{t('اختر السلفة')}</Label>
+                        <Select value={advanceDeductId} onValueChange={setAdvanceDeductId}>
+                          <SelectTrigger data-testid="advance-deduct-select"><SelectValue /></SelectTrigger>
+                          <SelectContent>
+                            {advanceDeductList.map(a => (
+                              <SelectItem key={a.id} value={a.id}>
+                                {(a.date || '').slice(0, 7)} — {t('المتبقي')}: {formatPrice(a.remaining_amount)} {a.reason ? `(${a.reason})` : ''}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      {(() => {
+                        const sel = advanceDeductList.find(a => a.id === advanceDeductId);
+                        return sel ? (
+                          <p className="text-xs text-muted-foreground">
+                            {t('الرصيد المتبقّي لهذه السلفة')}: <span className="font-bold text-red-500">{formatPrice(sel.remaining_amount)}</span>
+                          </p>
+                        ) : null;
+                      })()}
+                      <div>
+                        <Label>{t('كم تريد أن تستقطع هذا الشهر؟')}</Label>
+                        <Input
+                          type="number"
+                          min="0"
+                          value={advanceDeductAmount}
+                          onChange={(e) => setAdvanceDeductAmount(e.target.value)}
+                          placeholder="0"
+                          data-testid="advance-deduct-amount-input"
+                        />
+                      </div>
+                      <div className="flex justify-end gap-2">
+                        <Button type="button" variant="outline" onClick={() => setAdvanceDeductOpen(false)}>{t('إلغاء')}</Button>
+                        <Button type="button" onClick={submitAdvanceDeduct} disabled={advanceDeductSubmitting} data-testid="advance-deduct-submit-btn">
+                          {advanceDeductSubmitting ? t('جارٍ الحفظ...') : t('احتساب القسط')}
+                        </Button>
+                      </div>
+                    </>
+                  )}
+                </div>
+              </DialogContent>
+            </Dialog>
           </TabsContent>
-
-
-          {/* 💰 Daily Payroll Tab — كشف الرواتب اليومي */}
           <TabsContent value="daily-payroll">
             <Card>
               <CardHeader className="flex flex-row items-center justify-between flex-wrap gap-3">

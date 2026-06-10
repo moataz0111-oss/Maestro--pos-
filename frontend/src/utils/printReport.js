@@ -488,8 +488,10 @@ export const printSalesReport = (data, branchName, dateRange) => {
           <tbody>
             ${Object.entries(data.by_payment_method || {}).map(([method, amount]) => {
               const percentage = ((amount / (data.total_sales || 1)) * 100).toFixed(1);
-              return `<tr><td>${method === 'cash' ? 'نقدي' : method === 'card' ? 'بطاقة' : 'آجل'}</td><td>${formatPrice(amount)}</td><td>${percentage}%</td></tr>`;
+              const label = method === 'cash' ? 'نقدي' : method === 'card' ? 'بطاقة' : method === 'credit' ? 'آجل' : method;
+              return `<tr><td>${label}</td><td>${formatPrice(amount)}</td><td>${percentage}%</td></tr>`;
             }).join('')}
+            ${(data.internal_delivery_fees || 0) > 0 ? `<tr><td>🚗 خدمة توصيل داخلية (ضمن النقدي)</td><td>${formatPrice(data.internal_delivery_fees)}</td><td>-</td></tr>` : ''}
           </tbody>
         </table>
       </div>

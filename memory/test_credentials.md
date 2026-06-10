@@ -62,3 +62,18 @@
 - Flow: captain creates dine_in/takeaway (delivery blocked) → counts on cashier shift as captain_cash_status='held' → cashier confirms via POST /api/captains/collect → 'collected' → close blocked 409 CAPTAIN_CASH_PENDING until settled
 - Endpoints: GET /api/captain/my-shift, GET /api/shifts/available-captains, POST /api/shifts/{id}/link-captain, POST /api/shifts/{id}/unlink-captain, GET /api/captains/shift-summary, POST /api/captains/collect
 - UI: Dashboard tile "إدارة الطلبات والكابتن" → /captains-management (tabs الكباتن/الطلبات), visible to owner+cashier+managers (NOT captain)
+
+## Seeded Test Data (Advance Deduct Modal - 10 يونيو 2026)
+- Employee "موظف سلفة سابقة" (main branch 76f56acc-...) with a 2026-05 advance (status approved). After a self-test deduct, remaining_amount may be 70000 (originally 100000).
+- Re-seed an advance: insert into db.advances {tenant_id:'default', employee_id, employee_name, amount:100000, remaining_amount:100000, deducted_amount:0, deduction_months:1, monthly_deduction:100000, status:'approved', date:'2026-05-10'}.
+- Main branch owner-safe (خزينة المالك) balance ~130000 IQD (varies). Advances now withdraw from here (owner_withdrawals category='advance'), NOT cashier cash.
+- Modal test IDs: pending-advance-notice-{empId} (in 'salary-report' tab), advance-deduct-dialog, advance-deduct-select, advance-deduct-amount-input, advance-deduct-submit-btn.
+
+## Delivery / Tracking / Chat Test Data (10 يونيو 2026)
+- Drivers in main branch: "سائق 1" phone 07801111111, "سائق 2" phone 07802222222 — both PIN 1234 (driver app login at /driver-app).
+- Seeded delivery order #9901 (id starts aae6db59-...) with customer "زبون تجريبي" 07701234567, address "حي الجامعة - شارع 14"; assigned to سائق 1 with a current_location set (for /track and tracking map).
+- Public tracking link: /track/{order_id} (no auth, no install). Example: /track/aae6db59-d386-4cdd-82b2-3b2f244fbf63
+- Incoming-call cashier notification: created in collection order_notifications (type 'new_order_cashier', is_read false, created within last 60 min). Re-seed/reset is_read=false to re-trigger. Shows for roles cashier/admin/manager/owner/super_admin.
+- Order chat endpoints (public): GET/POST /api/order-chat/{order_id}. Collection 'order_chats'.
+- Driver batching: PUT /api/drivers/{driver_id}/assign?order_id=...&force=false. 409 if driver departed (an order out_for_delivery) and new order >2km from existing; force=true overrides.
+- Test IDs: incoming-order-call, accept-order-call, reject-order-call, assign-driver-{id}; driver-contact-btn, driver-contact-sheet, contact-opt-*, driver-chat-dialog, chat-input, chat-send-btn; driver-chat-btn-{orderId}, driver-chat-overlay, driver-chat-input, driver-chat-send-btn; public-tracking-page, track-driver-name, track-chat-btn, track-chat-overlay, track-chat-input, track-chat-send; share-tracking-link.

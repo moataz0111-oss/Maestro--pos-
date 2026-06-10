@@ -1,5 +1,85 @@
 # Maestro EGP - Multi-Tenant POS System PRD
 
+## FEATURE (10 يونيو 2026) — تقرير أداء السائقين 🏆 ✅
+- **Backend:** `GET /api/drivers/performance?period=today|week|month&branch_id=` (routes/drivers_routes.py — مُعرّف قبل مسارات `/{driver_id}`): لكل سائق: `deliveries` (المُسلّمة)، `active_orders`، `total_fees` (أجور التوصيل)، `total_collected`، `avg_delivery_minutes` (من `out_for_delivery_at` أو `created_at` حتى `delivered_at`، استبعاد >24س)، `distance_km` (تقديرية فرع→زبون Haversine، تتطلب إحداثيات الفرع). يشمل السائقين بلا طلبات والسائقين المحذوفين. مرتب بعدد التوصيلات ثم الأجور + `totals` للفترة. يستبعد طلبات شركات التوصيل.
+- **طابع زمني جديد:** `out_for_delivery_at` يُسجل الآن عند تغيير الحالة لـ"خرج للتوصيل" في endpoint حالة السائق + endpoint الحالة العام (server.py) — لدقة متوسط الزمن مستقبلاً.
+- **Frontend (Delivery.js):** تبويب رابع "الأداء" (`performance-tab`، TabsList أصبح grid-cols-2 sm:grid-cols-4): أزرار فترة (اليوم/أسبوع/شهر `perf-period-*`)، 4 بطاقات إجماليات (توصيلات/أجور/متوسط زمن/مسافة `perf-total-*`)، قائمة سائقين مرتبة بصفوف responsive (جدول md+ / بطاقات موبايل)، المركز الأول بخلفية ذهبية و🏆، تلوين الزمن بالأحمر إذا >60د، Badge للطلبات النشطة. يتبع فلتر الفرع المختار.
+- **اختبارات:** `tests/test_driver_performance.py` (سائق بطلبين مُسلّمين 20+40د + طلب نشط → deliveries=2، fees=5000، avg≈30د، distance≈10كم) + تحقق E2E حي بـ Playwright (3 توصيلات، 7,000 IQD، 30د، 15كم، صف السائق مع الكأس، تبديل الفترة) + تحليل بصري للقطة أكد سلامة RTL. كل اختبارات regression الأربعة pass.
+
+## FEATURE (10 يونيو 2026) — حدود التغطية + بطاقة "خدمة توصيل داخلية" في التقارير المالية ✅
+**1) حدود نطاق التوصيل (مناطق محظورة):**
+- إعداد جديد `max_distance_km` في قسم أجور المسافة (Settings → الدفع الإلكتروني، حقل `max-distance-input`، 0 = بلا حدود).
+- **تطبيق الزبون:** عند اختيار موقع أبعد من الحد → تنبيه أحمر (`out-of-range-alert`) "موقعك خارج نطاق التوصيل (X كم — الحد الأقصى Y كم)" + تعطيل زر تأكيد الطلب. الباك إند يرفض الطلب 400 أيضاً (دفاع مزدوج).
+- **الكاشير:** `delivery-fee/suggest` يرجع `out_of_range+reason` — نافذتا الإسناد (Delivery + IncomingOrderCall) تعرضان تحذير ⚠️ مع إبقاء الأجرة المقترحة (الكاشير يقرر).
+**2) "خدمة توصيل داخلية" في جميع التقارير المالية** (أجور التوصيل المحصلة لسائقي المطعم — قيمها مدمجة ضمن النقدي وإجمالي المبيعات، تُعرض كسطر/بطاقة توضيحية):
+- `/api/reports/sales` (routes/reports_routes.py — تبويب المبيعات): حقول `internal_delivery_fees` + `internal_delivery_orders_count` (أُضيف delivery_fee للـ projection). Reports.js: سطر أخضر `internal-delivery-fees-row` في "حسب طريقة الدفع" — تحقق حي: "🚗 خدمة توصيل داخلية (1 طلب) (ضمن النقدي) 2,000 IQD".
+- `/api/smart-reports/sales` (server.py — التقرير الشامل): نفس الحقول + بطاقة StatBox "خدمة توصيل داخلية" في شبكة الإحصائيات.
+- `/api/reports/cash-register-closing` (إغلاق الصندوق): `by_payment_method.internal_delivery_fees {total, label}` + سطر في واجهة التقرير وقالب الطباعة.
+- قالب طباعة تقرير المبيعات (printReport.js): سطر الخدمة + إصلاح جانبي لتسمية طرق الدفع العربية (كانت تطبع "آجل" لأي مفتاح غير معروف).
+**اختبارات:** `tests/test_distance_delivery_fee.py` موسّع (out_of_range quote/suggest + رفض طلب الزبون 400 + حقول التقارير في sales/smart-reports/closing) — 3/3 pass + تحقق E2E حي بـ Playwright (الإعدادات + تبويب المبيعات).
+**ملاحظات:** الباك إند لا يملك hot-reload — يجب `sudo supervisorctl restart backend` بعد أي تعديل. أُغلقت إشعارات اختبار قديمة (Structure Test) كانت تفتح شاشة المكالمة للكاشير.
+
+## FEATURE (10 يونيو 2026) — أجور توصيل تلقائية حسب المسافة 🗺️ ✅
+**(بناءً على موافقة المستخدم على الاقتراح):**
+- **الإعدادات** (تبويب "الدفع الإلكتروني" → بطاقة رسوم التوصيل → قسم `distance-fee-section`): مفتاح تفعيل + أجرة أساسية (`fee_base`) تشمل أول X كم (`fee_base_km`) + أجرة كل كم إضافي (`fee_per_km`) + سقف (`fee_max`) + تقريب (`fee_round_to` 0/250/500/1000) + معاينة مثال 5كم. تُحفظ في `payment_settings`.
+- **مواقع الفروع:** داخل نفس القسم — لكل فرع حقلا lat/lng + زر "📍 موقعي الحالي" (geolocation) + حفظ عبر `PUT /api/branches/{id}/location`. أُضيفت latitude/longitude لـ `BranchResponse`.
+- **Backend:** `_srv_haversine_km` + `_compute_distance_fee` + `_distance_fee_for` في server.py. Endpoints: `GET /api/delivery-fee/suggest?order_id=` (للكاشير، يرجع suggested_fee+distance_km أو reason)، `GET /api/customer/delivery-fee/{tenant_id}?lat&lng&branch_id` (عام للزبون).
+- **التطبيق التلقائي:** (1) إنشاء طلب الزبون: إن مفعلة + للطلب delivery_location + للفرع إحداثيات → الأجرة تحل محل الثابتة وتدخل total. (2) نافذة المكالمة الواردة `IncomingOrderCall` ونافذة الإسناد في `Delivery.js`: تجلب الاقتراح وتملأ حقل الأجور تلقائياً مع تلميح "🗺️ محسوبة تلقائياً حسب المسافة (X كم)" (`assign-fee-hint`/`call-fee-hint`) — قابلة للتعديل يدوياً. (3) سلة/checkout الزبون: `quotedFee` يُجلب عند اختيار الموقع ويُعرض "(X كم 🗺️)" بجانب رسوم التوصيل.
+- **اختبارات:** `tests/test_distance_delivery_fee.py` (تفعيل → موقع فرع → تسعير 5كم=3250 (2000+2.0027*500 مقرب 250) → طلب زبون total=subtotal+fee → suggest) + E2E حي بـ Playwright: واجهة الإعدادات (toggle/حقول/إحداثيات فرع محفوظة) + نافذة الإسناد املأت 3250 تلقائياً مع التلميح.
+- **إصلاح جانبي:** حذف مستخدم اختبار قديم بلا email كان يكسر `GET /api/users` بـ500 ويمنع تحميل صفحة الإعدادات كاملة (Promise.all).
+- **الحالة الافتراضية:** الميزة غير مفعلة (`distance_fee_enabled=false`) حتى يفعّلها المالك. إحداثيات الفرع الرئيسي محفوظة تجريبياً (بغداد 33.3152/44.3661).
+
+## FEATURE (10 يونيو 2026) — أجور التوصيل للسائقين الداخليين + تسوية "توصيل داخلي" + تجاوب الواجهات ✅
+**1) أجور التوصيل عند إسناد السائق (طلب صريح):**
+- `PUT /api/drivers/{id}/assign` يقبل `delivery_fee` اختيارياً: يضبط `order.delivery_fee` ويعيد حساب `total = total - old_fee + new_fee` (idempotent عند إعادة الإسناد، لا تراكم). يحفظ أيضاً driver_name/driver_phone. الاستجابة ترجع `new_total`.
+- **نقاط الإدخال الثلاث:** (أ) نافذة المكالمة الواردة للكاشير `IncomingOrderCall.jsx` (حقل `call-delivery-fee-input` + أزرار سريعة 1000-5000)، (ب) صفحة إدارة التوصيل `Delivery.js` — الضغط على اسم سائق في "جاهزة للتعيين" يفتح `assign-fee-dialog` (إدخال + أزرار سريعة + معاينة الإجمالي الجديد)، (ج) POS — عند اختيار سائق يظهر حقل `pos-delivery-fee` ويُمرَّر للإسناد بعد إنشاء الطلب (وتُضاف للفاتورة المطبوعة والطلب الأوفلاين).
+- **ظهور للزبون:** تفاصيل الطلب في تطبيق الزبون تعرض "رسوم خدمة التوصيل" (`order-delivery-fee`) + المجموع الكلي، مع **polling كل 15ث** أثناء التتبع ليظهر التحديث بعد الإسناد. صفحة التتبع العامة `/track/:id` تعرض ملخص فاتورة (`track-order-summary`). endpoints `order-driver-info` ترجع `delivery_fee` و`order_total`.
+**2) تسوية حسابات السائق "توصيل داخلي":** التحصيل من السائق (`collect-payment`) يبقى للصندوق كنقدي (expected_cash_in_drawer) ويُوسَم `payment_source=internal_delivery`. تسميات التقارير: by_payment_method "توصيل داخلي" (بدل "نقدي السائقين") و"توصيل داخلي (بذمة السائقين)" لغير المحصّل، وتقرير إغلاق الصندوق driver_cash.label="توصيل داخلي" (حُدّث Reports.js أيضاً).
+**3) تجاوب الواجهات (responsive):** CustomerMenu (max-w-lg→md:2xl/lg:4xl + شبكة منتجات md:3/lg:4 أعمدة)، DriverApp (md:3xl/xl:6xl + شبكة طلبات md:2/xl:3 — تحقق حي: عرض main أصبح 1152px على 1280px بدل 512px)، Delivery (هيدر flex-wrap + بطاقات إحصائيات grid-cols-2 على الهاتف).
+**اختبارات:** `tests/test_delivery_fee_and_settlement.py` (2/2) + `test_delivery_fee_extras_iter226.py` (testing agent، باك إند 100%، iteration_226.json) + تحقق E2E حي بـ Playwright: dialog الإسناد → أجور 2000 → total 9500→11500 في DB → صفحة التتبع العامة تعرض الرسوم والإجمالي.
+**ملاحظة:** تقرير المبيعات الذي يحوي by_payment_method هو `/api/smart-reports/sales`.
+
+## FEATURE (10 يونيو 2026) — منظومة التوصيل: مكالمة طلب للكاشير + تتبّع حيّ + محادثة + تجميع + رابط عام ✅
+**نقل بطاقة المستحقات:** أصبحت آخر بطاقة في لوحة HR (top-card-net-payable).
+
+**المرحلة 1 — إصلاح تثبيت PWA:** قائمة الزبائن (manifest-menu.json + توجيه standalone من الجذر) وتطبيق السائق (manifest-driver.json + sw-driver.js + تبديل manifest في /driver-app). (مفصّل في إدخال سابق).
+
+**المرحلة 2 — إشعار الكاشير كمكالمة واردة (E2E ✅):** مكوّن `IncomingOrderCall.jsx` (portal + pointer-events:auto لتجاوز قفل Radix لـ body) يستطلع `order-notifications` (type new_order_cashier) ويعرض شاشة كاملة برنين (Web Audio) + قبول/رفض. عند القبول: تفاصيل الطلب (اسم/هاتف/عنوان/مبلغ/أصناف) + قائمة إسناد سائق. مثبّت في App.js للأدوار cashier/admin/manager/owner.
+
+**المرحلة 3 — تجميع الطلبات على السائق (backend 5/5 ✅):** `assign_driver` (drivers_routes.py): إن لم يغادر السائق (لا طلب out_for_delivery) يُسمح بإضافة طلبات؛ إن غادر يُرفض (409) إلا إذا كان الطلب ضمن 2كم من طلباته (Haversine)؛ `force=true` للمالك. واجهة الإسناد تعرض رسالة 409 وتتيح الإضافة الإجبارية.
+
+**المرحلة 4 — تتبّع حيّ + تواصل (E2E ✅):**
+- خريطة Leaflet+OSM مع **خط سير على الطرق عبر OSRM** (سائق 🛵 + توصيل 📍) في تطبيق الزبون وصفحة التتبّع العامة.
+- **قائمة تواصل مع السائق** (6 خيارات: محادثة داخل التطبيق، اتصال داخل التطبيق [قريباً]، اتصال عادي tel:، SMS، اتصال واتساب، رسالة واتساب) — bottom sheet.
+- **محادثة نصية ثنائية** بين الزبون والسائق: endpoints عامة `GET/POST /api/order-chat/{order_id}` (collection order_chats، اختبار 7/7) + غرفة شات في CustomerMenu وDriverApp (تحديث كل ٣ث).
+- **رابط تتبّع عام** `/track/:orderId` (PublicTracking.jsx، بلا تسجيل/تثبيت) + زر "مشاركة رابط التتبّع" في تطبيق الزبون.
+
+**إصلاحات حرجة ضمن العمل:**
+- 🔴 `create_customer_order` كان يرمي 500 (NameError `current_user`) فيمنع كل طلبات الزبائن — أُصلح (None).
+- `GET /driver/orders` كان يستثني 'preparing' فلا تظهر الطلبات المُسندة للسائق — أُضيف preparing/pending.
+- توحيد `delivery_location` (lat/lng ↔ latitude/longitude) في endpoints التتبّع.
+- a11y: إضافة DialogTitle مخفي لغرفة الشات.
+
+**مؤجّل (مُبلَّغ للمستخدم):** الاتصال الصوتي الحيّ داخل التطبيق (WebRTC + خادم TURN).
+**اختبارات:** tests/test_order_chat_iter223.py (7/7), tests/test_driver_batching.py, iteration_222/224/225.json. Incoming-call + driver chat + public tracking + customer contact-sheet كلها موثّقة E2E.
+
+
+## FIX/FEATURE (10 يونيو 2026) — نقل بطاقة المستحقات + إصلاح تثبيت PWA للزبائن والسائق (المرحلة 1) ✅
+- **نقل بطاقة "المستحقات":** في لوحة HR العلوية أصبحت بطاقة المستحقات (`top-card-net-payable`) في **آخر** الصف بعد "الدفعات المصروفة" و"قيمة الأوقات الإضافية".
+- **عطل تثبيت قائمة الزبائن (كان يفتح صفحة دخول الموظفين):** السبب أن `/menu/{tenant}` يُخدَّم من `index.html` الذي يربط مانيفست المشرف (start_url=`/`)؛ على iOS يُلتقط هذا المانيفست فيفتح التطبيق المثبّت على `/` ← حارس الحماية ← دخول الموظفين. الإصلاح: (1) سكربت مبكر في `index.html` يعيد توجيه التطبيق المثبّت (standalone) المفتوح على `/` بلا جلسة موظف: لو `driver_app_session` → `/driver-app`، ولو `customer_restaurant` → `/menu/{r}`. (2) لمسارات `/menu` يُربط `manifest-menu.json` (start_url=`/menu.html` الذي يستعيد المطعم من localStorage ويعيد التوجيه).
+- **عطل تطبيق السائق (لا يُثبَّت/لا يظهر باسمه):** كان `/driver-app` يسجّل `/sw.js` غير الموجود ولا يبدّل المانيفست → يستخدم مانيفست المشرف. الإصلاح: أُنشئ `manifest-driver.json` (باسم "تطبيق السائق"، start_url=`/driver-app`، أيقونات، لون أخضر) + `sw-driver.js` (يجعله installable + أوفلاين أساسي)، و`DriverApp.js` يسجّل `/sw-driver.js` (scope `/driver-app`) ويربط مانيفست السائق، و`index.html` يبدّل المانيفست/العنوان لمسار `/driver-app`.
+- تحقّق حيّ: `/driver-app` → manifest-driver.json + عنوان "تطبيق السائق - التوصيل" وصفحة دخول السائق تظهر؛ `/menu/default` → manifest-menu.json. (خرائط Leaflet+OSM مستخدمة أصلاً في تطبيق السائق).
+- **المتبقّي (مراحل قادمة):** م2: إشعار الكاشير الصوتي/المرئي كمكالمة واردة عند طلب جديد + فتح الطلب في POS مع بيانات الزبون وإسناد سائق. م3: تجميع عدة طلبات على سائق بشروط المغادرة/قرب العنوان. م4: خريطة تتبّع حيّة للسائق في تطبيق الزبائن + خط سير دقيق (OSRM). ملاحظة: تثبيت PWA على iOS الحقيقي يحتاج جهاز iPhone للتأكيد النهائي.
+
+
+## FEATURE/FIX (10 يونيو 2026) — صرف السلف من خزينة المالك + نافذة احتساب السلف السابقة + إصلاح 500 للموظفين ✅
+- **صرف السلف من خزينة المالك (طلب صريح):** `create_advance` (`server.py` ~3809) لم يعد يُنشئ مصروفاً نقدياً (`expenses` category=advance, payment_method=cash) من شفت الكاشير. أصبح **يسحب من خزينة المالك** عبر `owner_withdrawals` (category=`advance`, مرتبط بالفرع، `linked_advance_id`) تماماً مثل دفعات الراتب. يتحقّق من رصيد فرع الموظف في خزينة المالك (إيداعات − سحوبات − تحويلات) ويرجع **400** برسالة عربية ("...غير كافٍ في خزينة المالك...") عند عدم الكفاية. السلفة تحمل `linked_owner_withdrawal_id`.
+- **نافذة احتساب قسط سلفة سابقة يدوياً (P0 كان مفقوداً/يسبب كراش):** زر إشعار "سلفة سابقة 🔔" في تبويب "تقرير الرواتب" (`HR.js`) كان يستدعي `openAdvanceDeductDialog` غير المعرّفة. أُضيفت الدالة + `submitAdvanceDeduct` + نافذة `advance-deduct-dialog` (select للسلفة + إدخال المبلغ + زر) تستدعي `POST /api/advances/{id}/deduct-installment` مع `{month: selectedMonth, amount}`. تحقّق E2E: سلفة 100,000 → استقطاع 30,000 → المتبقي 70,000، وتوست نجاح، وتحديث بطاقة "سلف معلقة".
+- **إصلاح 500 على `GET /api/employees`:** الحقول `phone`/`position`/`salary`/`created_at` في `EmployeeResponse` أصبحت اختيارية/بقيم افتراضية، فلا يسقط جلب الموظفين (ومعه كامل صفحة HR) بسبب مستندات قديمة بلا هاتف.
+- الاحتساب اليومي (pro-rata من البصمة) **مؤكد من المستخدم** أنه السلوك الصحيح — لم يُغيّر.
+- اختبارات: `tests/test_advance_from_treasury.py` (نجح) + `tests/test_advance_deduct_installment.py` (testing agent، نجح). الباك إند 100%.
+
+
 ## FIX P0 (9 يونيو 2026) — إصلاح 502 Bad Gateway على الإنتاج (تعليق الإقلاع بسبب الترحيلات الثقيلة) ✅
 - العَرَض: الموقع المباشر متوقف تماماً (502) لأن 17 خطّاف `@app.on_event("startup")` في `server.py` كانت تُنفَّذ متزامنة قبل أن يفتح uvicorn المنفذ. على قاعدة بيانات الإنتاج الكبيرة، ترحيلات مثل `auto_heal_shifts_and_business_dates` و`auto_migrate_business_dates` و`apply_automatic_updates` تمرّ على كامل المستندات فتتجاوز مهلة Nginx.
 - الإصلاح (`server.py`):

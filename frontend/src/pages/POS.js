@@ -148,6 +148,7 @@ export default function POS() {
   const [deliveryApps, setDeliveryApps] = useState([]);
   const [drivers, setDrivers] = useState([]);
   const [selectedDriver, setSelectedDriver] = useState('');
+  const [posDeliveryFee, setPosDeliveryFee] = useState('');
   // Extras modal state
   const [extrasModalOpen, setExtrasModalOpen] = useState(false);
   const [selectedCartItem, setSelectedCartItem] = useState(null);
@@ -1522,6 +1523,7 @@ export default function POS() {
     setDeliveryApp('');
     setDeliveryCompanyOrderId('');
     setSelectedDriver('');
+    setPosDeliveryFee('');
     setOrderNotes('');
     setEditingOrder(null);
     setCustomerData(null);
@@ -1941,10 +1943,11 @@ export default function POS() {
           toast.error(t('خطأ في طباعة المطبخ: ') + printErr.message);
         }
         
-        // إذا كان طلب توصيل مع سائق، نعين السائق مباشرة
+        // إذا كان طلب توصيل مع سائق، نعين السائق مباشرة (مع أجور التوصيل إن وُجدت)
         if (orderType === 'delivery' && selectedDriver) {
-          await axios.put(`${API}/drivers/${selectedDriver}/assign?order_id=${res.data.id}`);
-          toast.success(`${t('تم إنشاء الطلب')} #${res.data.order_number} ${t('وتحويله للسائق')}`);
+          const feeVal = Number(posDeliveryFee) || 0;
+          await axios.put(`${API}/drivers/${selectedDriver}/assign?order_id=${res.data.id}${feeVal > 0 ? `&delivery_fee=${feeVal}` : ''}`);
+          toast.success(`${t('تم إنشاء الطلب')} #${res.data.order_number} ${t('وتحويله للسائق')}${feeVal > 0 ? ` + ${t('أجور توصيل')} ${feeVal.toLocaleString()}` : ''}`);
         } else {
           toast.success(`${t('تم إنشاء الطلب')} #${res.data.order_number}`);
         }
@@ -1967,7 +1970,8 @@ export default function POS() {
                 notes: item.notes || '',
                 extras: item.selectedExtras || []
               })),
-              total: Math.max(0, subtotalCalc - Math.min(subtotalCalc, (discount || 0) + (couponDiscount || 0))),
+              total: Math.max(0, subtotalCalc - Math.min(subtotalCalc, (discount || 0) + (couponDiscount || 0))) + (orderType === 'delivery' && selectedDriver ? (Number(posDeliveryFee) || 0) : 0),
+              delivery_fee: orderType === 'delivery' && selectedDriver ? (Number(posDeliveryFee) || 0) : 0,
               subtotal: subtotalCalc,
               discount: (discount || 0),
               coupon_id: appliedCoupon?.id || null,
@@ -2034,7 +2038,8 @@ export default function POS() {
               extras: item.selectedExtras || []
             })),
             subtotal: cart.reduce((sum, item) => sum + ((item.price * item.quantity) + (item.selectedExtras || []).reduce((s, e) => s + (e.price * (e.quantity || 1)), 0)), 0),
-            total: cart.reduce((sum, item) => sum + ((item.price * item.quantity) + (item.selectedExtras || []).reduce((s, e) => s + (e.price * (e.quantity || 1)), 0)), 0) - discount,
+            total: cart.reduce((sum, item) => sum + ((item.price * item.quantity) + (item.selectedExtras || []).reduce((s, e) => s + (e.price * (e.quantity || 1)), 0)), 0) - discount + (orderType === 'delivery' && selectedDriver ? (Number(posDeliveryFee) || 0) : 0),
+            delivery_fee: orderType === 'delivery' && selectedDriver ? (Number(posDeliveryFee) || 0) : 0,
             discount: discount,
             branch_id: currentBranchId,
             payment_method: 'pending',
@@ -3750,15 +3755,46 @@ export default function POS() {
                 )}
               </div>
               
-              {/* حقل العنوان - يظهر فقط إذا تم اختيار سائق */}
+              {/* حقل العنوان وأجور التوصيل - يظهران فقط إذا تم اختيار سائق */}
               {selectedDriver && (
-                <Input
-                  placeholder={t('عنوان التوصيل')}
-                  value={deliveryAddress}
-                  onChange={(e) => setDeliveryAddress(e.target.value)}
-                  data-testid="delivery-address"
-                  className="border-green-300 focus:border-green-500"
-                />
+                <>
+                  <Input
+                    placeholder={t('عنوان التوصيل')}
+                    value={deliveryAddress}
+                    onChange={(e) => setDeliveryAddress(e.target.value)}
+                    data-testid="delivery-address"
+                    className="border-green-300 focus:border-green-500"
+                  />
+                  <div>
+                    <p className="text-sm text-muted-foreground mb-1">{t('أجور التوصيل')} <span className="text-xs">({t('تُضاف للفاتورة وتظهر للزبون')})</span>:</p>
+                    <Input
+                      type="number"
+                      min="0"
+                      placeholder="0"
+                      value={posDeliveryFee}
+                      onChange={(e) => setPosDeliveryFee(e.target.value)}
+                      data-testid="pos-delivery-fee"
+                      className="border-amber-300 focus:border-amber-500"
+                    />
+                    <div className="flex flex-wrap gap-1 mt-1">
+                      {[1000, 2000, 3000, 5000].map(v => (
+                        <button
+                          key={v}
+                          type="button"
+                          onClick={() => { setPosDeliveryFee(String(v)); playClick(); }}
+                          data-testid={`pos-fee-quick-${v}`}
+                          className={`px-2 py-1 rounded-md text-xs border transition-all ${
+                            Number(posDeliveryFee) === v
+                              ? 'bg-amber-500 text-white border-amber-500'
+                              : 'bg-muted/50 text-foreground border-border hover:bg-muted'
+                          }`}
+                        >
+                          {v.toLocaleString()}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </>
               )}
               
               {/* شركة التوصيل */}
