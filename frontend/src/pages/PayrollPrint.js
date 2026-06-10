@@ -214,13 +214,26 @@ export default function PayrollPrint() {
             </div>
           )}
           {/* Summary */}
-          <div className="border-t-2 border-gray-800 pt-4 mt-6">
+          {(() => {
+            const earned = payroll.earned_salary != null ? payroll.earned_salary : payroll.basic_salary;
+            const overtime = payroll.overtime_pay || 0;
+            return (
+            <div className="border-t-2 border-gray-800 pt-4 mt-6">
             <table className="w-full">
               <tbody>
                 <tr>
-                  <td className="py-2 text-gray-600">الراتب الأساسي</td>
-                  <td className="py-2 text-left">{payroll.basic_salary?.toLocaleString()} د.ع</td>
+                  <td className="py-2 text-gray-600">
+                    الراتب المستحق
+                    {payroll.worked_days != null ? ` (${payroll.worked_days} يوم عمل × أساسي ${payroll.basic_salary?.toLocaleString()})` : ''}
+                  </td>
+                  <td className="py-2 text-left">{earned?.toLocaleString()} د.ع</td>
                 </tr>
+                {overtime > 0 && (
+                  <tr>
+                    <td className="py-2 text-blue-600">+ وقت إضافي</td>
+                    <td className="py-2 text-left text-blue-600">+{overtime?.toLocaleString()} د.ع</td>
+                  </tr>
+                )}
                 <tr>
                   <td className="py-2 text-green-600">+ المكافآت</td>
                   <td className="py-2 text-left text-green-600">+{payroll.total_bonuses?.toLocaleString()} د.ع</td>
@@ -240,6 +253,8 @@ export default function PayrollPrint() {
               </tbody>
             </table>
           </div>
+            );
+          })()}
           {/* Footer */}
           <div className="mt-8 pt-4 border-t border-gray-300">
             <div className="grid grid-cols-2 gap-8">

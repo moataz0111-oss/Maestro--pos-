@@ -4881,7 +4881,7 @@ async def get_employee_salary_slip(
     # حساب الإجماليات
     total_deductions = sum(_sn(d.get("amount")) for d in deductions)
     total_bonuses = sum(_sn(b.get("amount")) for b in bonuses)
-    advance_deduction = sum(a.get("monthly_deduction", 0) for a in advances if a.get("status") == "approved")
+    advance_deduction = sum(a.get("monthly_deduction", 0) for a in advances if a.get("status") == "approved" and _sn(a.get("remaining_amount", 0)) > 0)
     pending_advances = sum(a.get("remaining_amount", 0) for a in advances if a.get("status") == "approved")
     
     basic_salary = _sn(employee.get("salary"))
@@ -4904,9 +4904,20 @@ async def get_employee_salary_slip(
     else:
         earned_salary = basic_salary
     
-    # صافي الراتب = المستحق + المكافآت - الخصومات - السلف
+    # الوقت الإضافي الموافق عليه (موحّد مع تقرير الرواتب)
+    work_hours_per_day = _sn(employee.get("work_hours_per_day", 8)) or 8
+    hourly_rate_ot = (daily_rate / work_hours_per_day) if work_hours_per_day else 0
+    approved_overtime = await db.overtime_requests.find({
+        "employee_id": employee_id,
+        "date": {"$gte": start_date, "$lte": end_date},
+        "status": "approved"
+    }, {"_id": 0}).to_list(100)
+    approved_ot_hours = sum(_sn(o.get("hours")) for o in approved_overtime)
+    overtime_pay = round(approved_ot_hours * hourly_rate_ot * 1.5, 2)
+
+    # صافي الراتب = المستحق + الوقت الإضافي + المكافآت - الخصومات - السلف
     # يمكن أن يكون سالباً (الموظف مدين للشركة) وهذا متوقّع ودقيق
-    net_salary = round(earned_salary + total_bonuses - total_deductions - advance_deduction, 2)
+    net_salary = round(earned_salary + overtime_pay + total_bonuses - total_deductions - advance_deduction, 2)
     
     return {
         "employee": employee,
@@ -4945,7 +4956,8 @@ async def get_employee_salary_slip(
             "worked_days": worked_days,
             "daily_rate": daily_rate,
             "earned_salary": earned_salary,
-            "total_additions": total_bonuses,
+            "overtime_pay": overtime_pay,
+            "total_additions": total_bonuses + overtime_pay,
             "total_deductions": total_deductions + advance_deduction,
             "net_salary": net_salary
         },

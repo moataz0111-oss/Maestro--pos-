@@ -65,6 +65,9 @@ class PayrollCreate(BaseModel):
     employee_id: str
     month: str
     basic_salary: float
+    earned_salary: float = 0      # الراتب المستحق (pro-rata حسب أيام العمل) — لتطابق الكشف المطبوع مع الصافي
+    worked_days: int = 0
+    overtime_pay: float = 0
     total_deductions: float = 0
     total_bonuses: float = 0
     advance_deduction: float = 0
@@ -469,7 +472,7 @@ async def calculate_payroll(
         "date": {"$regex": f"^{month}"}
     }, {"_id": 0}).to_list(31)
     
-    worked_days = len([a for a in attendance if a.get("status") in ["present", "late"]])
+    worked_days = len([a for a in attendance if a.get("status") in ["present", "late", "early_leave"]])
     absent_days = len([a for a in attendance if a.get("status") == "absent"])
     total_worked_hours = sum(a.get("worked_hours", 0) for a in attendance)
     late_hours = round(sum(a.get("late_minutes", 0) for a in attendance) / 60, 2)
@@ -511,13 +514,14 @@ async def calculate_payroll(
     }, {"_id": 0}).to_list(100)
     total_bonuses = sum(b.get("amount", 0) for b in bonuses)
     
-    # جلب السلف المعتمدة
+    # جلب السلف المعتمدة التي ما زال لها رصيد متبقٍّ — نخصم القسط الشهري فقط
+    # (موحّد تماماً مع تقرير الرواتب /reports/payroll-summary)
     advances = await db.advances.find({
         "employee_id": employee_id,
-        "date": {"$regex": f"^{month}"},
-        "status": "approved"
+        "status": "approved",
+        "remaining_amount": {"$gt": 0}
     }, {"_id": 0}).to_list(100)
-    advance_deduction = sum(a.get("amount", 0) for a in advances)
+    advance_deduction = sum(a.get("monthly_deduction", 0) for a in advances)
     
     # صافي الراتب = الراتب المستحق + وقت إضافي موافق + مكافآت - خصومات - سلف
     net_salary = round(earned_salary + overtime_pay + total_bonuses - total_deductions - advance_deduction, 2)
@@ -680,7 +684,7 @@ async def generate_all_payrolls(month: str, current_user: dict = Depends(get_cur
                 "date": {"$regex": f"^{month}"}
             }, {"_id": 0}).to_list(31)
             
-            worked_days = len([a for a in attendance if a.get("status") in ["present", "late"]])
+            worked_days = len([a for a in attendance if a.get("status") in ["present", "late", "early_leave"]])
             absent_days = len([a for a in attendance if a.get("status") == "absent"])
             total_worked_hours = sum(a.get("worked_hours", 0) for a in attendance)
             late_hours = round(sum(a.get("late_minutes", 0) for a in attendance) / 60, 2)
@@ -692,7 +696,8 @@ async def generate_all_payrolls(month: str, current_user: dict = Depends(get_cur
             elif salary_type == "daily":
                 earned_salary = round(worked_days * daily_rate, 2)
             else:
-                earned_salary = round(basic_salary - (absent_days * daily_rate), 2)
+                # شهري: pro-rata حسب أيام العمل الفعلية (موحّد مع تقرير الرواتب)
+                earned_salary = round(daily_rate * worked_days, 2)
             
             # وقت إضافي موافق عليه فقط
             approved_ot = await db.overtime_requests.find({
@@ -717,13 +722,13 @@ async def generate_all_payrolls(month: str, current_user: dict = Depends(get_cur
             }).to_list(100)
             total_bonuses = sum(b.get("amount", 0) for b in bonuses)
             
-            # سلف
+            # سلف: القسط الشهري للسلف التي لها رصيد متبقٍّ (موحّد مع تقرير الرواتب)
             advances = await db.advances.find({
                 "employee_id": emp["id"],
-                "date": {"$regex": f"^{month}"},
-                "status": "approved"
+                "status": "approved",
+                "remaining_amount": {"$gt": 0}
             }).to_list(100)
-            advance_deduction = sum(a.get("amount", 0) for a in advances)
+            advance_deduction = sum(a.get("monthly_deduction", 0) for a in advances)
             
             net_salary = round(earned_salary + overtime_pay + total_bonuses - total_deductions - advance_deduction, 2)
             

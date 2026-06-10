@@ -1673,6 +1673,9 @@ export default function HR() {
         employee_id: payrollPreview.employee_id,
         month: payrollPreview.month,
         basic_salary: payrollPreview.basic_salary,
+        earned_salary: payrollPreview.earned_salary,
+        worked_days: payrollPreview.worked_days,
+        overtime_pay: payrollPreview.overtime_pay,
         total_deductions: payrollPreview.total_deductions,
         total_bonuses: payrollPreview.total_bonuses,
         advance_deduction: payrollPreview.advance_deduction,
@@ -1730,6 +1733,9 @@ export default function HR() {
               employee_id: preview.employee_id,
               month: preview.month,
               basic_salary: preview.basic_salary,
+              earned_salary: preview.earned_salary,
+              worked_days: preview.worked_days,
+              overtime_pay: preview.overtime_pay,
               total_deductions: preview.total_deductions,
               total_bonuses: preview.total_bonuses,
               advance_deduction: preview.advance_deduction,
@@ -2825,6 +2831,7 @@ export default function HR() {
                                   )}
                                 </div>
                               </td>
+                              <td className="p-3">{emp.branch_name || '-'}</td>
                               <td className="p-3">{emp.position}</td>
                               <td className="p-3">{formatPrice(emp.basic_salary)}</td>
                               <td className="p-3 text-green-600">{formatPrice(emp.bonuses)}</td>
