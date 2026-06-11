@@ -9,7 +9,7 @@ import { API_URL } from '../utils/api';
 import { useAuth } from '../context/AuthContext';
 import { Button } from './ui/button';
 import { toast } from 'sonner';
-import { Phone, MapPin, User, Banknote, Package, Bike, X, CheckCircle } from 'lucide-react';
+import { Phone, MapPin, User, Banknote, Package, Bike, X, CheckCircle, Clock } from 'lucide-react';
 import { BrandLogo } from './BrandLogo';
 import { printSavedOrder } from '../utils/printService';
 
@@ -19,6 +19,7 @@ const ALLOWED_ROLES = ['cashier', 'admin', 'manager', 'owner', 'super_admin'];
 export const IncomingOrderCall = () => {
   const { user, isAuthenticated } = useAuth();
   const [call, setCall] = useState(null);          // الإشعار الوارد المعروض الآن
+  const [queueCount, setQueueCount] = useState(0); // عدد الطلبات الإضافية المنتظرة في الطابور
   const [accepted, setAccepted] = useState(false); // بعد القبول نعرض التفاصيل
   const [order, setOrder] = useState(null);
   const [drivers, setDrivers] = useState([]);
@@ -75,10 +76,15 @@ export const IncomingOrderCall = () => {
         const params = new URLSearchParams({ notification_type: 'new_order_cashier', unread_only: 'true' });
         if (branchId) params.append('branch_id', branchId);
         const res = await axios.get(`${API}/order-notifications?${params.toString()}`);
-        const list = res.data?.notifications || [];
+        const list = (res.data?.notifications || []).slice()
+          .sort((a, b) => new Date(a.created_at) - new Date(b.created_at)); // FIFO: الأقدم أولاً (الطلبات المسبقة بالترتيب)
         if (!active) return;
-        // أول إشعار غير معالَج
-        const next = list.find((n) => !handledRef.current.has(n.id));
+        // عدد الطلبات غير المعالَجة المنتظرة في الطابور
+        const unhandled = list.filter((n) => !handledRef.current.has(n.id));
+        // أول إشعار غير معالَج (الأقدم) — يظهر التالي تلقائياً بعد قبول/رفض الحالي
+        const next = unhandled[0];
+        // العدد الإضافي بانتظار الكاشير (باستثناء المعروض حالياً)
+        setQueueCount(Math.max(0, unhandled.length - 1));
         if (next && !call) {
           setCall(next);
           setAccepted(false);
@@ -286,6 +292,14 @@ export const IncomingOrderCall = () => {
               <Package className="h-4 w-4 text-amber-300" />
               <p className="text-sm font-semibold text-amber-200">طلب جديد وارد</p>
             </div>
+            {queueCount > 0 && (
+              <div className="flex items-center justify-center mb-3" data-testid="incoming-queue-counter">
+                <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-blue-500/15 border border-blue-400/30 text-blue-200 text-xs font-semibold animate-pulse">
+                  <Clock className="h-3.5 w-3.5" />
+                  {queueCount === 1 ? 'طلب إضافي بانتظارك' : `${queueCount.toLocaleString('ar-EG')} طلبات إضافية بانتظارك`}
+                </span>
+              </div>
+            )}
             <div className="mx-auto my-2 flex items-center justify-center">
               <BrandLogo size={96} showName={false} dark={true} />
             </div>

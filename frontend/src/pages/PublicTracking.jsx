@@ -207,7 +207,7 @@ export default function PublicTracking() {
           {hasLoc ? (
             <div className="rounded-xl overflow-hidden border border-white/10 h-80">
               <MapContainer center={[cl.latitude, cl.longitude]} zoom={15} style={{ height: '100%', width: '100%' }} zoomControl={false}>
-                <TileLayer url="https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png" attribution='&copy; CARTO' />
+                <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" attribution='&copy; OpenStreetMap' />
                 {route.length > 0 && <Polyline positions={route} pathOptions={{ color: '#3b82f6', weight: 5, opacity: 0.85 }} />}
                 <Marker position={[cl.latitude, cl.longitude]} icon={L.divIcon({ className: '', html: '<div style="font-size:30px">🛵</div>', iconSize: [30, 30], iconAnchor: [15, 15] })}>
                   <Popup>{driver.name}</Popup>

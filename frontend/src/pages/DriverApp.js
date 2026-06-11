@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { API_URL } from '../utils/api';
 import { BrandLogo } from '../components/BrandLogo';
+import InstallPWAButton from '../components/InstallPWAButton';
 import axios from 'axios';
 import { Button } from '../components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
@@ -588,6 +589,7 @@ export default function DriverApp() {
               </div>
             </div>
             <div className="flex items-center gap-2">
+              <InstallPWAButton className="!border-white/50 !text-white hover:!bg-white/20 bg-white/10" />
               {/* حالة الاتصال */}
               <div className={`p-2 rounded-full ${isOnline ? 'bg-green-400/30' : 'bg-red-400/30'}`}>
                 {isOnline ? <Wifi className="h-4 w-4" /> : <WifiOff className="h-4 w-4" />}
@@ -828,7 +830,7 @@ export default function DriverApp() {
                     style={{ height: '400px' }}
                   >
                     <TileLayer
-                      url="https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png"
+                      url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
                       attribution='&copy; OpenStreetMap'
                     />
                     <MapUpdater center={currentLocation} />

@@ -2103,10 +2103,50 @@ async def get_delivery_collections(
         query.setdefault("date", {})["$lte"] = end_date
     
     collections = await db.delivery_collections.find(query, {"_id": 0}).to_list(1000)
-    
+
+    # ⭐ احتساب "كلفة المواد" لكل سجل تحصيل ديناميكياً من طلباته (لدعم السجلات القديمة
+    # التي أُنشئت قبل تخزين total_materials_cost). يستخدم نفس مصدر تقرير المبيعات.
+    try:
+        all_order_ids = []
+        for c in collections:
+            all_order_ids.extend(c.get("order_ids") or [])
+        if all_order_ids:
+            _costs_map = await _build_current_costs_map(db, tenant_id)
+            _by_id = _costs_map["by_id"]
+            _by_name = _costs_map["by_name"]
+
+            def _cn(val):
+                try:
+                    return float(val) if val is not None else 0.0
+                except (TypeError, ValueError):
+                    return 0.0
+
+            orders_docs = await db.orders.find(
+                {"id": {"$in": list(set(all_order_ids))}},
+                {"_id": 0, "id": 1, "items": 1}
+            ).to_list(length=None)
+            mat_by_order = {}
+            for od in orders_docs:
+                _m = 0.0
+                for it in (od.get("items") or []):
+                    qty = it.get("quantity", it.get("qty", 1)) or 1
+                    pname = it.get("name") or it.get("product_name") or "صنف"
+                    pid_ref = it.get("product_id")
+                    _ce = _by_id.get(pid_ref) or _by_name.get(pname) or {"unit_cost": 0.0}
+                    _m += _cn(_ce.get("unit_cost")) * qty
+                mat_by_order[od.get("id")] = _m
+
+            for c in collections:
+                computed = sum(mat_by_order.get(oid, 0.0) for oid in (c.get("order_ids") or []))
+                # نعتمد القيمة المحسوبة دائماً (مصدر الحقيقة الحالي للتكاليف)
+                c["total_materials_cost"] = round(computed, 2)
+    except Exception as e:
+        logger.warning(f"Failed to compute materials cost for collections: {e}")
+
     return {
         "collections": collections,
         "total_collected": sum(c.get("amount", 0) for c in collections),
+        "total_materials_cost": sum(c.get("total_materials_cost", 0) for c in collections),
         "count": len(collections)
     }
 

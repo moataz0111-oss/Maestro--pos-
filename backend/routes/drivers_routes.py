@@ -220,6 +220,8 @@ class DriverUpdate(BaseModel):
     phone: Optional[str] = None
     pin: Optional[str] = None
     is_active: Optional[bool] = None
+    is_available: Optional[bool] = None
+    current_order_id: Optional[str] = None
     user_id: Optional[str] = None
 
 @router.put("/{driver_id}")
@@ -240,6 +242,11 @@ async def update_driver(driver_id: str, driver: DriverUpdate, current_user: dict
         update_data["pin"] = driver.pin  # تحديث الرمز السري
     if driver.is_active is not None:
         update_data["is_active"] = driver.is_active
+    if driver.is_available is not None:
+        update_data["is_available"] = driver.is_available  # حالة التوفّر
+    if driver.current_order_id is not None:
+        # سلسلة فارغة = تفريغ الطلب الحالي (إلى null)
+        update_data["current_order_id"] = driver.current_order_id or None
     if driver.user_id:
         update_data["user_id"] = driver.user_id
     

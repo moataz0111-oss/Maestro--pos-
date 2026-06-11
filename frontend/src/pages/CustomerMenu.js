@@ -112,8 +112,8 @@ function LocationPicker({ position, setPosition, onClose, t }) {
         >
           {/* خريطة داكنة مع أسماء الشوارع واضحة */}
           <TileLayer
-            url="https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png"
-            attribution='&copy; CARTO'
+            url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+            attribution='&copy; OpenStreetMap'
           />
           <MapClickHandler />
           {position && (
@@ -1199,31 +1199,31 @@ export default function CustomerMenu() {
             {branches.map(branch => (
               <Card 
                 key={branch.id} 
-                className="cursor-pointer hover:shadow-lg transition-all hover:scale-[1.02] border-2 border-transparent hover:border-orange-300"
+                className="cursor-pointer hover:shadow-lg transition-all hover:scale-[1.02] bg-neutral-900/95 border-2 border-orange-500/20 hover:border-orange-400"
                 onClick={() => selectBranch(branch.id)}
                 data-testid={`branch-${branch.id}`}
               >
                 <CardContent className="p-4">
                   <div className="flex items-center gap-4">
-                    <div className="w-12 h-12 bg-gradient-to-br from-orange-400 to-red-400 rounded-full flex items-center justify-center text-white">
+                    <div className="w-12 h-12 bg-gradient-to-br from-orange-400 to-red-400 rounded-full flex items-center justify-center text-white shrink-0">
                       <Store className="h-6 w-6" />
                     </div>
                     <div className="flex-1">
-                      <h3 className="font-bold text-lg text-gray-800">{branch.name}</h3>
+                      <h3 className="font-extrabold text-lg text-orange-400 [text-shadow:_0_0_10px_rgb(251_146_60_/_70%)]">{branch.name}</h3>
                       {branch.address && (
-                        <p className="text-sm text-gray-500 flex items-center gap-1 mt-1">
+                        <p className="text-sm text-orange-200/90 flex items-center gap-1 mt-1">
                           <MapPin className="h-3 w-3" />
                           {branch.address}
                         </p>
                       )}
                       {branch.phone && (
-                        <p className="text-sm text-gray-500 flex items-center gap-1">
+                        <p className="text-sm text-orange-200/90 flex items-center gap-1">
                           <Phone className="h-3 w-3" />
                           {branch.phone}
                         </p>
                       )}
                     </div>
-                    <ArrowLeft className="h-5 w-5 text-orange-500" />
+                    <ArrowLeft className="h-5 w-5 text-orange-400 shrink-0" />
                   </div>
                 </CardContent>
               </Card>
@@ -2248,8 +2248,8 @@ export default function CustomerMenu() {
                 >
                   {/* خريطة واضحة مع أسماء الشوارع */}
                   <TileLayer 
-                    url="https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png"
-                    attribution='&copy; <a href="https://carto.com/">CARTO</a>'
+                    url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+                    attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
                   />
                   
                   {/* موقع السائق */}

@@ -1,0 +1,62 @@
+{
+  "summary": "Frontend-only verification of Delivery page two new requirements: (1) 'كل الطلبات' tab excludes delivery-company orders, (2) 'طلبات جاهزة للتوصيل' pending tab renders 4 columns with NEW 'الطلبات المسلّمة للزبون' inserted before 'حركة اليوم'. Both requirements PASS. Backend cross-check via GET /api/delivery-orders also confirms exclusion (summary.all=14, 0 company orders).",
+  "tests_executed": [
+    {
+      "name": "Backend cross-check GET /api/delivery-orders (admin Bearer)",
+      "result": "PASS",
+      "details": "summary={'all':14,'rejected':0,'late':9,'accepted':9,'preparing':3,'completed':1,'cancelled':1}; 0 orders have is_delivery_company/delivery_company_name/delivery_app_name/delivery_app_id; all customer_name start with 'زبون'; statuses: pending=9, preparing=2, out_for_delivery=1, delivered=1, cancelled=1."
+    },
+    {
+      "name": "All Orders tab excludes company orders",
+      "result": "PASS",
+      "details": "[data-testid='all-orders-content'] inner text does NOT contain 'توترز' or 'مزاجك'. Order card customer names visible in UI all begin with 'زبون' (زبون سارة #5002, زبون أحمد #5001, زبون مازن #5003, زبون نور #5004, زبون خالد #5005, زبون_TEST #6110007, زبون_TEST #6110006...). No delivery-company orders rendered."
+    },
+    {
+      "name": "Pending tab has 4 columns (incl. NEW delivered-to-customer)",
+      "result": "PASS",
+      "details": "All 4 column titles found in DOM with correct testid prefixes. DOM order (verified from source lines 1135/1186/1259/1308): (1) جاهزة للتعيين -> (2) في حيازة السائق -> (3) الطلبات المسلّمة للزبون (NEW) -> (4) حركة اليوم. data-testid counts: out-for-delivery-*=1, delivered-to-customer-*=1, today-movement-*=12. Column badge counts shown in UI: 0, 1, 1, 12 respectively."
+    },
+    {
+      "name": "NEW 'الطلبات المسلّمة للزبون' appears BEFORE 'حركة اليوم'",
+      "result": "PASS",
+      "details": "Source code line numbers confirm delivered column (line 1259) is rendered before today-movement column (line 1308) in JSX/DOM order. Both columns appear inside the same grid grid-cols-4 container, so delivered is DOM-before today-movement as required."
+    },
+    {
+      "name": "Top stat cards reflect counts",
+      "result": "PASS",
+      "details": "Stat card 'تم التسليم اليوم' = 1 (matches delivered count). Stat card 'في الطريق' = 1 (matches out_for_delivery count)."
+    }
+  ],
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {
+        "screen": "Pending tab (طلبات جاهزة للتوصيل)",
+        "issues": [
+          "Visual flow of the 4 columns in RTL page is LTR (x=369,681,993,1305 for DOM order 1→4). In an Arabic RTL page, conventionally DOM-first column should render on the RIGHT side. Currently 'جاهزة للتعيين' (the first/empty column) appears at the LEFT and 'حركة اليوم' at the RIGHT. The DOM order is correct, but the visual reading order in RTL is reversed. Consider verifying with user whether this LTR-flow inside an RTL page is intended; if not, set dir attribute or use flex-row-reverse on the grid container."
+        ]
+      }
+    ]
+  },
+  "minor_observations": [
+    "All-orders heading text shows count from ordersSummary.all = 12 in UI, but backend GET /api/delivery-orders returned summary.all=14. Difference of 2 corresponds exactly to delivered(1)+out_for_delivery(1) — those are currently shown in the pending tab's columns, not in the 'all' list. If the requirement intent is that summary.all should equal exactly 14 in the heading, the heading count is off. The list/cards count rendered also reflects 12 entries. NOT blocking (numbers are internally consistent with the rendered list)."
+  ],
+  "test_report_links": [],
+  "action_items": [
+    "Optional: confirm with user whether the visual flow of the 4 pending columns should be right-to-left (Arabic reading) — currently DOM order maps to LTR visual flow inside the RTL page.",
+    "Optional: clarify whether 'الكل' badge in All-Orders tab should equal backend summary.all (14) or the filtered list count (12 — excludes delivered/out_for_delivery shown in pending tab)."
+  ],
+  "critical_code_review_comments": [
+    "Delivery.js is 2096 lines — exceeds 700-line guideline; consider splitting into focused sub-components (PendingColumns, AllOrdersList, DriversTab, MapTab, PerformanceTab).",
+    "The 4-column grid for pending tab uses default CSS grid flow; in RTL pages this may not give the expected visual order — add explicit dir or ordering if right-to-left visual is intended."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "100%", "frontend": "100%"},
+  "test_credentials": "admin@maestroegp.com / admin123 (from /app/memory/test_credentials.md)",
+  "seed_data_creation": "None — used existing seeded delivery orders (12 customer/internal orders visible in UI; backend reports 14 incl. delivered+out_for_delivery).",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Both new requirements verified at code + UI + backend level. Login takes ~5s + ~13s splash; /delivery extra ~8s splash. Use [data-testid='login-email'], [data-testid='login-password'], [data-testid='login-submit'] and wait ~18s after submit before navigating to /delivery, then ~13s more for content. Order cards in all-orders-content use data-testid='delivery-order-{id}' (NOT 'order-card-')."
+}

@@ -487,18 +487,18 @@ export default function Orders() {
       
       {/* Header */}
       <header className="sticky top-0 z-50 glass border-b border-border/50 px-6 py-4">
-        <div className="max-w-7xl mx-auto flex items-center justify-between">
-          <div className="flex items-center gap-4">
+        <div className="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-3">
+          <div className="flex items-center gap-2 sm:gap-4">
             <Button variant="ghost" size="icon" onClick={() => navigate('/')} data-testid="back-btn">
               <ArrowRight className="h-5 w-5" />
             </Button>
             <div>
-              <h1 className="text-xl font-bold font-cairo text-foreground">{t('إدارة الطلبات')}</h1>
-              <p className="text-sm text-muted-foreground">{t('طلبات اليوم')}: {orders.length}</p>
+              <h1 className="text-lg sm:text-xl font-bold font-cairo text-foreground">{t('إدارة الطلبات')}</h1>
+              <p className="text-xs sm:text-sm text-muted-foreground">{t('طلبات اليوم')}: {orders.length}</p>
             </div>
           </div>
 
-          <div className="flex items-center gap-3">
+          <div className="flex flex-wrap items-center justify-end gap-2 sm:gap-3">
             {/* Offline/Online Status Indicator */}
             {isOffline ? (
               <div className="flex items-center gap-2 px-3 py-1.5 bg-amber-500/10 border border-amber-500/30 rounded-lg">
@@ -567,9 +567,9 @@ export default function Orders() {
       </header>
 
       {/* Filters */}
-      <div className="max-w-7xl mx-auto px-6 py-4">
-        <div className="flex flex-wrap gap-4 mb-6">
-          <div className="flex-1 min-w-[200px] relative">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 py-4">
+        <div className="flex flex-wrap gap-3 sm:gap-4 mb-6">
+          <div className="flex-1 min-w-[160px] relative">
             <Search className={`absolute ${isRTL ? 'right-3' : 'left-3'} top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground`} />
             <Input
               placeholder={t('بحث برقم الطلب أو اسم الزبون...')}
@@ -595,7 +595,7 @@ export default function Orders() {
         </div>
 
         {/* Status Stats */}
-        <div className="grid grid-cols-5 gap-3 mb-6">
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2 sm:gap-3 mb-6">
           {['pending', 'preparing', 'ready', 'delivered', 'cancelled'].map(status => {
             const count = orders.filter(o => o.status === status).length;
             const StatusIcon = getStatusIcon(status);

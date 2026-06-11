@@ -52,10 +52,12 @@ import {
   AlertCircle,
   Bell,
   Eye,
-  Building2
+  Building2,
+  ScanLine
 } from 'lucide-react';
 import { toast } from 'sonner';
 import BranchSelector from '../components/BranchSelector';
+import BarcodeScannerDialog from '../components/BarcodeScannerDialog';
 import {
   Dialog,
   DialogContent,
@@ -145,6 +147,7 @@ export default function POS() {
   const [discountType, setDiscountType] = useState('fixed'); // fixed or percentage
   const [deliveryApp, setDeliveryApp] = useState('');
   const [deliveryCompanyOrderId, setDeliveryCompanyOrderId] = useState('');  // رقم الطلب لدى شركة التوصيل (منع تكرار)
+  const [barcodeScanOpen, setBarcodeScanOpen] = useState(false);  // نافذة مسح الباركود بالكاميرا
   const [deliveryApps, setDeliveryApps] = useState([]);
   const [drivers, setDrivers] = useState([]);
   const [selectedDriver, setSelectedDriver] = useState('');
@@ -3134,14 +3137,14 @@ export default function POS() {
         </div>
       )}
       <AgentUpdateBanner t={t} />
-      <div className="flex-1 flex">
-      {/* Categories Sidebar - Right */}
-      <div className="w-56 border-l border-border bg-card flex flex-col">
-        <div className="p-3 border-b border-border">
+      <div className="flex-1 flex flex-col lg:flex-row overflow-y-auto lg:overflow-hidden">
+      {/* Categories Sidebar - Right (يتحوّل لشريط علوي أفقي على الهاتف/التابلت) */}
+      <div className="w-full lg:w-56 shrink-0 border-b lg:border-b-0 lg:border-l border-border bg-card flex flex-col max-h-[26vh] lg:max-h-none">
+        <div className="p-3 border-b border-border hidden lg:block">
           <h2 className="font-bold text-foreground text-sm">{t('الفئات')}</h2>
         </div>
-        <ScrollArea className="flex-1">
-          <div className="p-2 space-y-2">
+        <ScrollArea className="flex-1" dir="rtl">
+          <div className="p-2 flex flex-row gap-2 overflow-x-auto lg:flex-col lg:gap-0 lg:space-y-2 lg:overflow-x-visible [&>button]:shrink-0 [&>button]:w-32 lg:[&>button]:w-full">
             {/* زر عرض الكل */}
             <button
               onClick={() => { setSelectedCategory(null); playClick(); }}
@@ -3226,14 +3229,14 @@ export default function POS() {
       </div>
 
       {/* Main Content - Products */}
-      <div className="flex-1 flex flex-col">
+      <div className="flex-1 flex flex-col min-h-[55vh] lg:min-h-0">
         {/* Header */}
-        <header className="h-16 border-b border-border bg-card flex items-center justify-between px-4">
-          <div className="flex items-center gap-4">
+        <header className="min-h-16 border-b border-border bg-card flex flex-wrap items-center justify-between gap-2 px-3 sm:px-4 py-2 sm:py-0">
+          <div className="flex items-center gap-2 sm:gap-4">
             <Button variant="ghost" size="icon" onClick={() => navigate('/dashboard')}>
               <ArrowRight className="h-5 w-5" />
             </Button>
-            <h1 className="text-xl font-bold font-cairo text-foreground">{t('نقطة البيع')}</h1>
+            <h1 className="text-lg sm:text-xl font-bold font-cairo text-foreground">{t('نقطة البيع')}</h1>
             
             {/* اختيار الفرع */}
             <div className="flex items-center gap-2">
@@ -3447,8 +3450,8 @@ export default function POS() {
         </ScrollArea>
       </div>
 
-      {/* Cart Sidebar */}
-      <div className="w-96 border-r border-border bg-card flex flex-col">
+      {/* Cart Sidebar (يتحوّل لقسم سفلي بعرض كامل على الهاتف/التابلت) */}
+      <div className="w-full lg:w-96 shrink-0 border-t lg:border-t-0 lg:border-r border-border bg-card flex flex-col">
         {/* Order Type Tabs */}
         <div className="p-3 border-b border-border">
           <div className="flex gap-1">
@@ -3852,14 +3855,27 @@ export default function POS() {
                     <label className="text-xs font-medium text-red-500 flex items-center gap-1 mb-1">
                       {t('رقم الطلب لدى شركة التوصيل')} <span className="text-red-600">*</span>
                     </label>
-                    <Input
-                      placeholder={t('مثال: 9242 — إجباري لمنع تكرار الطلب')}
-                      value={deliveryCompanyOrderId}
-                      onChange={(e) => setDeliveryCompanyOrderId(e.target.value)}
-                      data-testid="delivery-company-order-id"
-                      inputMode="text"
-                      className={`focus:border-blue-500 ${!deliveryCompanyOrderId.trim() ? 'border-red-400' : 'border-green-400'}`}
-                    />
+                    <div className="flex gap-2">
+                      <Input
+                        placeholder={t('مثال: 9242 — إجباري لمنع تكرار الطلب')}
+                        value={deliveryCompanyOrderId}
+                        onChange={(e) => setDeliveryCompanyOrderId(e.target.value)}
+                        data-testid="delivery-company-order-id"
+                        inputMode="text"
+                        className={`flex-1 focus:border-blue-500 ${!deliveryCompanyOrderId.trim() ? 'border-red-400' : 'border-green-400'}`}
+                      />
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="icon"
+                        className="shrink-0 border-blue-400 text-blue-500 hover:bg-blue-500/10"
+                        onClick={() => setBarcodeScanOpen(true)}
+                        data-testid="scan-company-order-id-btn"
+                        title={t('مسح الباركود بالكاميرا')}
+                      >
+                        <ScanLine className="h-5 w-5" />
+                      </Button>
+                    </div>
                   </div>
                 )}
               </div>
@@ -5093,6 +5109,17 @@ export default function POS() {
           )}
         </DialogContent>
       </Dialog>
+
+      {/* نافذة مسح باركود رقم طلب شركة التوصيل بالكاميرا */}
+      <BarcodeScannerDialog
+        open={barcodeScanOpen}
+        onOpenChange={setBarcodeScanOpen}
+        title={t('مسح باركود الطلب')}
+        onScan={(code) => {
+          setDeliveryCompanyOrderId(code);
+          toast.success(`${t('تم مسح الرقم')}: ${code}`);
+        }}
+      />
       </div>{/* end flex-1 flex wrapper */}
     </div>
   );

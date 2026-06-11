@@ -2399,21 +2399,21 @@ export default function Settings() {
   return (
     <div className="min-h-screen bg-background" data-testid="settings-page">
       {/* Header */}
-      <header className="sticky top-0 z-50 glass border-b border-border/50 px-6 py-4">
+      <header className="sticky top-0 z-50 glass border-b border-border/50 px-4 sm:px-6 py-3 sm:py-4">
         <div className="max-w-5xl mx-auto flex items-center justify-between">
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-2 sm:gap-4">
             <Button variant="ghost" size="icon" onClick={() => navigate('/')} data-testid="back-btn">
               <ArrowRight className="h-5 w-5" />
             </Button>
             <div>
-              <h1 className="text-xl font-bold font-cairo text-foreground">{t('الإعدادات')}</h1>
-              <p className="text-sm text-muted-foreground">{t('إدارة النظام والمستخدمين')}</p>
+              <h1 className="text-lg sm:text-xl font-bold font-cairo text-foreground">{t('الإعدادات')}</h1>
+              <p className="text-xs sm:text-sm text-muted-foreground hidden sm:block">{t('إدارة النظام والمستخدمين')}</p>
             </div>
           </div>
         </div>
       </header>
 
-      <main className="max-w-6xl mx-auto px-6 py-6">
+      <main className="max-w-6xl mx-auto px-4 sm:px-6 py-4 sm:py-6">
         <Tabs defaultValue="appearance" className="space-y-6">
           {/* شريط التبويبات المحسن */}
           <div className="bg-card border rounded-xl p-2 overflow-x-auto">

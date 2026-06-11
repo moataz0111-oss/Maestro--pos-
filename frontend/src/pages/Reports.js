@@ -3209,7 +3209,7 @@ const DeliveryReportTab = ({ deliveryCreditsReport, t, formatPrice, fetchReports
               </div>
             ) : (
               <div className="overflow-x-auto" data-testid="collections-log-table">
-                <table className="w-full text-sm">
+                <table className="w-full text-sm min-w-[760px]">
                   <thead className="bg-muted/50">
                     <tr className="text-xs text-muted-foreground">
                       <th className="p-2 text-right">{t('التاريخ')}</th>
@@ -4050,19 +4050,19 @@ export default function Reports() {
   return (
     <div className="min-h-screen bg-background" data-testid="reports-page">
       {/* Header */}
-      <header className="sticky top-0 z-50 glass border-b border-border/50 px-6 py-4">
-        <div className="max-w-7xl mx-auto flex items-center justify-between">
-          <div className="flex items-center gap-4">
+      <header className="sticky top-0 z-50 glass border-b border-border/50 px-4 sm:px-6 py-3 sm:py-4">
+        <div className="max-w-7xl mx-auto flex items-center justify-between gap-2">
+          <div className="flex items-center gap-2 sm:gap-4 min-w-0">
             <Button variant="ghost" size="icon" onClick={() => navigate('/')} data-testid="back-btn">
               <ArrowRight className="h-5 w-5" />
             </Button>
-            <div>
-              <h1 className="text-xl font-bold font-cairo text-foreground">{t('التقارير')}</h1>
-              <p className="text-sm text-muted-foreground">{t('تقارير شاملة للمبيعات والمصاريف والأرباح')}</p>
+            <div className="min-w-0">
+              <h1 className="text-lg sm:text-xl font-bold font-cairo text-foreground truncate">{t('التقارير')}</h1>
+              <p className="text-xs sm:text-sm text-muted-foreground truncate hidden sm:block">{t('تقارير شاملة للمبيعات والمصاريف والأرباح')}</p>
             </div>
           </div>
 
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-3 shrink-0">
             <Button variant="outline" size="icon" onClick={fetchReports} data-testid="refresh-btn">
               <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
             </Button>

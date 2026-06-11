@@ -54,11 +54,11 @@ export default function DriverTrackingMap({
   const [driverHistory, setDriverHistory] = useState({});
   const [showSidebar, setShowSidebar] = useState(true);
 
-  // Map tile layers — موحّدة مع تطبيق الزبائن والسائقين (CARTO Voyager)
+  // Map tile layers — موحّدة مع تطبيق الزبائن والسائقين (OpenStreetMap التفصيلية مثل Baly)
   const tileLayers = {
     streets: {
-      url: 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png',
-      attribution: '© CARTO'
+      url: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
+      attribution: '© OpenStreetMap'
     },
     satellite: {
       url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
@@ -521,7 +521,8 @@ export default function DriverTrackingMap({
         
         destinationMarkersRef.current[driver.id] = destMarker;
 
-        // Add route line
+        // Add route line — مسار حقيقي على الطرق عبر OSRM (موحّد مع تطبيق الزبائن وBaly)
+        // نرسم خطاً مستقيماً مبدئياً ثم نستبدله بمسار الطرق الفعلي عند وصوله
         const routeLine = L.polyline([
           [driver.location_lat, driver.location_lng],
           [driver.current_order.delivery_lat, driver.current_order.delivery_lng]
@@ -534,6 +535,29 @@ export default function DriverTrackingMap({
         }).addTo(mapRef.current);
 
         routeLinesRef.current[driver.id] = routeLine;
+
+        // جلب مسار الطرق الحقيقي (OSRM) واستبدال الخط المستقيم به — نفس خريطة الزبائن/Baly
+        (async () => {
+          try {
+            const osrmUrl = `https://router.project-osrm.org/route/v1/driving/${driver.location_lng},${driver.location_lat};${driver.current_order.delivery_lng},${driver.current_order.delivery_lat}?overview=full&geometries=geojson`;
+            const resp = await fetch(osrmUrl);
+            const data = await resp.json();
+            const coords = data?.routes?.[0]?.geometry?.coordinates;
+            // نتأكد أن الخط لم يُستبدل/يُحذف أثناء الجلب (تحديث جديد)
+            if (coords && coords.length > 1 && mapRef.current && routeLinesRef.current[driver.id] === routeLine) {
+              const latlngs = coords.map(c => [c[1], c[0]]);
+              mapRef.current.removeLayer(routeLine);
+              const roadLine = L.polyline(latlngs, {
+                color: '#f97316',
+                weight: 5,
+                opacity: 0.9
+              }).addTo(mapRef.current);
+              routeLinesRef.current[driver.id] = roadLine;
+            }
+          } catch (e) {
+            /* تجاهل — يبقى الخط المستقيم كاحتياط */
+          }
+        })();
       }
     });
 

@@ -10,6 +10,22 @@
     box-sizing: border-box;
 }
 
+/* ===== التجاوب العام (Responsive global helpers) ===== */
+/* حارس ضد التمرير الأفقي / كسر الصفحة على الهاتف والتابلت (clip لا يكسر sticky) */
+@media (max-width: 1023px) {
+  html, body { overflow-x: clip; }
+}
+
+/* النوافذ المنبثقة (shadcn / Radix Dialog & AlertDialog) تملأ معظم الشاشة على الهاتف */
+@media (max-width: 640px) {
+  [role="dialog"][data-state="open"],
+  [role="alertdialog"][data-state="open"] {
+    width: 95vw !important;
+    max-width: 95vw !important;
+  }
+}
+
+
 body {
     font-family: 'Tajawal', 'Cairo', -apple-system, BlinkMacSystemFont, sans-serif;
     -webkit-font-smoothing: antialiased;

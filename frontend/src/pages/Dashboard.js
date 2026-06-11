@@ -80,6 +80,7 @@ import { useTheme } from '../context/ThemeContext';
 import TargetCelebration from '../components/TargetCelebration';
 import LowStockBanner from '../components/LowStockBanner';
 import PriceAlertsBell from '../components/PriceAlertsBell';
+import InstallPWAButton from '../components/InstallPWAButton';
 import { toast } from 'sonner';
 import {
   Dialog,
@@ -1966,8 +1967,8 @@ export default function Dashboard() {
       )}
       
       {/* Header */}
-      <header className={`sticky ${isImpersonating ? 'top-[40px]' : 'top-0'} z-50 glass border-b border-border/50 px-6 py-4`}>
-        <div className="max-w-7xl mx-auto flex items-center justify-between">
+      <header className={`sticky ${isImpersonating ? 'top-[40px]' : 'top-0'} z-50 glass border-b border-border/50 px-3 sm:px-6 py-4`}>
+        <div className="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-center gap-4">
             {/* Logo - يعرض شعار العميل إذا وجد - دائري */}
             <div className="w-12 h-12 bg-primary rounded-full flex items-center justify-center overflow-hidden shadow-lg">
@@ -1994,7 +1995,9 @@ export default function Dashboard() {
             </div>
           </div>
 
-          <div className="flex items-center gap-3">
+          <div className="flex flex-wrap items-center justify-end gap-2 sm:gap-3">
+            {/* زر تثبيت التطبيق (PWA) — يظهر عند توفّر التثبيت */}
+            <InstallPWAButton />
             {/* Price Alerts Bell - تنبيهات تغير الأسعار (للمالك فقط) */}
             <PriceAlertsBell user={user} />
 

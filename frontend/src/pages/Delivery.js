@@ -5,6 +5,7 @@ import axios from 'axios';
 import { useAuth } from '../context/AuthContext';
 import { useTranslation } from '../hooks/useTranslation';
 import { formatPrice } from '../utils/currency';
+import { printSavedOrder } from '../utils/printService';
 import { Button } from '../components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
 import { Input } from '../components/ui/input';
@@ -45,7 +46,8 @@ import {
   Route,
   BarChart3,
   Star,
-  MessageSquare
+  MessageSquare,
+  Printer
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Badge } from '../components/ui/badge';
@@ -115,6 +117,11 @@ export default function Delivery() {
   const [driverStats, setDriverStats] = useState({});
   const [collectPaymentDialogOpen, setCollectPaymentDialogOpen] = useState(false);
   const [paymentAmount, setPaymentAmount] = useState(0);
+  // تفاصيل الطلب (الضغط على أي طلب لعرض كل التفاصيل)
+  const [orderDetailsOpen, setOrderDetailsOpen] = useState(false);
+  const [orderDetails, setOrderDetails] = useState(null);
+  const [loadingOrderDetails, setLoadingOrderDetails] = useState(false);
+
   
   // حالات إسناد سائق مع أجور التوصيل
   const [assignFeeDialogOpen, setAssignFeeDialogOpen] = useState(false);
@@ -415,6 +422,7 @@ export default function Delivery() {
       }
       toast.success(t('تم تسليم الطلب بنجاح'));
       fetchData();
+      fetchAllOrders();
       if (selectedDriver) {
         fetchDriverOrders(selectedDriver.id);
       }
@@ -498,6 +506,79 @@ export default function Delivery() {
       toast.error(t('فشل في تسجيل الدفعة'));
     }
   };
+
+  // فتح تفاصيل أي طلب (يجلب الطلب كاملاً: المنتجات، الكاشير، وقت الرفض...)
+  const openOrderDetails = async (orderId) => {
+    if (!orderId) return;
+    setOrderDetailsOpen(true);
+    setLoadingOrderDetails(true);
+    setOrderDetails(null);
+    try {
+      const res = await axios.get(`${API}/orders/${orderId}`, { headers });
+      setOrderDetails(res.data);
+    } catch (error) {
+      toast.error(t('تعذّر تحميل تفاصيل الطلب'));
+      setOrderDetailsOpen(false);
+    } finally {
+      setLoadingOrderDetails(false);
+    }
+  };
+
+  // إعادة طباعة فاتورة أي طلب من إدارة التوصيل (طابعة USB إن وُجدت، وإلا طباعة المتصفح)
+  const reprintOrderInvoice = async (ord) => {
+    if (!ord) return;
+    try {
+      const bparam = ord.branch_id ? { params: { branch_id: ord.branch_id } } : {};
+      const [printersRes, restRes, invRes] = await Promise.all([
+        axios.get(`${API}/printers`, { ...bparam, headers }).catch(() => ({ data: [] })),
+        axios.get(`${API}/settings/restaurant`, { headers }).catch(() => ({ data: {} })),
+        axios.get(`${API}/tenant/invoice-settings`, { headers }).catch(() => ({ data: {} })),
+      ]);
+      const res = await printSavedOrder(ord, {
+        printers: printersRes.data || [],
+        restaurantName: restRes.data?.name_ar || restRes.data?.name || '',
+        invoiceSettings: invRes.data || {},
+      });
+      if (res && (res.cashier || res.kitchen)) {
+        toast.success(t('تم إرسال الفاتورة للطباعة'));
+        return;
+      }
+    } catch (e) { /* تجاوز إلى طباعة المتصفح */ }
+    reprintInvoiceBrowser(ord);
+  };
+
+  // طباعة احتياطية للفاتورة عبر نافذة المتصفح
+  const reprintInvoiceBrowser = (o) => {
+    const items = o.items || [];
+    const rows = items.map((it) => `
+      <tr>
+        <td style="padding:3px 6px;border-bottom:1px dashed #ccc">${it.quantity || 1}× ${it.product_name || it.name || ''}</td>
+        <td style="padding:3px 6px;border-bottom:1px dashed #ccc;text-align:left">${Number(((it.price||0)*(it.quantity||1))+(it.extras_total||0)).toLocaleString()}</td>
+      </tr>`).join('');
+    const html = `<!DOCTYPE html><html dir="rtl" lang="ar"><head><meta charset="utf-8"><title>فاتورة #${o.order_number}</title>
+      <style>*{font-family:'Tahoma',sans-serif}body{padding:12px;color:#000}h2{text-align:center;margin:4px 0}
+      .muted{color:#555;font-size:12px;text-align:center}table{width:100%;border-collapse:collapse;margin-top:8px;font-size:13px}
+      th{text-align:right;border-bottom:2px solid #000;padding:5px}.row{display:flex;justify-content:space-between;font-size:13px;padding:2px 0}
+      .tot{font-weight:bold;font-size:15px;border-top:2px solid #000;padding-top:6px;margin-top:6px;display:flex;justify-content:space-between}
+      .rj{margin-top:8px;text-align:center;font-weight:bold;color:#dc2626;border:2px solid #dc2626;border-radius:8px;padding:5px}</style></head><body>
+      <h2>فاتورة الطلب #${o.order_number}</h2>
+      <p class="muted">${o.customer_name || 'زبون'} ${o.delivery_address ? '• ' + o.delivery_address : ''}</p>
+      <p class="muted">${o.created_at ? new Date(o.created_at).toLocaleString('ar') : ''} ${o.cashier_name ? '• كاشير: ' + o.cashier_name : ''}</p>
+      <table><thead><tr><th>الصنف</th><th style="text-align:left">المبلغ</th></tr></thead><tbody>${rows}</tbody></table>
+      <div style="margin-top:8px">
+        <div class="row"><span>المجموع الفرعي</span><span>${Number(o.subtotal||0).toLocaleString()}</span></div>
+        ${o.discount>0?`<div class="row" style="color:#dc2626"><span>الخصم</span><span>-${Number(o.discount).toLocaleString()}</span></div>`:''}
+        ${o.delivery_fee>0?`<div class="row" style="color:#d97706"><span>أجور التوصيل</span><span>+${Number(o.delivery_fee).toLocaleString()}</span></div>`:''}
+        <div class="tot"><span>الإجمالي</span><span>${Number(o.total||0).toLocaleString()} IQD</span></div>
+      </div>
+      ${o.is_rejected?`<div class="rj">✕ طلب مرفوض — ${o.cancellation_reason || ''}</div>`:''}
+      </body></html>`;
+    const w = window.open('', '_blank', 'width=400,height=600');
+    if (!w) { toast.error(t('فعّل النوافذ المنبثقة للطباعة')); return; }
+    w.document.write(html); w.document.close();
+    setTimeout(() => { try { w.print(); } catch (e) {} }, 400);
+  };
+
 
   // تحويل الطلب لسائق آخر
   const handleTransferDriver = async () => {
@@ -593,15 +674,15 @@ export default function Delivery() {
   return (
     <div className="min-h-screen bg-background" data-testid="delivery-page">
       {/* Header */}
-      <header className="sticky top-0 z-50 glass border-b border-border/50 px-6 py-4">
+      <header className="sticky top-0 z-50 glass border-b border-border/50 px-4 sm:px-6 py-3 sm:py-4">
         <div className="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-3">
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-2 sm:gap-4">
             <Button variant="ghost" size="icon" onClick={() => navigate('/')} data-testid="back-btn">
               <ArrowRight className="h-5 w-5" />
             </Button>
             <div>
-              <h1 className="text-xl font-bold font-cairo text-foreground">{t('إدارة التوصيل')}</h1>
-              <p className="text-sm text-muted-foreground">{t('متابعة السائقين والطلبات')}</p>
+              <h1 className="text-lg sm:text-xl font-bold font-cairo text-foreground">{t('إدارة التوصيل')}</h1>
+              <p className="text-xs sm:text-sm text-muted-foreground hidden sm:block">{t('متابعة السائقين والطلبات')}</p>
             </div>
           </div>
 
@@ -712,7 +793,7 @@ export default function Delivery() {
         </div>
       </header>
 
-      <main className="max-w-7xl mx-auto px-6 py-6">
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 py-4 sm:py-6">
         {/* إحصائيات سريعة */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4 mb-6">
           <Card className="border-border/50 bg-card">
@@ -1100,7 +1181,7 @@ export default function Delivery() {
                   <Truck className="h-5 w-5 mx-auto mb-1 text-orange-500" />
                   <p className="text-xs text-muted-foreground">{t('في الطريق')}</p>
                   <p className="text-xl font-bold text-orange-500">
-                    {drivers.filter(d => d.current_order_id).length}
+                    {allOrders.filter(o => o.status === 'out_for_delivery').length}
                   </p>
                 </CardContent>
               </Card>
@@ -1109,7 +1190,7 @@ export default function Delivery() {
                   <CheckCircle className="h-5 w-5 mx-auto mb-1 text-green-500" />
                   <p className="text-xs text-muted-foreground">{t('تم التسليم اليوم')}</p>
                   <p className="text-xl font-bold text-green-500">
-                    {Object.values(driverStats).reduce((sum, s) => sum + (s.delivered_today || 0), 0)}
+                    {ordersSummary.completed}
                   </p>
                 </CardContent>
               </Card>
@@ -1130,7 +1211,7 @@ export default function Delivery() {
             </div>
 
             {/* قائمة الطلبات مع حالاتها */}
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-4 gap-4" dir="rtl">
               {/* الطلبات الجاهزة للتعيين */}
               <Card className="border-border/50 bg-card">
                 <CardHeader className="pb-3">
@@ -1182,27 +1263,29 @@ export default function Delivery() {
                 </CardContent>
               </Card>
 
-              {/* في حيازة السائق (في الطريق) */}
+              {/* في حيازة السائق (في الطريق للزبون) */}
               <Card className="border-border/50 bg-card">
                 <CardHeader className="pb-3">
                   <CardTitle className="text-base flex items-center gap-2 text-orange-500">
                     <Truck className="h-5 w-5" />
                     {t('في حيازة السائق')}
                     <span className="bg-orange-500/20 text-orange-500 px-2 py-0.5 rounded-full text-xs mr-auto">
-                      {drivers.filter(d => d.current_order_id).length}
+                      {allOrders.filter(o => o.status === 'out_for_delivery').length}
                     </span>
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
                   <ScrollArea className="h-[400px]">
                     <div className="space-y-3">
-                      {drivers.filter(d => d.current_order_id).length === 0 ? (
+                      {allOrders.filter(o => o.status === 'out_for_delivery').length === 0 ? (
                         <p className="text-center text-muted-foreground py-8 text-sm">{t('لا توجد طلبات في الطريق')}</p>
                       ) : (
-                        drivers.filter(d => d.current_order_id).map(driver => (
+                        allOrders.filter(o => o.status === 'out_for_delivery').map(order => (
                           <div 
-                            key={driver.id}
-                            className="p-3 rounded-lg border border-orange-500/30 bg-orange-500/5"
+                            key={order.id}
+                            className="p-3 rounded-lg border border-orange-500/30 bg-orange-500/5 cursor-pointer hover:bg-orange-500/10 transition-colors"
+                            data-testid={`out-for-delivery-${order.id}`}
+                            onClick={() => openOrderDetails(order.id)}
                           >
                             <div className="flex items-center justify-between mb-2">
                               <div className="flex items-center gap-2">
@@ -1210,22 +1293,21 @@ export default function Delivery() {
                                   <Truck className="h-4 w-4 text-orange-500" />
                                 </div>
                                 <div>
-                                  <p className="font-bold text-foreground text-sm">{driver.name}</p>
-                                  <p className="text-xs text-orange-500">#{driver.current_order?.order_number || '---'}</p>
+                                  <p className="font-bold text-foreground text-sm">{order.driver_name || t('سائق')}</p>
+                                  <p className="text-xs text-orange-500">#{order.order_number}</p>
                                 </div>
                               </div>
-                              <span className="text-primary font-bold">
-                                {formatPrice(driver.current_order?.total || 0)}
-                              </span>
+                              <span className="text-primary font-bold">{formatPrice(order.total || 0)}</span>
                             </div>
                             <p className="text-xs text-muted-foreground truncate mb-2">
-                              {driver.current_order?.customer_name || t('زبون')}
+                              {order.customer_name || t('زبون')}
                             </p>
                             <div className="flex gap-2">
                               <Button
                                 size="sm"
                                 className="flex-1 h-7 text-xs bg-green-500 hover:bg-green-600 text-white"
-                                onClick={() => completeDelivery(driver.id)}
+                                disabled={!order.driver_id}
+                                onClick={(e) => { e.stopPropagation(); completeDelivery(order.driver_id, order.id); }}
                               >
                                 <Check className="h-3 w-3 ml-1" />
                                 {t('تم التسليم')}
@@ -1234,13 +1316,14 @@ export default function Delivery() {
                                 size="sm"
                                 variant="outline"
                                 className="h-7 text-xs border-amber-500 text-amber-500"
-                                onClick={() => {
+                                onClick={(e) => {
+                                  e.stopPropagation();
                                   openTransferDriverDialog({
-                                    id: driver.current_order_id,
-                                    order_number: driver.current_order?.order_number || '---',
-                                    total: driver.current_order?.total || 0,
-                                    driver_id: driver.id,
-                                    driver_name: driver.name
+                                    id: order.id,
+                                    order_number: order.order_number,
+                                    total: order.total || 0,
+                                    driver_id: order.driver_id,
+                                    driver_name: order.driver_name
                                   });
                                 }}
                               >
@@ -1255,39 +1338,38 @@ export default function Delivery() {
                 </CardContent>
               </Card>
 
-              {/* حركة اليوم - آخر الطلبات المسلمة */}
+              {/* الطلبات المسلّمة للزبون */}
               <Card className="border-border/50 bg-card">
                 <CardHeader className="pb-3">
-                  <CardTitle className="text-base flex items-center gap-2 text-green-500">
-                    <History className="h-5 w-5" />
-                    {t('حركة اليوم')}
-                    <span className="bg-green-500/20 text-green-500 px-2 py-0.5 rounded-full text-xs mr-auto">
-                      {driverOrders.filter(o => o.status === 'delivered').length}
+                  <CardTitle className="text-base flex items-center gap-2 text-emerald-500">
+                    <CheckCircle className="h-5 w-5" />
+                    {t('الطلبات المسلّمة للزبون')}
+                    <span className="bg-emerald-500/20 text-emerald-500 px-2 py-0.5 rounded-full text-xs mr-auto">
+                      {allOrders.filter(o => o.status === 'delivered').length}
                     </span>
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
                   <ScrollArea className="h-[400px]">
                     <div className="space-y-2">
-                      {driverOrders.filter(o => o.status === 'delivered').length === 0 ? (
-                        <p className="text-center text-muted-foreground py-8 text-sm">{t('لا توجد طلبات مسلمة اليوم')}</p>
+                      {allOrders.filter(o => o.status === 'delivered').length === 0 ? (
+                        <p className="text-center text-muted-foreground py-8 text-sm">{t('لا توجد طلبات مسلّمة')}</p>
                       ) : (
-                        driverOrders.filter(o => o.status === 'delivered').slice(0, 20).map((order, index) => (
+                        allOrders.filter(o => o.status === 'delivered').map((order) => (
                           <div 
                             key={order.id}
-                            className={`p-2 rounded-lg border ${
+                            className={`p-2 rounded-lg border cursor-pointer transition-colors ${
                               order.driver_payment_status === 'paid' 
-                                ? 'border-green-500/30 bg-green-500/5' 
-                                : 'border-red-500/30 bg-red-500/5'
+                                ? 'border-green-500/30 bg-green-500/5 hover:bg-green-500/10' 
+                                : 'border-red-500/30 bg-red-500/5 hover:bg-red-500/10'
                             }`}
+                            data-testid={`delivered-to-customer-${order.id}`}
+                            onClick={() => openOrderDetails(order.id)}
                           >
                             <div className="flex items-center justify-between">
-                              <div className="flex items-center gap-2">
-                                <span className="text-xs text-muted-foreground">{index + 1}.</span>
-                                <div>
-                                  <p className="text-sm font-medium text-foreground">#{order.order_number}</p>
-                                  <p className="text-xs text-muted-foreground">{order.driver_name || t('سائق')}</p>
-                                </div>
+                              <div>
+                                <p className="text-sm font-medium text-foreground">#{order.order_number}</p>
+                                <p className="text-xs text-muted-foreground">{order.driver_name || t('سائق')} • {order.customer_name || t('زبون')}</p>
                               </div>
                               <div className="text-left">
                                 <p className="text-sm font-bold text-foreground">{formatPrice(order.total)}</p>
@@ -1300,6 +1382,65 @@ export default function Delivery() {
                             </div>
                           </div>
                         ))
+                      )}
+                    </div>
+                  </ScrollArea>
+                </CardContent>
+              </Card>
+
+              {/* حركة اليوم - تسلسل كل طلبات اليوم */}
+              <Card className="border-border/50 bg-card">
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-base flex items-center gap-2 text-green-500">
+                    <History className="h-5 w-5" />
+                    {t('حركة اليوم')}
+                    <span className="bg-green-500/20 text-green-500 px-2 py-0.5 rounded-full text-xs mr-auto">
+                      {allOrders.length}
+                    </span>
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <ScrollArea className="h-[400px]">
+                    <div className="space-y-2">
+                      {allOrders.length === 0 ? (
+                        <p className="text-center text-muted-foreground py-8 text-sm">{t('لا توجد حركة اليوم')}</p>
+                      ) : (
+                        allOrders.map((order, index) => {
+                          const stMap = {
+                            delivered: { l: t('مسلّم'), c: 'text-green-500' },
+                            out_for_delivery: { l: t('في الطريق'), c: 'text-orange-500' },
+                            ready: { l: t('جاهز'), c: 'text-blue-500' },
+                            preparing: { l: t('قيد التحضير'), c: 'text-blue-500' },
+                            cancelled: { l: order.is_rejected ? t('مرفوض') : t('ملغي'), c: 'text-red-500' },
+                            pending: { l: t('بانتظار القبول'), c: 'text-yellow-500' },
+                          };
+                          const s = stMap[order.status] || { l: order.status, c: 'text-muted-foreground' };
+                          return (
+                            <div 
+                              key={order.id}
+                              className="p-2 rounded-lg border border-border/50 bg-muted/20 cursor-pointer hover:bg-muted/40 transition-colors"
+                              data-testid={`today-movement-${order.id}`}
+                              onClick={() => openOrderDetails(order.id)}
+                            >
+                              <div className="flex items-center justify-between">
+                                <div className="flex items-center gap-2">
+                                  <span className="text-xs text-muted-foreground">{index + 1}.</span>
+                                  <div>
+                                    <p className="text-sm font-medium text-foreground">#{order.order_number}</p>
+                                    <p className="text-xs text-muted-foreground">
+                                      {new Date(order.created_at).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}
+                                      {order.driver_name ? ` • ${order.driver_name}` : ''}
+                                    </p>
+                                  </div>
+                                </div>
+                                <div className="text-left">
+                                  <p className="text-sm font-bold text-foreground">{formatPrice(order.total)}</p>
+                                  <span className={`text-xs ${s.c}`}>{s.l}{order.is_late ? ' ⏱' : ''}</span>
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        })
                       )}
                     </div>
                   </ScrollArea>
@@ -1511,7 +1652,7 @@ export default function Delivery() {
                     {filtered.map((o) => {
                       const b = catBadge(o);
                       return (
-                        <Card key={o.id} className="border-border/50 bg-card" data-testid={`delivery-order-${o.id}`}>
+                        <Card key={o.id} className="border-border/50 bg-card cursor-pointer hover:border-primary/50 hover:bg-muted/30 transition-colors" data-testid={`delivery-order-${o.id}`} onClick={() => openOrderDetails(o.id)}>
                           <CardContent className="p-4">
                             <div className="flex items-start justify-between gap-3 flex-wrap">
                               <div>
@@ -2033,6 +2174,121 @@ export default function Delivery() {
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* نافذة تفاصيل الطلب الكاملة */}
+      <Dialog open={orderDetailsOpen} onOpenChange={setOrderDetailsOpen}>
+        <DialogContent className="max-w-lg max-h-[88vh] overflow-y-auto" data-testid="order-details-dialog">
+          <DialogHeader>
+            <DialogTitle className="text-foreground flex items-center gap-2">
+              <Package className="h-5 w-5 text-primary" />
+              {orderDetails ? `${t('تفاصيل الطلب')} #${orderDetails.order_number}` : t('تفاصيل الطلب')}
+            </DialogTitle>
+          </DialogHeader>
+
+          {loadingOrderDetails ? (
+            <div className="py-12 text-center text-muted-foreground" data-testid="order-details-loading">{t('جارٍ التحميل...')}</div>
+          ) : orderDetails ? (
+            <div className="space-y-4">
+              {/* الحالة + وسم مرفوض */}
+              <div className="flex items-center flex-wrap gap-2">
+                {orderDetails.is_rejected ? (
+                  <span className="text-sm font-bold px-3 py-1 rounded-full bg-red-500/15 text-red-500 border border-red-500/30" data-testid="order-details-rejected-badge">
+                    ✕ {t('مرفوض')}
+                  </span>
+                ) : (
+                  <span className="text-sm font-bold px-3 py-1 rounded-full bg-emerald-500/15 text-emerald-600 border border-emerald-500/30">
+                    {orderDetails.status === 'delivered' ? t('مسلّم') : orderDetails.status === 'out_for_delivery' ? t('في الطريق') : orderDetails.status === 'cancelled' ? t('ملغي') : orderDetails.status === 'preparing' ? t('قيد التحضير') : orderDetails.status === 'ready' ? t('جاهز') : t('بانتظار القبول')}
+                  </span>
+                )}
+                {orderDetails.order_type === 'delivery' && (
+                  <span className="text-xs px-2 py-1 rounded-full bg-blue-500/10 text-blue-500 border border-blue-500/20">{t('توصيل')}</span>
+                )}
+              </div>
+
+              {/* سبب ووقت الرفض */}
+              {orderDetails.is_rejected && (
+                <div className="bg-red-500/5 border border-red-500/20 rounded-lg p-3 space-y-1" data-testid="order-details-rejection">
+                  <p className="text-sm text-red-500"><strong>{t('سبب الرفض')}:</strong> {orderDetails.cancellation_reason || t('رُفض من قبل الكاشير')}</p>
+                  {(orderDetails.rejected_at || orderDetails.cancelled_at) && (
+                    <p className="text-xs text-muted-foreground">{t('وقت الرفض')}: {new Date(orderDetails.rejected_at || orderDetails.cancelled_at).toLocaleString('ar')}</p>
+                  )}
+                </div>
+              )}
+
+              {/* معلومات أساسية */}
+              <div className="grid grid-cols-2 gap-3 text-sm">
+                <div className="bg-muted/30 rounded-lg p-2">
+                  <p className="text-xs text-muted-foreground">{t('الكاشير')}</p>
+                  <p className="font-medium text-foreground" data-testid="order-details-cashier">{orderDetails.cashier_name || orderDetails.created_by_name || t('غير محدد')}</p>
+                </div>
+                <div className="bg-muted/30 rounded-lg p-2">
+                  <p className="text-xs text-muted-foreground">{t('وقت الإنشاء')}</p>
+                  <p className="font-medium text-foreground">{orderDetails.created_at ? new Date(orderDetails.created_at).toLocaleString('ar') : '—'}</p>
+                </div>
+                <div className="bg-muted/30 rounded-lg p-2">
+                  <p className="text-xs text-muted-foreground">{t('الزبون')}</p>
+                  <p className="font-medium text-foreground">{orderDetails.customer_name || t('زبون')}</p>
+                </div>
+                <div className="bg-muted/30 rounded-lg p-2">
+                  <p className="text-xs text-muted-foreground">{t('السائق')}</p>
+                  <p className="font-medium text-foreground">{orderDetails.driver_name || '—'}</p>
+                </div>
+                {orderDetails.delivery_address && (
+                  <div className="bg-muted/30 rounded-lg p-2 col-span-2">
+                    <p className="text-xs text-muted-foreground">{t('العنوان')}</p>
+                    <p className="font-medium text-foreground">{orderDetails.delivery_address}</p>
+                  </div>
+                )}
+              </div>
+
+              {/* المنتجات */}
+              <div>
+                <p className="text-sm font-bold text-foreground mb-2">{t('المنتجات')}</p>
+                <div className="space-y-1" data-testid="order-details-items">
+                  {(orderDetails.items || []).map((it, idx) => (
+                    <div key={idx} className="flex items-center justify-between text-sm border-b border-border/30 pb-1">
+                      <span className="text-foreground">
+                        <span className="text-muted-foreground">{it.quantity}× </span>
+                        {it.product_name}
+                      </span>
+                      <span className="tabular-nums text-foreground">{Number((it.price || 0) * (it.quantity || 1) + (it.extras_total || 0)).toLocaleString()}</span>
+                    </div>
+                  ))}
+                  {(!orderDetails.items || orderDetails.items.length === 0) && (
+                    <p className="text-sm text-muted-foreground">{t('لا توجد منتجات')}</p>
+                  )}
+                </div>
+              </div>
+
+              {/* المجاميع */}
+              <div className="bg-muted/30 rounded-lg p-3 space-y-1 text-sm">
+                <div className="flex justify-between"><span className="text-muted-foreground">{t('المجموع الفرعي')}</span><span className="tabular-nums">{Number(orderDetails.subtotal || 0).toLocaleString()}</span></div>
+                {orderDetails.discount > 0 && (
+                  <div className="flex justify-between text-red-500"><span>{t('الخصم')}</span><span className="tabular-nums">-{Number(orderDetails.discount).toLocaleString()}</span></div>
+                )}
+                {orderDetails.delivery_fee > 0 && (
+                  <div className="flex justify-between text-amber-500"><span>{t('أجور التوصيل')}</span><span className="tabular-nums">+{Number(orderDetails.delivery_fee).toLocaleString()}</span></div>
+                )}
+                <div className="flex justify-between font-bold text-base border-t border-border/50 pt-1 mt-1">
+                  <span className="text-foreground">{t('الإجمالي')}</span>
+                  <span className="text-primary tabular-nums" data-testid="order-details-total">{Number(orderDetails.total || 0).toLocaleString()} IQD</span>
+                </div>
+              </div>
+
+              {/* إعادة طباعة الفاتورة */}
+              <Button
+                className="w-full bg-primary text-primary-foreground hover:bg-primary/90"
+                data-testid="reprint-invoice-btn"
+                onClick={() => reprintOrderInvoice(orderDetails)}
+              >
+                <Printer className="h-4 w-4 ml-2" />
+                {t('إعادة طباعة الفاتورة')}
+              </Button>
+            </div>
+          ) : null}
+        </DialogContent>
+      </Dialog>
+
     </div>
   );
 }
