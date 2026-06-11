@@ -54,11 +54,11 @@ export default function DriverTrackingMap({
   const [driverHistory, setDriverHistory] = useState({});
   const [showSidebar, setShowSidebar] = useState(true);
 
-  // Map tile layers
+  // Map tile layers — موحّدة مع تطبيق الزبائن والسائقين (CARTO Voyager)
   const tileLayers = {
     streets: {
-      url: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
-      attribution: '© OpenStreetMap'
+      url: 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png',
+      attribution: '© CARTO'
     },
     satellite: {
       url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',

@@ -1670,6 +1670,7 @@ class DeliveryCollectionCreate(BaseModel):
     branch_name: Optional[str] = None
     total_sales: Optional[float] = None  # إجمالي المبيعات قبل الاستقطاع (لإعادة الطباعة)
     commission: Optional[float] = None  # العمولة المستقطعة (لإعادة الطباعة)
+    total_materials_cost: Optional[float] = None  # إجمالي كلفة المواد للطلبات المحصّلة (لسطر إجمالي سجل التحصيلات)
 
 @router.post("/delivery/collect")
 async def collect_delivery(
@@ -1712,6 +1713,7 @@ async def collect_delivery(
         "expected_amount": expected,  # المستحق قبل العروض
         "total_sales": collection.total_sales,  # إجمالي المبيعات قبل الاستقطاع
         "commission": collection.commission,  # العمولة المستقطعة
+        "total_materials_cost": collection.total_materials_cost,  # إجمالي كلفة المواد
         "has_offers": collection.has_offers,
         "offer_amount": offer_amount,
         "offer_percentage": offer_percentage,

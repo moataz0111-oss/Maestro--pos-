@@ -893,9 +893,19 @@ export default function POS() {
       
       // إضافة الطلبات غير المدفوعة (التي لم تُسلم ولم تُلغَ)
       for (const order of unpaidRes.data) {
-        if (order.status !== 'delivered' && order.status !== 'cancelled') {
-          ordersMap.set(order.id, order);
+        if (order.status === 'cancelled') continue;
+        if (order.status === 'delivered') {
+          // ⭐ طلبات التوصيل الداخلي المُسلَّمة تبقى معلّقة حتى يحصّل الكاشير المبلغ من السائق
+          // (لا تختفي بمجرد ضغط السائق "تم الاستلام/التسليم")
+          const isDelivery = (order.order_type === 'delivery');
+          const driverUncollected = order.driver_id && order.driver_payment_status !== 'paid';
+          const notPaid = !['paid', 'credit'].includes((order.payment_status || '').toLowerCase());
+          if (isDelivery && driverUncollected && notPaid) {
+            ordersMap.set(order.id, order);
+          }
+          continue;
         }
+        ordersMap.set(order.id, order);
       }
       
       // حفظ الطلبات من API للاستخدام offline
@@ -1608,6 +1618,10 @@ export default function POS() {
   const totalBeforeCommission = Math.max(0, subtotal - totalDiscount);
   const netTotal = Math.max(0, totalBeforeCommission - commissionAmount);
 
+  // أجور التوصيل تُعامل كبند في السلة (مثل الخصم) — تظهر في السلة والفاتورة قبل الإجمالي
+  const cartDeliveryFee = (orderType === 'delivery' && selectedDriver) ? (Number(posDeliveryFee) || 0) : 0;
+  const grandTotalWithDelivery = totalBeforeCommission + cartDeliveryFee;
+
 
   // دالة مساعدة لربط عناصر السلة بطابعاتها
   const getCartItemPrinterMap = () => {
@@ -1669,6 +1683,8 @@ export default function POS() {
       table_number: orderType === 'dine_in' ? (tables.find(t => t.id === selectedTable)?.number || selectedTable) : '',
       buzzer_number: buzzerNumber || '',
       discount: discount || 0,
+      delivery_fee: cartDeliveryFee || 0,
+      subtotal: subtotal || 0,
       driver_name: driverObj?.name || '',
       delivery_company: deliveryAppObj?.name || '',
       delivery_app_name: deliveryAppObj?.name || '',
@@ -3985,6 +4001,12 @@ export default function POS() {
                 <span className="tabular-nums">-{formatPrice(discount)}</span>
               </div>
             )}
+            {cartDeliveryFee > 0 && (
+              <div className="flex justify-between text-sm text-amber-500" data-testid="cart-delivery-fee-line">
+                <span>{t('أجور التوصيل')}:</span>
+                <span className="tabular-nums">+{formatPrice(cartDeliveryFee)}</span>
+              </div>
+            )}
             {commissionAmount > 0 && (
               <div className="flex justify-between text-sm text-amber-500">
                 <span>{t('عمولة')} {selectedDeliveryApp?.name} ({commissionRate}%):</span>
@@ -3993,7 +4015,7 @@ export default function POS() {
             )}
             <div className="flex justify-between text-lg font-bold pt-2 border-t border-border">
               <span className="text-foreground">{t('الإجمالي')}:</span>
-              <span className="text-primary tabular-nums" data-testid="cart-total">{formatPrice(totalBeforeCommission)}</span>
+              <span className="text-primary tabular-nums" data-testid="cart-total">{formatPrice(grandTotalWithDelivery)}</span>
             </div>
             {commissionAmount > 0 && (
               <div className="flex justify-between text-base font-bold bg-green-500/10 p-2 rounded-lg">
@@ -4549,9 +4571,15 @@ export default function POS() {
                   <span className="tabular-nums font-bold" dir="ltr">-{formatPrice(discount)}</span>
                 </div>
               )}
+              {cartDeliveryFee > 0 && (
+                <div className="flex justify-between text-base p-1 rounded text-amber-600 bg-amber-50" data-testid="receipt-delivery-fee-line">
+                  <span>{t('أجور التوصيل')}:</span>
+                  <span className="tabular-nums font-bold" dir="ltr">+{formatPrice(cartDeliveryFee)}</span>
+                </div>
+              )}
               <div className="flex justify-between font-bold text-lg border-t-2 border-gray-400 pt-2 mt-2">
                 <span>{t('الإجمالي النهائي')}:</span>
-                <span className="tabular-nums" dir="ltr">{formatPrice(totalBeforeCommission)}</span>
+                <span className="tabular-nums" dir="ltr">{formatPrice(grandTotalWithDelivery)}</span>
               </div>
               {/* طريقة الدفع */}
               {paymentMethod && paymentMethod !== 'pending' && (

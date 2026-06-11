@@ -378,6 +378,20 @@ async def assign_driver(driver_id: str, order_id: str, force: bool = False, deli
         "driver_phone": driver.get("phone", ""),
         "status": OrderStatus.PREPARING,
     }
+    # ⭐ تسجيل وقت القبول وحساب تأخّر القبول (عتبة دقيقتين = 120 ثانية)
+    if not new_order.get("accepted_at"):
+        accepted_dt = datetime.now(timezone.utc)
+        order_update["accepted_at"] = accepted_dt.isoformat()
+        try:
+            created_raw = new_order.get("created_at")
+            created_dt = datetime.fromisoformat(created_raw.replace("Z", "+00:00")) if isinstance(created_raw, str) else created_raw
+            if created_dt and created_dt.tzinfo is None:
+                created_dt = created_dt.replace(tzinfo=timezone.utc)
+            delay_sec = (accepted_dt - created_dt).total_seconds() if created_dt else 0
+        except Exception:
+            delay_sec = 0
+        order_update["acceptance_delay_seconds"] = int(max(0, delay_sec))
+        order_update["acceptance_late"] = bool(delay_sec > 120)
     # أجور التوصيل: تُضاف لإجمالي الفاتورة (مع الحفاظ على عدم التكرار إن أُعيد التعيين)
     if delivery_fee is not None and delivery_fee >= 0:
         old_fee = float(new_order.get("delivery_fee") or 0)
@@ -385,6 +399,46 @@ async def assign_driver(driver_id: str, order_id: str, force: bool = False, deli
         order_update["delivery_fee"] = float(delivery_fee)
         order_update["total"] = new_total
     await db.orders.update_one({"id": order_id}, {"$set": order_update})
+
+    # ⭐ إشعار فوري للسائق: طلب جديد على اسمه قيد التحضير في المطبخ
+    if new_order.get("order_type") == "delivery":
+        try:
+            now = datetime.now(timezone.utc)
+            driver_notification = {
+                "id": f"notif_{now.timestamp()}_{order_id}_driver",
+                "type": "new_order_driver",
+                "order_id": order_id,
+                "order_number": str(new_order.get("order_number", "")),
+                "branch_id": new_order.get("branch_id", ""),
+                "order_type": new_order.get("order_type", "delivery"),
+                "customer_name": new_order.get("customer_name"),
+                "customer_phone": new_order.get("customer_phone"),
+                "delivery_address": new_order.get("delivery_address"),
+                "driver_id": driver_id,
+                "total_amount": float(order_update.get("total") or new_order.get("total") or 0),
+                "items_count": len(new_order.get("items") or []),
+                "tenant_id": new_order.get("tenant_id"),
+                "is_read": False,
+                "is_printed": False,
+                "created_at": now.isoformat(),
+            }
+            await db.order_notifications.insert_one(driver_notification)
+            try:
+                from services.websocket_service import notify_driver_new_order
+                await notify_driver_new_order(driver_id, {
+                    "order_id": order_id,
+                    "order_number": str(new_order.get("order_number", "")),
+                    "customer_name": new_order.get("customer_name"),
+                    "customer_phone": new_order.get("customer_phone"),
+                    "delivery_address": new_order.get("delivery_address"),
+                    "total_amount": float(order_update.get("total") or new_order.get("total") or 0),
+                    "branch_id": new_order.get("branch_id", ""),
+                })
+            except Exception as _e:
+                logger.warning(f"driver websocket notify failed: {_e}")
+        except Exception as _e:
+            logger.warning(f"driver notification insert failed: {_e}")
+
     return {
         "message": "تم تعيين السائق",
         "batched": len(active) > 0,

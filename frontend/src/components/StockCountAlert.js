@@ -4,6 +4,7 @@ import { BellRing, ClipboardCheck, X } from 'lucide-react';
 import { API_URL } from '../utils/api';
 import { useTranslation } from '../hooks/useTranslation';
 import { useAuth } from '../context/AuthContext';
+import { useBranch } from '../context/BranchContext';
 
 const API = API_URL;
 const POLL_MS = 60000;
@@ -20,6 +21,7 @@ const POLL_MS = 60000;
 export const StockCountAlert = ({ onOpenCount }) => {
   const { t } = useTranslation();
   const { isAuthenticated, user } = useAuth();
+  const { getBranchIdForApi } = useBranch();
   const [pending, setPending] = useState([]);
   const [dismissed, setDismissed] = useState(false);
   const audioCtxRef = useRef(null);
@@ -70,7 +72,11 @@ export const StockCountAlert = ({ onOpenCount }) => {
 
   const poll = useCallback(async () => {
     try {
-      const res = await axios.get(`${API}/branch-stock-count/pending-alerts`);
+      // 🔒 خصوصية الجرد لكل فرع: مرّر الفرع المختار (المالك) — والباكند يحصر موظف الفرع بفرعه
+      const bid = getBranchIdForApi ? getBranchIdForApi() : null;
+      const res = await axios.get(`${API}/branch-stock-count/pending-alerts`, {
+        params: bid ? { branch_id: bid } : {}
+      });
       const list = res.data?.pending || [];
       setPending(list);
       if (list.length > 0) {
@@ -78,7 +84,7 @@ export const StockCountAlert = ({ onOpenCount }) => {
         playBeep();
       }
     } catch (e) { /* صامت */ }
-  }, [playBeep]);
+  }, [playBeep, getBranchIdForApi]);
 
   useEffect(() => {
     if (!isAuthenticated || user?.role === 'delivery') return;

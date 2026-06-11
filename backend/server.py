@@ -6928,10 +6928,15 @@ async def get_orders(
     date: Optional[str] = None,
     payment_status: Optional[str] = None,
     order_type: Optional[str] = None,
+    include_rejected: bool = False,
     current_user: dict = Depends(get_current_user)
 ):
     # فلترة حسب tenant_id و branch_id للمستخدم
     query = build_branch_query(current_user)
+
+    # ⭐ الطلبات المرفوضة من الكاشير لا تظهر في إدارة الطلبات (تظهر فقط في إدارة التوصيل عبر include_rejected)
+    if not include_rejected:
+        query["is_rejected"] = {"$ne": True}
     
     # المستخدمون غير المدراء يرون فقط طلباتهم الخاصة لليوم الحالي
     user_role = current_user.get("role", "")
@@ -6967,7 +6972,105 @@ async def get_orders(
     orders = await db.orders.find(query, {"_id": 0}).sort("created_at", -1).to_list(500)
     return orders
 
-def _order_dup_signature(o: dict) -> str:
+
+@api_router.get("/delivery-orders")
+async def get_delivery_orders(
+    branch_id: Optional[str] = None,
+    date: Optional[str] = None,
+    current_user: dict = Depends(get_current_user),
+):
+    """عرض شامل لكل طلبات التوصيل لإدارة التوصيل:
+    يشمل المرفوض + المتأخر في القبول (>دقيقتين) + المقبول + قيد التحضير + المكتمل.
+    """
+    query = build_branch_query(current_user)
+    query["order_type"] = "delivery"
+    if branch_id:
+        if not user_can_access_branch(current_user, branch_id):
+            raise HTTPException(status_code=403, detail="لا يمكنك الوصول لهذا الفرع")
+        query["branch_id"] = branch_id
+    if date:
+        query["created_at"] = {"$regex": f"^{date}"}
+
+    orders = await db.orders.find(query, {"_id": 0}).sort("created_at", -1).to_list(500)
+    now = datetime.now(timezone.utc)
+
+    def _parse(dt):
+        if not dt:
+            return None
+        try:
+            d = datetime.fromisoformat(dt.replace("Z", "+00:00")) if isinstance(dt, str) else dt
+            if d.tzinfo is None:
+                d = d.replace(tzinfo=timezone.utc)
+            return d
+        except Exception:
+            return None
+
+    summary = {"all": 0, "rejected": 0, "late": 0, "accepted": 0, "preparing": 0, "completed": 0, "cancelled": 0}
+    result = []
+    for o in orders:
+        st = o.get("status")
+        is_rejected = bool(o.get("is_rejected"))
+        is_late = bool(o.get("acceptance_late"))
+        waiting_seconds = None
+        # طلب لم يُقبل بعد: احسب مدة الانتظار، واعتبره متأخراً إن تجاوزت دقيقتين
+        if not is_rejected and st == "pending" and not o.get("accepted_at"):
+            created = _parse(o.get("created_at"))
+            if created:
+                waiting_seconds = int(max(0, (now - created).total_seconds()))
+                if waiting_seconds > 120:
+                    is_late = True
+        # التصنيف الأساسي
+        if is_rejected:
+            category = "rejected"
+        elif st == "delivered":
+            category = "completed"
+        elif st == "cancelled":
+            category = "cancelled"
+        elif st in ("preparing", "ready", "out_for_delivery"):
+            category = "preparing"
+        else:
+            category = "accepted" if o.get("accepted_at") else "pending"
+
+        summary["all"] += 1
+        if is_rejected:
+            summary["rejected"] += 1
+        elif st == "delivered":
+            summary["completed"] += 1
+        elif st == "cancelled":
+            summary["cancelled"] += 1
+        elif st in ("preparing", "ready", "out_for_delivery"):
+            summary["preparing"] += 1
+        else:
+            summary["accepted"] += 1
+        if is_late:
+            summary["late"] += 1
+
+        result.append({
+            "id": o.get("id"),
+            "order_number": o.get("order_number"),
+            "status": st,
+            "category": category,
+            "is_rejected": is_rejected,
+            "is_late": is_late,
+            "acceptance_delay_seconds": o.get("acceptance_delay_seconds"),
+            "waiting_seconds": waiting_seconds,
+            "cancellation_reason": o.get("cancellation_reason"),
+            "rejected_by_name": o.get("rejected_by_name"),
+            "customer_name": o.get("customer_name"),
+            "customer_phone": o.get("customer_phone"),
+            "delivery_address": o.get("delivery_address"),
+            "driver_name": o.get("driver_name"),
+            "delivery_fee": o.get("delivery_fee", 0),
+            "total": o.get("total", 0),
+            "items_count": len(o.get("items") or []),
+            "branch_id": o.get("branch_id"),
+            "created_at": o.get("created_at"),
+            "accepted_at": o.get("accepted_at"),
+        })
+
+    return {"orders": result, "summary": summary}
+
+
     """بصمة محتوى الطلب لاكتشاف التطابق.
     متساهلة عمداً: لا تعتمد على product_id (لأن النسخة الأوفلاين قد تخزّن العناصر
     باسم المنتج فقط) — نعتمد على: الفرع + النوع + العميل + الإجمالي + عدد العناصر
@@ -7296,7 +7399,45 @@ async def update_order_kitchen_status(order_id: str, kitchen_status: str, curren
             "kitchen_updated_at": datetime.now(timezone.utc).isoformat()
         }}
     )
-    
+
+    # ⭐ إشعار ثانٍ للسائق عند جاهزية الطلب للاستلام
+    if kitchen_status == "ready_kitchen" and order.get("driver_id") and order.get("order_type") == "delivery":
+        try:
+            now = datetime.now(timezone.utc)
+            ready_notification = {
+                "id": f"notif_{now.timestamp()}_{order_id}_ready",
+                "type": "order_ready",
+                "order_id": order_id,
+                "order_number": str(order.get("order_number", "")),
+                "branch_id": order.get("branch_id", ""),
+                "order_type": order.get("order_type", "delivery"),
+                "customer_name": order.get("customer_name"),
+                "customer_phone": order.get("customer_phone"),
+                "delivery_address": order.get("delivery_address"),
+                "driver_id": order.get("driver_id"),
+                "total_amount": float(order.get("total") or 0),
+                "items_count": len(order.get("items") or []),
+                "tenant_id": order.get("tenant_id"),
+                "is_read": False,
+                "is_printed": False,
+                "created_at": now.isoformat(),
+            }
+            await db.order_notifications.insert_one(ready_notification)
+            try:
+                from services.websocket_service import notify_driver_new_order
+                await notify_driver_new_order(order.get("driver_id"), {
+                    "order_id": order_id,
+                    "order_number": str(order.get("order_number", "")),
+                    "ready": True,
+                    "customer_name": order.get("customer_name"),
+                    "delivery_address": order.get("delivery_address"),
+                    "branch_id": order.get("branch_id", ""),
+                })
+            except Exception as _e:
+                logger.warning(f"driver ready websocket notify failed: {_e}")
+        except Exception as _e:
+            logger.warning(f"driver ready notification insert failed: {_e}")
+
     return {"message": "تم تحديث حالة المطبخ"}
 
 @api_router.get("/kitchen/orders")
@@ -7444,6 +7585,46 @@ async def cancel_order(order_id: str, current_user: dict = Depends(get_current_u
         "was_quick_delete": False,
         "in_reports": True
     }
+
+
+@api_router.put("/orders/{order_id}/reject")
+async def reject_order(order_id: str, reason: Optional[str] = None, current_user: dict = Depends(get_current_user)):
+    """رفض طلب وارد من قبل الكاشير: يُسجَّل الطلب كمرفوض (ملغي مع سبب) ويظهر في تقرير الطلبات،
+    ويُشعَر الزبون بالرفض. لا يُحذف نهائياً (بخلاف الإلغاء السريع) كي يبقى مُتتبَّعاً.
+    """
+    allowed = [UserRole.ADMIN, UserRole.MANAGER, UserRole.SUPERVISOR, UserRole.CASHIER, UserRole.SUPER_ADMIN, "owner"]
+    if current_user.get("role") not in allowed:
+        raise HTTPException(status_code=403, detail="غير مصرح")
+    query = build_tenant_query(current_user, {"id": order_id})
+    order = await db.orders.find_one(query)
+    if not order:
+        raise HTTPException(status_code=404, detail="الطلب غير موجود")
+    now_iso = datetime.now(timezone.utc).isoformat()
+    await db.orders.update_one(
+        {"id": order_id},
+        {"$set": {
+            "status": OrderStatus.CANCELLED,
+            "is_rejected": True,
+            "cancelled_at": now_iso,
+            "cancelled_by": current_user.get("id"),
+            "cancellation_reason": reason or "رُفض الطلب من قبل الكاشير",
+            "rejected_at": now_iso,
+            "rejected_by_name": current_user.get("full_name") or current_user.get("username") or "",
+            "updated_at": now_iso,
+        }}
+    )
+    # تحرير الطاولة إن وُجدت
+    if order.get("table_id"):
+        await db.tables.update_one(
+            {"id": order["table_id"]},
+            {"$set": {"status": "available", "current_order_id": None}}
+        )
+    # إشعار الزبون بأن الطلب رُفض
+    try:
+        await notify_order_status_change(order_id, "cancelled")
+    except Exception as _e:
+        logger.warning(f"reject notify customer failed: {_e}")
+    return {"message": "تم رفض الطلب وتسجيله كطلب مرفوض", "order_id": order_id}
 
 
 class ItemCancellationRequest(BaseModel):
@@ -9350,6 +9531,7 @@ class TenantInvoiceSettings(BaseModel):
     custom_header: Optional[str] = None  # نص إضافي في الترويسة
     custom_footer: Optional[str] = None  # نص إضافي في التذييل
     thank_you_message: Optional[str] = None  # رسالة الشكر
+    default_delivery_fee: Optional[float] = 0  # مبلغ التوصيل الافتراضي (يُقترح تلقائياً)
 
 @api_router.get("/system/invoice-settings")
 async def get_system_invoice_settings():
@@ -9399,7 +9581,8 @@ async def get_tenant_invoice_settings(current_user: dict = Depends(get_current_u
         "show_tax": True,
         "custom_header": None,
         "custom_footer": None,
-        "thank_you_message": "شكراً لزيارتكم ❤️"
+        "thank_you_message": "شكراً لزيارتكم ❤️",
+        "default_delivery_fee": 0
     }
     
     if tenant_id:
@@ -21114,6 +21297,33 @@ async def create_customer_order(
     await db.orders.insert_one(order_doc)
     order_doc.pop("_id", None)
     
+    # ⭐ إشعار "مكالمة واردة" للكاشير (شاشة قبول/رفض + اسم الزبون والعنوان والمنتجات والمبلغ)
+    # كان مفقوداً هنا فكان الطلب يظهر في "المعلّق" فقط بلا مكالمة. IncomingOrderCall يستطلع هذا الإشعار.
+    try:
+        notification_doc = {
+            "id": str(uuid.uuid4()),
+            "type": "new_order_cashier",
+            "order_id": order_doc["id"],
+            "order_number": str(order_number),
+            "branch_id": branch_id or "",
+            "order_type": "delivery",
+            "customer_name": order_doc.get("customer_name", ""),
+            "customer_phone": order_doc.get("customer_phone", ""),
+            "delivery_address": order.delivery_address,
+            "total_amount": order_doc["total"],
+            "items_count": len(order_items),
+            "payment_method": order.payment_method,
+            "source": "customer_app",
+            "notes": order.delivery_notes,
+            "tenant_id": tenant_id,
+            "is_read": False,
+            "is_printed": False,
+            "created_at": datetime.now(timezone.utc).isoformat()
+        }
+        await db.order_notifications.insert_one(notification_doc)
+    except Exception as _ne:
+        logger.warning(f"order notification create failed: {_ne}")
+    
     # تحديث إحصائيات العميل
     if customer:
         await db.customers.update_one(
@@ -21609,7 +21819,7 @@ async def get_menu_link(request: Request, current_user: dict = Depends(get_curre
         base_url = f"{parsed.scheme}://{parsed.netloc}"
     else:
         # fallback للـ environment variable
-        base_url = os.environ.get('REACT_APP_BACKEND_URL', 'https://multi-tenant-pwa-pos.preview.emergentagent.com')
+        base_url = os.environ.get('REACT_APP_BACKEND_URL', 'https://multi-tenant-pwa-pos-1.preview.emergentagent.com')
     
     menu_url = f"{base_url}/menu/{tenant.get('menu_slug', tenant_id)}"
     
@@ -22045,8 +22255,88 @@ async def get_driver_info_for_customer(order_id: str):
         "order_status": order.get("status"),
         "delivery_address": order.get("delivery_address"),
         "delivery_fee": order.get("delivery_fee", 0),
-        "order_total": order.get("total", 0)
+        "order_total": order.get("total", 0),
+        "order_number": order.get("order_number"),
+        "is_rated": bool(order.get("is_rated")),
     }
+
+
+# ==================== DELIVERY RATINGS (تقييم الزبون بعد التسليم - بدون مصادقة) ====================
+class DeliveryRatingCreate(BaseModel):
+    food_rating: Optional[int] = None        # تقييم الطعام (1-5)
+    restaurant_rating: Optional[int] = None  # تقييم المطعم (1-5)
+    driver_rating: Optional[int] = None      # تقييم السائق (1-5)
+    notes: Optional[str] = None
+
+
+@api_router.post("/track/{order_id}/rating")
+async def submit_delivery_rating(order_id: str, rating: DeliveryRatingCreate):
+    """تقييم الزبون بعد التسليم: الطعام + المطعم + السائق + ملاحظات. بدون مصادقة (يفتحه الزبون من رابط التتبّع).
+    يُسجَّل في سجل التوصيل ليطّلع عليه المالك/المدير."""
+    order = await db.orders.find_one({"id": order_id}, {"_id": 0})
+    if not order:
+        raise HTTPException(status_code=404, detail="الطلب غير موجود")
+    if order.get("is_rated"):
+        raise HTTPException(status_code=400, detail="تم تقييم هذا الطلب مسبقاً")
+
+    def _clamp(v):
+        if v is None:
+            return None
+        try:
+            return max(1, min(5, int(v)))
+        except Exception:
+            return None
+
+    now_iso = datetime.now(timezone.utc).isoformat()
+    doc = {
+        "id": str(uuid.uuid4()),
+        "order_id": order_id,
+        "order_number": order.get("order_number"),
+        "tenant_id": order.get("tenant_id"),
+        "branch_id": order.get("branch_id"),
+        "driver_id": order.get("driver_id"),
+        "driver_name": order.get("driver_name"),
+        "customer_name": order.get("customer_name"),
+        "customer_phone": order.get("customer_phone"),
+        "food_rating": _clamp(rating.food_rating),
+        "restaurant_rating": _clamp(rating.restaurant_rating),
+        "driver_rating": _clamp(rating.driver_rating),
+        "notes": (rating.notes or "").strip()[:500],
+        "created_at": now_iso,
+    }
+    await db.delivery_ratings.insert_one(doc)
+    await db.orders.update_one({"id": order_id}, {"$set": {"is_rated": True, "rated_at": now_iso}})
+    doc.pop("_id", None)
+    return {"message": "شكراً لتقييمك", "rating": doc}
+
+
+@api_router.get("/delivery-ratings")
+async def get_delivery_ratings(
+    branch_id: Optional[str] = None,
+    driver_id: Optional[str] = None,
+    limit: int = 100,
+    current_user: dict = Depends(get_current_user),
+):
+    """سجل التوصيل: تقييمات الزبائن بعد التسليم — للمالك/المدير لمتابعة الأداء."""
+    query = build_tenant_query(current_user, {})
+    if branch_id:
+        query["branch_id"] = branch_id
+    if driver_id:
+        query["driver_id"] = driver_id
+    ratings = await db.delivery_ratings.find(query, {"_id": 0}).sort("created_at", -1).to_list(limit)
+
+    def _avg(field):
+        vals = [r[field] for r in ratings if r.get(field)]
+        return round(sum(vals) / len(vals), 1) if vals else 0
+
+    summary = {
+        "count": len(ratings),
+        "avg_food": _avg("food_rating"),
+        "avg_restaurant": _avg("restaurant_rating"),
+        "avg_driver": _avg("driver_rating"),
+    }
+    return {"ratings": ratings, "summary": summary}
+
 
 # ==================== ORDER CHAT (محادثة الزبون مع السائق - بدون مصادقة) ====================
 class OrderChatMessage(BaseModel):
@@ -22498,6 +22788,7 @@ class PaymentSettingsUpdate(BaseModel):
     fee_max: Optional[int] = None         # سقف الأجرة (0 = بلا سقف)
     fee_round_to: Optional[int] = None    # التقريب لأقرب (250/500/1000)
     max_distance_km: Optional[float] = None  # أقصى مسافة توصيل (0 = بلا حدود)
+    fee_zones: Optional[List[dict]] = None   # نطاقات الكم: [{up_to_km, fee}] (تطغى على المعادلة)
 
 @api_router.get("/payment-settings")
 async def get_payment_settings(current_user: dict = Depends(get_current_user)):
@@ -22577,7 +22868,21 @@ def _srv_haversine_km(lat1: float, lng1: float, lat2: float, lng2: float) -> flo
 
 
 def _compute_distance_fee(s: dict, km: float) -> int:
-    """حساب أجور التوصيل من إعدادات المسافة"""
+    """حساب أجور التوصيل من إعدادات المسافة.
+    الأولوية: نطاقات الكيلومتر (fee_zones) إن وُجدت — المالك يحدد مبلغاً لكل نطاق كم.
+    وإلا المعادلة (أساس + لكل كم)."""
+    zones = s.get("fee_zones")
+    if isinstance(zones, list) and len(zones) > 0:
+        valid = sorted(
+            [z for z in zones if z.get("up_to_km") not in (None, "") and z.get("fee") not in (None, "")],
+            key=lambda z: float(z["up_to_km"])
+        )
+        for z in valid:
+            if km <= float(z["up_to_km"]):
+                return int(float(z["fee"]))
+        if valid:
+            return int(float(valid[-1]["fee"]))  # أبعد من كل النطاقات → مبلغ آخر نطاق
+    # المعادلة (احتياطي)
     base = float(s.get("fee_base") or 0)
     base_km = float(s.get("fee_base_km") or 0)
     per_km = float(s.get("fee_per_km") or 0)

@@ -2821,6 +2821,7 @@ const DeliveryReportTab = ({ deliveryCreditsReport, t, formatPrice, fetchReports
           expected_amount: net,
           total_sales: data.total,
           commission: data.commission,
+          total_materials_cost: data.total_materials_cost != null ? data.total_materials_cost : (data.materials_cost || 0),
           has_offers: false,
           collected_by: collectAllReceiver.trim(),
           notes: t('تحصيل جماعي'),
@@ -3262,9 +3263,30 @@ const DeliveryReportTab = ({ deliveryCreditsReport, t, formatPrice, fetchReports
                   </tbody>
                   <tfoot>
                     <tr className="border-t-2 border-border/50 font-bold bg-muted/30">
-                      <td className="p-2 text-right" colSpan={5}>{t('الإجمالي المُحصّل')}</td>
-                      <td className="p-2 text-center tabular-nums text-green-600" colSpan={3}>
-                        {formatPrice(collections.reduce((s, c) => s + (c.amount || 0), 0))}
+                      <td className="p-3" colSpan={8}>
+                        {/* سطر الإجمالي الشامل: المبيعات ← كلفة المواد ← الاستقطاعات ← العرض/الفرق ← المُحصّل (يسار→يمين) */}
+                        <div className="flex flex-wrap items-center justify-between gap-3 text-xs sm:text-sm" dir="ltr" data-testid="collections-totals-row">
+                          <div className="flex flex-col items-center min-w-[90px]">
+                            <span className="text-muted-foreground font-normal">{t('إجمالي المبيعات')}</span>
+                            <span className="tabular-nums text-blue-500" data-testid="collections-total-sales">{formatPrice(collections.reduce((s, c) => s + (c.total_sales || 0), 0))}</span>
+                          </div>
+                          <div className="flex flex-col items-center min-w-[90px]">
+                            <span className="text-muted-foreground font-normal">{t('إجمالي كلفة المواد')}</span>
+                            <span className="tabular-nums text-orange-500" data-testid="collections-total-materials">{formatPrice(collections.reduce((s, c) => s + (c.total_materials_cost || 0), 0))}</span>
+                          </div>
+                          <div className="flex flex-col items-center min-w-[90px]">
+                            <span className="text-muted-foreground font-normal">{t('إجمالي الاستقطاعات')}</span>
+                            <span className="tabular-nums text-red-500" data-testid="collections-total-commission">{formatPrice(collections.reduce((s, c) => s + (c.commission || 0), 0))}</span>
+                          </div>
+                          <div className="flex flex-col items-center min-w-[90px]">
+                            <span className="text-muted-foreground font-normal">{t('العرض / الفرق')}</span>
+                            <span className="tabular-nums text-amber-500" data-testid="collections-total-offer">{formatPrice(collections.reduce((s, c) => s + (c.offer_amount || 0), 0))}</span>
+                          </div>
+                          <div className="flex flex-col items-center min-w-[90px]">
+                            <span className="text-muted-foreground font-normal">{t('الإجمالي المُحصّل')}</span>
+                            <span className="tabular-nums text-green-600 text-base" data-testid="collections-total-collected">{formatPrice(collections.reduce((s, c) => s + (c.amount || 0), 0))}</span>
+                          </div>
+                        </div>
                       </td>
                     </tr>
                   </tfoot>

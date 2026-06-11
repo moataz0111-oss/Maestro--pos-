@@ -407,6 +407,7 @@ export default function Orders() {
       pending: 'bg-yellow-500/10 text-yellow-500 border-yellow-500/20',
       preparing: 'bg-blue-500/10 text-blue-500 border-blue-500/20',
       ready: 'bg-green-500/10 text-green-500 border-green-500/20',
+      out_for_delivery: 'bg-orange-500/10 text-orange-500 border-orange-500/20',
       delivered: 'bg-gray-500/10 text-gray-500 border-gray-500/20',
       cancelled: 'bg-red-500/10 text-red-500 border-red-500/20',
     };
@@ -418,6 +419,7 @@ export default function Orders() {
       pending: t('معلق'),
       preparing: t('قيد التحضير'),
       ready: t('جاهز'),
+      out_for_delivery: t('في الطريق'),
       delivered: t('تم التسليم'),
       cancelled: t('ملغي'),
     };
@@ -429,6 +431,7 @@ export default function Orders() {
       pending: Clock,
       preparing: ChefHat,
       ready: Check,
+      out_for_delivery: Truck,
       delivered: Truck,
       cancelled: X,
     };
@@ -673,7 +676,11 @@ export default function Orders() {
 
                       <div className={isRTL ? 'text-left' : 'text-right'}>
                         <p className="text-xl font-bold text-primary tabular-nums">{formatPrice(order.total)}</p>
-                        <div className="flex gap-2 mt-2">
+                      </div>
+                    </div>
+
+                    {/* أزرار الإجراءات — في وسط البطاقة وتلتف عند الحاجة */}
+                    <div className="flex flex-wrap gap-2 mt-3 justify-center">
                           <Button
                             size="sm"
                             variant="outline"
@@ -756,8 +763,6 @@ export default function Orders() {
                             </Button>
                           )}
                         </div>
-                      </div>
-                    </div>
                   </CardContent>
                 </Card>
               );

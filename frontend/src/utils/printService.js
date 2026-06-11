@@ -353,6 +353,64 @@ export const printOrderToAllPrinters = async (order, orderItems, products, print
   };
 };
 
+/**
+ * طباعة طلب محفوظ (من الخادم) على طابعة الكاشير USB + طابعات المطبخ.
+ * تُستخدم من شاشة إشعار الطلب الوارد عند "إرسال للتحضير".
+ */
+export const printSavedOrder = async (order, opts = {}) => {
+  const { printers = [], products = [], restaurantName = '', invoiceSettings = {}, branchName = '' } = opts;
+  const items = (order.items || []).map((it) => ({
+    product_id: it.product_id || it.id,
+    name: it.product_name || it.name,
+    product_name: it.product_name || it.name,
+    price: it.price ?? it.unit_price ?? 0,
+    quantity: it.quantity || 1,
+    extras: it.extras || it.selectedExtras || [],
+    notes: it.notes || ''
+  }));
+  const orderData = {
+    restaurant_name: restaurantName,
+    branch_name: branchName,
+    order_number: order.order_number || order.id,
+    order_type: order.order_type || 'delivery',
+    customer_name: order.customer_name || '',
+    customer_phone: order.customer_phone || '',
+    delivery_address: order.delivery_address || '',
+    driver_name: order.driver_name || '',
+    discount: order.discount || 0,
+    delivery_fee: order.delivery_fee || 0,
+    total: order.total || 0,
+    is_paid: false,
+    custom_header: invoiceSettings?.custom_header || '',
+    custom_footer: invoiceSettings?.custom_footer || 'فاتورة غير مدفوعة - تُحصَّل عند الاستلام',
+    thank_you_message: invoiceSettings?.thank_you_message || '',
+    phone: invoiceSettings?.phone || '',
+    address: invoiceSettings?.address || '',
+    tax_number: invoiceSettings?.tax_number || '',
+    show_tax: invoiceSettings?.show_tax !== false,
+    payment_method: order.payment_method || '',
+    language: localStorage.getItem('language') || 'ar',
+    items,
+  };
+
+  const results = { cashier: null, kitchen: null };
+  // فاتورة الكاشير على طابعة USB (full_receipt)
+  let cashierPrinter = printers.find((p) => p.print_mode === 'full_receipt');
+  if (!cashierPrinter) cashierPrinter = printers.find((p) => p.connection_type === 'usb' && p.usb_printer_name);
+  if (cashierPrinter) {
+    results.cashier = await sendReceiptPrint(cashierPrinter, orderData).catch((e) => ({ success: false, message: e.message }));
+  }
+  // تذاكر المطبخ على طابعات المطبخ
+  const kitchenPrinters = printers.filter((p) =>
+    (p.print_mode === 'orders_only' || p.print_mode === 'selected_products') &&
+    ((p.connection_type === 'usb' && p.usb_printer_name) || (p.connection_type !== 'usb' && p.ip_address))
+  );
+  if (kitchenPrinters.length > 0) {
+    results.kitchen = await printOrderToAllPrinters(orderData, items, products, kitchenPrinters, restaurantName).catch((e) => ({ success: false, message: e.message }));
+  }
+  return results;
+};
+
 export default {
   checkAgentStatus,
   getSavedAgentStatus,
@@ -364,5 +422,6 @@ export default {
   sendRawPrint,
   sendReceiptPrint,
   routeOrderToPrinters,
-  printOrderToAllPrinters
+  printOrderToAllPrinters,
+  printSavedOrder
 };

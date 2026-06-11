@@ -1,0 +1,39 @@
+{
+  "summary": "Verified the 3 user-reported fixes. Backend: all 4 pytest cases PASS (Issue1 P0 notification, Issue2 pending-alerts branch_id, Issue3 fee_zones persistence + zone-based customer fee + delivery-fee/suggest). Frontend P0: confirmed IncomingOrderCall modal appears for the cashier after a customer order is created — modal showed order number, customer name (TEST_فرونت زبون), items count, total IQD, delivery address, and Accept/Reject buttons; clicking Accept transitioned to the driver-assignment view (finish-without-driver visible).",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "/api/customer/order/{tenant_id}", "issue": "Schema requires customer_phone (not 'phone') and delivery_location keys must be {lat,lng} (not latitude/longitude). 'price'/'product_name'/'total' fields are ignored — server computes from menu. Minor documentation gap — fields are not what the problem statement listed."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [
+      {"flow": "Settings → 'الدفع الإلكتروني' (Payment) tab", "issue": "Clicking the Radix TabsTrigger for value='payments' in the preview did not switch TabsContent — the active tab visibly reverted to 'المظهر' (Appearance) after click. Could not visually exercise distance-fee-toggle / fee-zones-section / add-fee-zone-btn / fee-zone-km-0 / fee-zone-fee-0 via the live UI. All data-testids exist in source at /app/frontend/src/pages/Settings.js lines 6692/6701/6707/6712/6726/6730, and the backend correctly persists fee_zones (verified by pytest).", "affected_selectors": ["[data-testid=distance-fee-toggle]","[data-testid=fee-zones-section]","[data-testid=add-fee-zone-btn]","[data-testid=fee-zone-km-0]","[data-testid=fee-zone-fee-0]"]}
+    ],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iter227_incoming_call_zones.py",
+    "/app/test_reports/pytest/iter227.xml"
+  ],
+  "action_items": [
+    "Main agent: self-test the Settings → 'الدفع الإلكتروني' tab once — the tab content reverts to Appearance in the automated session. Verify the TabsTrigger for value='payments' actually switches TabsContent (it may be guarded by hasRole or a Suspense fallback that flashes the splash).",
+    "Optional polish: add a data-testid to the payments TabsTrigger (e.g. data-testid='tab-payments') to make the fee-zones UI walkthrough reliable in automation."
+  ],
+  "critical_code_review_comments": [
+    "/app/backend/server.py is now 23,917 lines — the customer-order handler, payment-settings handler and delivery-fee computation should be moved to dedicated routers/services.",
+    "IncomingOrderCall.jsx polls every 4s via GET /order-notifications — fine for one cashier but with many cashiers per branch this creates N polls. Consider a single WebSocket/SSE channel.",
+    "CustomerOrderCreate (server.py:20745) silently drops client-sent 'price'/'product_name'/'total' fields because the Pydantic model only has product_id/quantity/notes — acceptable but should be documented in the API spec."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iter227_incoming_call_zones.py"
+  ],
+  "success_rate": {"backend": "100% (4/4)", "frontend": "P0 IncomingOrderCall verified live; fee_zones UI source-verified only"},
+  "test_credentials": "Admin: admin@maestroegp.com / admin123 (tenant=default).",
+  "seed_data_creation": "Created several TEST_-prefixed customer orders to trigger order_notifications; corresponding new_order_cashier notifications were marked as read after each UI test to avoid polluting the next cashier session.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Customer order endpoint requires keys: items[].product_id+quantity, customer_phone (not 'phone'), delivery_location={lat,lng} (not latitude/longitude). The response wraps the order under data.order.id. Settings page in the live preview sometimes flashes a long Maestro EGP splash when switching tabs — wait >10s after clicking the payments tab.",
+  "rca of the issue": "None — fixes work. Test data-shape mismatches were resolved by switching to the model's actual field names (customer_phone, delivery_location={lat,lng}) and using a real product_id fetched from /api/customer/menu/default."
+}

@@ -1,9 +1,1112 @@
-<analysis>piece_def_valuecomputeRecipeYieldfrontend/src/pages/WarehouseManufacturing.jsbackend/routes/inventory_system.py_enrich_unit_cost_fieldstotal_gramsserver.pyWarehouseManufacturing.js_build_current_costs_map_resolve_product_unit_costpiece_def_valueraw_materialsmanufactured_productscomputeRecipeYielduvicornmotormongodpip install uvicorn motormongod502FATALuvicornfastapi.envuvicornsupervisorctl
-/app
-├── frontend/
-│   ├── src/pages/ (WarehouseManufacturing.js, Reports.js)
-├── backend/
-│   ├── routes/ (reports_routes.py, inventory_system.py)
-│   ├── tests/ 
-│   ├── server.py (Core Monolith)
-_enrich_unit_cost_fieldspiece_def_valuemanufactured_products/app/backend/routes/inventory_system.py/app/frontend/src/pages/WarehouseManufacturing.js/app/backend/tests/test_production_yield_piece_def.py/app/backend/server.py/app/frontend/src/pages/WarehouseManufacturing.jsPOST /api/manufactured-products/{product_id}/producePATCH /api/manufactured-products/{product_id}/recipeGET /api/reports/salesmongodpip install -r /app/backend/requirements.txt/app/test_reports/iteration_196.jsoniteration_203.json/app/memory/CHANGELOG.md/app/memory/PRD.md/app/backend/tests/test_addstock_piece_def_iter198.py/app/backend/tests/test_piece_def_priority_yield.py/app/memory/test_credentials.md/app/frontend/src/pages/WarehouseManufacturing.jscomputeRecipeYield/app/backend/routes/inventory_system.py_enrich_unit_cost_fieldstotal_grams</analysis>
+<analysis>**original_problem_statement**: Multi-tenant POS system with complex manufacturing inventory calculations. Precise COGS, yield, unit cost accounting, offline sync, waste reporting, and multi-role dashboards. Added requirements: Real-time PWA driver tracking, in-app chat, cashier call notifications, automated driver batching, responsive design, boundary restrictions, internal delivery fee tracking.
+PRODUCT REQUIREMENTS: Implement a fully functioning, responsive, offline-capable POS with an integrated ecosystem for customers and drivers without crossover security flaws. Currently focusing on UI/UX refinement of the order lifecycle notifications, tracking flows, and delivery management features based strictly on text annotations provided by the user within uploaded images.
+
+**User's preferred language**: Arabic (العربية)
+(INSTRUCT NEXT AGENT: You MUST automatically detect the user's primary language from their messages inside the <trajectory> tag and INSTRUCT next agent to respond in the user's preferred language only. The user communicates in Arabic, please reply in Arabic exclusively.)
+
+**what currently exists?** 
+A full-stack offline-first POS system. In this session, the Incoming Order cashier notification was fully redesigned (app logo + square Accept/Reject buttons). The Accept Order flow now supports manual fee adjustment, mandatory driver selection, and a Send to Preparation button that automatically prints to USB/Kitchen printers via  and notifies the driver. A customer rating system (Food/Restaurant/Driver) was added to the public tracking page upon delivery, which feeds into a new Performance tab in the Delivery Management page. The Delivery Management map was unified using the CARTO tile layer, and rejected orders were successfully hidden from the POS Orders page while remaining in the database.
+
+**Last working item**: 
+    - Last item agent was working: The agent just used  to read the text annotations from 3 newly uploaded images (Message #397). Just before this, the agent was midway through implementing a  setting in the  (Invoice Settings) and an All Orders comprehensive tab in  to track delayed orders (accepted after 2 minutes) and rejected orders.
+    - Status: IN PROGRESS
+    - Agent Testing Done: N
+    - Which testing method agent to use? both (curl for backend endpoints, screenshot tool for frontend UI).
+    - User Testing Done: N
+
+**All Pending/In progress Issue list**:  
+  - Issue 1: Analyze and implement instructions from newly uploaded images (P0)
+     - Attempted fixes: The agent just called  on the images from Message 397 but has not yet read the results or written code based on them.
+     - Next debug checklist: 
+       1. Read the text from the images (using vision/get_assets tool).
+       2. Propose a plan to the user based *strictly* on what the text inside those images says.
+     - Why fix this issue and what will be achieved with the fix? The user relies entirely on text written inside screenshots to communicate requirements. Ignoring them causes extreme user frustration.
+     - Status: IN PROGRESS
+     - Is recurring issue? N
+     - Should Test frontend/backend/both after fix? Both
+
+  - Issue 2: All Orders view in Delivery Management & 2-Minute Delay Logic (P1)
+     - Attempted fixes: Agent added  endpoint in backend and started building the UI tab in .
+     - Next debug checklist: Ensure the backend calculates if an order is delayed (accepted > 2 mins after creation) and that the frontend accurately displays this status in the newly created tab.
+     - Why fix this issue and what will be achieved with the fix? Allows the owner to see a comprehensive view of delivery operations, including cashiers who are slow to accept orders.
+     - Status: IN PROGRESS
+     - Is recurring issue? N
+     - Should Test frontend/backend/both after fix? Frontend (Screenshot)
+
+  - Issue 3: Default Delivery Fee in Invoice Settings (P1)
+     - Attempted fixes: Agent added  to  in backend and started updating .
+     - Next debug checklist: Complete the UI in  (Invoice Settings section) so the owner can set this fee. Ensure  pulls this default fee automatically when an order arrives.
+     - Status: IN PROGRESS
+     - Is recurring issue? N
+     - Should Test frontend/backend/both after fix? Frontend (Screenshot)
+
+**In progress Task List**: 
+  - None outside the issues listed above.
+
+**Upcoming and Future Tasks**
+    - (P1) Feature Enhancement: Auto-reject/timeout for unacknowledged cashier orders (User mentioned this previously, wait for their explicit approval to build it).
+    - (P2) UI/UX: Responsive design improvements for all devices (Requested in older image annotation).
+    - (P2) Feature Enhancement: Add QR/Barcode scanner support for the  field in POS.
+    - (P2) Refactor: Break down , , and  into smaller components.
+    - (P2) Refactor: Break down  (24k+ lines) into modular routes.
+
+**Completed work in this session**
+- Redesigned  (Removed phone UI, added Maestro logo, added Item list details) (DONE)
+- Implemented Send to Preparation flow integrating  (USB/Kitchen tickets) and push notifications (DONE)
+- Built Customer Rating System on  page (DONE)
+- Built Performance / Ratings tab in  to view driver/restaurant feedback (DONE)
+- Hid rejected orders from  (POS view) but kept them in DB with cancellation reasons (DONE)
+- Unified  map to use CARTO tiles matching the customer/driver map (DONE)
+- Added automated ============================= test session starts ==============================
+platform linux -- Python 3.11.15, pytest-9.0.3, pluggy-1.6.0
+rootdir: /app
+plugins: anyio-4.13.0, asyncio-1.4.0
+asyncio: mode=Mode.STRICT, debug=False, asyncio_default_fixture_loop_scope=None, asyncio_default_test_loop_scope=function
+collected 1817 items / 35 errors
+
+==================================== ERRORS ====================================
+_____________ ERROR collecting backend/seed_branch_fulfill_test.py _____________
+ImportError while importing test module '/app/backend/seed_branch_fulfill_test.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/usr/local/lib/python3.11/importlib/__init__.py:126: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+backend/seed_branch_fulfill_test.py:12: in <module>
+    from motor.motor_asyncio import AsyncIOMotorClient
+E   ModuleNotFoundError: No module named 'motor'
+___________ ERROR collecting backend/seed_produce_deduction_test.py ____________
+ImportError while importing test module '/app/backend/seed_produce_deduction_test.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/usr/local/lib/python3.11/importlib/__init__.py:126: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+backend/seed_produce_deduction_test.py:7: in <module>
+    from motor.motor_asyncio import AsyncIOMotorClient
+E   ModuleNotFoundError: No module named 'motor'
+______ ERROR collecting backend/tests/test_addstock_piece_def_iter198.py _______
+ImportError while importing test module '/app/backend/tests/test_addstock_piece_def_iter198.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/usr/local/lib/python3.11/importlib/__init__.py:126: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+backend/tests/test_addstock_piece_def_iter198.py:9: in <module>
+    from pymongo import MongoClient
+E   ModuleNotFoundError: No module named 'pymongo'
+______ ERROR collecting backend/tests/test_advance_deduct_installment.py _______
+ImportError while importing test module '/app/backend/tests/test_advance_deduct_installment.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/usr/local/lib/python3.11/importlib/__init__.py:126: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+backend/tests/test_advance_deduct_installment.py:5: in <module>
+    from motor.motor_asyncio import AsyncIOMotorClient
+E   ModuleNotFoundError: No module named 'motor'
+_________ ERROR collecting backend/tests/test_advance_from_treasury.py _________
+ImportError while importing test module '/app/backend/tests/test_advance_from_treasury.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/usr/local/lib/python3.11/importlib/__init__.py:126: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+backend/tests/test_advance_from_treasury.py:5: in <module>
+    from motor.motor_asyncio import AsyncIOMotorClient
+E   ModuleNotFoundError: No module named 'motor'
+___________ ERROR collecting backend/tests/test_arabic_normalize.py ____________
+ImportError while importing test module '/app/backend/tests/test_arabic_normalize.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/usr/local/lib/python3.11/importlib/__init__.py:126: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+backend/tests/test_arabic_normalize.py:8: in <module>
+    from routes.inventory_system import (
+backend/routes/inventory_system.py:15: in <module>
+    from .shared import get_database, get_current_user, get_user_tenant_id, UserRole
+backend/routes/shared.py:7: in <module>
+    from motor.motor_asyncio import AsyncIOMotorClient
+E   ModuleNotFoundError: No module named 'motor'
+_______ ERROR collecting backend/tests/test_branch_count_full_iter210.py _______
+ImportError while importing test module '/app/backend/tests/test_branch_count_full_iter210.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/usr/local/lib/python3.11/importlib/__init__.py:126: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+backend/tests/test_branch_count_full_iter210.py:18: in <module>
+    from pymongo import MongoClient
+E   ModuleNotFoundError: No module named 'pymongo'
+______ ERROR collecting backend/tests/test_branch_count_sold_accuracy.py _______
+ImportError while importing test module '/app/backend/tests/test_branch_count_sold_accuracy.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/usr/local/lib/python3.11/importlib/__init__.py:126: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+backend/tests/test_branch_count_sold_accuracy.py:11: in <module>
+    from pymongo import MongoClient
+E   ModuleNotFoundError: No module named 'pymongo'
+________ ERROR collecting backend/tests/test_branch_waste_efficiency.py ________
+ImportError while importing test module '/app/backend/tests/test_branch_waste_efficiency.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/usr/local/lib/python3.11/importlib/__init__.py:126: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+backend/tests/test_branch_waste_efficiency.py:13: in <module>
+    from pymongo import MongoClient
+E   ModuleNotFoundError: No module named 'pymongo'
+____ ERROR collecting backend/tests/test_branch_waste_unit_cost_iter215.py _____
+ImportError while importing test module '/app/backend/tests/test_branch_waste_unit_cost_iter215.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/usr/local/lib/python3.11/importlib/__init__.py:126: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+backend/tests/test_branch_waste_unit_cost_iter215.py:17: in <module>
+    from pymongo import MongoClient
+E   ModuleNotFoundError: No module named 'pymongo'
+______ ERROR collecting backend/tests/test_delivery_fee_and_settlement.py ______
+ImportError while importing test module '/app/backend/tests/test_delivery_fee_and_settlement.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/usr/local/lib/python3.11/importlib/__init__.py:126: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+backend/tests/test_delivery_fee_and_settlement.py:4: in <module>
+    from motor.motor_asyncio import AsyncIOMotorClient
+E   ModuleNotFoundError: No module named 'motor'
+______ ERROR collecting backend/tests/test_delivery_fee_extras_iter226.py ______
+ImportError while importing test module '/app/backend/tests/test_delivery_fee_extras_iter226.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/usr/local/lib/python3.11/importlib/__init__.py:126: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+backend/tests/test_delivery_fee_extras_iter226.py:5: in <module>
+    from motor.motor_asyncio import AsyncIOMotorClient
+E   ModuleNotFoundError: No module named 'motor'
+_________ ERROR collecting backend/tests/test_distance_delivery_fee.py _________
+ImportError while importing test module '/app/backend/tests/test_distance_delivery_fee.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/usr/local/lib/python3.11/importlib/__init__.py:126: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+backend/tests/test_distance_delivery_fee.py:4: in <module>
+    from motor.motor_asyncio import AsyncIOMotorClient
+E   ModuleNotFoundError: No module named 'motor'
+____________ ERROR collecting backend/tests/test_driver_batching.py ____________
+ImportError while importing test module '/app/backend/tests/test_driver_batching.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/usr/local/lib/python3.11/importlib/__init__.py:126: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+backend/tests/test_driver_batching.py:4: in <module>
+    from motor.motor_asyncio import AsyncIOMotorClient
+E   ModuleNotFoundError: No module named 'motor'
+__________ ERROR collecting backend/tests/test_driver_performance.py ___________
+ImportError while importing test module '/app/backend/tests/test_driver_performance.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/usr/local/lib/python3.11/importlib/__init__.py:126: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+backend/tests/test_driver_performance.py:4: in <module>
+    from motor.motor_asyncio import AsyncIOMotorClient
+E   ModuleNotFoundError: No module named 'motor'
+___________ ERROR collecting backend/tests/test_enrich_unit_cost.py ____________
+ImportError while importing test module '/app/backend/tests/test_enrich_unit_cost.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/usr/local/lib/python3.11/importlib/__init__.py:126: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+backend/tests/test_enrich_unit_cost.py:15: in <module>
+    from routes.inventory_system import _enrich_unit_cost_fields
+backend/routes/inventory_system.py:15: in <module>
+    from .shared import get_database, get_current_user, get_user_tenant_id, UserRole
+backend/routes/shared.py:7: in <module>
+    from motor.motor_asyncio import AsyncIOMotorClient
+E   ModuleNotFoundError: No module named 'motor'
+___ ERROR collecting backend/tests/test_fifo_fulfill_propagation_iter173.py ____
+ImportError while importing test module '/app/backend/tests/test_fifo_fulfill_propagation_iter173.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/usr/local/lib/python3.11/importlib/__init__.py:126: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+backend/tests/test_fifo_fulfill_propagation_iter173.py:23: in <module>
+    from motor.motor_asyncio import AsyncIOMotorClient
+E   ModuleNotFoundError: No module named 'motor'
+_______ ERROR collecting backend/tests/test_inventory_stats_unit_cost.py _______
+ImportError while importing test module '/app/backend/tests/test_inventory_stats_unit_cost.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/usr/local/lib/python3.11/importlib/__init__.py:126: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+backend/tests/test_inventory_stats_unit_cost.py:67: in <module>
+    from routes import inventory_system  # noqa: E402
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+backend/routes/inventory_system.py:15: in <module>
+    from .shared import get_database, get_current_user, get_user_tenant_id, UserRole
+backend/routes/shared.py:7: in <module>
+    from motor.motor_asyncio import AsyncIOMotorClient
+E   ModuleNotFoundError: No module named 'motor'
+___ ERROR collecting backend/tests/test_mfg_unit_cost_zero_stock_iter193.py ____
+ImportError while importing test module '/app/backend/tests/test_mfg_unit_cost_zero_stock_iter193.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/usr/local/lib/python3.11/importlib/__init__.py:126: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+backend/tests/test_mfg_unit_cost_zero_stock_iter193.py:15: in <module>
+    from motor.motor_asyncio import AsyncIOMotorClient
+E   ModuleNotFoundError: No module named 'motor'
+_______ ERROR collecting backend/tests/test_missing_piece_def_iter197.py _______
+ImportError while importing test module '/app/backend/tests/test_missing_piece_def_iter197.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/usr/local/lib/python3.11/importlib/__init__.py:126: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+backend/tests/test_missing_piece_def_iter197.py:13: in <module>
+    from motor.motor_asyncio import AsyncIOMotorClient
+E   ModuleNotFoundError: No module named 'motor'
+____________ ERROR collecting backend/tests/test_multi_mfg_links.py ____________
+ImportError while importing test module '/app/backend/tests/test_multi_mfg_links.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/usr/local/lib/python3.11/importlib/__init__.py:126: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+backend/tests/test_multi_mfg_links.py:11: in <module>
+    from motor.motor_asyncio import AsyncIOMotorClient
+E   ModuleNotFoundError: No module named 'motor'
+_____ ERROR collecting backend/tests/test_nested_consumption_deduction.py ______
+ImportError while importing test module '/app/backend/tests/test_nested_consumption_deduction.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/usr/local/lib/python3.11/importlib/__init__.py:126: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+backend/tests/test_nested_consumption_deduction.py:11: in <module>
+    from motor.motor_asyncio import AsyncIOMotorClient
+E   ModuleNotFoundError: No module named 'motor'
+__________ ERROR collecting backend/tests/test_nested_produce_e2e.py ___________
+ImportError while importing test module '/app/backend/tests/test_nested_produce_e2e.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/usr/local/lib/python3.11/importlib/__init__.py:126: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+backend/tests/test_nested_produce_e2e.py:10: in <module>
+    from motor.motor_asyncio import AsyncIOMotorClient
+E   ModuleNotFoundError: No module named 'motor'
+____ ERROR collecting backend/tests/test_offline_id_idempotency_iter215.py _____
+ImportError while importing test module '/app/backend/tests/test_offline_id_idempotency_iter215.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/usr/local/lib/python3.11/importlib/__init__.py:126: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+backend/tests/test_offline_id_idempotency_iter215.py:16: in <module>
+    from pymongo import MongoClient
+E   ModuleNotFoundError: No module named 'pymongo'
+____ ERROR collecting backend/tests/test_offline_order_numbering_iter177.py ____
+ImportError while importing test module '/app/backend/tests/test_offline_order_numbering_iter177.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/usr/local/lib/python3.11/importlib/__init__.py:126: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+backend/tests/test_offline_order_numbering_iter177.py:17: in <module>
+    from pymongo import MongoClient
+E   ModuleNotFoundError: No module named 'pymongo'
+__________ ERROR collecting backend/tests/test_payroll_consistency.py __________
+ImportError while importing test module '/app/backend/tests/test_payroll_consistency.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/usr/local/lib/python3.11/importlib/__init__.py:126: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+backend/tests/test_payroll_consistency.py:14: in <module>
+    from pymongo import MongoClient
+E   ModuleNotFoundError: No module named 'pymongo'
+_______ ERROR collecting backend/tests/test_piece_def_priority_yield.py ________
+ImportError while importing test module '/app/backend/tests/test_piece_def_priority_yield.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/usr/local/lib/python3.11/importlib/__init__.py:126: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+backend/tests/test_piece_def_priority_yield.py:20: in <module>
+    from motor.motor_asyncio import AsyncIOMotorClient
+E   ModuleNotFoundError: No module named 'motor'
+_______ ERROR collecting backend/tests/test_piece_definition_iter194.py ________
+ImportError while importing test module '/app/backend/tests/test_piece_definition_iter194.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/usr/local/lib/python3.11/importlib/__init__.py:126: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+backend/tests/test_piece_definition_iter194.py:13: in <module>
+    from motor.motor_asyncio import AsyncIOMotorClient
+E   ModuleNotFoundError: No module named 'motor'
+________ ERROR collecting backend/tests/test_produce_count_to_count.py _________
+ImportError while importing test module '/app/backend/tests/test_produce_count_to_count.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/usr/local/lib/python3.11/importlib/__init__.py:126: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+backend/tests/test_produce_count_to_count.py:13: in <module>
+    from motor.motor_asyncio import AsyncIOMotorClient
+E   ModuleNotFoundError: No module named 'motor'
+______ ERROR collecting backend/tests/test_produce_scales_actual_yield.py ______
+ImportError while importing test module '/app/backend/tests/test_produce_scales_actual_yield.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/usr/local/lib/python3.11/importlib/__init__.py:126: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+backend/tests/test_produce_scales_actual_yield.py:12: in <module>
+    from motor.motor_asyncio import AsyncIOMotorClient
+E   ModuleNotFoundError: No module named 'motor'
+______ ERROR collecting backend/tests/test_production_yield_piece_def.py _______
+ImportError while importing test module '/app/backend/tests/test_production_yield_piece_def.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/usr/local/lib/python3.11/importlib/__init__.py:126: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+backend/tests/test_production_yield_piece_def.py:15: in <module>
+    from routes.inventory_system import _resolve_piece_grams, _resolve_recipe_yield
+backend/routes/inventory_system.py:15: in <module>
+    from .shared import get_database, get_current_user, get_user_tenant_id, UserRole
+backend/routes/shared.py:7: in <module>
+    from motor.motor_asyncio import AsyncIOMotorClient
+E   ModuleNotFoundError: No module named 'motor'
+________ ERROR collecting backend/tests/test_recipe_ingredient_model.py ________
+ImportError while importing test module '/app/backend/tests/test_recipe_ingredient_model.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/usr/local/lib/python3.11/importlib/__init__.py:126: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+backend/tests/test_recipe_ingredient_model.py:17: in <module>
+    from routes.inventory_system import RecipeIngredient, ManufacturedProductCreate
+backend/routes/inventory_system.py:15: in <module>
+    from .shared import get_database, get_current_user, get_user_tenant_id, UserRole
+backend/routes/shared.py:7: in <module>
+    from motor.motor_asyncio import AsyncIOMotorClient
+E   ModuleNotFoundError: No module named 'motor'
+_________ ERROR collecting backend/tests/test_stale_yield_self_heal.py _________
+ImportError while importing test module '/app/backend/tests/test_stale_yield_self_heal.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/usr/local/lib/python3.11/importlib/__init__.py:126: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+backend/tests/test_stale_yield_self_heal.py:15: in <module>
+    from motor.motor_asyncio import AsyncIOMotorClient
+E   ModuleNotFoundError: No module named 'motor'
+_______ ERROR collecting backend/tests/test_sync_routing_fix_iter178.py ________
+ImportError while importing test module '/app/backend/tests/test_sync_routing_fix_iter178.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/usr/local/lib/python3.11/importlib/__init__.py:126: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+backend/tests/test_sync_routing_fix_iter178.py:20: in <module>
+    from pymongo import MongoClient
+E   ModuleNotFoundError: No module named 'pymongo'
+____________ ERROR collecting backend/tests/test_yield_variance.py _____________
+ImportError while importing test module '/app/backend/tests/test_yield_variance.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/usr/local/lib/python3.11/importlib/__init__.py:126: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+backend/tests/test_yield_variance.py:19: in <module>
+    from routes.inventory_system import produce_product, get_yield_variances  # noqa: E402
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+backend/routes/inventory_system.py:15: in <module>
+    from .shared import get_database, get_current_user, get_user_tenant_id, UserRole
+backend/routes/shared.py:7: in <module>
+    from motor.motor_asyncio import AsyncIOMotorClient
+E   ModuleNotFoundError: No module named 'motor'
+=========================== short test summary info ============================
+ERROR backend/seed_branch_fulfill_test.py
+ERROR backend/seed_produce_deduction_test.py
+ERROR backend/tests/test_addstock_piece_def_iter198.py
+ERROR backend/tests/test_advance_deduct_installment.py
+ERROR backend/tests/test_advance_from_treasury.py
+ERROR backend/tests/test_arabic_normalize.py
+ERROR backend/tests/test_branch_count_full_iter210.py
+ERROR backend/tests/test_branch_count_sold_accuracy.py
+ERROR backend/tests/test_branch_waste_efficiency.py
+ERROR backend/tests/test_branch_waste_unit_cost_iter215.py
+ERROR backend/tests/test_delivery_fee_and_settlement.py
+ERROR backend/tests/test_delivery_fee_extras_iter226.py
+ERROR backend/tests/test_distance_delivery_fee.py
+ERROR backend/tests/test_driver_batching.py
+ERROR backend/tests/test_driver_performance.py
+ERROR backend/tests/test_enrich_unit_cost.py
+ERROR backend/tests/test_fifo_fulfill_propagation_iter173.py
+ERROR backend/tests/test_inventory_stats_unit_cost.py
+ERROR backend/tests/test_mfg_unit_cost_zero_stock_iter193.py
+ERROR backend/tests/test_missing_piece_def_iter197.py
+ERROR backend/tests/test_multi_mfg_links.py
+ERROR backend/tests/test_nested_consumption_deduction.py
+ERROR backend/tests/test_nested_produce_e2e.py
+ERROR backend/tests/test_offline_id_idempotency_iter215.py
+ERROR backend/tests/test_offline_order_numbering_iter177.py
+ERROR backend/tests/test_payroll_consistency.py
+ERROR backend/tests/test_piece_def_priority_yield.py
+ERROR backend/tests/test_piece_definition_iter194.py
+ERROR backend/tests/test_produce_count_to_count.py
+ERROR backend/tests/test_produce_scales_actual_yield.py
+ERROR backend/tests/test_production_yield_piece_def.py
+ERROR backend/tests/test_recipe_ingredient_model.py
+ERROR backend/tests/test_stale_yield_self_heal.py
+ERROR backend/tests/test_sync_routing_fix_iter178.py
+ERROR backend/tests/test_yield_variance.py
+!!!!!!!!!!!!!!!!!!! Interrupted: 35 errors during collection !!!!!!!!!!!!!!!!!!!
+============================== 35 errors in 4.63s ============================== regression file for delivery ratings () (DONE)
+
+**Earlier issues found/mentioned but not fixed**
+   - Splash Screen blocking automated clicks: The  has a high z-index that persists invisibly for ~10 seconds after load, blocking the testing agent/screenshot tool from clicking tabs. (Workaround: Wait 10 seconds before automated clicks, or fix the z-index/display logic).
+
+**Known issue recurrence from previous fork**
+  - Issue recurrence in previous fork: Backend environment randomly drops Python packages (, , etc.).
+  - Recurrence count: >30
+  - Status: BLOCKED (Environment limitation).
+  - *Note:* If tests fail with , run Looking in indexes: https://pypi.org/simple, https://d33sy5i8bnduwe.cloudfront.net/simple/
+Collecting aiofiles==25.1.0 (from -r /app/backend/requirements.txt (line 2))
+  Using cached aiofiles-25.1.0-py3-none-any.whl.metadata (6.3 kB)
+Collecting aiohappyeyeballs==2.6.1 (from -r /app/backend/requirements.txt (line 3))
+  Using cached aiohappyeyeballs-2.6.1-py3-none-any.whl.metadata (5.9 kB)
+Collecting aiohttp==3.13.3 (from -r /app/backend/requirements.txt (line 4))
+  Using cached aiohttp-3.13.3-cp311-cp311-manylinux2014_aarch64.manylinux_2_17_aarch64.manylinux_2_28_aarch64.whl.metadata (8.1 kB)
+Collecting aiosignal==1.4.0 (from -r /app/backend/requirements.txt (line 5))
+  Using cached aiosignal-1.4.0-py3-none-any.whl.metadata (3.7 kB)
+Collecting annotated-types==0.7.0 (from -r /app/backend/requirements.txt (line 6))
+  Using cached annotated_types-0.7.0-py3-none-any.whl.metadata (15 kB)
+Collecting anyio==4.12.0 (from -r /app/backend/requirements.txt (line 7))
+  Using cached anyio-4.12.0-py3-none-any.whl.metadata (4.3 kB)
+Collecting arabic-reshaper==3.0.0 (from -r /app/backend/requirements.txt (line 8))
+  Using cached arabic_reshaper-3.0.0-py3-none-any.whl.metadata (12 kB)
+Collecting attrs==25.4.0 (from -r /app/backend/requirements.txt (line 9))
+  Using cached attrs-25.4.0-py3-none-any.whl.metadata (10 kB)
+Collecting bcrypt==4.1.3 (from -r /app/backend/requirements.txt (line 10))
+  Using cached bcrypt-4.1.3-cp39-abi3-manylinux_2_28_aarch64.whl.metadata (9.5 kB)
+Collecting bidict==0.23.1 (from -r /app/backend/requirements.txt (line 11))
+  Using cached bidict-0.23.1-py3-none-any.whl.metadata (8.7 kB)
+Collecting black==25.12.0 (from -r /app/backend/requirements.txt (line 12))
+  Using cached black-25.12.0-py3-none-any.whl.metadata (86 kB)
+Collecting boto3==1.42.21 (from -r /app/backend/requirements.txt (line 13))
+  Using cached boto3-1.42.21-py3-none-any.whl.metadata (6.8 kB)
+Collecting botocore==1.42.21 (from -r /app/backend/requirements.txt (line 14))
+  Using cached botocore-1.42.21-py3-none-any.whl.metadata (5.9 kB)
+Collecting CacheControl==0.14.4 (from -r /app/backend/requirements.txt (line 15))
+  Using cached cachecontrol-0.14.4-py3-none-any.whl.metadata (3.1 kB)
+Collecting certifi==2026.1.4 (from -r /app/backend/requirements.txt (line 16))
+  Using cached certifi-2026.1.4-py3-none-any.whl.metadata (2.5 kB)
+Collecting cffi==2.0.0 (from -r /app/backend/requirements.txt (line 17))
+  Using cached cffi-2.0.0-cp311-cp311-manylinux2014_aarch64.manylinux_2_17_aarch64.whl.metadata (2.6 kB)
+Collecting charset-normalizer==3.4.4 (from -r /app/backend/requirements.txt (line 18))
+  Using cached charset_normalizer-3.4.4-cp311-cp311-manylinux2014_aarch64.manylinux_2_17_aarch64.manylinux_2_28_aarch64.whl.metadata (37 kB)
+Collecting click==8.3.1 (from -r /app/backend/requirements.txt (line 19))
+  Using cached click-8.3.1-py3-none-any.whl.metadata (2.6 kB)
+Collecting cryptography==46.0.3 (from -r /app/backend/requirements.txt (line 20))
+  Using cached cryptography-46.0.3-cp311-abi3-manylinux_2_34_aarch64.whl.metadata (5.7 kB)
+Collecting distro==1.9.0 (from -r /app/backend/requirements.txt (line 21))
+  Using cached distro-1.9.0-py3-none-any.whl.metadata (6.8 kB)
+Collecting dnspython==2.8.0 (from -r /app/backend/requirements.txt (line 22))
+  Using cached dnspython-2.8.0-py3-none-any.whl.metadata (5.7 kB)
+Collecting ecdsa==0.19.1 (from -r /app/backend/requirements.txt (line 23))
+  Using cached ecdsa-0.19.1-py2.py3-none-any.whl.metadata (29 kB)
+Collecting email-validator==2.3.0 (from -r /app/backend/requirements.txt (line 24))
+  Using cached email_validator-2.3.0-py3-none-any.whl.metadata (26 kB)
+Collecting et_xmlfile==2.0.0 (from -r /app/backend/requirements.txt (line 25))
+  Using cached et_xmlfile-2.0.0-py3-none-any.whl.metadata (2.7 kB)
+Collecting fastapi==0.110.1 (from -r /app/backend/requirements.txt (line 26))
+  Using cached fastapi-0.110.1-py3-none-any.whl.metadata (24 kB)
+Collecting fastuuid==0.14.0 (from -r /app/backend/requirements.txt (line 27))
+  Using cached fastuuid-0.14.0-cp311-cp311-manylinux_2_17_aarch64.manylinux2014_aarch64.whl.metadata (1.1 kB)
+Collecting filelock==3.20.2 (from -r /app/backend/requirements.txt (line 28))
+  Using cached filelock-3.20.2-py3-none-any.whl.metadata (2.1 kB)
+Collecting firebase_admin==7.1.0 (from -r /app/backend/requirements.txt (line 29))
+  Using cached firebase_admin-7.1.0-py3-none-any.whl.metadata (1.7 kB)
+Collecting flake8==7.3.0 (from -r /app/backend/requirements.txt (line 30))
+  Using cached flake8-7.3.0-py2.py3-none-any.whl.metadata (3.8 kB)
+Collecting frozenlist==1.8.0 (from -r /app/backend/requirements.txt (line 31))
+  Using cached frozenlist-1.8.0-cp311-cp311-manylinux2014_aarch64.manylinux_2_17_aarch64.manylinux_2_28_aarch64.whl.metadata (20 kB)
+Collecting fsspec==2025.12.0 (from -r /app/backend/requirements.txt (line 32))
+  Using cached fsspec-2025.12.0-py3-none-any.whl.metadata (10 kB)
+Collecting future==1.0.0 (from -r /app/backend/requirements.txt (line 33))
+  Using cached future-1.0.0-py3-none-any.whl.metadata (4.0 kB)
+Collecting google-ai-generativelanguage==0.6.15 (from -r /app/backend/requirements.txt (line 34))
+  Using cached google_ai_generativelanguage-0.6.15-py3-none-any.whl.metadata (5.7 kB)
+Collecting google-api-core==2.29.0 (from -r /app/backend/requirements.txt (line 35))
+  Using cached google_api_core-2.29.0-py3-none-any.whl.metadata (3.3 kB)
+Collecting google-api-python-client==2.187.0 (from -r /app/backend/requirements.txt (line 36))
+  Using cached google_api_python_client-2.187.0-py3-none-any.whl.metadata (7.0 kB)
+Collecting google-auth==2.47.0 (from -r /app/backend/requirements.txt (line 37))
+  Using cached google_auth-2.47.0-py3-none-any.whl.metadata (6.4 kB)
+Collecting google-auth-httplib2==0.3.0 (from -r /app/backend/requirements.txt (line 38))
+  Using cached google_auth_httplib2-0.3.0-py3-none-any.whl.metadata (3.1 kB)
+Collecting google-cloud-core==2.5.0 (from -r /app/backend/requirements.txt (line 39))
+  Using cached google_cloud_core-2.5.0-py3-none-any.whl.metadata (3.1 kB)
+Collecting google-cloud-firestore==2.22.0 (from -r /app/backend/requirements.txt (line 40))
+  Using cached google_cloud_firestore-2.22.0-py3-none-any.whl.metadata (10 kB)
+Collecting google-cloud-storage==3.8.0 (from -r /app/backend/requirements.txt (line 41))
+  Using cached google_cloud_storage-3.8.0-py3-none-any.whl.metadata (14 kB)
+Collecting google-crc32c==1.8.0 (from -r /app/backend/requirements.txt (line 42))
+  Using cached google_crc32c-1.8.0-cp311-cp311-manylinux2014_aarch64.manylinux_2_17_aarch64.whl.metadata (1.7 kB)
+Collecting google-genai==1.57.0 (from -r /app/backend/requirements.txt (line 43))
+  Using cached google_genai-1.57.0-py3-none-any.whl.metadata (53 kB)
+Collecting google-generativeai==0.8.6 (from -r /app/backend/requirements.txt (line 44))
+  Using cached google_generativeai-0.8.6-py3-none-any.whl.metadata (3.9 kB)
+Collecting google-resumable-media==2.8.0 (from -r /app/backend/requirements.txt (line 45))
+  Using cached google_resumable_media-2.8.0-py3-none-any.whl.metadata (2.6 kB)
+Collecting googleapis-common-protos==1.72.0 (from -r /app/backend/requirements.txt (line 46))
+  Using cached googleapis_common_protos-1.72.0-py3-none-any.whl.metadata (9.4 kB)
+Collecting grpcio==1.76.0 (from -r /app/backend/requirements.txt (line 47))
+  Using cached grpcio-1.76.0-cp311-cp311-manylinux2014_aarch64.manylinux_2_17_aarch64.whl.metadata (3.7 kB)
+Collecting grpcio-status==1.71.2 (from -r /app/backend/requirements.txt (line 48))
+  Using cached grpcio_status-1.71.2-py3-none-any.whl.metadata (1.1 kB)
+Collecting h11==0.16.0 (from -r /app/backend/requirements.txt (line 49))
+  Using cached h11-0.16.0-py3-none-any.whl.metadata (8.3 kB)
+Collecting h2==4.3.0 (from -r /app/backend/requirements.txt (line 50))
+  Using cached h2-4.3.0-py3-none-any.whl.metadata (5.1 kB)
+Collecting hf-xet==1.2.0 (from -r /app/backend/requirements.txt (line 51))
+  Using cached hf_xet-1.2.0-cp37-abi3-manylinux_2_28_aarch64.whl.metadata (4.9 kB)
+Collecting hpack==4.1.0 (from -r /app/backend/requirements.txt (line 52))
+  Using cached hpack-4.1.0-py3-none-any.whl.metadata (4.6 kB)
+Collecting httpcore==1.0.9 (from -r /app/backend/requirements.txt (line 53))
+  Using cached httpcore-1.0.9-py3-none-any.whl.metadata (21 kB)
+Collecting httplib2==0.31.0 (from -r /app/backend/requirements.txt (line 54))
+  Using cached httplib2-0.31.0-py3-none-any.whl.metadata (2.2 kB)
+Collecting httpx==0.28.1 (from -r /app/backend/requirements.txt (line 55))
+  Using cached httpx-0.28.1-py3-none-any.whl.metadata (7.1 kB)
+Collecting huggingface_hub==1.2.4 (from -r /app/backend/requirements.txt (line 56))
+  Using cached huggingface_hub-1.2.4-py3-none-any.whl.metadata (13 kB)
+Collecting hyperframe==6.1.0 (from -r /app/backend/requirements.txt (line 57))
+  Using cached hyperframe-6.1.0-py3-none-any.whl.metadata (4.3 kB)
+Collecting idna==3.11 (from -r /app/backend/requirements.txt (line 58))
+  Using cached idna-3.11-py3-none-any.whl.metadata (8.4 kB)
+Collecting importlib_metadata==8.7.1 (from -r /app/backend/requirements.txt (line 59))
+  Using cached importlib_metadata-8.7.1-py3-none-any.whl.metadata (4.7 kB)
+Collecting iniconfig==2.3.0 (from -r /app/backend/requirements.txt (line 60))
+  Using cached iniconfig-2.3.0-py3-none-any.whl.metadata (2.5 kB)
+Collecting isort==7.0.0 (from -r /app/backend/requirements.txt (line 61))
+  Using cached isort-7.0.0-py3-none-any.whl.metadata (11 kB)
+Collecting Jinja2==3.1.6 (from -r /app/backend/requirements.txt (line 62))
+  Using cached jinja2-3.1.6-py3-none-any.whl.metadata (2.9 kB)
+Collecting jiter==0.12.0 (from -r /app/backend/requirements.txt (line 63))
+  Using cached jiter-0.12.0-cp311-cp311-manylinux_2_17_aarch64.manylinux2014_aarch64.whl.metadata (5.2 kB)
+Collecting jmespath==1.0.1 (from -r /app/backend/requirements.txt (line 64))
+  Using cached jmespath-1.0.1-py3-none-any.whl.metadata (7.6 kB)
+Collecting jq==1.10.0 (from -r /app/backend/requirements.txt (line 65))
+  Using cached jq-1.10.0-cp311-cp311-manylinux_2_17_aarch64.manylinux2014_aarch64.whl.metadata (7.0 kB)
+Collecting jsonschema==4.26.0 (from -r /app/backend/requirements.txt (line 66))
+  Using cached jsonschema-4.26.0-py3-none-any.whl.metadata (7.6 kB)
+Collecting jsonschema-specifications==2025.9.1 (from -r /app/backend/requirements.txt (line 67))
+  Using cached jsonschema_specifications-2025.9.1-py3-none-any.whl.metadata (2.9 kB)
+Collecting librt==0.7.7 (from -r /app/backend/requirements.txt (line 68))
+  Using cached librt-0.7.7-cp311-cp311-manylinux2014_aarch64.manylinux_2_17_aarch64.manylinux_2_28_aarch64.whl.metadata (1.3 kB)
+Collecting litellm==1.80.0 (from -r /app/backend/requirements.txt (line 69))
+  Using cached litellm-1.80.0-py3-none-any.whl.metadata (30 kB)
+Collecting markdown-it-py==4.0.0 (from -r /app/backend/requirements.txt (line 70))
+  Using cached markdown_it_py-4.0.0-py3-none-any.whl.metadata (7.3 kB)
+Collecting MarkupSafe==3.0.3 (from -r /app/backend/requirements.txt (line 71))
+  Using cached markupsafe-3.0.3-cp311-cp311-manylinux2014_aarch64.manylinux_2_17_aarch64.manylinux_2_28_aarch64.whl.metadata (2.7 kB)
+Collecting mccabe==0.7.0 (from -r /app/backend/requirements.txt (line 72))
+  Using cached mccabe-0.7.0-py2.py3-none-any.whl.metadata (5.0 kB)
+Collecting mdurl==0.1.2 (from -r /app/backend/requirements.txt (line 73))
+  Using cached mdurl-0.1.2-py3-none-any.whl.metadata (1.6 kB)
+Collecting motor==3.3.1 (from -r /app/backend/requirements.txt (line 74))
+  Using cached motor-3.3.1-py3-none-any.whl.metadata (20 kB)
+Collecting msgpack==1.1.2 (from -r /app/backend/requirements.txt (line 75))
+  Using cached msgpack-1.1.2-cp311-cp311-manylinux2014_aarch64.manylinux_2_17_aarch64.manylinux_2_28_aarch64.whl.metadata (8.1 kB)
+Collecting multidict==6.7.0 (from -r /app/backend/requirements.txt (line 76))
+  Using cached multidict-6.7.0-cp311-cp311-manylinux2014_aarch64.manylinux_2_17_aarch64.manylinux_2_28_aarch64.whl.metadata (5.3 kB)
+Collecting mypy==1.19.1 (from -r /app/backend/requirements.txt (line 77))
+  Using cached mypy-1.19.1-cp311-cp311-manylinux2014_aarch64.manylinux_2_17_aarch64.manylinux_2_28_aarch64.whl.metadata (2.2 kB)
+Collecting mypy_extensions==1.1.0 (from -r /app/backend/requirements.txt (line 78))
+  Using cached mypy_extensions-1.1.0-py3-none-any.whl.metadata (1.1 kB)
+Collecting numpy==2.4.0 (from -r /app/backend/requirements.txt (line 79))
+  Using cached numpy-2.4.0-cp311-cp311-manylinux_2_27_aarch64.manylinux_2_28_aarch64.whl.metadata (6.6 kB)
+Collecting oauthlib==3.3.1 (from -r /app/backend/requirements.txt (line 80))
+  Using cached oauthlib-3.3.1-py3-none-any.whl.metadata (7.9 kB)
+Collecting openai==1.99.9 (from -r /app/backend/requirements.txt (line 81))
+  Using cached openai-1.99.9-py3-none-any.whl.metadata (29 kB)
+Collecting openpyxl==3.1.5 (from -r /app/backend/requirements.txt (line 82))
+  Using cached openpyxl-3.1.5-py2.py3-none-any.whl.metadata (2.5 kB)
+Collecting packaging==25.0 (from -r /app/backend/requirements.txt (line 83))
+  Using cached packaging-25.0-py3-none-any.whl.metadata (3.3 kB)
+Collecting pandas==2.3.3 (from -r /app/backend/requirements.txt (line 84))
+  Using cached pandas-2.3.3-cp311-cp311-manylinux_2_24_aarch64.manylinux_2_28_aarch64.whl.metadata (91 kB)
+Collecting passlib==1.7.4 (from -r /app/backend/requirements.txt (line 85))
+  Using cached passlib-1.7.4-py2.py3-none-any.whl.metadata (1.7 kB)
+Collecting pathspec==0.12.1 (from -r /app/backend/requirements.txt (line 86))
+  Using cached pathspec-0.12.1-py3-none-any.whl.metadata (21 kB)
+Collecting pillow==12.1.0 (from -r /app/backend/requirements.txt (line 87))
+  Using cached pillow-12.1.0-cp311-cp311-manylinux_2_27_aarch64.manylinux_2_28_aarch64.whl.metadata (8.8 kB)
+Collecting pillow_heif==1.3.0 (from -r /app/backend/requirements.txt (line 88))
+  Using cached pillow_heif-1.3.0-cp311-cp311-manylinux_2_26_aarch64.manylinux_2_28_aarch64.whl.metadata (9.4 kB)
+Collecting platformdirs==4.5.1 (from -r /app/backend/requirements.txt (line 89))
+  Using cached platformdirs-4.5.1-py3-none-any.whl.metadata (12 kB)
+Collecting pluggy==1.6.0 (from -r /app/backend/requirements.txt (line 90))
+  Using cached pluggy-1.6.0-py3-none-any.whl.metadata (4.8 kB)
+Collecting propcache==0.4.1 (from -r /app/backend/requirements.txt (line 91))
+  Using cached propcache-0.4.1-cp311-cp311-manylinux2014_aarch64.manylinux_2_17_aarch64.manylinux_2_28_aarch64.whl.metadata (13 kB)
+Collecting proto-plus==1.27.0 (from -r /app/backend/requirements.txt (line 92))
+  Using cached proto_plus-1.27.0-py3-none-any.whl.metadata (2.2 kB)
+Collecting protobuf==5.29.5 (from -r /app/backend/requirements.txt (line 93))
+  Using cached protobuf-5.29.5-cp38-abi3-manylinux2014_aarch64.whl.metadata (592 bytes)
+Collecting pyasn1==0.6.1 (from -r /app/backend/requirements.txt (line 94))
+  Using cached pyasn1-0.6.1-py3-none-any.whl.metadata (8.4 kB)
+Collecting pyasn1_modules==0.4.2 (from -r /app/backend/requirements.txt (line 95))
+  Using cached pyasn1_modules-0.4.2-py3-none-any.whl.metadata (3.5 kB)
+Collecting pycodestyle==2.14.0 (from -r /app/backend/requirements.txt (line 96))
+  Using cached pycodestyle-2.14.0-py2.py3-none-any.whl.metadata (4.5 kB)
+Collecting pycparser==2.23 (from -r /app/backend/requirements.txt (line 97))
+  Using cached pycparser-2.23-py3-none-any.whl.metadata (993 bytes)
+Collecting pydantic==2.12.5 (from -r /app/backend/requirements.txt (line 98))
+  Using cached pydantic-2.12.5-py3-none-any.whl.metadata (90 kB)
+Collecting pydantic_core==2.41.5 (from -r /app/backend/requirements.txt (line 99))
+  Using cached pydantic_core-2.41.5-cp311-cp311-manylinux_2_17_aarch64.manylinux2014_aarch64.whl.metadata (7.3 kB)
+Collecting pyflakes==3.4.0 (from -r /app/backend/requirements.txt (line 100))
+  Using cached pyflakes-3.4.0-py2.py3-none-any.whl.metadata (3.5 kB)
+Collecting Pygments==2.19.2 (from -r /app/backend/requirements.txt (line 101))
+  Using cached pygments-2.19.2-py3-none-any.whl.metadata (2.5 kB)
+Collecting PyJWT==2.10.1 (from -r /app/backend/requirements.txt (line 102))
+  Using cached PyJWT-2.10.1-py3-none-any.whl.metadata (4.0 kB)
+Collecting pymongo==4.5.0 (from -r /app/backend/requirements.txt (line 103))
+  Using cached pymongo-4.5.0-cp311-cp311-manylinux_2_17_aarch64.manylinux2014_aarch64.whl.metadata (22 kB)
+Collecting pyparsing==3.3.1 (from -r /app/backend/requirements.txt (line 104))
+  Using cached pyparsing-3.3.1-py3-none-any.whl.metadata (5.6 kB)
+Collecting pytest==9.0.2 (from -r /app/backend/requirements.txt (line 105))
+  Using cached pytest-9.0.2-py3-none-any.whl.metadata (7.6 kB)
+Collecting python-bidi==0.6.7 (from -r /app/backend/requirements.txt (line 106))
+  Using cached python_bidi-0.6.7-cp311-cp311-manylinux_2_17_aarch64.manylinux2014_aarch64.whl.metadata (4.9 kB)
+Collecting python-dateutil==2.9.0.post0 (from -r /app/backend/requirements.txt (line 107))
+  Using cached python_dateutil-2.9.0.post0-py2.py3-none-any.whl.metadata (8.4 kB)
+Collecting python-dotenv==1.2.1 (from -r /app/backend/requirements.txt (line 108))
+  Using cached python_dotenv-1.2.1-py3-none-any.whl.metadata (25 kB)
+Collecting python-engineio==4.13.1 (from -r /app/backend/requirements.txt (line 109))
+  Using cached python_engineio-4.13.1-py3-none-any.whl.metadata (2.3 kB)
+Collecting python-http-client==3.3.7 (from -r /app/backend/requirements.txt (line 110))
+  Using cached python_http_client-3.3.7-py3-none-any.whl.metadata (6.9 kB)
+Collecting python-jose==3.5.0 (from -r /app/backend/requirements.txt (line 111))
+  Using cached python_jose-3.5.0-py2.py3-none-any.whl.metadata (5.5 kB)
+Collecting python-multipart==0.0.21 (from -r /app/backend/requirements.txt (line 112))
+  Using cached python_multipart-0.0.21-py3-none-any.whl.metadata (1.8 kB)
+Collecting python-socketio==5.16.1 (from -r /app/backend/requirements.txt (line 113))
+  Using cached python_socketio-5.16.1-py3-none-any.whl.metadata (3.3 kB)
+Collecting pytokens==0.3.0 (from -r /app/backend/requirements.txt (line 114))
+  Using cached pytokens-0.3.0-py3-none-any.whl.metadata (2.0 kB)
+Collecting pytz==2025.2 (from -r /app/backend/requirements.txt (line 115))
+  Using cached pytz-2025.2-py2.py3-none-any.whl.metadata (22 kB)
+Collecting PyYAML==6.0.3 (from -r /app/backend/requirements.txt (line 116))
+  Using cached pyyaml-6.0.3-cp311-cp311-manylinux2014_aarch64.manylinux_2_17_aarch64.manylinux_2_28_aarch64.whl.metadata (2.4 kB)
+Collecting pyzk==0.9 (from -r /app/backend/requirements.txt (line 117))
+  Using cached pyzk-0.9-py3-none-any.whl
+Collecting referencing==0.37.0 (from -r /app/backend/requirements.txt (line 118))
+  Using cached referencing-0.37.0-py3-none-any.whl.metadata (2.8 kB)
+Collecting regex==2025.11.3 (from -r /app/backend/requirements.txt (line 119))
+  Using cached regex-2025.11.3-cp311-cp311-manylinux2014_aarch64.manylinux_2_17_aarch64.manylinux_2_28_aarch64.whl.metadata (40 kB)
+Collecting reportlab==4.4.9 (from -r /app/backend/requirements.txt (line 120))
+  Using cached reportlab-4.4.9-py3-none-any.whl.metadata (1.7 kB)
+Collecting requests==2.32.5 (from -r /app/backend/requirements.txt (line 121))
+  Using cached requests-2.32.5-py3-none-any.whl.metadata (4.9 kB)
+Collecting requests-oauthlib==2.0.0 (from -r /app/backend/requirements.txt (line 122))
+  Using cached requests_oauthlib-2.0.0-py2.py3-none-any.whl.metadata (11 kB)
+Collecting rich==14.2.0 (from -r /app/backend/requirements.txt (line 123))
+  Using cached rich-14.2.0-py3-none-any.whl.metadata (18 kB)
+Collecting rpds-py==0.30.0 (from -r /app/backend/requirements.txt (line 124))
+  Using cached rpds_py-0.30.0-cp311-cp311-manylinux_2_17_aarch64.manylinux2014_aarch64.whl.metadata (4.1 kB)
+Collecting rsa==4.9.1 (from -r /app/backend/requirements.txt (line 125))
+  Using cached rsa-4.9.1-py3-none-any.whl.metadata (5.6 kB)
+Collecting s3transfer==0.16.0 (from -r /app/backend/requirements.txt (line 126))
+  Using cached s3transfer-0.16.0-py3-none-any.whl.metadata (1.7 kB)
+Collecting s5cmd==0.2.0 (from -r /app/backend/requirements.txt (line 127))
+  Using cached s5cmd-0.2.0-py3-none-manylinux_2_17_aarch64.manylinux2014_aarch64.whl.metadata (5.7 kB)
+Collecting sendgrid==6.12.5 (from -r /app/backend/requirements.txt (line 128))
+  Using cached sendgrid-6.12.5-py3-none-any.whl.metadata (12 kB)
+Collecting shellingham==1.5.4 (from -r /app/backend/requirements.txt (line 129))
+  Using cached shellingham-1.5.4-py2.py3-none-any.whl.metadata (3.5 kB)
+Collecting simple-websocket==1.1.0 (from -r /app/backend/requirements.txt (line 130))
+  Using cached simple_websocket-1.1.0-py3-none-any.whl.metadata (1.5 kB)
+Collecting six==1.17.0 (from -r /app/backend/requirements.txt (line 131))
+  Using cached six-1.17.0-py2.py3-none-any.whl.metadata (1.7 kB)
+Collecting sniffio==1.3.1 (from -r /app/backend/requirements.txt (line 132))
+  Using cached sniffio-1.3.1-py3-none-any.whl.metadata (3.9 kB)
+Collecting starlette==0.37.2 (from -r /app/backend/requirements.txt (line 133))
+  Using cached starlette-0.37.2-py3-none-any.whl.metadata (5.9 kB)
+Collecting stripe==14.1.0 (from -r /app/backend/requirements.txt (line 134))
+  Using cached stripe-14.1.0-py3-none-any.whl.metadata (18 kB)
+Collecting tenacity==9.1.2 (from -r /app/backend/requirements.txt (line 135))
+  Using cached tenacity-9.1.2-py3-none-any.whl.metadata (1.2 kB)
+Collecting tiktoken==0.12.0 (from -r /app/backend/requirements.txt (line 136))
+  Using cached tiktoken-0.12.0-cp311-cp311-manylinux_2_28_aarch64.whl.metadata (6.7 kB)
+Collecting tokenizers==0.22.2 (from -r /app/backend/requirements.txt (line 137))
+  Using cached tokenizers-0.22.2-cp39-abi3-manylinux_2_17_aarch64.manylinux2014_aarch64.whl.metadata (7.3 kB)
+Collecting tqdm==4.67.1 (from -r /app/backend/requirements.txt (line 138))
+  Using cached tqdm-4.67.1-py3-none-any.whl.metadata (57 kB)
+Collecting typer==0.21.0 (from -r /app/backend/requirements.txt (line 139))
+  Using cached typer-0.21.0-py3-none-any.whl.metadata (16 kB)
+Collecting typer-slim==0.21.1 (from -r /app/backend/requirements.txt (line 140))
+  Using cached typer_slim-0.21.1-py3-none-any.whl.metadata (16 kB)
+Collecting typing-inspection==0.4.2 (from -r /app/backend/requirements.txt (line 141))
+  Using cached typing_inspection-0.4.2-py3-none-any.whl.metadata (2.6 kB)
+Requirement already satisfied: typing_extensions==4.15.0 in /usr/local/lib/python3.11/site-packages (from -r /app/backend/requirements.txt (line 142)) (4.15.0)
+Collecting tzdata==2025.3 (from -r /app/backend/requirements.txt (line 143))
+  Using cached tzdata-2025.3-py2.py3-none-any.whl.metadata (1.4 kB)
+Collecting uritemplate==4.2.0 (from -r /app/backend/requirements.txt (line 144))
+  Using cached uritemplate-4.2.0-py3-none-any.whl.metadata (2.6 kB)
+Collecting urllib3==2.6.2 (from -r /app/backend/requirements.txt (line 145))
+  Using cached urllib3-2.6.2-py3-none-any.whl.metadata (6.6 kB)
+Collecting uvicorn==0.25.0 (from -r /app/backend/requirements.txt (line 146))
+  Using cached uvicorn-0.25.0-py3-none-any.whl.metadata (6.4 kB)
+Collecting watchfiles==1.1.1 (from -r /app/backend/requirements.txt (line 147))
+  Using cached watchfiles-1.1.1-cp311-cp311-manylinux_2_17_aarch64.manylinux2014_aarch64.whl.metadata (4.9 kB)
+Collecting websockets==15.0.1 (from -r /app/backend/requirements.txt (line 148))
+  Using cached websockets-15.0.1-cp311-cp311-manylinux_2_17_aarch64.manylinux2014_aarch64.whl.metadata (6.8 kB)
+Collecting Werkzeug==3.1.5 (from -r /app/backend/requirements.txt (line 149))
+  Using cached werkzeug-3.1.5-py3-none-any.whl.metadata (4.0 kB)
+Collecting wsproto==1.3.2 (from -r /app/backend/requirements.txt (line 150))
+  Using cached wsproto-1.3.2-py3-none-any.whl.metadata (5.2 kB)
+Collecting yarl==1.22.0 (from -r /app/backend/requirements.txt (line 151))
+  Using cached yarl-1.22.0-cp311-cp311-manylinux2014_aarch64.manylinux_2_17_aarch64.manylinux_2_28_aarch64.whl.metadata (75 kB)
+Collecting zipp==3.23.0 (from -r /app/backend/requirements.txt (line 152))
+  Using cached zipp-3.23.0-py3-none-any.whl.metadata (3.6 kB)
+Using cached aiofiles-25.1.0-py3-none-any.whl (14 kB)
+Using cached aiohappyeyeballs-2.6.1-py3-none-any.whl (15 kB)
+Using cached aiohttp-3.13.3-cp311-cp311-manylinux2014_aarch64.manylinux_2_17_aarch64.manylinux_2_28_aarch64.whl (1.7 MB)
+Using cached aiosignal-1.4.0-py3-none-any.whl (7.5 kB)
+Using cached annotated_types-0.7.0-py3-none-any.whl (13 kB)
+Using cached anyio-4.12.0-py3-none-any.whl (113 kB)
+Using cached arabic_reshaper-3.0.0-py3-none-any.whl (20 kB)
+Using cached attrs-25.4.0-py3-none-any.whl (67 kB)
+Using cached bcrypt-4.1.3-cp39-abi3-manylinux_2_28_aarch64.whl (284 kB)
+Using cached bidict-0.23.1-py3-none-any.whl (32 kB)
+Using cached black-25.12.0-py3-none-any.whl (206 kB)
+Using cached boto3-1.42.21-py3-none-any.whl (140 kB)
+Using cached botocore-1.42.21-py3-none-any.whl (14.6 MB)
+Using cached cachecontrol-0.14.4-py3-none-any.whl (22 kB)
+Using cached certifi-2026.1.4-py3-none-any.whl (152 kB)
+Using cached cffi-2.0.0-cp311-cp311-manylinux2014_aarch64.manylinux_2_17_aarch64.whl (216 kB)
+Using cached charset_normalizer-3.4.4-cp311-cp311-manylinux2014_aarch64.manylinux_2_17_aarch64.manylinux_2_28_aarch64.whl (147 kB)
+Using cached click-8.3.1-py3-none-any.whl (108 kB)
+Using cached cryptography-46.0.3-cp311-abi3-manylinux_2_34_aarch64.whl (4.3 MB)
+Using cached distro-1.9.0-py3-none-any.whl (20 kB)
+Using cached dnspython-2.8.0-py3-none-any.whl (331 kB)
+Using cached ecdsa-0.19.1-py2.py3-none-any.whl (150 kB)
+Using cached email_validator-2.3.0-py3-none-any.whl (35 kB)
+Using cached et_xmlfile-2.0.0-py3-none-any.whl (18 kB)
+Using cached fastapi-0.110.1-py3-none-any.whl (91 kB)
+Using cached fastuuid-0.14.0-cp311-cp311-manylinux_2_17_aarch64.manylinux2014_aarch64.whl (278 kB)
+Using cached filelock-3.20.2-py3-none-any.whl (16 kB)
+Using cached firebase_admin-7.1.0-py3-none-any.whl (137 kB)
+Using cached flake8-7.3.0-py2.py3-none-any.whl (57 kB)
+Using cached frozenlist-1.8.0-cp311-cp311-manylinux2014_aarch64.manylinux_2_17_aarch64.manylinux_2_28_aarch64.whl (233 kB)
+Using cached fsspec-2025.12.0-py3-none-any.whl (201 kB)
+Using cached future-1.0.0-py3-none-any.whl (491 kB)
+Using cached google_ai_generativelanguage-0.6.15-py3-none-any.whl (1.3 MB)
+Using cached google_api_core-2.29.0-py3-none-any.whl (173 kB)
+Using cached google_api_python_client-2.187.0-py3-none-any.whl (14.6 MB)
+Using cached google_auth-2.47.0-py3-none-any.whl (234 kB)
+Using cached google_auth_httplib2-0.3.0-py3-none-any.whl (9.5 kB)
+Using cached google_cloud_core-2.5.0-py3-none-any.whl (29 kB)
+Using cached google_cloud_firestore-2.22.0-py3-none-any.whl (377 kB)
+Using cached google_cloud_storage-3.8.0-py3-none-any.whl (312 kB)
+Using cached google_crc32c-1.8.0-cp311-cp311-manylinux2014_aarch64.manylinux_2_17_aarch64.whl (33 kB)
+Using cached google_genai-1.57.0-py3-none-any.whl (713 kB)
+Using cached google_generativeai-0.8.6-py3-none-any.whl (155 kB)
+Using cached google_resumable_media-2.8.0-py3-none-any.whl (81 kB)
+Using cached googleapis_common_protos-1.72.0-py3-none-any.whl (297 kB)
+Using cached grpcio-1.76.0-cp311-cp311-manylinux2014_aarch64.manylinux_2_17_aarch64.whl (6.4 MB)
+Using cached grpcio_status-1.71.2-py3-none-any.whl (14 kB)
+Using cached h11-0.16.0-py3-none-any.whl (37 kB)
+Using cached h2-4.3.0-py3-none-any.whl (61 kB)
+Using cached hf_xet-1.2.0-cp37-abi3-manylinux_2_28_aarch64.whl (3.2 MB)
+Using cached hpack-4.1.0-py3-none-any.whl (34 kB)
+Using cached httpcore-1.0.9-py3-none-any.whl (78 kB)
+Using cached httplib2-0.31.0-py3-none-any.whl (91 kB)
+Using cached httpx-0.28.1-py3-none-any.whl (73 kB)
+Using cached huggingface_hub-1.2.4-py3-none-any.whl (520 kB)
+Using cached hyperframe-6.1.0-py3-none-any.whl (13 kB)
+Using cached idna-3.11-py3-none-any.whl (71 kB)
+Using cached importlib_metadata-8.7.1-py3-none-any.whl (27 kB)
+Using cached iniconfig-2.3.0-py3-none-any.whl (7.5 kB)
+Using cached isort-7.0.0-py3-none-any.whl (94 kB)
+Using cached jinja2-3.1.6-py3-none-any.whl (134 kB)
+Using cached jiter-0.12.0-cp311-cp311-manylinux_2_17_aarch64.manylinux2014_aarch64.whl (351 kB)
+Using cached jmespath-1.0.1-py3-none-any.whl (20 kB)
+Using cached jq-1.10.0-cp311-cp311-manylinux_2_17_aarch64.manylinux2014_aarch64.whl (739 kB)
+Using cached jsonschema-4.26.0-py3-none-any.whl (90 kB)
+Using cached jsonschema_specifications-2025.9.1-py3-none-any.whl (18 kB)
+Using cached librt-0.7.7-cp311-cp311-manylinux2014_aarch64.manylinux_2_17_aarch64.manylinux_2_28_aarch64.whl (171 kB)
+Using cached litellm-1.80.0-py3-none-any.whl (10.5 MB)
+Using cached markdown_it_py-4.0.0-py3-none-any.whl (87 kB)
+Using cached markupsafe-3.0.3-cp311-cp311-manylinux2014_aarch64.manylinux_2_17_aarch64.manylinux_2_28_aarch64.whl (24 kB)
+Using cached mccabe-0.7.0-py2.py3-none-any.whl (7.3 kB)
+Using cached mdurl-0.1.2-py3-none-any.whl (10.0 kB)
+Using cached motor-3.3.1-py3-none-any.whl (70 kB)
+Using cached msgpack-1.1.2-cp311-cp311-manylinux2014_aarch64.manylinux_2_17_aarch64.manylinux_2_28_aarch64.whl (416 kB)
+Using cached multidict-6.7.0-cp311-cp311-manylinux2014_aarch64.manylinux_2_17_aarch64.manylinux_2_28_aarch64.whl (246 kB)
+Using cached mypy-1.19.1-cp311-cp311-manylinux2014_aarch64.manylinux_2_17_aarch64.manylinux_2_28_aarch64.whl (12.7 MB)
+Using cached mypy_extensions-1.1.0-py3-none-any.whl (5.0 kB)
+Using cached numpy-2.4.0-cp311-cp311-manylinux_2_27_aarch64.manylinux_2_28_aarch64.whl (14.7 MB)
+Using cached oauthlib-3.3.1-py3-none-any.whl (160 kB)
+Using cached openai-1.99.9-py3-none-any.whl (786 kB)
+Using cached openpyxl-3.1.5-py2.py3-none-any.whl (250 kB)
+Using cached packaging-25.0-py3-none-any.whl (66 kB)
+Using cached pandas-2.3.3-cp311-cp311-manylinux_2_24_aarch64.manylinux_2_28_aarch64.whl (12.2 MB)
+Using cached passlib-1.7.4-py2.py3-none-any.whl (525 kB)
+Using cached pathspec-0.12.1-py3-none-any.whl (31 kB)
+Using cached pillow-12.1.0-cp311-cp311-manylinux_2_27_aarch64.manylinux_2_28_aarch64.whl (6.3 MB)
+Using cached pillow_heif-1.3.0-cp311-cp311-manylinux_2_26_aarch64.manylinux_2_28_aarch64.whl (5.8 MB)
+Using cached platformdirs-4.5.1-py3-none-any.whl (18 kB)
+Using cached pluggy-1.6.0-py3-none-any.whl (20 kB)
+Using cached propcache-0.4.1-cp311-cp311-manylinux2014_aarch64.manylinux_2_17_aarch64.manylinux_2_28_aarch64.whl (214 kB)
+Using cached proto_plus-1.27.0-py3-none-any.whl (50 kB)
+Using cached protobuf-5.29.5-cp38-abi3-manylinux2014_aarch64.whl (319 kB)
+Using cached pyasn1-0.6.1-py3-none-any.whl (83 kB)
+Using cached pyasn1_modules-0.4.2-py3-none-any.whl (181 kB)
+Using cached pycodestyle-2.14.0-py2.py3-none-any.whl (31 kB)
+Using cached pycparser-2.23-py3-none-any.whl (118 kB)
+Using cached pydantic-2.12.5-py3-none-any.whl (463 kB)
+Using cached pydantic_core-2.41.5-cp311-cp311-manylinux_2_17_aarch64.manylinux2014_aarch64.whl (1.9 MB)
+Using cached pyflakes-3.4.0-py2.py3-none-any.whl (63 kB)
+Using cached pygments-2.19.2-py3-none-any.whl (1.2 MB)
+Using cached PyJWT-2.10.1-py3-none-any.whl (22 kB)
+Using cached pymongo-4.5.0-cp311-cp311-manylinux_2_17_aarch64.manylinux2014_aarch64.whl (674 kB)
+Using cached pyparsing-3.3.1-py3-none-any.whl (121 kB)
+Using cached pytest-9.0.2-py3-none-any.whl (374 kB)
+Using cached python_bidi-0.6.7-cp311-cp311-manylinux_2_17_aarch64.manylinux2014_aarch64.whl (293 kB)
+Using cached python_dateutil-2.9.0.post0-py2.py3-none-any.whl (229 kB)
+Using cached python_dotenv-1.2.1-py3-none-any.whl (21 kB)
+Using cached python_engineio-4.13.1-py3-none-any.whl (59 kB)
+Using cached python_http_client-3.3.7-py3-none-any.whl (8.4 kB)
+Using cached python_jose-3.5.0-py2.py3-none-any.whl (34 kB)
+Using cached python_multipart-0.0.21-py3-none-any.whl (24 kB)
+Using cached python_socketio-5.16.1-py3-none-any.whl (82 kB)
+Using cached pytokens-0.3.0-py3-none-any.whl (12 kB)
+Using cached pytz-2025.2-py2.py3-none-any.whl (509 kB)
+Using cached pyyaml-6.0.3-cp311-cp311-manylinux2014_aarch64.manylinux_2_17_aarch64.manylinux_2_28_aarch64.whl (775 kB)
+Using cached referencing-0.37.0-py3-none-any.whl (26 kB)
+Using cached regex-2025.11.3-cp311-cp311-manylinux2014_aarch64.manylinux_2_17_aarch64.manylinux_2_28_aarch64.whl (793 kB)
+Using cached reportlab-4.4.9-py3-none-any.whl (2.0 MB)
+Using cached requests-2.32.5-py3-none-any.whl (64 kB)
+Using cached requests_oauthlib-2.0.0-py2.py3-none-any.whl (24 kB)
+Using cached rich-14.2.0-py3-none-any.whl (243 kB)
+Using cached rpds_py-0.30.0-cp311-cp311-manylinux_2_17_aarch64.manylinux2014_aarch64.whl (389 kB)
+Using cached rsa-4.9.1-py3-none-any.whl (34 kB)
+Using cached s3transfer-0.16.0-py3-none-any.whl (86 kB)
+Using cached s5cmd-0.2.0-py3-none-manylinux_2_17_aarch64.manylinux2014_aarch64.whl (4.3 MB)
+Using cached sendgrid-6.12.5-py3-none-any.whl (102 kB)
+Using cached shellingham-1.5.4-py2.py3-none-any.whl (9.8 kB)
+Using cached simple_websocket-1.1.0-py3-none-any.whl (13 kB)
+Using cached six-1.17.0-py2.py3-none-any.whl (11 kB)
+Using cached sniffio-1.3.1-py3-none-any.whl (10 kB)
+Using cached starlette-0.37.2-py3-none-any.whl (71 kB)
+Using cached stripe-14.1.0-py3-none-any.whl (2.1 MB)
+Using cached tenacity-9.1.2-py3-none-any.whl (28 kB)
+Using cached tiktoken-0.12.0-cp311-cp311-manylinux_2_28_aarch64.whl (1.1 MB)
+Using cached tokenizers-0.22.2-cp39-abi3-manylinux_2_17_aarch64.manylinux2014_aarch64.whl (3.3 MB)
+Using cached tqdm-4.67.1-py3-none-any.whl (78 kB)
+Using cached typer-0.21.0-py3-none-any.whl (47 kB)
+Using cached typer_slim-0.21.1-py3-none-any.whl (47 kB)
+Using cached typing_inspection-0.4.2-py3-none-any.whl (14 kB)
+Using cached tzdata-2025.3-py2.py3-none-any.whl (348 kB)
+Using cached uritemplate-4.2.0-py3-none-any.whl (11 kB)
+Using cached urllib3-2.6.2-py3-none-any.whl (131 kB)
+Using cached uvicorn-0.25.0-py3-none-any.whl (60 kB)
+Using cached watchfiles-1.1.1-cp311-cp311-manylinux_2_17_aarch64.manylinux2014_aarch64.whl (448 kB)
+Using cached websockets-15.0.1-cp311-cp311-manylinux_2_17_aarch64.manylinux2014_aarch64.whl (182 kB)
+Using cached werkzeug-3.1.5-py3-none-any.whl (225 kB)
+Using cached wsproto-1.3.2-py3-none-any.whl (24 kB)
+Using cached yarl-1.22.0-cp311-cp311-manylinux2014_aarch64.manylinux_2_17_aarch64.manylinux_2_28_aarch64.whl (368 kB)
+Using cached zipp-3.23.0-py3-none-any.whl (10 kB)
+Installing collected packages: pytz, python-bidi, passlib, arabic-reshaper, zipp, websockets, urllib3, uritemplate, tzdata, typing-inspection, tqdm, tenacity, sniffio, six, shellingham, s5cmd, rpds-py, regex, PyYAML, pytokens, python-multipart, python-http-client, python-dotenv, pyparsing, PyJWT, Pygments, pyflakes, pydantic_core, pycparser, pycodestyle, pyasn1, protobuf, propcache, pluggy, platformdirs, pillow, pathspec, packaging, oauthlib, numpy, mypy_extensions, multidict, msgpack, mdurl, mccabe, MarkupSafe, librt, jq, jmespath, jiter, isort, iniconfig, idna, hyperframe, hpack, hf-xet, h11, grpcio, google-crc32c, future, fsspec, frozenlist, filelock, fastuuid, et_xmlfile, dnspython, distro, click, charset-normalizer, certifi, bidict, bcrypt, attrs, annotated-types, aiohappyeyeballs, aiofiles, yarl, wsproto, Werkzeug, uvicorn, typer-slim, rsa, requests, reportlab, referencing, pyzk, python-dateutil, pytest, pymongo, pydantic, pyasn1_modules, proto-plus, pillow_heif, openpyxl, mypy, markdown-it-py, Jinja2, importlib_metadata, httplib2, httpcore, h2, googleapis-common-protos, google-resumable-media, flake8, email-validator, ecdsa, cffi, black, anyio, aiosignal, watchfiles, tiktoken, stripe, starlette, simple-websocket, rich, requests-oauthlib, python-jose, pandas, motor, jsonschema-specifications, httpx, grpcio-status, google-auth, cryptography, CacheControl, botocore, aiohttp, typer, sendgrid, s3transfer, python-engineio, openai, jsonschema, huggingface_hub, google-auth-httplib2, google-api-core, fastapi, tokenizers, python-socketio, google-genai, google-cloud-core, google-api-python-client, boto3, litellm, google-cloud-storage, google-cloud-firestore, google-ai-generativelanguage, google-generativeai, firebase_admin
+Successfully installed CacheControl-0.14.4 Jinja2-3.1.6 MarkupSafe-3.0.3 PyJWT-2.10.1 PyYAML-6.0.3 Pygments-2.19.2 Werkzeug-3.1.5 aiofiles-25.1.0 aiohappyeyeballs-2.6.1 aiohttp-3.13.3 aiosignal-1.4.0 annotated-types-0.7.0 anyio-4.12.0 arabic-reshaper-3.0.0 attrs-25.4.0 bcrypt-4.1.3 bidict-0.23.1 black-25.12.0 boto3-1.42.21 botocore-1.42.21 certifi-2026.1.4 cffi-2.0.0 charset-normalizer-3.4.4 click-8.3.1 cryptography-46.0.3 distro-1.9.0 dnspython-2.8.0 ecdsa-0.19.1 email-validator-2.3.0 et_xmlfile-2.0.0 fastapi-0.110.1 fastuuid-0.14.0 filelock-3.20.2 firebase_admin-7.1.0 flake8-7.3.0 frozenlist-1.8.0 fsspec-2025.12.0 future-1.0.0 google-ai-generativelanguage-0.6.15 google-api-core-2.29.0 google-api-python-client-2.187.0 google-auth-2.47.0 google-auth-httplib2-0.3.0 google-cloud-core-2.5.0 google-cloud-firestore-2.22.0 google-cloud-storage-3.8.0 google-crc32c-1.8.0 google-genai-1.57.0 google-generativeai-0.8.6 google-resumable-media-2.8.0 googleapis-common-protos-1.72.0 grpcio-1.76.0 grpcio-status-1.71.2 h11-0.16.0 h2-4.3.0 hf-xet-1.2.0 hpack-4.1.0 httpcore-1.0.9 httplib2-0.31.0 httpx-0.28.1 huggingface_hub-1.2.4 hyperframe-6.1.0 idna-3.11 importlib_metadata-8.7.1 iniconfig-2.3.0 isort-7.0.0 jiter-0.12.0 jmespath-1.0.1 jq-1.10.0 jsonschema-4.26.0 jsonschema-specifications-2025.9.1 librt-0.7.7 litellm-1.80.0 markdown-it-py-4.0.0 mccabe-0.7.0 mdurl-0.1.2 motor-3.3.1 msgpack-1.1.2 multidict-6.7.0 mypy-1.19.1 mypy_extensions-1.1.0 numpy-2.4.0 oauthlib-3.3.1 openai-1.99.9 openpyxl-3.1.5 packaging-25.0 pandas-2.3.3 passlib-1.7.4 pathspec-0.12.1 pillow-12.1.0 pillow_heif-1.3.0 platformdirs-4.5.1 pluggy-1.6.0 propcache-0.4.1 proto-plus-1.27.0 protobuf-5.29.5 pyasn1-0.6.1 pyasn1_modules-0.4.2 pycodestyle-2.14.0 pycparser-2.23 pydantic-2.12.5 pydantic_core-2.41.5 pyflakes-3.4.0 pymongo-4.5.0 pyparsing-3.3.1 pytest-9.0.2 python-bidi-0.6.7 python-dateutil-2.9.0.post0 python-dotenv-1.2.1 python-engineio-4.13.1 python-http-client-3.3.7 python-jose-3.5.0 python-multipart-0.0.21 python-socketio-5.16.1 pytokens-0.3.0 pytz-2025.2 pyzk-0.9 referencing-0.37.0 regex-2025.11.3 reportlab-4.4.9 requests-2.32.5 requests-oauthlib-2.0.0 rich-14.2.0 rpds-py-0.30.0 rsa-4.9.1 s3transfer-0.16.0 s5cmd-0.2.0 sendgrid-6.12.5 shellingham-1.5.4 simple-websocket-1.1.0 six-1.17.0 sniffio-1.3.1 starlette-0.37.2 stripe-14.1.0 tenacity-9.1.2 tiktoken-0.12.0 tokenizers-0.22.2 tqdm-4.67.1 typer-0.21.0 typer-slim-0.21.1 typing-inspection-0.4.2 tzdata-2025.3 uritemplate-4.2.0 urllib3-2.6.2 uvicorn-0.25.0 watchfiles-1.1.1 websockets-15.0.1 wsproto-1.3.2 yarl-1.22.0 zipp-3.23.0 and backend: ERROR (not running)
+backend: started.
+
+**Code Architecture**
+
+
+**Key Technical Concepts**
+- : Unified utility that handles routing print jobs to local USB/Kitchen agents or falling back to browser print.
+- Offline-first: React components rely heavily on local state/IndexedDB; ensure API calls handle network failures gracefully.
+
+**key DB schema**
+  - :  (pending, delivered, cancelled),  (boolean), ,  (boolean).
+  - :  (float).
+  - : New collection tracking customer feedback (food, restaurant, driver ratings 1-5).
+
+**changes in tech stack**
+  - Added ============================= test session starts ==============================
+platform linux -- Python 3.11.15, pytest-9.0.3, pluggy-1.6.0
+rootdir: /app
+plugins: anyio-4.13.0, asyncio-1.4.0
+asyncio: mode=Mode.STRICT, debug=False, asyncio_default_fixture_loop_scope=None, asyncio_default_test_loop_scope=function
+collected 1934 items / 2 errors
+
+==================================== ERRORS ====================================
+_____________ ERROR collecting backend/seed_branch_fulfill_test.py _____________
+backend/seed_branch_fulfill_test.py:69: in <module>
+    asyncio.run(main())
+/usr/local/lib/python3.11/asyncio/runners.py:190: in run
+    return runner.run(main)
+           ^^^^^^^^^^^^^^^^
+/usr/local/lib/python3.11/asyncio/runners.py:118: in run
+    return self._loop.run_until_complete(task)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/usr/local/lib/python3.11/asyncio/base_events.py:654: in run_until_complete
+    return future.result()
+           ^^^^^^^^^^^^^^^
+backend/seed_branch_fulfill_test.py:22: in main
+    branch = await db.branches.find_one({"tenant_id": TENANT}, {"_id": 0})
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/usr/local/lib/python3.11/concurrent/futures/thread.py:58: in run
+    result = self.fn(*self.args, **self.kwargs)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/usr/local/lib/python3.11/site-packages/pymongo/collection.py:1508: in find_one
+    for result in cursor.limit(-1):
+/usr/local/lib/python3.11/site-packages/pymongo/cursor.py:1262: in next
+    if len(self.__data) or self._refresh():
+                           ^^^^^^^^^^^^^^^
+/usr/local/lib/python3.11/site-packages/pymongo/cursor.py:1153: in _refresh
+    self.__session = self.__collection.database.client._ensure_session()
+                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/usr/local/lib/python3.11/site-packages/pymongo/mongo_client.py:1868: in _ensure_session
+    return self.__start_session(True, causal_consistency=False)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/usr/local/lib/python3.11/site-packages/pymongo/mongo_client.py:1811: in __start_session
+    self._topology._check_implicit_session_support()
+/usr/local/lib/python3.11/site-packages/pymongo/topology.py:583: in _check_implicit_session_support
+    self._check_session_support()
+/usr/local/lib/python3.11/site-packages/pymongo/topology.py:599: in _check_session_support
+    self._select_servers_loop(
+/usr/local/lib/python3.11/site-packages/pymongo/topology.py:269: in _select_servers_loop
+    raise ServerSelectionTimeoutError(
+E   pymongo.errors.ServerSelectionTimeoutError: localhost:27017: [Errno 111] Connection refused, Timeout: 30s, Topology Description: <TopologyDescription id: 6a2af6718cffb6bbb341cd2f, topology_type: Unknown, servers: [<ServerDescription ('localhost', 27017) server_type: Unknown, rtt: None, error=AutoReconnect('localhost:27017: [Errno 111] Connection refused')>]>
+___________ ERROR collecting backend/seed_produce_deduction_test.py ____________
+backend/seed_produce_deduction_test.py:47: in <module>
+    asyncio.run(main())
+/usr/local/lib/python3.11/asyncio/runners.py:190: in run
+    return runner.run(main)
+           ^^^^^^^^^^^^^^^^
+/usr/local/lib/python3.11/asyncio/runners.py:118: in run
+    return self._loop.run_until_complete(task)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/usr/local/lib/python3.11/asyncio/base_events.py:654: in run_until_complete
+    return future.result()
+           ^^^^^^^^^^^^^^^
+backend/seed_produce_deduction_test.py:22: in main
+    await db.manufacturing_inventory.delete_many({"material_id": {"$in": [lahm_id, khubz_id]}})
+/usr/local/lib/python3.11/concurrent/futures/thread.py:58: in run
+    result = self.fn(*self.args, **self.kwargs)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/usr/local/lib/python3.11/site-packages/pymongo/collection.py:1464: in delete_many
+    self._delete_retryable(
+/usr/local/lib/python3.11/site-packages/pymongo/collection.py:1339: in _delete_retryable
+    return self.__database.client._retryable_write(
+/usr/local/lib/python3.11/site-packages/pymongo/mongo_client.py:1567: in _retryable_write
+    with self._tmp_session(session) as s:
+/usr/local/lib/python3.11/contextlib.py:137: in __enter__
+    return next(self.gen)
+           ^^^^^^^^^^^^^^
+/usr/local/lib/python3.11/site-packages/pymongo/mongo_client.py:1885: in _tmp_session
+    s = self._ensure_session(session)
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/usr/local/lib/python3.11/site-packages/pymongo/mongo_client.py:1868: in _ensure_session
+    return self.__start_session(True, causal_consistency=False)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/usr/local/lib/python3.11/site-packages/pymongo/mongo_client.py:1811: in __start_session
+    self._topology._check_implicit_session_support()
+/usr/local/lib/python3.11/site-packages/pymongo/topology.py:583: in _check_implicit_session_support
+    self._check_session_support()
+/usr/local/lib/python3.11/site-packages/pymongo/topology.py:599: in _check_session_support
+    self._select_servers_loop(
+/usr/local/lib/python3.11/site-packages/pymongo/topology.py:269: in _select_servers_loop
+    raise ServerSelectionTimeoutError(
+E   pymongo.errors.ServerSelectionTimeoutError: localhost:27017: [Errno 111] Connection refused, Timeout: 30s, Topology Description: <TopologyDescription id: 6a2af68f8cffb6bbb341cd30, topology_type: Unknown, servers: [<ServerDescription ('localhost', 27017) server_type: Unknown, rtt: None, error=AutoReconnect('localhost:27017: [Errno 111] Connection refused')>]>
+=========================== short test summary info ============================
+ERROR backend/seed_branch_fulfill_test.py - pymongo.errors.ServerSelectionTim...
+ERROR backend/seed_produce_deduction_test.py - pymongo.errors.ServerSelection...
+!!!!!!!!!!!!!!!!!!! Interrupted: 2 errors during collection !!!!!!!!!!!!!!!!!!!!
+========================= 2 errors in 64.38s (0:01:04) ========================= framework usage inside  for workflow regression.
+
+**All files of reference** 
+  -  
+  - 
+  - 
+  - 
+  - 
+
+**Areas that need refactoring**:
+-  (24k+ lines)
+-  (7.9k lines)
+- 
+
+**key api endpoints**
+- 
+- 
+-  (Used for rejecting orders)
+-  (New endpoint for All Orders delivery tab)
+
+**Critical Info for New Agent** 
+- **CRITICAL BEHAVIORAL RULE:** The user writes explicit instructions **inside** the images they upload in Arabic. In this session, the user got very angry because the agent looked at the image but didn't read the text. You **MUST** use  to read the text inside any uploaded image, translate it, and execute it verbatim. Do not assume you know what the UI change is just by looking at the picture.
+- **Current State:** The agent just extracted the assets from Message #397 but the context cut off before the agent could process what the user wrote on them. Start by reading those exact assets and addressing them.
+
+**documents and test reports created in this job**
+  -  (Updated)
+  -  (Updated)
+  - 
+
+**Last 10 User Messages and any pending HUMAN messages** 
+- (Message 233) User asked agent to strictly follow the text written in the images.
+- (Message 297) User uploaded 4 images and said Okay my friend, what are the next steps?
+- (Message 306) User got angry: My friend, look at the comments on every image and fix them first. Are you ignoring my words and images?
+- (Message 360) User reiterated the remaining tasks (default delivery fee, map style, responsive design) and told the agent to proceed.
+- (Message 397) **PENDING**: User uploaded 3 new images and said Read the comments and execute. -> *Agent needs to process these images immediately.*
+
+**Project Health Check:**
+Broken: Python env drops occasionally. Splash screen blocks automated testing clicks for 10 seconds.
+Mocked: None.
+
+**3rd Party Integrations**
+- OSRM via Leaflet (Mapping & Routing)
+- CARTO (Map tile provider)
+
+**Testing status**
+  - Testing agent used after significant changes: NO (Self-tested via curl, pytest, and screenshots)
+  - Troubleshoot agent used after agent stuck in loop: NO
+  - Test files created: 
+  - Known regressions: None
+
+**Credentials to test flow:**
+Admin:  / 
+Demo Driver (created by seed script):  / 
+
+**What agent forgot to execute**
+The agent forgot to read the text on the images in Message #297, which resulted in the user getting angry. The agent fixed the issues later, but the exact same scenario is currently pending for Message #397. 
+
+**Debugging checklist for current issue**
+    Issue: Processing new user image annotations (Message 397).
+    Action: 
+    1. Read the output of the last  call.
+    2. Extract the Arabic instructions the user wrote *inside* the images.
+    3. State clearly to the user what you understood from those images.
+    4. Concurrently, finish the  implementation in  and the All Orders tab in  that was interrupted.</analysis>

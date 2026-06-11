@@ -9,9 +9,28 @@ import { API_URL } from '../utils/api';
 import { MapContainer, TileLayer, Marker, Popup, Polyline } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
 import L from 'leaflet';
-import { Phone, MapPin, MessageCircle, Truck, Loader2, Send, X } from 'lucide-react';
+import { Phone, MapPin, MessageCircle, Truck, Loader2, Send, X, Star } from 'lucide-react';
 
 const API = API_URL;
+
+const StarRow = ({ label, value, onChange, testid }) => (
+  <div className="flex items-center justify-between py-1.5" data-testid={testid}>
+    <span className="text-sm text-slate-200">{label}</span>
+    <div className="flex gap-1" dir="ltr">
+      {[1, 2, 3, 4, 5].map((n) => (
+        <button
+          key={n}
+          type="button"
+          onClick={() => onChange(n)}
+          data-testid={`${testid}-star-${n}`}
+          className="transition-transform hover:scale-110"
+        >
+          <Star className={`h-7 w-7 ${n <= value ? 'fill-amber-400 text-amber-400' : 'text-slate-600'}`} />
+        </button>
+      ))}
+    </div>
+  </div>
+);
 
 const STATUS_STEPS = [
   { key: 'pending', label: 'قيد الانتظار' },
@@ -29,6 +48,26 @@ export default function PublicTracking() {
   const [chatOpen, setChatOpen] = useState(false);
   const [messages, setMessages] = useState([]);
   const [text, setText] = useState('');
+  const [foodR, setFoodR] = useState(0);
+  const [restR, setRestR] = useState(0);
+  const [driverR, setDriverR] = useState(0);
+  const [ratingNotes, setRatingNotes] = useState('');
+  const [ratingSubmitted, setRatingSubmitted] = useState(false);
+  const [submittingRating, setSubmittingRating] = useState(false);
+
+  const submitRating = async () => {
+    if (!foodR && !restR && !driverR) return;
+    setSubmittingRating(true);
+    try {
+      await axios.post(`${API}/track/${orderId}/rating`, {
+        food_rating: foodR || null,
+        restaurant_rating: restR || null,
+        driver_rating: driverR || null,
+        notes: ratingNotes,
+      });
+      setRatingSubmitted(true);
+    } catch (e) { /* noop */ } finally { setSubmittingRating(false); }
+  };
 
   const fetchInfo = useCallback(async () => {
     try {
@@ -97,6 +136,38 @@ export default function PublicTracking() {
           </div>
         ))}
       </div>
+
+      {/* تقييم الطلب بعد التسليم */}
+      {status === 'delivered' && (ratingSubmitted || info?.is_rated) ? (
+        <div className="mx-4 mt-3 p-4 rounded-xl bg-green-500/10 border border-green-400/30 text-center" data-testid="rating-thanks">
+          <Star className="h-8 w-8 mx-auto mb-2 fill-amber-400 text-amber-400" />
+          <p className="font-bold text-green-300">شكراً لتقييمك! 🌟</p>
+          <p className="text-xs text-slate-400 mt-1">يساعدنا رأيك على تحسين الخدمة</p>
+        </div>
+      ) : status === 'delivered' ? (
+        <div className="mx-4 mt-3 p-4 rounded-xl bg-slate-800/70 border border-white/10" data-testid="rating-form">
+          <p className="font-bold mb-2 flex items-center gap-2"><Star className="h-5 w-5 text-amber-400" /> قيّم تجربتك</p>
+          <StarRow label="🍽️ الطعام" value={foodR} onChange={setFoodR} testid="rate-food" />
+          <StarRow label="🏪 المطعم" value={restR} onChange={setRestR} testid="rate-restaurant" />
+          <StarRow label="🛵 السائق" value={driverR} onChange={setDriverR} testid="rate-driver" />
+          <textarea
+            value={ratingNotes}
+            onChange={(e) => setRatingNotes(e.target.value)}
+            placeholder="ملاحظات (اختياري)..."
+            data-testid="rating-notes"
+            className="w-full mt-2 rounded-lg bg-slate-900/60 border border-white/10 px-3 py-2 text-sm text-white placeholder:text-slate-500 focus:outline-none focus:border-amber-400"
+            rows={2}
+          />
+          <button
+            onClick={submitRating}
+            disabled={submittingRating || (!foodR && !restR && !driverR)}
+            data-testid="submit-rating"
+            className="w-full mt-2 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-600 text-black font-bold disabled:opacity-50 transition-colors"
+          >
+            {submittingRating ? 'جارٍ الإرسال…' : 'إرسال التقييم'}
+          </button>
+        </div>
+      ) : null}
 
       {/* ملخص الفاتورة */}
       {Number(info?.order_total) > 0 && (

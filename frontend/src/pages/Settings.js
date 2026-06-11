@@ -402,7 +402,8 @@ export default function Settings() {
     address: '',
     tax_number: '',
     custom_header: '',
-    custom_footer: ''
+    custom_footer: '',
+    default_delivery_fee: 0
   });
   const [savingInvoiceSettings, setSavingInvoiceSettings] = useState(false);
   
@@ -1157,7 +1158,10 @@ export default function Settings() {
         fee_per_km: Number(paymentSettings.fee_per_km) || 0,
         fee_max: Number(paymentSettings.fee_max) || 0,
         fee_round_to: Number(paymentSettings.fee_round_to) || 0,
-        max_distance_km: Number(paymentSettings.max_distance_km) || 0
+        max_distance_km: Number(paymentSettings.max_distance_km) || 0,
+        fee_zones: (paymentSettings.fee_zones || [])
+          .filter(z => z.up_to_km !== '' && z.up_to_km != null && z.fee !== '' && z.fee != null)
+          .map(z => ({ up_to_km: Number(z.up_to_km), fee: Number(z.fee) }))
       });
       toast.success(t('تم الحفظ بنجاح'));
     } catch (error) {
@@ -2505,6 +2509,7 @@ export default function Settings() {
               {hasRole(['admin', 'super_admin']) && (
                 <TabsTrigger 
                   value="payments"
+                  data-testid="tab-payments"
                   className="flex-shrink-0 px-4 py-2.5 text-sm font-medium rounded-lg data-[state=active]:bg-primary data-[state=active]:text-primary-foreground"
                 >
                   {t('الدفع الإلكتروني')}
@@ -6700,6 +6705,41 @@ export default function Settings() {
                         </div>
                         {paymentSettings.distance_fee_enabled && (
                           <>
+                            {/* نطاقات الكيلومتر — المالك يحدد مبلغاً لكل نطاق (الأبسط) */}
+                            <div className="mb-3 p-3 rounded-lg border border-emerald-500/30 bg-emerald-500/5" data-testid="fee-zones-section">
+                              <div className="flex items-center justify-between mb-1.5">
+                                <p className="text-sm font-bold text-foreground">📏 {t('التسعير حسب نطاقات الكيلومتر')}</p>
+                                <Button size="sm" variant="outline" className="h-7 text-xs"
+                                  onClick={() => setPaymentSettings(prev => ({...prev, fee_zones: [...(prev.fee_zones || []), { up_to_km: '', fee: '' }]}))}
+                                  data-testid="add-fee-zone-btn">+ {t('إضافة نطاق')}</Button>
+                              </div>
+                              <p className="text-[11px] text-emerald-600 dark:text-emerald-400 mb-2">
+                                {t('إن حددت نطاقات هنا فتُحسب الأجرة تلقائياً من موقع الزبون وتُستخدم بدل المعادلة. الكاشير لا يدخل المبلغ يدوياً لطلبات التطبيق.')}
+                              </p>
+                              {(paymentSettings.fee_zones || []).length === 0 && (
+                                <p className="text-xs text-muted-foreground">{t('لا توجد نطاقات — تُستخدم المعادلة بالأسفل')}</p>
+                              )}
+                              <div className="space-y-2">
+                                {(paymentSettings.fee_zones || []).map((z, idx) => (
+                                  <div key={idx} className="flex items-center gap-2 flex-wrap" data-testid={`fee-zone-row-${idx}`}>
+                                    <span className="text-xs text-muted-foreground">{t('حتى')}</span>
+                                    <Input type="number" step="0.5" min="0" value={z.up_to_km ?? ''} placeholder={t('كم')}
+                                      onChange={(e) => setPaymentSettings(prev => { const zs = [...(prev.fee_zones || [])]; zs[idx] = {...zs[idx], up_to_km: e.target.value}; return {...prev, fee_zones: zs}; })}
+                                      className="w-20 h-9 text-sm bg-background" data-testid={`fee-zone-km-${idx}`} />
+                                    <span className="text-xs text-muted-foreground">{t('كم')} =</span>
+                                    <Input type="number" min="0" value={z.fee ?? ''} placeholder={t('د.ع')}
+                                      onChange={(e) => setPaymentSettings(prev => { const zs = [...(prev.fee_zones || [])]; zs[idx] = {...zs[idx], fee: e.target.value}; return {...prev, fee_zones: zs}; })}
+                                      className="w-28 h-9 text-sm bg-background" data-testid={`fee-zone-fee-${idx}`} />
+                                    <span className="text-xs text-muted-foreground">{t('د.ع')}</span>
+                                    <Button size="icon" variant="ghost" className="h-8 w-8 text-red-500 hover:bg-red-500/10"
+                                      onClick={() => setPaymentSettings(prev => ({...prev, fee_zones: (prev.fee_zones || []).filter((_, i) => i !== idx)}))}
+                                      data-testid={`remove-fee-zone-${idx}`}>✕</Button>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+
+                            <p className="text-xs font-medium text-muted-foreground mb-1">{t('أو المعادلة (تُستخدم إن لم تُحدد نطاقات)')}:</p>
                             <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
                               <div>
                                 <Label className="text-foreground mb-1 block text-xs">{t('الأجرة الأساسية (د.ع)')}</Label>
@@ -7259,6 +7299,23 @@ export default function Settings() {
                           <span className="text-sm text-muted-foreground">{t('إظهار الرقم الضريبي في الفاتورة')}</span>
                         </div>
                       </div>
+                    </div>
+
+                    {/* مبلغ التوصيل الافتراضي — يُقترح تلقائياً عند قبول طلبات التوصيل */}
+                    <div className="p-4 border rounded-lg bg-amber-500/10">
+                      <Label className="text-foreground font-bold mb-2 flex items-center gap-2">
+                        <Truck className="h-5 w-5 text-amber-500" />{t('مبلغ التوصيل الافتراضي')}</Label>
+                      <p className="text-xs text-muted-foreground mb-2">{t('يُقترح هذا المبلغ تلقائياً في أجور التوصيل عند قبول الطلب (يمكن للكاشير تعديله).')}</p>
+                      <Input
+                        type="number"
+                        min="0"
+                        value={invoiceSettings.default_delivery_fee ?? 0}
+                        onChange={(e) => setInvoiceSettings(prev => ({...prev, default_delivery_fee: e.target.value === '' ? 0 : Number(e.target.value)}))}
+                        placeholder="0"
+                        className="mt-1"
+                        dir="ltr"
+                        data-testid="default-delivery-fee-input"
+                      />
                     </div>
 
                     {/* نصوص مخصصة */}

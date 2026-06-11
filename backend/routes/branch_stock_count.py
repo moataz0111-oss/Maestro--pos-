@@ -560,17 +560,24 @@ async def check_pending_count(
 
 
 @router.get("/branch-stock-count/pending-alerts")
-async def pending_count_alerts(current_user: dict = Depends(get_current_user)):
+async def pending_count_alerts(branch_id: Optional[str] = None, current_user: dict = Depends(get_current_user)):
     """⭐ تنبيهات الجرد المعلّق لمسؤول المطبخ/الكاشير.
     يُرجع الفروع التي بها وردية مفتوحة (شفت نشط) وتحتاج جرداً ولم يُسجَّل بعد.
-    يُستخدم لإظهار تنبيه صوتي/مرئي خلال الشفت قبل الإغلاق."""
+    🔒 خصوصية الجرد لكل فرع: يُحصر بفرع المستخدم (أو الفرع المختار) فلا يرى موظف فرع جردَ فرعٍ آخر."""
     db = get_database()
     tenant_id = get_user_tenant_id(current_user)
+
+    # تحديد الفرع المستهدف: المعامل branch_id (تبديل المالك بين الفروع) ثم فرع المستخدم نفسه.
+    # الموظف المرتبط بفرع لا يرى إلا فرعه. المالك بلا فرع وبلا معامل يرى الجميع (إشراف).
+    user_branch = current_user.get("branch_id")
+    target_branch = branch_id if (branch_id and branch_id != "all") else user_branch
 
     # الفروع ذات وردية مفتوحة حالياً (شفت نشط)
     shift_q = {"status": "open"}
     if tenant_id:
         shift_q["tenant_id"] = tenant_id
+    if target_branch:
+        shift_q["branch_id"] = target_branch
     open_shifts = await db.shifts.find(
         shift_q, {"_id": 0, "branch_id": 1, "business_date": 1, "started_at": 1, "opened_at": 1}
     ).to_list(100)

@@ -98,6 +98,7 @@ export default function DriverApp() {
   const [activeTab, setActiveTab] = useState('orders');
   const previousOrdersRef = useRef([]);
   const audioRef = useRef(null);
+  const handledNotifRef = useRef(new Set());
 
   // تشغيل صوت الإشعار
   const playNotificationSound = () => {
@@ -408,6 +409,36 @@ export default function DriverApp() {
       return () => clearInterval(interval);
     }
   }, [isLoggedIn, driver]);
+
+  // إشعارات فورية للسائق (طلب جديد قيد التحضير / الطلب جاهز للاستلام)
+  useEffect(() => {
+    if (!isLoggedIn || !driver) return;
+    let active = true;
+    const poll = async () => {
+      try {
+        const res = await axios.get(`${API}/order-notifications`, {
+          params: { driver_id: driver.id, unread_only: true, limit: 20 },
+        });
+        const list = res.data?.notifications || [];
+        if (!active) return;
+        for (const n of list) {
+          if (handledNotifRef.current.has(n.id)) continue;
+          handledNotifRef.current.add(n.id);
+          playNotificationSound();
+          if (n.type === 'order_ready') {
+            toast.success(`${t('الطلب جاهز للاستلام')} ✅ #${n.order_number}`, { duration: 8000 });
+          } else if (n.type === 'new_order_driver') {
+            toast.info(`${t('طلب جديد على اسمك قيد التحضير')} 🍳 #${n.order_number}`, { duration: 8000 });
+          }
+          try { await axios.put(`${API}/order-notifications/${n.id}/read`); } catch (e) { /* noop */ }
+        }
+        fetchOrders();
+      } catch (e) { /* noop */ }
+    };
+    poll();
+    const iv = setInterval(poll, 5000);
+    return () => { active = false; clearInterval(iv); };
+  }, [isLoggedIn, driver, t]);
 
   // فلترة الطلبات
   const activeOrders = orders.filter(o => !['delivered', 'cancelled'].includes(o.status));

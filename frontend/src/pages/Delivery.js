@@ -43,7 +43,9 @@ import {
   Trophy,
   Timer,
   Route,
-  BarChart3
+  BarChart3,
+  Star,
+  MessageSquare
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Badge } from '../components/ui/badge';
@@ -84,6 +86,11 @@ export default function Delivery() {
   const [perfData, setPerfData] = useState(null);
   const [perfPeriod, setPerfPeriod] = useState('today');
   const [perfLoading, setPerfLoading] = useState(false);
+  const [ratings, setRatings] = useState([]);
+  const [ratingsSummary, setRatingsSummary] = useState({ count: 0, avg_food: 0, avg_restaurant: 0, avg_driver: 0 });
+  const [allOrders, setAllOrders] = useState([]);
+  const [ordersSummary, setOrdersSummary] = useState({ all: 0, rejected: 0, late: 0, accepted: 0, preparing: 0, completed: 0, cancelled: 0 });
+  const [ordersFilter, setOrdersFilter] = useState('all');
   const [branches, setBranches] = useState([]);
   const [selectedBranch, setSelectedBranch] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -180,6 +187,43 @@ export default function Delivery() {
     fetchPerformance();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [perfPeriod, selectedBranch]);
+
+  const fetchRatings = async () => {
+    try {
+      const res = await axios.get(`${API}/delivery-ratings`, {
+        params: { ...(selectedBranch && { branch_id: selectedBranch }) }
+      });
+      setRatings(res.data?.ratings || []);
+      setRatingsSummary(res.data?.summary || { count: 0, avg_food: 0, avg_restaurant: 0, avg_driver: 0 });
+    } catch (error) {
+      console.error('Failed to fetch delivery ratings:', error);
+    }
+  };
+
+  useEffect(() => {
+    fetchRatings();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedBranch]);
+
+  const fetchAllOrders = async () => {
+    try {
+      const today = new Date().toISOString().split('T')[0];
+      const res = await axios.get(`${API}/delivery-orders`, {
+        params: { date: today, ...(selectedBranch && { branch_id: selectedBranch }) }
+      });
+      setAllOrders(res.data?.orders || []);
+      setOrdersSummary(res.data?.summary || { all: 0, rejected: 0, late: 0, accepted: 0, preparing: 0, completed: 0, cancelled: 0 });
+    } catch (error) {
+      console.error('Failed to fetch delivery orders:', error);
+    }
+  };
+
+  useEffect(() => {
+    fetchAllOrders();
+    const iv = setInterval(fetchAllOrders, 20000);
+    return () => clearInterval(iv);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedBranch]);
 
   const fetchData = async () => {
     try {
@@ -397,15 +441,55 @@ export default function Delivery() {
     setDriverOrdersDialogOpen(true);
   };
 
+  // طباعة إيصال تحصيل من السائق (يفتح نافذة طباعة بفاتورة محصّلة باسم السائق)
+  const printCollectionReceipt = (driver, orders, collectedAmount) => {
+    const now = new Date();
+    const rows = (orders || []).map((o) => `
+      <tr>
+        <td style="padding:4px 6px;border-bottom:1px dashed #ccc">#${o.order_number || '-'}</td>
+        <td style="padding:4px 6px;border-bottom:1px dashed #ccc">${o.customer_name || '-'}</td>
+        <td style="padding:4px 6px;border-bottom:1px dashed #ccc;text-align:left">${Number(o.total || 0).toLocaleString()}</td>
+      </tr>`).join('');
+    const ordersTotal = (orders || []).reduce((s, o) => s + (Number(o.total) || 0), 0);
+    const html = `<!DOCTYPE html><html dir="rtl" lang="ar"><head><meta charset="utf-8"><title>إيصال تحصيل</title>
+      <style>
+        *{font-family:'Tahoma',sans-serif} body{padding:12px;color:#000}
+        h2{text-align:center;margin:4px 0} .muted{color:#555;font-size:12px;text-align:center}
+        table{width:100%;border-collapse:collapse;margin-top:10px;font-size:13px}
+        th{text-align:right;border-bottom:2px solid #000;padding:6px}
+        .tot{font-weight:bold;font-size:16px;border-top:2px solid #000;padding-top:8px;margin-top:8px;display:flex;justify-content:space-between}
+        .paid{margin-top:10px;text-align:center;font-weight:bold;color:#15803d;border:2px solid #15803d;border-radius:8px;padding:6px}
+      </style></head><body>
+      <h2>إيصال تحصيل من السائق</h2>
+      <p class="muted">السائق: ${driver?.name || '-'} • ${now.toLocaleString('ar-IQ')}</p>
+      <table>
+        <thead><tr><th>رقم الطلب</th><th>الزبون</th><th style="text-align:left">المبلغ</th></tr></thead>
+        <tbody>${rows || '<tr><td colspan="3" style="text-align:center;padding:8px">لا توجد طلبات</td></tr>'}</tbody>
+      </table>
+      <div class="tot"><span>إجمالي الطلبات (${(orders || []).length})</span><span>${ordersTotal.toLocaleString()} IQD</span></div>
+      <div class="tot"><span>المبلغ المُحصّل</span><span>${Number(collectedAmount || 0).toLocaleString()} IQD</span></div>
+      <div class="paid">✓ مدفوعة — محصّلة من السائق ${driver?.name || ''}</div>
+      </body></html>`;
+    const w = window.open('', '_blank', 'width=400,height=600');
+    if (!w) { toast.error(t('فعّل النوافذ المنبثقة للطباعة')); return; }
+    w.document.write(html);
+    w.document.close();
+    setTimeout(() => { try { w.print(); } catch (e) {} }, 400);
+  };
+
   // تسجيل دفعة من السائق
   const handleCollectPayment = async () => {
     if (!selectedDriver || paymentAmount <= 0) return;
     
     try {
+      // التقط الطلبات غير المحصّلة قبل التحصيل (للطباعة)
+      const collectedOrders = (driverOrders || []).filter(o => o.driver_payment_status !== 'paid');
       await axios.post(`${API}/drivers/${selectedDriver.id}/collect-payment`, {
         amount: paymentAmount
       });
       toast.success(`${t('تم تسجيل دفعة بقيمة')} ${formatPrice(paymentAmount)}`);
+      // ⭐ طباعة إيصال التحصيل (فاتورة محصّلة باسم السائق)
+      printCollectionReceipt(selectedDriver, collectedOrders, paymentAmount);
       setCollectPaymentDialogOpen(false);
       setPaymentAmount(0);
       fetchData();
@@ -689,16 +773,24 @@ export default function Delivery() {
         </div>
 
         <Tabs defaultValue="drivers" className="space-y-6">
-          <TabsList className="grid w-full grid-cols-2 sm:grid-cols-4 max-w-2xl h-auto">
+          <TabsList className="grid w-full grid-cols-3 sm:grid-cols-6 max-w-4xl h-auto">
             <TabsTrigger value="drivers">{t('السائقين والحسابات')}</TabsTrigger>
             <TabsTrigger value="map" className="flex items-center gap-1">
               <Map className="h-4 w-4" />
               {t('الخريطة')}
             </TabsTrigger>
             <TabsTrigger value="pending">{t('طلبات جاهزة للتوصيل')}</TabsTrigger>
+            <TabsTrigger value="all-orders" className="flex items-center gap-1" data-testid="all-orders-tab">
+              <Package className="h-4 w-4" />
+              {t('كل الطلبات')}
+            </TabsTrigger>
             <TabsTrigger value="performance" className="flex items-center gap-1" data-testid="performance-tab">
               <BarChart3 className="h-4 w-4" />
               {t('الأداء')}
+            </TabsTrigger>
+            <TabsTrigger value="ratings" className="flex items-center gap-1" data-testid="ratings-tab">
+              <Star className="h-4 w-4" />
+              {t('سجل التقييمات')}
             </TabsTrigger>
           </TabsList>
 
@@ -1360,6 +1452,170 @@ export default function Delivery() {
               </p>
             </div>
           </TabsContent>
+
+          {/* كل الطلبات (عرض شامل: مرفوض/متأخر القبول/مقبول/قيد التحضير/مكتمل) */}
+          <TabsContent value="all-orders">
+            <div className="space-y-4" data-testid="all-orders-content">
+              <h2 className="text-lg font-bold text-foreground flex items-center gap-2">
+                <Package className="h-5 w-5 text-amber-500" />
+                {t('كل الطلبات الواردة')} ({ordersSummary.all})
+              </h2>
+
+              {/* شرائح التصفية */}
+              <div className="flex flex-wrap gap-2">
+                {[
+                  { k: 'all', l: t('الكل'), n: ordersSummary.all, c: 'bg-muted text-foreground' },
+                  { k: 'late', l: t('متأخر القبول'), n: ordersSummary.late, c: 'bg-orange-500/15 text-orange-600 border border-orange-500/30' },
+                  { k: 'rejected', l: t('مرفوض'), n: ordersSummary.rejected, c: 'bg-red-500/15 text-red-600 border border-red-500/30' },
+                  { k: 'accepted', l: t('مقبول'), n: ordersSummary.accepted, c: 'bg-emerald-500/15 text-emerald-600 border border-emerald-500/30' },
+                  { k: 'preparing', l: t('قيد التحضير'), n: ordersSummary.preparing, c: 'bg-blue-500/15 text-blue-600 border border-blue-500/30' },
+                  { k: 'completed', l: t('مكتمل'), n: ordersSummary.completed, c: 'bg-gray-500/15 text-gray-600 border border-gray-500/30' },
+                ].map((f) => (
+                  <button
+                    key={f.k}
+                    onClick={() => setOrdersFilter(f.k)}
+                    data-testid={`orders-filter-${f.k}`}
+                    className={`px-3 py-1.5 rounded-full text-sm font-medium transition-all ${f.c} ${ordersFilter === f.k ? 'ring-2 ring-amber-500' : 'opacity-80 hover:opacity-100'}`}
+                  >
+                    {f.l} ({f.n})
+                  </button>
+                ))}
+              </div>
+
+              {(() => {
+                const filtered = allOrders.filter((o) => {
+                  if (ordersFilter === 'all') return true;
+                  if (ordersFilter === 'late') return o.is_late;
+                  return o.category === ordersFilter;
+                });
+                if (filtered.length === 0) {
+                  return (
+                    <Card className="border-border/50 bg-card">
+                      <CardContent className="py-12 text-center">
+                        <Package className="h-16 w-16 text-muted-foreground mx-auto mb-4" />
+                        <p className="text-muted-foreground text-lg">{t('لا توجد طلبات')}</p>
+                      </CardContent>
+                    </Card>
+                  );
+                }
+                const catBadge = (o) => {
+                  if (o.is_rejected) return { l: t('مرفوض'), c: 'bg-red-500/15 text-red-600 border-red-500/30' };
+                  if (o.category === 'completed') return { l: t('مكتمل'), c: 'bg-gray-500/15 text-gray-600 border-gray-500/30' };
+                  if (o.category === 'cancelled') return { l: t('ملغي'), c: 'bg-red-500/10 text-red-500 border-red-500/20' };
+                  if (o.category === 'preparing') return { l: t('قيد التحضير'), c: 'bg-blue-500/15 text-blue-600 border-blue-500/30' };
+                  if (o.category === 'accepted') return { l: t('مقبول'), c: 'bg-emerald-500/15 text-emerald-600 border-emerald-500/30' };
+                  return { l: t('بانتظار القبول'), c: 'bg-yellow-500/15 text-yellow-600 border-yellow-500/30' };
+                };
+                return (
+                  <div className="space-y-3">
+                    {filtered.map((o) => {
+                      const b = catBadge(o);
+                      return (
+                        <Card key={o.id} className="border-border/50 bg-card" data-testid={`delivery-order-${o.id}`}>
+                          <CardContent className="p-4">
+                            <div className="flex items-start justify-between gap-3 flex-wrap">
+                              <div>
+                                <div className="flex items-center gap-2 flex-wrap">
+                                  <span className="font-bold text-foreground">#{o.order_number}</span>
+                                  <span className="text-foreground">{o.customer_name || t('زبون')}</span>
+                                  <span className={`text-xs px-2 py-0.5 rounded-full border ${b.c}`}>{b.l}</span>
+                                  {o.is_late && (
+                                    <span className="text-xs px-2 py-0.5 rounded-full bg-orange-500/15 text-orange-600 border border-orange-500/30">⏱ {t('متأخر القبول')}</span>
+                                  )}
+                                </div>
+                                <p className="text-xs text-muted-foreground mt-1">
+                                  {o.driver_name ? `${t('السائق')}: ${o.driver_name} • ` : ''}
+                                  {o.items_count} {t('عناصر')} • {new Date(o.created_at).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}
+                                </p>
+                                {o.delivery_address && <p className="text-xs text-muted-foreground">{o.delivery_address}</p>}
+                                {o.is_rejected && o.cancellation_reason && (
+                                  <p className="text-xs text-red-500 mt-1">{t('سبب الرفض')}: {o.cancellation_reason}{o.rejected_by_name ? ` (${o.rejected_by_name})` : ''}</p>
+                                )}
+                                {typeof o.acceptance_delay_seconds === 'number' && o.acceptance_delay_seconds > 0 && (
+                                  <p className="text-xs text-muted-foreground">{t('زمن القبول')}: {Math.floor(o.acceptance_delay_seconds / 60)}{t('د')} {o.acceptance_delay_seconds % 60}{t('ث')}</p>
+                                )}
+                              </div>
+                              <div className="text-left">
+                                <p className="font-bold text-primary tabular-nums">{Number(o.total || 0).toLocaleString()} IQD</p>
+                                {o.delivery_fee > 0 && <p className="text-xs text-muted-foreground">{t('توصيل')}: {Number(o.delivery_fee).toLocaleString()}</p>}
+                              </div>
+                            </div>
+                          </CardContent>
+                        </Card>
+                      );
+                    })}
+                  </div>
+                );
+              })()}
+            </div>
+          </TabsContent>
+
+          {/* سجل التقييمات */}
+          <TabsContent value="ratings">
+            <div className="space-y-4" data-testid="ratings-content">
+              <h2 className="text-lg font-bold text-foreground flex items-center gap-2">
+                <Star className="h-5 w-5 text-amber-500" />
+                {t('سجل التقييمات')} ({ratingsSummary.count})
+              </h2>
+
+              {/* ملخص المتوسطات */}
+              <div className="grid grid-cols-3 gap-3">
+                {[
+                  { l: t('الطعام'), v: ratingsSummary.avg_food, icon: '🍽️' },
+                  { l: t('المطعم'), v: ratingsSummary.avg_restaurant, icon: '🏪' },
+                  { l: t('السائق'), v: ratingsSummary.avg_driver, icon: '🛵' },
+                ].map((s, i) => (
+                  <Card key={i} className="border-border/50 bg-card">
+                    <CardContent className="p-4 text-center">
+                      <div className="text-2xl mb-1">{s.icon}</div>
+                      <div className="flex items-center justify-center gap-1">
+                        <Star className="h-5 w-5 fill-amber-400 text-amber-400" />
+                        <span className="text-2xl font-bold text-foreground">{s.v || '—'}</span>
+                      </div>
+                      <p className="text-xs text-muted-foreground mt-1">{s.l}</p>
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+
+              {/* قائمة التقييمات */}
+              {ratings.length === 0 ? (
+                <Card className="border-border/50 bg-card">
+                  <CardContent className="py-12 text-center">
+                    <Star className="h-16 w-16 text-muted-foreground mx-auto mb-4" />
+                    <p className="text-muted-foreground text-lg">{t('لا توجد تقييمات بعد')}</p>
+                    <p className="text-sm text-muted-foreground">{t('تظهر التقييمات هنا بعد أن يقيّم الزبائن طلباتهم المسلّمة')}</p>
+                  </CardContent>
+                </Card>
+              ) : (
+                <div className="space-y-3">
+                  {ratings.map((r) => (
+                    <Card key={r.id} className="border-border/50 bg-card" data-testid={`rating-row-${r.id}`}>
+                      <CardContent className="p-4">
+                        <div className="flex items-start justify-between gap-3 flex-wrap">
+                          <div>
+                            <p className="font-bold text-foreground">#{r.order_number} • {r.customer_name || t('زبون')}</p>
+                            <p className="text-xs text-muted-foreground">{r.driver_name || '—'} • {new Date(r.created_at).toLocaleString('ar')}</p>
+                          </div>
+                          <div className="flex flex-wrap gap-3 text-sm">
+                            <span className="flex items-center gap-1">🍽️ <Star className="h-4 w-4 fill-amber-400 text-amber-400" /> {r.food_rating || '—'}</span>
+                            <span className="flex items-center gap-1">🏪 <Star className="h-4 w-4 fill-amber-400 text-amber-400" /> {r.restaurant_rating || '—'}</span>
+                            <span className="flex items-center gap-1">🛵 <Star className="h-4 w-4 fill-amber-400 text-amber-400" /> {r.driver_rating || '—'}</span>
+                          </div>
+                        </div>
+                        {r.notes && (
+                          <div className="mt-2 flex items-start gap-2 text-sm text-muted-foreground bg-muted/40 rounded-lg p-2">
+                            <MessageSquare className="h-4 w-4 mt-0.5 shrink-0" />
+                            <span>{r.notes}</span>
+                          </div>
+                        )}
+                      </CardContent>
+                    </Card>
+                  ))}
+                </div>
+              )}
+            </div>
+          </TabsContent>
         </Tabs>
       </main>
 
@@ -1376,6 +1632,7 @@ export default function Delivery() {
                 <Button 
                   size="sm"
                   className="bg-green-500 hover:bg-green-600 text-white"
+                  data-testid="collect-payment-btn"
                   onClick={() => {
                     setPaymentAmount(driverStats[selectedDriver.id]?.unpaid_total || 0);
                     setCollectPaymentDialogOpen(true);
@@ -1603,6 +1860,7 @@ export default function Delivery() {
               <Button 
                 onClick={handleCollectPayment}
                 className="flex-1 bg-green-500 hover:bg-green-600 text-white"
+                data-testid="confirm-collect-payment-btn"
               >
                 <Check className="h-4 w-4 ml-1" />
                 {t('تأكيد التحصيل')}

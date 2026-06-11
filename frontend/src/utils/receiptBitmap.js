@@ -432,6 +432,12 @@ async function renderReceipt(order) {
     }
   }
 
+  // أجور التوصيل (تظهر بعد الخصم وقبل الإجمالي — كبند مُضاف للفاتورة)
+  if (order.delivery_fee && order.delivery_fee > 0) {
+    y += drawRow(x, 'أجور التوصيل:', `+${fmt(order.delivery_fee)} IQD`, y, 20);
+    y += 4;
+  }
+
   // Thick separator before total
   x.strokeStyle='#000'; x.lineWidth=3;
   x.beginPath(); x.moveTo(MARGIN, y+2); x.lineTo(PW-MARGIN, y+2); x.stroke();
