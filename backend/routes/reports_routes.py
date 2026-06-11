@@ -2143,6 +2143,24 @@ async def get_delivery_collections(
     except Exception as e:
         logger.warning(f"Failed to compute materials cost for collections: {e}")
 
+    # ⭐ حل أسماء الفروع من branch_id (لدعم السجلات القديمة التي خُزّنت بـ branch_name = null
+    # فتظهر "غير محدد" في تفصيل الفروع). نبني خريطة id->name مرة واحدة.
+    try:
+        branch_docs = await db.branches.find(
+            {"tenant_id": tenant_id} if tenant_id else {},
+            {"_id": 0, "id": 1, "name": 1}
+        ).to_list(1000)
+        branch_name_by_id = {b.get("id"): b.get("name") for b in branch_docs if b.get("id")}
+
+        for c in collections:
+            if c.get("branch_id") and not c.get("branch_name"):
+                c["branch_name"] = branch_name_by_id.get(c["branch_id"])
+            for item in (c.get("branch_breakdown") or []):
+                if not item.get("branch_name"):
+                    item["branch_name"] = branch_name_by_id.get(item.get("branch_id")) or c.get("branch_name")
+    except Exception as e:
+        logger.warning(f"Failed to resolve branch names for collections: {e}")
+
     return {
         "collections": collections,
         "total_collected": sum(c.get("amount", 0) for c in collections),

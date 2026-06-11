@@ -14,8 +14,13 @@ from .shared import get_current_user, get_user_tenant_id, build_tenant_query, ge
 logger = logging.getLogger(__name__)
 router = APIRouter(tags=["Reservations & Reviews"])
 
-# module-level DB handle
-db = get_database()
+# lazy DB proxy: resolves the motor client at request time (correct event loop),
+# avoiding a module-import-time client bind that breaks under production ASGI servers
+class _LazyDB:
+    def __getattr__(self, name):
+        return getattr(get_database(), name)
+
+db = _LazyDB()
 
 
 class ReservationCreate(BaseModel):

@@ -12,8 +12,13 @@ from .shared import get_current_user, get_user_tenant_id, get_database, UserRole
 logger = logging.getLogger(__name__)
 router = APIRouter(tags=["Break Even"])
 
-# module-level DB handle (env is loaded at import time)
-db = get_database()
+# lazy DB proxy: resolves the motor client at request time (correct event loop),
+# avoiding a module-import-time client bind that breaks under production ASGI servers
+class _LazyDB:
+    def __getattr__(self, name):
+        return getattr(get_database(), name)
+
+db = _LazyDB()
 
 
 def _sn(val, default=0):
