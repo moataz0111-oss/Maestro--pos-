@@ -44,6 +44,44 @@ import 'leaflet/dist/leaflet.css';
 
 const API = API_URL;
 
+// ===== اشتراك إشعارات Push للسائق =====
+const urlBase64ToUint8Array = (base64String) => {
+  const padding = '='.repeat((4 - (base64String.length % 4)) % 4);
+  const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
+  const rawData = window.atob(base64);
+  const outputArray = new Uint8Array(rawData.length);
+  for (let i = 0; i < rawData.length; ++i) outputArray[i] = rawData.charCodeAt(i);
+  return outputArray;
+};
+
+const subscribeDriverPush = async (phone) => {
+  try {
+    if (!('serviceWorker' in navigator) || !('PushManager' in window) || !('Notification' in window)) return;
+    const permission = await Notification.requestPermission();
+    if (permission !== 'granted') return;
+    const registration = await navigator.serviceWorker.ready;
+    const res = await fetch(`${API}/push/vapid-public-key`);
+    const { publicKey } = await res.json();
+    if (!publicKey) return;
+    let subscription = await registration.pushManager.getSubscription();
+    if (!subscription) {
+      subscription = await registration.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: urlBase64ToUint8Array(publicKey),
+      });
+    }
+    const sj = subscription.toJSON();
+    await fetch(`${API}/push/subscribe`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ endpoint: sj.endpoint, keys: sj.keys, phone, user_type: 'driver' }),
+    });
+    console.log('✅ تم تسجيل إشعارات السائق');
+  } catch (e) {
+    console.log('push subscribe (driver) failed', e);
+  }
+};
+
 // Fix Leaflet icon issue
 delete L.Icon.Default.prototype._getIconUrl;
 L.Icon.Default.mergeOptions({
@@ -205,6 +243,7 @@ export default function DriverApp() {
         localStorage.setItem('driver_phone', driverPhone);
         toast.success(`${t('مرحباً')} ${driverData.name}!`);
         fetchOrders(driverData.id);
+        subscribeDriverPush(driverPhone);
       }
     } catch (error) {
       const message = error.response?.data?.detail || t('فشل في تسجيل الدخول');
@@ -279,6 +318,7 @@ export default function DriverApp() {
 
     setWatchId(id);
     setIsTracking(true);
+    localStorage.setItem('driver_tracking_active', '1');
     toast.success(t('تم بدء تتبع الموقع'));
   };
 
@@ -289,6 +329,7 @@ export default function DriverApp() {
       setWatchId(null);
     }
     setIsTracking(false);
+    localStorage.removeItem('driver_tracking_active');
     toast.info(t('تم إيقاف تتبع الموقع'));
   };
 
@@ -392,6 +433,8 @@ export default function DriverApp() {
         setDriver(driverData);
         setIsLoggedIn(true);
         fetchOrders(driverData.id);
+        const ph = localStorage.getItem('driver_phone') || driverData.phone;
+        if (ph) subscribeDriverPush(ph);
       } catch (e) {
         localStorage.removeItem('driver_app_session');
       }
@@ -409,6 +452,22 @@ export default function DriverApp() {
       const interval = setInterval(() => fetchOrders(), 15000);
       return () => clearInterval(interval);
     }
+  }, [isLoggedIn, driver]);
+
+  // ⭐ استئناف تتبّع الموقع تلقائياً عند العودة للتطبيق (لا يطلب البدء مجدداً طوال المهمة)
+  useEffect(() => {
+    if (isLoggedIn && driver && !isTracking && watchId === null) {
+      if (localStorage.getItem('driver_tracking_active') === '1' && navigator.geolocation) {
+        const id = navigator.geolocation.watchPosition(
+          updateLocation,
+          (error) => console.log('Location resume error:', error),
+          { enableHighAccuracy: true, maximumAge: 5000, timeout: 15000 }
+        );
+        setWatchId(id);
+        setIsTracking(true);
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isLoggedIn, driver]);
 
   // إشعارات فورية للسائق (طلب جديد قيد التحضير / الطلب جاهز للاستلام)

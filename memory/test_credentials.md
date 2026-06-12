@@ -77,3 +77,17 @@
 - Order chat endpoints (public): GET/POST /api/order-chat/{order_id}. Collection 'order_chats'.
 - Driver batching: PUT /api/drivers/{driver_id}/assign?order_id=...&force=false. 409 if driver departed (an order out_for_delivery) and new order >2km from existing; force=true overrides.
 - Test IDs: incoming-order-call, accept-order-call, reject-order-call, assign-driver-{id}; driver-contact-btn, driver-contact-sheet, contact-opt-*, driver-chat-dialog, chat-input, chat-send-btn; driver-chat-btn-{orderId}, driver-chat-overlay, driver-chat-input, driver-chat-send-btn; public-tracking-page, track-driver-name, track-chat-btn, track-chat-overlay, track-chat-input, track-chat-send; share-tracking-link.
+
+## Web Push + Cashier-Only Call + Management Escalation (12 يونيو 2026 — fork iter59)
+- Cashier (for incoming-call test): cashier1@maestroegp.com / cash123 (role cashier, branch الفرع الرئيسي 76f56acc-...)
+- Web Push: VAPID keys in backend/.env (VAPID_PUBLIC_KEY/PRIVATE_KEY/SUBJECT). Public key endpoint: GET /api/push/vapid-public-key. Subscribe: POST /api/push/subscribe {endpoint,keys,phone,user_type:'driver'|'customer'}. Driver SW: /sw-driver.js now has push+notificationclick handlers. Driver app auto-subscribes on login.
+- Incoming order CALL (IncomingOrderCall) now shows ONLY for role 'cashier' (ALLOWED_ROLES=['cashier']).
+- Management escalation: GET /api/order-notifications/escalations?branch_id= → creates 'order_management_alert' (alert_kind 'not_approved') when a new_order_cashier is unread >5min; reject endpoint creates alert_kind 'rejected'. Shown to admin/manager/owner/super_admin/supervisor via ManagementOrderAlerts component (bottom-left banners). Test IDs: management-order-alerts, management-alert-{order_id}, dismiss-alert-{order_id}.
+- NOTE: tenants.max_users bumped to 50 to allow creating the cashier.
+
+## fork iter61 — ترجمة AI + إشعارات الزبون + تقييم + QR
+- EMERGENT_LLM_KEY مُضاف في backend/.env (OpenAI gpt-4o عبر emergentintegrations) لترجمة الأسماء.
+- POST /api/admin/translate-names (admin/manager) → يملأ name_en. زر بالإعدادات: data-testid=auto-translate-btn.
+- إشعار الزبون: PUT /api/orders/{id}/status?status=ready|delivered → push للزبون (user_type=customer). اشتراك الزبون يجلب المفتاح من /api/push/vapid-public-key.
+- التقييم: نافذة تلقائية عند التسليم؛ POST /api/customer/rate-order {order_id,tenant_id,phone,rating,comment,food_quality,delivery_speed,service_quality}. يضبط order.is_rated=true.
+- إيصال التوصيل (Delivery > reprint) يحتوي QR لرابط /track/{order_id}.

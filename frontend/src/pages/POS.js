@@ -3143,7 +3143,7 @@ export default function POS() {
         <div className="p-3 border-b border-border hidden lg:block">
           <h2 className="font-bold text-foreground text-sm">{t('الفئات')}</h2>
         </div>
-        <ScrollArea className="flex-1" dir="rtl">
+        <div className="flex-1 overflow-auto" dir="rtl">
           <div className="p-2 flex flex-row gap-2 overflow-x-auto lg:flex-col lg:gap-0 lg:space-y-2 lg:overflow-x-visible [&>button]:shrink-0 [&>button]:w-32 lg:[&>button]:w-full">
             {/* زر عرض الكل */}
             <button
@@ -3225,14 +3225,14 @@ export default function POS() {
               </button>
             ))}
           </div>
-        </ScrollArea>
+        </div>
       </div>
 
       {/* Main Content - Products */}
       <div className="flex-1 flex flex-col min-h-[55vh] lg:min-h-0">
         {/* Header */}
         <header className="min-h-16 border-b border-border bg-card flex flex-wrap items-center justify-between gap-2 px-3 sm:px-4 py-2 sm:py-0">
-          <div className="flex items-center gap-2 sm:gap-4">
+          <div className="flex flex-wrap items-center gap-2 sm:gap-4">
             <Button variant="ghost" size="icon" onClick={() => navigate('/dashboard')}>
               <ArrowRight className="h-5 w-5" />
             </Button>

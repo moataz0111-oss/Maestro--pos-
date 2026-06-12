@@ -90,6 +90,7 @@ const ExternalBranchesManagement = lazy(() => import("./pages/ExternalBranchesMa
 // Components
 import IncomingCallPopup from "./components/IncomingCallPopup";
 import { IncomingOrderCall } from "./components/IncomingOrderCall";
+import { ManagementOrderAlerts } from "./components/ManagementOrderAlerts";
 
 // Check if initial auth check is done (stored in sessionStorage)
 const isAuthChecked = () => sessionStorage.getItem('auth_checked') === 'true';
@@ -688,6 +689,8 @@ function App() {
                       <IncomingCallPopup />
                       {/* إشعار طلب جديد للكاشير على شكل مكالمة واردة */}
                       <IncomingOrderCall />
+                      {/* تنبيهات الإدارة: تأخر/رفض الكاشير لطلب */}
+                      <ManagementOrderAlerts />
                       {/* PWA Install Prompt */}
                       <InstallPWA />
                     </BrowserRouter>

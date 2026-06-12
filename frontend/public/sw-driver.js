@@ -37,3 +37,39 @@ self.addEventListener('fetch', (event) => {
     }).catch(() => cached))
   );
 });
+
+// ===== إشعارات Push للسائق (تعمل في الخلفية حتى عند إغلاق التطبيق) =====
+self.addEventListener('push', (event) => {
+  let data = { title: 'تطبيق السائق', body: 'لديك إشعار جديد', icon: '/icons/icon-192.png', data: {} };
+  if (event.data) {
+    try { data = Object.assign(data, event.data.json()); }
+    catch (e) { data.body = event.data.text(); }
+  }
+  const options = {
+    body: data.body,
+    icon: data.icon || '/icons/icon-192.png',
+    badge: '/icons/icon-192.png',
+    vibrate: [300, 120, 300, 120, 300],
+    tag: data.tag || 'driver-notify',
+    renotify: true,
+    requireInteraction: !!data.requireInteraction,
+    data: data.data || {},
+  };
+  event.waitUntil(self.registration.showNotification(data.title, options));
+});
+
+self.addEventListener('notificationclick', (event) => {
+  event.notification.close();
+  const urlToOpen = (event.notification.data && event.notification.data.url) || '/driver-app';
+  event.waitUntil(
+    clients.matchAll({ type: 'window', includeUncontrolled: true }).then((list) => {
+      for (const client of list) {
+        if (client.url.includes(self.location.origin) && 'focus' in client) {
+          client.navigate(urlToOpen);
+          return client.focus();
+        }
+      }
+      if (clients.openWindow) return clients.openWindow(urlToOpen);
+    })
+  );
+});

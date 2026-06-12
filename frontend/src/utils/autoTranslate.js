@@ -2203,6 +2203,7 @@ const translationMap = {
   'إرسال التقييم': { en: 'Send Rating', ku: '' },
   'جاري تحميل القائمة': { en: 'Loading menu', ku: '' },
   'اختر الفرع الأقرب إليك': { en: 'Choose the nearest branch', ku: '' },
+  'الفروع المتاحة': { en: 'Available Branches', ku: 'لقە بەردەستەکان' },
   'ثبّت التطبيق للوصول السريع': { en: 'Install the app for quick access', ku: '' },
   'تثبيت': { en: 'Install', ku: '' },
   'تغيير': { en: 'Change', ku: '' },

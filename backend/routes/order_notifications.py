@@ -189,6 +189,67 @@ async def get_order_notifications(
     }
 
 
+@router.get("/order-notifications/escalations")
+async def get_order_escalations(branch_id: Optional[str] = None, limit: int = 20):
+    """إشعارات للإدارة (مالك/مدير/مدير عام):
+    - طلبات لم يوافق عليها الكاشير خلال 5 دقائق (تأخير) → يُنشأ تنبيه تلقائياً.
+    - طلبات رفضها الكاشير → تنبيه أُنشئ عند الرفض.
+    لا تظهر مكالمة الطلب للإدارة، فقط هذه التنبيهات.
+    """
+    now = datetime.now(timezone.utc)
+    cutoff_5min = (now - timedelta(minutes=5)).isoformat()
+    cutoff_recent = (now - timedelta(minutes=120)).isoformat()
+
+    # 1) صعّد طلبات الكاشير غير المقروءة والأقدم من 5 دقائق ولم تُصعَّد
+    pending_q = {
+        "type": "new_order_cashier",
+        "is_read": False,
+        "escalated": {"$ne": True},
+        "created_at": {"$lt": cutoff_5min, "$gt": cutoff_recent},
+    }
+    if branch_id:
+        pending_q["branch_id"] = branch_id
+    pending = await db.order_notifications.find(pending_q, {"_id": 0}).to_list(50)
+    for n in pending:
+        branch = await db.branches.find_one({"id": n.get("branch_id")}, {"_id": 0, "name": 1})
+        shift = await db.shifts.find_one(
+            {"branch_id": n.get("branch_id"), "status": "open"},
+            {"_id": 0, "cashier_name": 1}, sort=[("started_at", -1)],
+        )
+        await db.order_notifications.update_one({"id": n["id"]}, {"$set": {"escalated": True}})
+        await db.order_notifications.update_one(
+            {"id": f"esc_{n['order_id']}"},
+            {"$set": {
+                "id": f"esc_{n['order_id']}",
+                "type": "order_management_alert",
+                "alert_kind": "not_approved",
+                "order_id": n.get("order_id"),
+                "order_number": n.get("order_number"),
+                "branch_id": n.get("branch_id"),
+                "branch_name": (branch or {}).get("name", "غير محدد"),
+                "cashier_name": (shift or {}).get("cashier_name", "غير معروف"),
+                "order_type": n.get("order_type"),
+                "customer_name": n.get("customer_name"),
+                "customer_phone": n.get("customer_phone"),
+                "delivery_address": n.get("delivery_address"),
+                "total_amount": n.get("total_amount", 0),
+                "items_count": n.get("items_count", 0),
+                "reason": "لم يوافق عليه الكاشير خلال 5 دقائق",
+                "is_read": False,
+                "created_at": now.isoformat(),
+                "order_created_at": n.get("created_at"),
+            }},
+            upsert=True,
+        )
+
+    # 2) أعد كل تنبيهات الإدارة غير المقروءة من آخر ساعتين
+    mq = {"type": "order_management_alert", "is_read": False, "created_at": {"$gt": cutoff_recent}}
+    if branch_id:
+        mq["branch_id"] = branch_id
+    escalations = await db.order_notifications.find(mq, {"_id": 0}).sort("created_at", -1).limit(limit).to_list(limit)
+    return {"escalations": escalations, "count": len(escalations)}
+
+
 @router.put("/order-notifications/{notification_id}/read")
 async def mark_notification_read(notification_id: str):
     """تحديد إشعار كمقروء"""

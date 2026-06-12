@@ -106,7 +106,8 @@ import {
   Download,
   LogIn,
   LogOut,
-  ChevronDown
+  ChevronDown,
+  Languages
 } from 'lucide-react';
 import { toast } from 'sonner';
 import {
@@ -575,6 +576,22 @@ export default function Settings() {
   const [printerDialogOpen, setPrinterDialogOpen] = useState(false);
   const [categoryDialogOpen, setCategoryDialogOpen] = useState(false);
   const [productDialogOpen, setProductDialogOpen] = useState(false);
+  const [autoTranslating, setAutoTranslating] = useState(false);
+
+  const handleAutoTranslate = async () => {
+    if (autoTranslating) return;
+    setAutoTranslating(true);
+    try {
+      const token = localStorage.getItem('token');
+      const res = await axios.post(`${API}/admin/translate-names`, {}, { headers: { Authorization: `Bearer ${token}` }, timeout: 120000 });
+      toast.success(res.data?.message || t('تمت الترجمة بنجاح'));
+      await fetchData();
+    } catch (e) {
+      toast.error(e?.response?.data?.detail || t('تعذّرت الترجمة، حاول مرة أخرى'));
+    } finally {
+      setAutoTranslating(false);
+    }
+  };
   const [editProductDialogOpen, setEditProductDialogOpen] = useState(false);
   const [kitchenSectionDialogOpen, setKitchenSectionDialogOpen] = useState(false);
   const [editKitchenSectionDialogOpen, setEditKitchenSectionDialogOpen] = useState(false);
@@ -4173,14 +4190,20 @@ export default function Settings() {
           {hasRole(['admin', 'super_admin', 'manager', 'branch_manager']) && (
             <TabsContent value="products">
               <Card className="border-border/50 bg-card">
-                <CardHeader className="flex flex-row items-center justify-between">
+                <CardHeader className="flex flex-row items-center justify-between flex-wrap gap-2">
                   <CardTitle className="flex items-center gap-2 text-foreground">
                     <Package className="h-5 w-5" />{t('إدارة المنتجات')}</CardTitle>
-                  <Dialog open={productDialogOpen} onOpenChange={setProductDialogOpen}>
-                    <DialogTrigger asChild>
-                      <Button className="bg-primary text-primary-foreground">
-                        <Plus className="h-4 w-4 ml-2" />{t('إضافة منتج')}</Button>
-                    </DialogTrigger>
+                  <div className="flex items-center gap-2">
+                    <Button variant="outline" onClick={handleAutoTranslate} disabled={autoTranslating} data-testid="auto-translate-btn"
+                      className="border-primary/40 text-primary hover:bg-primary/10">
+                      <Languages className="h-4 w-4 ml-2" />
+                      {autoTranslating ? t('جارٍ الترجمة...') : t('ترجمة تلقائية (EN)')}
+                    </Button>
+                    <Dialog open={productDialogOpen} onOpenChange={setProductDialogOpen}>
+                      <DialogTrigger asChild>
+                        <Button className="bg-primary text-primary-foreground">
+                          <Plus className="h-4 w-4 ml-2" />{t('إضافة منتج')}</Button>
+                      </DialogTrigger>
                     <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
                       <DialogHeader>
                         <DialogTitle className="text-foreground">{t('إضافة منتج جديد')}</DialogTitle>
@@ -4593,6 +4616,7 @@ export default function Settings() {
                       </form>
                     </DialogContent>
                   </Dialog>
+                  </div>
                 </CardHeader>
                 <CardContent>
                   {products.length === 0 ? (

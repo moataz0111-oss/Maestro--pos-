@@ -56,19 +56,25 @@ export const useTranslation = () => {
     return text;
   }, [lang]);
 
-  // تغيير اللغة
+  // تغيير اللغة (فوري بدون إعادة تحميل الصفحة)
   const changeLanguage = useCallback((newLang) => {
     localStorage.setItem('app_language', newLang);
     setLang(newLang);
     const isRTL = ['ar', 'ku', 'fa', 'he'].includes(newLang);
     document.documentElement.dir = isRTL ? 'rtl' : 'ltr';
     document.documentElement.lang = newLang;
-    window.location.reload();
   }, []);
+
+  // الاسم المحلي لكائن من قاعدة البيانات (منتج/قسم) حسب اللغة مع رجوع للاسم العربي
+  const localName = useCallback((obj) => {
+    if (!obj) return '';
+    if (lang === 'ar') return obj.name || obj.name_ar || '';
+    return obj.name_en || obj.name || obj.name_ar || '';
+  }, [lang]);
 
   const isRTL = useMemo(() => ['ar', 'ku', 'fa', 'he'].includes(lang), [lang]);
 
-  return { t, lang, changeLanguage, isRTL };
+  return { t, lang, changeLanguage, isRTL, localName };
 };
 
 // دالة ترجمة مباشرة (للاستخدام خارج React)

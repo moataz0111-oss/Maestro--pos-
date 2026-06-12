@@ -6,6 +6,7 @@ import { useAuth } from '../context/AuthContext';
 import { useTranslation } from '../hooks/useTranslation';
 import { formatPrice } from '../utils/currency';
 import { printSavedOrder } from '../utils/printService';
+import QRCode from 'qrcode';
 import { Button } from '../components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
 import { Input } from '../components/ui/input';
@@ -145,11 +146,11 @@ export default function Delivery() {
   useEffect(() => {
     fetchData();
     fetchDriverLocations();
-    // Poll for updates
+    // Poll for updates (تحديث شبه فوري لاختفاء الطلبات المحذوفة/المدفوعة/المحوّلة)
     const interval = setInterval(() => {
       fetchData();
       fetchDriverLocations();
-    }, 30000);
+    }, 10000);
     return () => clearInterval(interval);
   }, [selectedBranch]);
 
@@ -227,7 +228,7 @@ export default function Delivery() {
 
   useEffect(() => {
     fetchAllOrders();
-    const iv = setInterval(fetchAllOrders, 20000);
+    const iv = setInterval(fetchAllOrders, 8000);
     return () => clearInterval(iv);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedBranch]);
@@ -548,13 +549,23 @@ export default function Delivery() {
   };
 
   // طباعة احتياطية للفاتورة عبر نافذة المتصفح
-  const reprintInvoiceBrowser = (o) => {
+  const reprintInvoiceBrowser = async (o) => {
     const items = o.items || [];
     const rows = items.map((it) => `
       <tr>
         <td style="padding:3px 6px;border-bottom:1px dashed #ccc">${it.quantity || 1}× ${it.product_name || it.name || ''}</td>
         <td style="padding:3px 6px;border-bottom:1px dashed #ccc;text-align:left">${Number(((it.price||0)*(it.quantity||1))+(it.extras_total||0)).toLocaleString()}</td>
       </tr>`).join('');
+    // باركود QR لتتبّع الطلب بسهولة عبر المسح
+    const trackUrl = `${window.location.origin}/track/${o.id}`;
+    let qrImg = '';
+    try {
+      const qrDataUrl = await QRCode.toDataURL(trackUrl, { width: 130, margin: 1 });
+      qrImg = `<div style="text-align:center;margin-top:10px">
+        <img src="${qrDataUrl}" alt="QR" style="width:120px;height:120px"/>
+        <p class="muted" style="margin-top:2px">امسح للتتبّع — #${o.order_number}</p>
+      </div>`;
+    } catch (e) { /* تجاهل إن فشل توليد الباركود */ }
     const html = `<!DOCTYPE html><html dir="rtl" lang="ar"><head><meta charset="utf-8"><title>فاتورة #${o.order_number}</title>
       <style>*{font-family:'Tahoma',sans-serif}body{padding:12px;color:#000}h2{text-align:center;margin:4px 0}
       .muted{color:#555;font-size:12px;text-align:center}table{width:100%;border-collapse:collapse;margin-top:8px;font-size:13px}
@@ -572,6 +583,7 @@ export default function Delivery() {
         <div class="tot"><span>الإجمالي</span><span>${Number(o.total||0).toLocaleString()} IQD</span></div>
       </div>
       ${o.is_rejected?`<div class="rj">✕ طلب مرفوض — ${o.cancellation_reason || ''}</div>`:''}
+      ${qrImg}
       </body></html>`;
     const w = window.open('', '_blank', 'width=400,height=600');
     if (!w) { toast.error(t('فعّل النوافذ المنبثقة للطباعة')); return; }

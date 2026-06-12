@@ -47,7 +47,9 @@ import {
   Heart,
   Star,
   Bookmark,
-  MessageSquare
+  MessageSquare,
+  Share2,
+  Copy
 } from 'lucide-react';
 import { MapContainer, TileLayer, Marker, Popup, Polyline, useMapEvents } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
@@ -160,7 +162,7 @@ function LocationPicker({ position, setPosition, onClose, t }) {
 export default function CustomerMenu() {
   const { tenantId } = useParams();
   const [searchParams] = useSearchParams();
-  const { t, lang, isRTL, changeLanguage } = useTranslation();
+  const { t, lang, isRTL, changeLanguage, localName } = useTranslation();
   
   // App States
   const [step, setStep] = useState('branches'); // branches, menu, cart, checkout, tracking, history
@@ -209,6 +211,7 @@ export default function CustomerMenu() {
   const [deliveryRating, setDeliveryRating] = useState(5);
   const [serviceRating, setServiceRating] = useState(5);
   const [submittingRating, setSubmittingRating] = useState(false);
+  const [ratingSubmitted, setRatingSubmitted] = useState(false);
   
   // PWA
   const [deferredPrompt, setDeferredPrompt] = useState(null);
@@ -260,12 +263,21 @@ export default function CustomerMenu() {
     }
   };
   // تحديث الطلب الحالي تلقائياً أثناء التتبع (لإظهار أجور التوصيل وأي تغييرات على الفاتورة)
+  const ratingPromptedRef = useRef(false);
   useEffect(() => {
     if (step !== 'tracking' || !currentOrder?.id || !tenantId) return;
     const iv = setInterval(async () => {
       try {
         const res = await axios.get(`${API}/customer/order/${tenantId}/${currentOrder.id}`);
-        if (res.data?.order) setCurrentOrder(res.data.order);
+        if (res.data?.order) {
+          const ord = res.data.order;
+          setCurrentOrder(ord);
+          // فتح نافذة التقييم تلقائياً عند تسليم الطلب (مرة واحدة)
+          if (!ratingPromptedRef.current && (ord.status === 'delivered' || ord.status === 'completed') && !ord.is_rated) {
+            ratingPromptedRef.current = true;
+            setTimeout(() => openRatingDialog(ord), 1200);
+          }
+        }
       } catch (e) { /* noop */ }
     }, 15000);
     return () => clearInterval(iv);
@@ -357,43 +369,37 @@ export default function CustomerMenu() {
     // تمنع نهائياً التقاط iOS لمانيفست المشرف وفتح التطبيق على صفحة دخول الموظفين
     window.location.href = `/menu.html?install=1${tenantId ? `&r=${encodeURIComponent(tenantId)}` : ''}`;
   };
-  // تسجيل إشعارات Push
+  // تسجيل إشعارات Push للزبون
   const registerPushNotifications = async () => {
     try {
-      if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
+      if (!('serviceWorker' in navigator) || !('PushManager' in window) || !('Notification' in window)) {
         console.log('Push notifications not supported');
         return;
       }
-      // تسجيل Service Worker
       const registration = await navigator.serviceWorker.register('/sw-push.js');
-      console.log('Service Worker registered');
-      // طلب إذن الإشعارات
       const permission = await Notification.requestPermission();
-      if (permission !== 'granted') {
-        console.log('Notification permission denied');
-        return;
+      if (permission !== 'granted') return;
+      // جلب مفتاح VAPID العام الحقيقي من الخادم
+      const keyRes = await axios.get(`${API}/push/vapid-public-key`);
+      const publicKey = keyRes.data?.publicKey;
+      if (!publicKey) return;
+      let subscription = await registration.pushManager.getSubscription();
+      if (!subscription) {
+        subscription = await registration.pushManager.subscribe({
+          userVisibleOnly: true,
+          applicationServerKey: urlBase64ToUint8Array(publicKey),
+        });
       }
-      // الاشتراك في Push
-      const subscription = await registration.pushManager.subscribe({
-        userVisibleOnly: true,
-        applicationServerKey: urlBase64ToUint8Array(
-          // VAPID public key (يجب توليدها)
-          'BEl62iUYgUivxIkv69yViEuiBIa-Ib9-SkvMeAtA3LFgDzkrxZJjSgSnfckjBJuBkr3qBUYIHBQFLXYp5Nksh8U'
-        )
-      });
-      // حفظ الاشتراك
+      const sj = subscription.toJSON();
       const savedCustomer = localStorage.getItem(`customer_${tenantId}`);
       const customerData = savedCustomer ? JSON.parse(savedCustomer) : {};
       await axios.post(`${API}/push/subscribe`, {
-        endpoint: subscription.endpoint,
-        keys: {
-          p256dh: btoa(String.fromCharCode.apply(null, new Uint8Array(subscription.getKey('p256dh')))),
-          auth: btoa(String.fromCharCode.apply(null, new Uint8Array(subscription.getKey('auth'))))
-        },
+        endpoint: sj.endpoint,
+        keys: sj.keys,
         phone: customerData.phone,
-        user_type: 'customer'
+        user_type: 'customer',
       });
-      console.log('Push subscription saved');
+      console.log('✅ Customer push subscription saved');
     } catch (error) {
       console.log('Push registration error:', error);
     }
@@ -626,7 +632,34 @@ export default function CustomerMenu() {
     setFoodRating(5);
     setDeliveryRating(5);
     setServiceRating(5);
+    setRatingSubmitted(false);
     setShowRatingDialog(true);
+  };
+
+  // رابط ورسالة المشاركة (تسويق مجاني من التقييمات)
+  const shareLink = `${window.location.origin}/menu/${tenantId}`;
+  const buildShareMessage = () => {
+    const stars = '⭐'.repeat(rating);
+    const name = restaurant?.name || t('هذا المطعم');
+    return `${t('جرّبتُ')} ${name} ${t('وكانت تجربة رائعة')}! ${stars}\n${t('اطلب الآن')}: ${shareLink}`;
+  };
+  const shareNative = async () => {
+    const message = buildShareMessage();
+    if (navigator.share) {
+      try {
+        await navigator.share({ title: restaurant?.name || 'Maestro', text: message, url: shareLink });
+        return;
+      } catch (e) { /* ألغى المستخدم */ }
+    }
+    window.open(`https://wa.me/?text=${encodeURIComponent(message)}`, '_blank');
+  };
+  const shareWhatsApp = () => window.open(`https://wa.me/?text=${encodeURIComponent(buildShareMessage())}`, '_blank');
+  const shareInstagram = async () => {
+    try { await navigator.clipboard.writeText(buildShareMessage()); toast.success(t('تم نسخ الرسالة — الصقها في قصتك على إنستغرام')); } catch (e) {}
+    window.open('https://instagram.com', '_blank');
+  };
+  const copyShare = async () => {
+    try { await navigator.clipboard.writeText(buildShareMessage()); toast.success(t('تم نسخ رابط المطعم والرسالة')); } catch (e) { toast.error(t('تعذّر النسخ')); }
   };
   // إرسال التقييم
   const submitRating = async () => {
@@ -646,12 +679,12 @@ export default function CustomerMenu() {
       });
       
       toast.success(t('شكراً لتقييمك!'));
-      setShowRatingDialog(false);
-      setRatingOrder(null);
+      setRatingSubmitted(true);
       fetchOrderHistory();
     } catch (error) {
       if (error.response?.data?.detail === 'تم تقييم هذا الطلب مسبقاً') {
         toast.info(t('تم تقييم هذا الطلب مسبقاً'));
+        setRatingSubmitted(true);
       } else {
         toast.error(t('فشل في إرسال التقييم'));
       }
@@ -1050,10 +1083,38 @@ export default function CustomerMenu() {
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Star className="h-5 w-5 text-yellow-500" />
-              قيّم طلبك
+              {ratingSubmitted ? t('شكراً لك') : t('قيّم طلبك')}
             </DialogTitle>
           </DialogHeader>
-          
+
+          {ratingSubmitted ? (
+            <div className="py-4 text-center space-y-5" data-testid="share-experience-view">
+              <div className="text-5xl">{rating >= 4 ? '🎉' : '🙏'}</div>
+              <div className="flex justify-center gap-1 text-2xl">{'⭐'.repeat(rating)}</div>
+              <div>
+                <p className="font-bold text-lg text-gray-800">{t('نسعد بمشاركتك تجربتك')}!</p>
+                <p className="text-sm text-gray-500 mt-1">{t('شارك أصدقاءك واحصل على خصومات قادمة')} 🎁</p>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <Button onClick={shareNative} data-testid="share-native-btn" className="bg-gradient-to-r from-orange-500 to-red-500 text-white col-span-2">
+                  <Share2 className="h-4 w-4 ml-2" />{t('شارك تجربتك')}
+                </Button>
+                <Button onClick={shareWhatsApp} data-testid="share-whatsapp-btn" variant="outline" className="border-green-500/40 text-green-600 hover:bg-green-50">
+                  🟢 {t('واتساب')}
+                </Button>
+                <Button onClick={shareInstagram} data-testid="share-instagram-btn" variant="outline" className="border-pink-500/40 text-pink-600 hover:bg-pink-50">
+                  📸 {t('إنستغرام')}
+                </Button>
+                <Button onClick={copyShare} data-testid="share-copy-btn" variant="outline" className="col-span-2 text-gray-600">
+                  <Copy className="h-4 w-4 ml-2" />{t('نسخ رابط المطعم')}
+                </Button>
+              </div>
+              <Button variant="ghost" onClick={() => { setShowRatingDialog(false); setRatingOrder(null); }} data-testid="share-close-btn" className="text-gray-400">
+                {t('إغلاق')}
+              </Button>
+            </div>
+          ) : (
+          <>
           <div className="space-y-6 py-4">
             {/* التقييم العام */}
             <div className="text-center">
@@ -1118,6 +1179,8 @@ export default function CustomerMenu() {
               )}
             </Button>
           </DialogFooter>
+          </>
+          )}
         </DialogContent>
       </Dialog>
     </>
@@ -1192,7 +1255,7 @@ export default function CustomerMenu() {
         <main className="max-w-lg md:max-w-2xl lg:max-w-4xl mx-auto px-4 py-6">
           <h2 className="text-xl font-bold text-gray-800 mb-4 flex items-center gap-2">
             <Store className="h-6 w-6 text-orange-500" />
-            الفروع المتاحة
+            {t('الفروع المتاحة')}
           </h2>
           
           <div className="space-y-3">
@@ -1378,7 +1441,7 @@ export default function CustomerMenu() {
                       : 'bg-gray-100 text-gray-700 hover:bg-orange-100 hover:text-orange-600 border border-gray-200'
                   }`}
                 >
-                  {cat.name}
+                  {t(localName(cat))}
                 </Button>
               ))}
             </div>
@@ -1423,7 +1486,7 @@ export default function CustomerMenu() {
                     )}
                   </div>
                   <CardContent className="p-3">
-                    <h3 className="font-medium text-sm line-clamp-2 mb-1 text-gray-800">{product.name}</h3>
+                    <h3 className="font-extrabold text-base line-clamp-2 mb-1 text-orange-400 [text-shadow:_0_0_8px_rgb(251_146_60_/_60%)]">{t(localName(product))}</h3>
                     <div className="flex items-center justify-between">
                       <span className="font-bold text-orange-600">{formatPrice(product.price)}</span>
                       <Button
@@ -2195,13 +2258,15 @@ export default function CustomerMenu() {
         } catch (e) { toast.error('تعذّر إرسال الرسالة'); }
       };
 
-      const contactOptions = [
-        { key: 'inapp-chat', label: 'رسالة داخل التطبيق', icon: '💬', action: () => { setContactOpen(false); setChatOpen(true); } },
-        { key: 'inapp-call', label: 'اتصال داخل التطبيق', icon: '🎙️', action: () => { setContactOpen(false); toast('ميزة الاتصال الصوتي داخل التطبيق قادمة قريباً', { icon: '🔜' }); } },
-        { key: 'call', label: 'اتصال عادي', icon: '📞', href: `tel:${driver.phone}` },
-        { key: 'sms', label: 'رسالة نصية (SMS)', icon: '✉️', href: `sms:${driver.phone}` },
-        { key: 'wa-call', label: 'اتصال واتساب', icon: '🟢', href: `https://wa.me/${waPhone}` },
-        { key: 'wa-msg', label: 'رسالة واتساب', icon: '🟩', href: `https://wa.me/${waPhone}?text=${encodeURIComponent('مرحباً، بخصوص طلبي رقم #' + (currentOrder.order_number || ''))}` },
+      const hasPhone = !!digits;
+      const contactOptions = hasPhone ? [
+        { key: 'wa-call', label: t('اتصال واتساب'), icon: '🟢', href: `https://wa.me/${waPhone}`, ext: true },
+        { key: 'wa-msg', label: t('رسالة واتساب'), icon: '🟩', href: `https://wa.me/${waPhone}?text=${encodeURIComponent('مرحباً، بخصوص طلبي رقم #' + (currentOrder.order_number || ''))}`, ext: true },
+        { key: 'call', label: t('اتصال هاتفي'), icon: '📞', href: `tel:${digits}` },
+        { key: 'sms', label: t('رسالة نصية (SMS)'), icon: '✉️', href: `sms:${digits}` },
+        { key: 'inapp-chat', label: t('محادثة داخل التطبيق'), icon: '💬', action: () => { setContactOpen(false); setChatOpen(true); } },
+      ] : [
+        { key: 'inapp-chat', label: t('محادثة داخل التطبيق'), icon: '💬', action: () => { setContactOpen(false); setChatOpen(true); } },
       ];
       return (
         <div className="space-y-4">
@@ -2377,7 +2442,7 @@ export default function CustomerMenu() {
                 </div>
                 <div className="grid grid-cols-2 gap-3">
                   {contactOptions.map(opt => opt.href ? (
-                    <a key={opt.key} href={opt.href} target="_blank" rel="noreferrer" onClick={() => setContactOpen(false)} data-testid={`contact-opt-${opt.key}`}
+                    <a key={opt.key} href={opt.href} {...(opt.ext ? { target: '_blank', rel: 'noreferrer' } : {})} onClick={() => setContactOpen(false)} data-testid={`contact-opt-${opt.key}`}
                        className="flex items-center gap-2 p-3 rounded-xl bg-gray-50 hover:bg-gray-100 border border-gray-200 transition-colors">
                       <span className="text-2xl">{opt.icon}</span>
                       <span className="text-sm font-medium text-gray-700">{opt.label}</span>
@@ -2390,6 +2455,9 @@ export default function CustomerMenu() {
                     </button>
                   ))}
                 </div>
+                {!driver.phone && (
+                  <p className="text-xs text-amber-600 mt-3 text-center" data-testid="driver-no-phone-hint">{t('رقم هاتف السائق غير متوفر — استخدم المحادثة داخل التطبيق')}</p>
+                )}
               </div>
             </div>
           )}

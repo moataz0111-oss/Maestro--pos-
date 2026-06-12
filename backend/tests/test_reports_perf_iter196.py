@@ -8,7 +8,7 @@ import pytest
 import requests
 from datetime import datetime, timedelta
 
-BASE_URL = os.environ.get("REACT_APP_BACKEND_URL", "https://pos-barcode-scan.preview.emergentagent.com").rstrip("/")
+BASE_URL = os.environ.get("REACT_APP_BACKEND_URL", "https://pos-driver-tracking.preview.emergentagent.com").rstrip("/")
 ADMIN_EMAIL = "admin@maestroegp.com"
 ADMIN_PASSWORD = "admin123"
 PERF_BUDGET_S = 5.0  # generous budget for tiny dataset

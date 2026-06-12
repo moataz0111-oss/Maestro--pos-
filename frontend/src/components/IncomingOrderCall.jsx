@@ -14,7 +14,8 @@ import { BrandLogo } from './BrandLogo';
 import { printSavedOrder } from '../utils/printService';
 
 const API = API_URL;
-const ALLOWED_ROLES = ['cashier', 'admin', 'manager', 'owner', 'super_admin'];
+// المكالمة تظهر للكاشير فقط (طلب المستخدم). الإدارة تتلقى تنبيهات التأخير/الرفض بدلاً منها.
+const ALLOWED_ROLES = ['cashier'];
 
 export const IncomingOrderCall = () => {
   const { user, isAuthenticated } = useAuth();

@@ -14,6 +14,7 @@ from typing import List, Optional, Dict, Any
 from enum import Enum
 import uuid
 import re
+import json
 import hashlib
 from datetime import datetime, timezone, timedelta
 import bcrypt
@@ -3155,6 +3156,78 @@ async def update_product(product_id: str, product: ProductCreate, current_user: 
     query = build_tenant_query(current_user, {"id": product_id})
     await db.products.update_one(query, {"$set": update_data})
     return await db.products.find_one({"id": product_id}, {"_id": 0})
+
+@api_router.post("/admin/translate-names")
+async def translate_entity_names(overwrite: bool = False, current_user: dict = Depends(get_current_user)):
+    """ترجمة تلقائية لأسماء المنتجات والأقسام إلى الإنجليزية (name_en) عبر الذكاء الاصطناعي."""
+    if current_user["role"] not in [UserRole.ADMIN, UserRole.MANAGER, UserRole.SUPER_ADMIN]:
+        raise HTTPException(status_code=403, detail="غير مصرح")
+
+    tenant_id = get_user_tenant_id(current_user)
+    api_key = os.environ.get("EMERGENT_LLM_KEY")
+    if not api_key:
+        raise HTTPException(status_code=500, detail="مفتاح الذكاء الاصطناعي غير مهيأ")
+
+    from emergentintegrations.llm.chat import LlmChat, UserMessage
+
+    def _parse_json(text: str) -> dict:
+        text = (text or "").strip()
+        if text.startswith("```"):
+            parts = text.split("```")
+            if len(parts) >= 2:
+                text = parts[1]
+                if text.lstrip().lower().startswith("json"):
+                    text = text.lstrip()[4:]
+        try:
+            return json.loads(text)
+        except Exception:
+            m = re.search(r"\{.*\}", text, re.DOTALL)
+            return json.loads(m.group(0)) if m else {}
+
+    async def translate_collection(coll_name: str) -> int:
+        coll = db[coll_name]
+        q = {"tenant_id": tenant_id}
+        if not overwrite:
+            q["$or"] = [{"name_en": {"$in": [None, ""]}}, {"name_en": {"$exists": False}}]
+        items = await coll.find(q, {"_id": 0, "id": 1, "name": 1}).to_list(1000)
+        items = [it for it in items if it.get("name")]
+        translated = 0
+        for i in range(0, len(items), 40):
+            chunk = items[i:i + 40]
+            names = {it["id"]: it["name"] for it in chunk}
+            chat = LlmChat(
+                api_key=api_key,
+                session_id=f"translate-{coll_name}-{uuid.uuid4()}",
+                system_message=(
+                    "You are a professional menu translator for an Iraqi restaurant POS. "
+                    "Translate Arabic food and category names into concise, natural English menu names. "
+                    "Keep brand/proper names sensible. Return ONLY valid JSON mapping each given id to its English name, no extra text."
+                ),
+            ).with_model("openai", "gpt-4o")
+            prompt = "Translate these to English. Return a JSON object {id: english_name}.\n" + json.dumps(names, ensure_ascii=False)
+            try:
+                resp = await chat.send_message(UserMessage(text=prompt))
+            except Exception as e:
+                logger.error(f"translate LLM error: {e}")
+                raise HTTPException(status_code=502, detail="تعذّر الاتصال بخدمة الترجمة")
+            mapping = _parse_json(resp if isinstance(resp, str) else str(resp))
+            for pid, en in mapping.items():
+                if en and isinstance(en, str):
+                    await coll.update_one(
+                        {"id": pid, "tenant_id": tenant_id},
+                        {"$set": {"name_en": en.strip()}},
+                    )
+                    translated += 1
+        return translated
+
+    products_n = await translate_collection("products")
+    categories_n = await translate_collection("categories")
+    return {
+        "products_translated": products_n,
+        "categories_translated": categories_n,
+        "message": f"تمت ترجمة {products_n} منتج و {categories_n} قسم",
+    }
+
 
 @api_router.delete("/products/{product_id}")
 async def delete_product(product_id: str, current_user: dict = Depends(get_current_user)):
@@ -7049,16 +7122,9 @@ async def get_delivery_orders(
             category = "accepted" if o.get("accepted_at") else "pending"
 
         summary["all"] += 1
-        if is_rejected:
-            summary["rejected"] += 1
-        elif st == "delivered":
-            summary["completed"] += 1
-        elif st == "cancelled":
-            summary["cancelled"] += 1
-        elif st in ("preparing", "ready", "out_for_delivery"):
-            summary["preparing"] += 1
-        else:
-            summary["accepted"] += 1
+        # العدّ حسب نفس تصنيف category لضمان تطابق شارات التبويبات مع القوائم المفلترة
+        if category in summary:
+            summary[category] += 1
         if is_late:
             summary["late"] += 1
 
@@ -7400,7 +7466,13 @@ async def update_order_status(order_id: str, status: str, current_user: dict = D
             {"id": order["table_id"]},
             {"$set": {"status": "available", "current_order_id": None}}
         )
-    
+
+    # إشعار Push للزبون عند تغيّر حالة الطلب (جاري التحضير/جاهز/في الطريق/تم التسليم)
+    try:
+        await notify_order_status_change(order_id, status)
+    except Exception as _e:
+        logger.warning(f"customer status push failed: {_e}")
+
     return {"message": "تم التحديث"}
 
 @api_router.put("/orders/{order_id}/kitchen-status")
@@ -7650,6 +7722,39 @@ async def reject_order(order_id: str, reason: Optional[str] = None, current_user
         await notify_order_status_change(order_id, "cancelled")
     except Exception as _e:
         logger.warning(f"reject notify customer failed: {_e}")
+    # أوقف مكالمة الكاشير لهذا الطلب (علّمها مقروءة) وأنشئ إشعاراً للإدارة بالرفض
+    try:
+        await db.order_notifications.update_many(
+            {"order_id": order_id, "type": "new_order_cashier"},
+            {"$set": {"is_read": True, "escalated": True}},
+        )
+        branch = await db.branches.find_one({"id": order.get("branch_id")}, {"_id": 0, "name": 1})
+        rejecter = current_user.get("full_name") or current_user.get("username") or "الكاشير"
+        await db.order_notifications.update_one(
+            {"id": f"esc_{order_id}"},
+            {"$set": {
+                "id": f"esc_{order_id}",
+                "type": "order_management_alert",
+                "alert_kind": "rejected",
+                "order_id": order_id,
+                "order_number": order.get("order_number"),
+                "branch_id": order.get("branch_id"),
+                "branch_name": (branch or {}).get("name", "غير محدد"),
+                "cashier_name": rejecter,
+                "order_type": order.get("order_type"),
+                "customer_name": order.get("customer_name"),
+                "customer_phone": order.get("customer_phone"),
+                "delivery_address": order.get("delivery_address"),
+                "total_amount": order.get("total", 0),
+                "items_count": len(order.get("items") or []),
+                "reason": reason or "رُفض الطلب من قبل الكاشير",
+                "is_read": False,
+                "created_at": now_iso,
+            }},
+            upsert=True,
+        )
+    except Exception as _e:
+        logger.warning(f"reject management alert failed: {_e}")
     return {"message": "تم رفض الطلب وتسجيله كطلب مرفوض", "order_id": order_id}
 
 
@@ -20359,7 +20464,10 @@ async def rate_order(rating: OrderRating):
     
     await db.order_ratings.insert_one(rating_doc)
     rating_doc.pop("_id", None)
-    
+
+    # علّم الطلب كمُقيَّم حتى لا تتكرر نافذة التقييم
+    await db.orders.update_one({"id": rating.order_id}, {"$set": {"is_rated": True}})
+
     # تحديث متوسط تقييم الفرع
     await update_branch_rating(order.get("branch_id"))
     
@@ -20663,7 +20771,7 @@ async def get_menu_link(request: Request, current_user: dict = Depends(get_curre
         base_url = f"{parsed.scheme}://{parsed.netloc}"
     else:
         # fallback للـ environment variable
-        base_url = os.environ.get('REACT_APP_BACKEND_URL', 'https://pos-barcode-scan.preview.emergentagent.com')
+        base_url = os.environ.get('REACT_APP_BACKEND_URL', 'https://pos-driver-tracking.preview.emergentagent.com')
     
     menu_url = f"{base_url}/menu/{tenant.get('menu_slug', tenant_id)}"
     
@@ -20862,7 +20970,23 @@ async def assign_driver_to_order(
         {"id": driver_id},
         {"$set": {"is_available": False}}
     )
-    
+
+    # إشعار Push فوري للسائق بطلب جديد مُسند إليه (مثل تطبيق توترز)
+    try:
+        order_doc = await db.orders.find_one({"id": order_id}, {"_id": 0, "order_number": 1, "customer_address": 1, "total": 1, "tenant_id": 1})
+        order_num = (order_doc or {}).get("order_number", order_id[:6])
+        await send_push_notification(
+            phone=driver.get("phone"),
+            title="طلب جديد 🚚",
+            body=f"تم إسناد الطلب #{order_num} إليك — {(order_doc or {}).get('customer_address','') or ''}",
+            data={"type": "new_order", "order_id": order_id, "url": "/driver-app"},
+            user_type="driver",
+            tag=f"order-{order_id}",
+            require_interaction=True,
+        )
+    except Exception as _e:
+        logger.warning(f"driver push (assign) failed: {_e}")
+
     return {
         "message": "تم تخصيص السائق للطلب",
         "driver": {
@@ -21217,6 +21341,23 @@ async def send_order_chat(order_id: str, msg: OrderChatMessage):
     }
     await db.order_chats.insert_one(doc)
     doc.pop("_id", None)
+
+    # إشعار Push فوري للطرف الآخر (رسالة محادثة)
+    try:
+        if sender == "customer" and order.get("driver_id"):
+            drv = await db.drivers.find_one({"id": order.get("driver_id")}, {"_id": 0, "phone": 1})
+            if drv and drv.get("phone"):
+                await send_push_notification(
+                    phone=drv.get("phone"),
+                    title=f"رسالة من {doc['sender_name']} 💬",
+                    body=text[:80],
+                    data={"type": "chat_message", "order_id": order_id, "url": "/driver-app"},
+                    user_type="driver",
+                    tag=f"chat-{order_id}",
+                )
+    except Exception as _e:
+        logger.warning(f"chat push failed: {_e}")
+
     return doc
 
 
@@ -21250,33 +21391,65 @@ async def unsubscribe_push(endpoint: str):
     await db.push_subscriptions.delete_one({"endpoint": endpoint})
     return {"message": "تم إلغاء الاشتراك"}
 
-async def send_push_notification(phone: str, title: str, body: str, data: dict = None, user_type: str = None):
-    """إرسال إشعار Push للمستخدم"""
+@api_router.get("/push/vapid-public-key")
+async def get_vapid_public_key():
+    """إرجاع مفتاح VAPID العام للواجهة الأمامية (applicationServerKey)"""
+    return {"publicKey": os.environ.get("VAPID_PUBLIC_KEY", "")}
+
+async def send_push_notification(phone: str, title: str, body: str, data: dict = None, user_type: str = None, icon: str = None, tag: str = None, require_interaction: bool = False):
+    """إرسال إشعار Push حقيقي للمستخدم عبر pywebpush + VAPID"""
     try:
         from pywebpush import webpush, WebPushException
-        
-        # جلب VAPID keys من البيئة (يجب توليدها مسبقاً)
-        # لأغراض العرض، سنستخدم طريقة بديلة
-        
+
+        vapid_private_key = os.environ.get("VAPID_PRIVATE_KEY")
+        vapid_subject = os.environ.get("VAPID_SUBJECT", "mailto:notifications@maestroegp.com")
+        if not vapid_private_key:
+            logger.warning("VAPID_PRIVATE_KEY غير مهيأ — لا يمكن إرسال إشعار Push")
+            return False
+
         query = {"is_active": True}
         if phone:
             query["phone"] = phone
         if user_type:
             query["user_type"] = user_type
-        
+
         subscriptions = await db.push_subscriptions.find(query).to_list(100)
-        
-        notification_data = {
+
+        payload = json.dumps({
             "title": title,
             "body": body,
+            "icon": icon or "/icons/icon-192.png",
+            "badge": "/icons/icon-192.png",
+            "tag": tag or (data or {}).get("type", "maestro"),
+            "requireInteraction": require_interaction,
             "data": data or {},
-            "icon": "/icons/admin-icon-192.png"
-        }
-        
-        # هنا يجب استخدام webpush library لإرسال الإشعارات الفعلية
-        # لكن لأن هذا يتطلب VAPID keys، سنسجل الإشعار في قاعدة البيانات
-        
-        notification_log = {
+        })
+
+        sent_count = 0
+        for sub in subscriptions:
+            sub_info = {"endpoint": sub.get("endpoint"), "keys": sub.get("keys", {})}
+            try:
+                webpush(
+                    subscription_info=sub_info,
+                    data=payload,
+                    vapid_private_key=vapid_private_key,
+                    vapid_claims={"sub": vapid_subject},
+                )
+                sent_count += 1
+            except WebPushException as ex:
+                status_code = getattr(getattr(ex, "response", None), "status_code", None)
+                if status_code in (404, 410):
+                    # اشتراك منتهي/غير صالح — أوقفه
+                    await db.push_subscriptions.update_one(
+                        {"endpoint": sub.get("endpoint")},
+                        {"$set": {"is_active": False}},
+                    )
+                logger.warning(f"WebPush failed ({status_code}): {ex}")
+            except Exception as ex:
+                logger.warning(f"WebPush error: {ex}")
+
+        # سجل الإشعار (للسجل التاريخي/جرس داخل التطبيق)
+        await db.notification_logs.insert_one({
             "id": str(uuid.uuid4()),
             "phone": phone,
             "user_type": user_type,
@@ -21284,13 +21457,12 @@ async def send_push_notification(phone: str, title: str, body: str, data: dict =
             "body": body,
             "data": data,
             "sent_at": datetime.now(timezone.utc).isoformat(),
-            "subscriptions_count": len(subscriptions)
-        }
-        
-        await db.notification_logs.insert_one(notification_log)
-        
-        return True
-        
+            "subscriptions_count": len(subscriptions),
+            "sent_count": sent_count,
+        })
+
+        return sent_count > 0
+
     except Exception as e:
         logger.error(f"Push notification error: {str(e)}")
         return False
@@ -21340,9 +21512,13 @@ async def notify_order_status_change(order_id: str, new_status: str):
                 "type": "order_status",
                 "order_id": order_id,
                 "status": new_status,
+                "rate": new_status == "delivered",
+                "order_number": str(order.get("order_number", "")),
                 "url": f"/menu/{order.get('tenant_id')}"
             },
-            user_type="customer"
+            user_type="customer",
+            tag=f"order-status-{order_id}",
+            require_interaction=new_status in ("ready", "out_for_delivery", "delivered"),
         )
 
 
