@@ -333,8 +333,8 @@ export default function Loyalty() {
                     </div>
                   </div>
                   <div className="mt-3 pt-3 border-t border-border/50 flex items-center justify-between text-xs text-muted-foreground">
-                    <span>{t('إجمالي الإنفاق: {(member.lifetime_spending || 0).toLocaleString()} د.ع')}</span>
-                    <span>{t('كود الإحالة: {member.referral_code}')}</span>
+                    <span>{t('إجمالي الإنفاق:')} {(member.lifetime_spending || 0).toLocaleString()} {t('د.ع')}</span>
+                    <span>{t('كود الإحالة:')} {member.referral_code}</span>
                   </div>
                 </CardContent>
               </Card>

@@ -420,7 +420,7 @@ export default function Coupons() {
                     </div>
                     
                     {coupon.min_order_amount > 0 && (
-                      <p className="text-muted-foreground">{t('الحد الأدنى: {coupon.min_order_amount.toLocaleString()} د.ع')}</p>
+                      <p className="text-muted-foreground">{t('الحد الأدنى:')} {coupon.min_order_amount.toLocaleString()} {t('د.ع')}</p>
                     )}
                     
                     <div className="flex items-center justify-between text-xs text-muted-foreground">
@@ -486,7 +486,7 @@ export default function Coupons() {
                       </p>
                     )}
                     {promo.promotion_type === 'bundle' && (
-                      <p className="text-center font-medium text-foreground">{t('باقة بسعر {promo.bundle_price?.toLocaleString()} د.ع')}</p>
+                      <p className="text-center font-medium text-foreground">{t('باقة بسعر')} {promo.bundle_price?.toLocaleString()} {t('د.ع')}</p>
                     )}
                   </div>
                   <div className="flex items-center justify-between text-sm">

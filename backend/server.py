@@ -1897,6 +1897,18 @@ class EmployeeResponse(BaseModel):
     face_photo_updated_at: Optional[str] = None
     is_general_manager: bool = False
 
+    # إنهاء الخدمات
+    employment_status: Optional[str] = "active"  # active | terminated_pending | terminated
+    termination_date: Optional[str] = None
+    termination_month: Optional[str] = None
+    termination_requested_at: Optional[str] = None
+    auto_finalize_at: Optional[str] = None
+    settlement_paid: Optional[bool] = None
+    settlement_amount: Optional[float] = None
+    settlement_preview: Optional[float] = None
+    settlement_withdrawal_id: Optional[str] = None
+    archive_purge_at: Optional[str] = None
+
 class EmployeeUpdate(BaseModel):
     name: Optional[str] = None
     phone: Optional[str] = None
@@ -3702,9 +3714,17 @@ async def get_employees(
     branch_id: Optional[str] = None,
     department: Optional[str] = None,
     is_active: Optional[bool] = None,
+    status: Optional[str] = None,  # "active" (افتراضي: نشط+منتهٍ مؤقت) | "archived" (المنتهية خدماتهم)
     current_user: dict = Depends(get_current_user)
 ):
     """جلب قائمة الموظفين"""
+    # معالجة الإنهاء التلقائي (بعد 24س) والحذف من الأرشيف (بعد نهاية الشهر التالي)
+    try:
+        from routes.payroll_routes import process_terminations
+        await process_terminations(db, get_user_tenant_id(current_user))
+    except Exception as _e:
+        logger.warning(f"process_terminations failed: {_e}")
+
     query = build_tenant_query(current_user)
     if branch_id:
         query["branch_id"] = branch_id
@@ -3712,7 +3732,13 @@ async def get_employees(
         query["department"] = department
     if is_active is not None:
         query["is_active"] = is_active
-    
+
+    if status == "archived":
+        query["employment_status"] = "terminated"
+    else:
+        # القائمة الافتراضية: تستثني المنتهية خدماتهم نهائياً (تبقى المنتهية مؤقتاً بخط أحمر)
+        query["employment_status"] = {"$ne": "terminated"}
+
     employees = await db.employees.find(query, {"_id": 0}).to_list(1000)
     return employees
 
@@ -6460,15 +6486,20 @@ async def create_order(order: OrderCreate, current_user: dict = Depends(get_curr
         items_sig = "|".join(items_sig_data)
         # ⭐ نضمّن رقم طلب شركة التوصيل وطريقة الدفع في البصمة: طلبان مختلفان لشركة التوصيل
         #    (برقمين خارجيين مختلفين) لهما بصمتان مختلفتان فلا يُدمجان خطأً ولا يُفقَد طلب.
+        #    كما نضمّن table_id: طاولتان مختلفتان بنفس الأصناف لا تُدمجان (حماية من فقدان طلب حقيقي).
         _ext_for_fp = (getattr(order, "delivery_company_order_id", None) or "").strip()
+        _table_for_fp = (getattr(order, "table_id", None) or "")
         order_fingerprint = hashlib.sha1(
             f"{tenant_id or ''}|{order.branch_id}|{current_user.get('id','')}|"
             f"{order.customer_name or ''}|{order.customer_phone or ''}|"
-            f"{order.order_type}|{items_sig}|{float(order.discount or 0):.2f}|"
+            f"{order.order_type}|{_table_for_fp}|{items_sig}|{float(order.discount or 0):.2f}|"
             f"{order.payment_method or ''}|{_ext_for_fp}".encode("utf-8")
         ).hexdigest()
-        
-        dedupe_cutoff_dt = datetime.now(timezone.utc) - timedelta(seconds=30)
+
+        # ⭐ نافذة منع التكرار 150 ثانية (كانت 30ث): يلتقط الضغط/الإرسال المزدوج المتباعد
+        #    (مثل الطلب #34/#35 في السيدية بفارق دقيقة) ومزامنة الأوفلاين المتأخرة.
+        #    البصمة تتضمّن الكاشير+الطاولة+الأصناف فلا تُدمَج طلبات حقيقية مختلفة.
+        dedupe_cutoff_dt = datetime.now(timezone.utc) - timedelta(seconds=150)
         dedupe_cutoff = dedupe_cutoff_dt.isoformat()
         
         existing_dup = await db.orders.find_one(
@@ -7207,7 +7238,13 @@ async def find_duplicate_orders(
         query["business_date"] = {"$gte": start_date}
 
     groups_map: dict = {}
-    async for o in db.orders.find(query, {"_id": 0}):
+    _dup_proj = {
+        "_id": 0, "id": 1, "order_number": 1, "branch_id": 1, "order_type": 1,
+        "customer_name": 1, "customer_phone": 1, "total": 1, "items": 1,
+        "business_date": 1, "created_at": 1, "payment_method": 1,
+        "payment_status": 1, "is_offline_order": 1, "status": 1,
+    }
+    async for o in db.orders.find(query, _dup_proj):
         groups_map.setdefault(_order_dup_signature(o), []).append(o)
 
     result_groups = []
@@ -7703,6 +7740,9 @@ async def reject_order(order_id: str, reason: Optional[str] = None, current_user
         {"$set": {
             "status": OrderStatus.CANCELLED,
             "is_rejected": True,
+            "driver_id": None,
+            "driver_name": None,
+            "driver_phone": None,
             "cancelled_at": now_iso,
             "cancelled_by": current_user.get("id"),
             "cancellation_reason": reason or "رُفض الطلب من قبل الكاشير",
@@ -12003,6 +12043,74 @@ async def get_expiring_subscriptions(current_user: dict = Depends(verify_super_a
         "already_expired": expired,
         "days_before_alert": days_before
     }
+
+# ==================== السجل الأمني للمالك الأعلى (Security Log) ====================
+
+@api_router.get("/super-admin/security-log")
+async def get_security_log(current_user: dict = Depends(verify_super_admin), limit: int = 100):
+    """السجل الأمني — خاص بمالك النظام الأعلى فقط (ليس للعملاء):
+    أحداث الدخول/الخروج/الانتحال، حالة العملاء (نشط/معطل)، وتنبيهات الاشتراك (المتبقي)."""
+    now = datetime.now(timezone.utc)
+
+    # أحداث الأمان من سجل المراقبة (عبر كل العملاء)
+    events = await db.audit_logs.find({}, {"_id": 0}).sort("created_at", -1).limit(limit).to_list(limit)
+    tenant_ids = list({e.get("tenant_id") for e in events if e.get("tenant_id")})
+    tdocs = await db.tenants.find(
+        {"id": {"$in": tenant_ids}}, {"_id": 0, "id": 1, "name": 1, "name_ar": 1, "slug": 1}
+    ).to_list(2000)
+    tmap = {t["id"]: (t.get("name") or t.get("name_ar") or t.get("slug")) for t in tdocs}
+    for e in events:
+        e["tenant_name"] = tmap.get(e.get("tenant_id")) or e.get("tenant_id") or "—"
+
+    # ملخص حالة العملاء
+    all_tenants = await db.tenants.find(
+        {}, {"_id": 0, "id": 1, "name": 1, "name_ar": 1, "slug": 1, "is_active": 1,
+             "expires_at": 1, "subscription_type": 1, "is_demo": 1}
+    ).to_list(5000)
+    active = [t for t in all_tenants if t.get("is_active")]
+    disabled = [t for t in all_tenants if not t.get("is_active")]
+
+    # تنبيهات الاشتراك (المتبقي / المنتهي)
+    settings = await db.settings.find_one({"type": "notification_settings"}, {"_id": 0})
+    days_before = (settings or {}).get("value", {}).get("days_before_expiry", 15) if settings else 15
+    expiring, expired = [], []
+    for t in active:
+        exp = t.get("expires_at")
+        if not exp:
+            continue
+        try:
+            expdt = datetime.fromisoformat(str(exp).replace("Z", "+00:00"))
+        except Exception:
+            continue
+        days_left = (expdt.date() - now.date()).days
+        rec = {
+            "id": t["id"],
+            "name": t.get("name") or t.get("name_ar") or t.get("slug"),
+            "expires_at": exp,
+            "days_left": days_left,
+            "subscription_type": t.get("subscription_type"),
+        }
+        if days_left < 0:
+            expired.append(rec)
+        elif days_left <= days_before:
+            expiring.append(rec)
+    expiring.sort(key=lambda x: x["days_left"])
+    expired.sort(key=lambda x: x["days_left"])
+
+    return {
+        "events": events,
+        "summary": {
+            "total": len(all_tenants),
+            "active": len(active),
+            "disabled": len(disabled),
+            "expiring_soon": len(expiring),
+            "expired": len(expired),
+        },
+        "expiring_soon": expiring,
+        "expired": expired,
+    }
+
+
 
 # ==================== لوحة معلومات الاشتراكات ====================
 
@@ -20771,7 +20879,7 @@ async def get_menu_link(request: Request, current_user: dict = Depends(get_curre
         base_url = f"{parsed.scheme}://{parsed.netloc}"
     else:
         # fallback للـ environment variable
-        base_url = os.environ.get('REACT_APP_BACKEND_URL', 'https://pos-driver-tracking.preview.emergentagent.com')
+        base_url = os.environ.get('REACT_APP_BACKEND_URL', 'https://maestro-pos-system.preview.emergentagent.com')
     
     menu_url = f"{base_url}/menu/{tenant.get('menu_slug', tenant_id)}"
     
@@ -21021,11 +21129,15 @@ async def driver_login(phone: str, pin: str):
 
 @api_router.get("/driver/orders")
 async def get_driver_orders(driver_id: str):
-    """جلب الطلبات المسندة للسائق"""
+    """جلب الطلبات المسندة للسائق.
+    يُرجع كل الطلبات المسندة للسائق التي لم تُسلَّم/تُلغَ بعد — بصرف النظر عن اسم الحالة الوسيطة.
+    (إصلاح: كان الفلتر يحصر الحالات بقائمة بيضاء؛ فعند تغيّر الحالة لـ"confirmed"/"completed" من الكاشير أو POS
+    كان الطلب يختفي من السائق قبل التسليم. الآن نستبعد فقط الحالات النهائية.)
+    """
     orders = await db.orders.find(
         {
             "driver_id": driver_id,
-            "status": {"$in": ["pending", "preparing", "ready", "out_for_delivery"]}
+            "status": {"$nin": ["delivered", "cancelled", "canceled", "refunded", "rejected"]}
         },
         {"_id": 0}
     ).sort("created_at", -1).to_list(50)
@@ -21033,8 +21145,10 @@ async def get_driver_orders(driver_id: str):
     # إضافة status_label
     status_labels = {
         'pending': 'بانتظار التحضير',
+        'confirmed': 'تم القبول',
         'preparing': 'قيد التحضير',
         'ready': 'جاهز للتوصيل',
+        'completed': 'جاهز للتوصيل',
         'out_for_delivery': 'في الطريق'
     }
     
@@ -22175,6 +22289,10 @@ async def reject_customer_order(
         {"id": order_id},
         {"$set": {
             "status": "cancelled",
+            "is_rejected": True,
+            "driver_id": None,
+            "driver_name": None,
+            "driver_phone": None,
             "rejected_by": current_user.get("id"),
             "rejected_at": datetime.now(timezone.utc).isoformat()
         }}
@@ -23002,6 +23120,10 @@ app.include_router(dept_stock_count_router)
 # Include sync routes for offline support
 from routes.sync_routes import router as sync_router
 app.include_router(sync_router, prefix="/api")
+
+# مكالمات WebRTC داخل التطبيق (زبون ↔ سائق)
+from routes.call_routes import router as call_router
+app.include_router(call_router, prefix="/api")
 
 # Middleware to prevent caching of API responses
 @app.middleware("http")

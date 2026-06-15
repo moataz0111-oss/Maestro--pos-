@@ -26,6 +26,7 @@ export function useAutoSync() {
     if (runningRef.current) return;
     runningRef.current = true;
     try {
+      if (typeof navigator !== 'undefined' && navigator.onLine === false) return;
       const token = localStorage.getItem('token');
       if (!token) return;
 
@@ -89,8 +90,17 @@ export function useAutoSync() {
     if (photoRunningRef.current) return;
     photoRunningRef.current = true;
     try {
+      if (typeof navigator !== 'undefined' && navigator.onLine === false) return;
       const token = localStorage.getItem('token');
       if (!token) return;
+
+      // لا تتصل بالوكيل المحلي إلا إذا كانت المزامنة التلقائية مفعّلة على السيرفر
+      try {
+        const en = await axios.get(`${API}/biometric/auto-sync`, {
+          headers: { Authorization: `Bearer ${token}` }, timeout: 5000
+        });
+        if (!en.data?.enabled) return;
+      } catch { return; }
 
       // تحقق من الوكيل المحلي
       let agentOk = false;

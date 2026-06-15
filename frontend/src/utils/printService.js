@@ -52,6 +52,7 @@ export const getSavedAgentStatus = () => {
  * فحص حالة الوسيط الحقيقية - يسأل السيرفر عن آخر heartbeat للفرع الحالي
  */
 export const checkAgentStatus = async () => {
+  if (typeof navigator !== 'undefined' && navigator.onLine === false) { saveAgentStatus(false); return false; }
   try {
     const branchId = resolveBranchId('');
     const url = branchId 

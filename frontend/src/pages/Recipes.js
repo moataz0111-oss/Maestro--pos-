@@ -252,7 +252,7 @@ export default function Recipes() {
             <div className="flex items-center gap-3">
               <AlertTriangle className="h-5 w-5 text-red-500" />
               <div>
-                <p className="font-bold text-red-500">{t('تنبيهات المخزون ({alerts.length})')}</p>
+                <p className="font-bold text-red-500">{t('تنبيهات المخزون')} ({alerts.length})</p>
                 <div className="flex flex-wrap gap-2 mt-2">
                   {alerts.slice(0, 5).map((alert, i) => (
                     <Badge key={i} variant="destructive" className="text-xs">
@@ -396,7 +396,7 @@ export default function Recipes() {
                   {recipe.preparation_time > 0 && (
                     <div className="flex items-center gap-2 text-sm text-muted-foreground">
                       <Clock className="h-4 w-4" />
-                      <span>{t('وقت التحضير: {recipe.preparation_time} دقيقة')}</span>
+                      <span>{t('وقت التحضير:')} {recipe.preparation_time} {t('دقيقة')}</span>
                     </div>
                   )}
                   <div className="mt-3 pt-3 border-t border-border/50">

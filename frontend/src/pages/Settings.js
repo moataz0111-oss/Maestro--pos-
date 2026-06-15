@@ -7407,7 +7407,7 @@ export default function Settings() {
                             </div>
                           )}
                           {invoiceSettings.tax_number && invoiceSettings.show_tax !== false && (
-                            <p className="text-xs text-gray-500 mt-1">{t('الرقم الضريبي: {invoiceSettings.tax_number}')}</p>
+                            <p className="text-xs text-gray-500 mt-1">{t('الرقم الضريبي:')} {invoiceSettings.tax_number}</p>
                           )}
                         </div>
                         

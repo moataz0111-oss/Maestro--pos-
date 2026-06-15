@@ -91,3 +91,31 @@
 - إشعار الزبون: PUT /api/orders/{id}/status?status=ready|delivered → push للزبون (user_type=customer). اشتراك الزبون يجلب المفتاح من /api/push/vapid-public-key.
 - التقييم: نافذة تلقائية عند التسليم؛ POST /api/customer/rate-order {order_id,tenant_id,phone,rating,comment,food_quality,delivery_speed,service_quality}. يضبط order.is_rated=true.
 - إيصال التوصيل (Delivery > reprint) يحتوي QR لرابط /track/{order_id}.
+
+## fork iter64 — إنهاء خدمات الموظف
+- نقاط: POST /api/employees/{id}/terminate | /terminate-payout | /reinstate (admin/super_admin). GET /api/employees?status=archived للأرشيف.
+- HR > الموظفين: زر terminate-{id}، صرف terminate-payout-{id}، إرجاع reinstate-{id}، شارة terminated-badge-{id}، تبديل الأرشيف toggle-archive-btn. تقرير الرواتب: report-terminate-payout-{id} / report-reinstate-{id}.
+- المستحقات تُخصم من owner_withdrawals (category end_of_service) حسب فرع الموظف. الإرجاع يحذف السحب ويعيد الرصيد. الإنهاء النهائي بعد 24س (is_active=False, pending_device_removal=True).
+
+## fork iter65 — مكالمة WebRTC داخل التطبيق + إصلاح اختفاء طلب السائق (14 يونيو 2026)
+- Drivers (preview seed): demo-drv-1 "سائق أحمد" 07801111111 / PIN 1234 ، demo-drv-2 "سائق علي" 07802222222 / PIN 1234.
+- مكالمات: POST /api/calls/initiate {order_id, caller:'customer'|'driver', caller_name, offer:{type,sdp}} → {call_id}. السائق يستطلع GET /api/calls/incoming?driver_id= ، الزبون GET /api/calls/incoming?order_id=. POST /api/calls/{id}/answer|reject|end ، GET /api/calls/{id}. مجموعة call_sessions.
+- Test IDs: call-ui-overlay, call-accept-btn, call-reject-btn, call-hangup-btn, call-mute-btn, call-peer-name, call-state-label, call-timer ، driver-call-btn-{orderId} ، contact-opt-inapp-call.
+- إصلاح اختفاء الطلب: GET /api/driver/orders يُرجع الآن كل الحالات عدا [delivered, cancelled, canceled, refunded, rejected] (كان يحذف confirmed/completed).
+- ملاحظة: WebRTC صوت حقيقي يحتاج جهازين بميكروفون؛ الـ signaling فقط قابل للاختبار آلياً. STUN عام (بلا TURN).
+
+## Seeded Test Data (Supplier Dues / Purchases — iter for this fork)
+- suppliers: "مورد تجريبي أ" (sup-a), "مورد تجريبي ب" (sup-b)
+- purchases_new: p1 (TST-1, 500k unpaid, ~40d old → overdue/estimated), p2 (TST-2, 300k partial 100k paid), p3 (TST-3, 200k paid)
+- Used to verify: /supplier-payment-dues (2 dues), /reports/purchases (total 1,000,000), dashboard SupplierDuesBanner
+
+## fork iter241 — Reports + Driver fixes (15 يونيو 2026)
+- Marketing PDF: Cairo font now EMBEDDED via @font-face in generate_profile.py (font kept dropping → wrong font). Logo has glow filter. Output: /app/frontend/public/Maestro-EGP-Profile.pdf (≈173KB) → public URL /Maestro-EGP-Profile.pdf.
+- Task C (invoice image): upload_invoice_image now stores /api/uploads/invoices/ (was /uploads/ → routed to frontend, broke). Frontend imgUrl() in ExternalPurchasesReport.js normalizes old /uploads/ → /api/uploads/. Migration run (0 old records).
+- Task D (price increase): POST /api/purchases-new now computes price_increase_log + tenant_id + created_by, enforces +10% reason (400 detail.code=PRICE_INCREASE_REASON_REQUIRED). Frontend PurchasesPage sends price_increase_reasons:{by_name|by_id}. Report /api/reports/price-increases now populated. Test data: material "مادة اختبار سعر" chain 1000→1300 (+30%, reason set).
+- Task B: Dashboard quick-action external-purchases-report label is dynamic — "تقرير المشتريات الخارجية" (centralized) / "مشتريات ومخزن الفرع" (per_branch). Removed centralOnly so it shows in both modes.
+- Driver app: after "بدء" tracking, start/stop button replaced by green "نشط" badge (data-testid driver-tracking-active-badge); no stop button (stop only via phone settings). Start btn data-testid driver-start-tracking-btn.
+- Driver freed on reject: reject_order (server.py) + reject_customer_order both clear driver_id/driver_name/driver_phone.
+- Fixed GET /api/purchases-new 500: PurchaseResponse fields made Optional with defaults (old seed docs lacked payment_method/created_by).
+- ManagementOrderAlerts: capped to 3 visible + pointer-events-none container so banners don't block clicks.
+- SW cache bumped: sw-offline v12, sw-customer v6, sw-driver v4.

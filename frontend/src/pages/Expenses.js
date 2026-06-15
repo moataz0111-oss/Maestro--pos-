@@ -23,7 +23,9 @@ import {
   WifiOff,
   Cloud,
   Users,
-  User
+  User,
+  Building2,
+  FileText
 } from 'lucide-react';
 import { toast } from 'sonner';
 import {
@@ -74,6 +76,7 @@ export default function Expenses() {
   const [loading, setLoading] = useState(true);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false); // يمنع التكرار بالضغط المتعدد
+  const [inventoryMode, setInventoryMode] = useState(null); // centralized | per_branch
   const [selectedCashierFilter, setSelectedCashierFilter] = useState(null); // فلتر الكاشير
   
   // التصنيفات المخصصة (يتم جلبها من قاعدة البيانات)
@@ -92,6 +95,7 @@ export default function Expenses() {
 
   useEffect(() => {
     fetchCategories();
+    fetchInventoryMode();
   }, []);
 
   // عند تغيير الفرع، اجلب business_date الحالي واضبط الفلتر ليعرض مصاريف اليوم التشغيلي فقط
@@ -132,6 +136,16 @@ export default function Expenses() {
     } catch (error) {
       console.log('Using default categories');
       setExpenseCategories(DEFAULT_EXPENSE_CATEGORIES);
+    }
+  };
+
+  // جلب وضع المخزن (مركزي / منفصل لكل فرع)
+  const fetchInventoryMode = async () => {
+    try {
+      const res = await axios.get(`${API}/inventory-settings`);
+      setInventoryMode(res.data?.inventory_mode || 'centralized');
+    } catch (e) {
+      setInventoryMode('centralized');
     }
   };
 
@@ -401,6 +415,19 @@ export default function Expenses() {
                 <option key={branch.id} value={branch.id}>{branch.name}</option>
               ))}
             </select>
+
+            {inventoryMode === 'per_branch' && (hasRole(['admin', 'manager', 'supervisor']) || user?.permissions?.includes('expenses') || user?.permissions?.includes('inventory')) && (
+              <>
+                <Button variant="outline" className="border-blue-500 text-blue-600 hover:bg-blue-50" onClick={() => navigate('/purchases-new', { state: { openDialog: 'supplier' } })} data-testid="expenses-add-supplier-btn">
+                  <Building2 className="h-4 w-4 ml-2" />
+                  {t('إضافة مورد')}
+                </Button>
+                <Button variant="outline" className="border-indigo-500 text-indigo-600 hover:bg-indigo-50" onClick={() => navigate('/purchases-new', { state: { openDialog: 'invoice' } })} data-testid="expenses-create-invoice-btn">
+                  <FileText className="h-4 w-4 ml-2" />
+                  {t('إنشاء فاتورة')}
+                </Button>
+              </>
+            )}
 
             {(hasRole(['admin', 'manager', 'supervisor']) || user?.permissions?.includes('expenses')) && (
               <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>

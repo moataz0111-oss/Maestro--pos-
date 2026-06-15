@@ -583,44 +583,62 @@ async def get_purchases_report(
 ):
     db = get_database()
     tenant_id = get_user_tenant_id(current_user)
+    # المشتريات على مستوى المخزن/الشركة وليست مرتبطة بفرع — لذلك نقرأ purchases_new
+    # (المجموعة الفعلية للفواتير) بدون فلتر فرع. نطبّق فلتر المستأجر بمرونة.
     query = {}
-    
     if tenant_id:
-        query["tenant_id"] = tenant_id
-    
-    user_branch_id = current_user.get("branch_id")
-    user_role = current_user.get("role")
-    
-    if user_branch_id and user_role not in [UserRole.SUPER_ADMIN, UserRole.ADMIN, UserRole.MANAGER]:
-        query["branch_id"] = user_branch_id
-    elif branch_id:
-        query["branch_id"] = branch_id
-    
+        query["$or"] = [{"tenant_id": tenant_id}, {"tenant_id": {"$exists": False}}, {"tenant_id": None}]
+
     query = _apply_business_date_filter(query, start_date, end_date)
-    
-    purchases = await db.purchases.find(query, {"_id": 0}).to_list(1000)
-    
-    total_purchases = sum(p["total_amount"] for p in purchases)
+
+    purchases = await db.purchases_new.find(query, {"_id": 0}).to_list(5000)
+
+    total_purchases = 0.0
+    total_paid = 0.0
+    total_unpaid = 0.0
     by_supplier = {}
     by_date = {}
     by_payment_status = {"paid": 0, "pending": 0, "partial": 0}
-    
+
     for p in purchases:
-        supplier = p.get("supplier_name", "غير محدد")
-        by_supplier[supplier] = by_supplier.get(supplier, 0) + p["total_amount"]
-        
-        date = p["created_at"][:10]
-        by_date[date] = by_date.get(date, 0) + p["total_amount"]
-        
-        status = p.get("payment_status", "paid")
-        by_payment_status[status] = by_payment_status.get(status, 0) + p["total_amount"]
-    
+        amt = float(p.get("total_amount") or 0)
+        payments = p.get("payments") or []
+        paid = float(p.get("paid_amount")) if p.get("paid_amount") is not None else sum(float(x.get("amount") or 0) for x in payments)
+        if paid == 0 and p.get("payment_status") == "paid" and not payments:
+            paid = amt
+        remaining = max(round(amt - paid, 2), 0)
+
+        total_purchases += amt
+        total_paid += paid
+        total_unpaid += remaining
+
+        supplier = p.get("supplier_name") or "غير محدد"
+        by_supplier[supplier] = by_supplier.get(supplier, 0) + amt
+
+        created = p.get("created_at") or ""
+        date = created[:10] if created else "—"
+        by_date[date] = by_date.get(date, 0) + amt
+
+        if remaining <= 0.009:
+            by_payment_status["paid"] += amt
+        elif paid > 0:
+            by_payment_status["partial"] += remaining
+        else:
+            by_payment_status["pending"] += remaining
+
     return {
-        "total_purchases": total_purchases,
+        "total_purchases": round(total_purchases, 2),
         "total_transactions": len(purchases),
+        "total_paid": round(total_paid, 2),
+        "total_unpaid": round(total_unpaid, 2),
         "by_supplier": by_supplier,
         "by_date": by_date,
-        "by_payment_status": by_payment_status
+        # pending = إجمالي المتبقي غير المسدّد (يشمل المتبقي من الجزئي)
+        "by_payment_status": {
+            "paid": round(by_payment_status["paid"], 2),
+            "pending": round(total_unpaid, 2),
+            "partial": round(by_payment_status["partial"], 2),
+        },
     }
 
 # ==================== INVENTORY REPORT ====================

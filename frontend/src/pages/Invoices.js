@@ -650,8 +650,8 @@ export default function Invoices() {
                 <p className="text-xs">{editingTemplate.business_name_en}</p>
               )}
               {editingTemplate.address && <p className="text-xs mt-1">{editingTemplate.address}</p>}
-              {editingTemplate.phone && <p className="text-xs">{t('هاتف: {editingTemplate.phone}')}</p>}
-              {editingTemplate.tax_number && <p className="text-xs">{t('الرقم الضريبي: {editingTemplate.tax_number}')}</p>}
+              {editingTemplate.phone && <p className="text-xs">{t('هاتف:')} {editingTemplate.phone}</p>}
+              {editingTemplate.tax_number && <p className="text-xs">{t('الرقم الضريبي:')} {editingTemplate.tax_number}</p>}
               
               <div className="border-t border-dashed border-gray-400 my-3"></div>
               

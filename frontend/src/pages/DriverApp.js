@@ -9,6 +9,8 @@ import { Badge } from '../components/ui/badge';
 import { Input } from '../components/ui/input';
 import { formatPrice } from '../utils/currency';
 import { useTranslation } from '../hooks/useTranslation';
+import { useWebRTCCall } from '../hooks/useWebRTCCall';
+import CallUI from '../components/CallUI';
 import {
   Truck,
   MapPin,
@@ -139,6 +141,12 @@ export default function DriverApp() {
   const audioRef = useRef(null);
   const handledNotifRef = useRef(new Set());
 
+  // مكالمة صوتية داخل التطبيق (سائق ↔ زبون)
+  const call = useWebRTCCall({ API, role: 'driver', driverId: driver?.id, callerName: driver?.name || 'السائق' });
+  useEffect(() => {
+    if (call.errorMsg) toast.error(call.errorMsg);
+  }, [call.errorMsg]);
+
   // تشغيل صوت الإشعار
   const playNotificationSound = () => {
     if (!soundEnabled) return;
@@ -244,6 +252,7 @@ export default function DriverApp() {
         toast.success(`${t('مرحباً')} ${driverData.name}!`);
         fetchOrders(driverData.id);
         subscribeDriverPush(driverPhone);
+        call.primeMic();
       }
     } catch (error) {
       const message = error.response?.data?.detail || t('فشل في تسجيل الدخول');
@@ -377,13 +386,6 @@ export default function DriverApp() {
     window.open(url, '_blank');
   };
 
-  // الاتصال بالعميل
-  const callCustomer = (phone) => {
-    if (phone) {
-      window.location.href = `tel:${phone}`;
-    }
-  };
-
   // محادثة السائق مع الزبون (تحديث كل ٣ ثوانٍ عند الفتح)
   useEffect(() => {
     if (!chatOrder) return;
@@ -501,13 +503,17 @@ export default function DriverApp() {
   }, [isLoggedIn, driver, t]);
 
   // فلترة الطلبات
-  const activeOrders = orders.filter(o => !['delivered', 'cancelled'].includes(o.status));
+  const activeOrders = orders.filter(o => !['delivered', 'cancelled', 'canceled', 'refunded', 'rejected'].includes(o.status));
   const completedOrders = orders.filter(o => o.status === 'delivered');
 
   const getStatusBadge = (status) => {
     const statusMap = {
       'assigned': { label: t('مُسند'), class: 'bg-blue-500' },
+      'pending': { label: t('بانتظار التحضير'), class: 'bg-slate-500' },
+      'confirmed': { label: t('تم القبول'), class: 'bg-blue-500' },
+      'preparing': { label: t('قيد التحضير'), class: 'bg-yellow-500' },
       'ready': { label: t('جاهز'), class: 'bg-yellow-500' },
+      'completed': { label: t('جاهز للتوصيل'), class: 'bg-yellow-500' },
       'out_for_delivery': { label: t('في الطريق'), class: 'bg-orange-500' },
       'delivered': { label: t('تم التسليم'), class: 'bg-green-500' },
       'cancelled': { label: t('ملغي'), class: 'bg-red-500' }
@@ -633,6 +639,7 @@ export default function DriverApp() {
   return (
     <div className="min-h-screen bg-gray-50" dir={isRTL ? 'rtl' : 'ltr'}>
       <Toaster position="top-center" richColors />
+      <CallUI {...call} />
       
       {/* Header */}
       <header className="sticky top-0 z-40 bg-gradient-to-r from-blue-500 to-green-500 text-white shadow-lg">
@@ -715,27 +722,26 @@ export default function DriverApp() {
                 <div>
                   <p className="font-bold">{isTracking ? t('التتبع نشط') : t('التتبع متوقف')}</p>
                   <p className="text-sm text-gray-500">
-                    {isTracking ? t('يتم إرسال موقعك للعملاء') : t('اضغط للبدء')}
+                    {isTracking ? t('يتم إرسال موقعك للعملاء — لإيقافه عطّل الموقع من إعدادات الهاتف') : t('اضغط للبدء')}
                   </p>
                 </div>
               </div>
-              <Button
-                onClick={isTracking ? stopTracking : startTracking}
-                variant={isTracking ? 'destructive' : 'default'}
-                className={isTracking ? '' : 'bg-green-500 hover:bg-green-600'}
-              >
-                {isTracking ? (
-                  <>
-                    <Pause className={`h-4 w-4 ${isRTL ? 'ml-2' : 'mr-2'}`} />
-                    {t('إيقاف')}
-                  </>
-                ) : (
-                  <>
-                    <Play className={`h-4 w-4 ${isRTL ? 'ml-2' : 'mr-2'}`} />
-                    {t('بدء')}
-                  </>
-                )}
-              </Button>
+              {isTracking ? (
+                <div className="flex items-center gap-1 px-3 py-2 rounded-lg bg-green-500 text-white text-sm font-bold" data-testid="driver-tracking-active-badge">
+                  <Navigation className="h-4 w-4 animate-pulse" />
+                  {t('نشط')}
+                </div>
+              ) : (
+                <Button
+                  onClick={startTracking}
+                  variant="default"
+                  className="bg-green-500 hover:bg-green-600"
+                  data-testid="driver-start-tracking-btn"
+                >
+                  <Play className={`h-4 w-4 ${isRTL ? 'ml-2' : 'mr-2'}`} />
+                  {t('بدء')}
+                </Button>
+              )}
             </div>
           </CardContent>
         </Card>
@@ -815,12 +821,13 @@ export default function DriverApp() {
 
                     {/* الأزرار */}
                     <div className="flex gap-2">
-                      {/* زر الاتصال */}
+                      {/* زر الاتصال الصوتي داخل التطبيق */}
                       <Button
                         size="sm"
                         variant="outline"
-                        onClick={() => callCustomer(order.customer_phone || order.phone)}
+                        onClick={() => call.startCall(order.id, order.customer_name || 'الزبون')}
                         className="flex-1"
+                        data-testid={`driver-call-btn-${order.id}`}
                       >
                         <Phone className="h-4 w-4 ml-1" />
                         اتصال

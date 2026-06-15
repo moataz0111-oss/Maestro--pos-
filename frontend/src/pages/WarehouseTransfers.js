@@ -450,7 +450,7 @@ export default function WarehouseTransfers() {
                       {/* Selected Items Summary */}
                       {selectedItems.length > 0 && (
                         <div className="bg-muted p-3 rounded-lg">
-                          <p className="font-medium mb-2">{t('الأصناف المختارة ({selectedItems.length})')}</p>
+                          <p className="font-medium mb-2">{t('الأصناف المختارة')} ({selectedItems.length})</p>
                           <div className="flex flex-wrap gap-2">
                             {selectedItems.map(item => (
                               <Badge key={item.id} variant="secondary">
@@ -653,7 +653,7 @@ export default function WarehouseTransfers() {
                               {request.items?.slice(0, 2).map((item, i) => (
                                 <div key={i}>{item.name} ({item.quantity} {item.unit})</div>
                               ))}
-                              {request.items?.length > 2 && <span className="text-muted-foreground">{t('+{request.items.length - 2} أخرى')}</span>}
+                              {request.items?.length > 2 && <span className="text-muted-foreground">+{request.items.length - 2} {t('أخرى')}</span>}
                             </div>
                           </td>
                           <td className="p-3">{getPriorityBadge(request.priority)}</td>

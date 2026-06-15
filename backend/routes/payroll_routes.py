@@ -4,9 +4,10 @@ Payroll Routes - إدارة الرواتب والخصومات والمكافآت
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, ConfigDict
 from typing import Optional, List
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 import uuid
 import logging
+import calendar
 
 from .shared import (
     get_database, get_current_user, get_user_tenant_id,
@@ -633,24 +634,335 @@ async def get_payroll(
 
 @router.put("/payroll/{payroll_id}/pay")
 async def pay_payroll(payroll_id: str, current_user: dict = Depends(get_current_user)):
-    """صرف الراتب"""
+    """صرف الراتب — يُخصم المبلغ المتبقي من **خزينة المالك حسب فرع الموظف**.
+    يتجنّب الازدواج: يخصم (صافي الراتب − ما صُرف نقداً مسبقاً لنفس الشهر) فقط."""
     db = get_database()
     if current_user["role"] not in [UserRole.ADMIN, UserRole.SUPER_ADMIN]:
         raise HTTPException(status_code=403, detail="غير مصرح")
-    
+
     payroll = await db.payroll.find_one({"id": payroll_id})
     if not payroll:
         raise HTTPException(status_code=404, detail="كشف الراتب غير موجود")
-    
+    if payroll.get("status") == "paid":
+        raise HTTPException(status_code=400, detail="تم صرف هذا الراتب مسبقاً")
+
+    tenant_id = get_user_tenant_id(current_user)
+    month = payroll.get("month")
+    net_salary = round(float(payroll.get("net_salary") or 0), 2)
+
+    # فرع الموظف (المقيَّد في بطاقة الموظف)
+    emp = await db.employees.find_one({"id": payroll.get("employee_id")}, {"_id": 0, "branch_id": 1, "name": 1})
+    emp_branch_id = (emp or {}).get("branch_id")
+    emp_branch_name = None
+    if emp_branch_id:
+        br = await db.branches.find_one({"id": emp_branch_id}, {"_id": 0, "name": 1})
+        emp_branch_name = (br or {}).get("name")
+
+    # ما صُرف نقداً مسبقاً لنفس الموظف/الشهر (دفعات على الراتب) لتجنّب الخصم المزدوج
+    already_paid = 0.0
+    if month:
+        prev_payments = await db.salary_payments.find(
+            {"employee_id": payroll.get("employee_id"), "salary_month": month},
+            {"_id": 0, "amount": 1},
+        ).to_list(1000)
+        already_paid = round(sum(p.get("amount", 0) for p in prev_payments), 2)
+
+    amount_to_withdraw = round(max(net_salary - already_paid, 0), 2)
+
+    withdrawal_id = None
+    if amount_to_withdraw > 0 and emp_branch_id:
+        # تحقّق من رصيد الفرع المتاح في خزينة المالك (إيداعات الفرع − سحوباته − تحويلاته)
+        branch_q = {"branch_id": emp_branch_id}
+        if tenant_id:
+            branch_q["tenant_id"] = tenant_id
+        br_deposits = await db.owner_deposits.find(branch_q, {"_id": 0, "amount": 1}).to_list(5000)
+        br_withdrawals = await db.owner_withdrawals.find(branch_q, {"_id": 0, "amount": 1}).to_list(5000)
+        br_transfers = await db.owner_profit_transfers.find(branch_q, {"_id": 0, "amount": 1}).to_list(5000)
+        branch_balance = (
+            sum(d.get("amount", 0) for d in br_deposits)
+            - sum(w.get("amount", 0) for w in br_withdrawals)
+            - sum(t.get("amount", 0) for t in br_transfers)
+        )
+        if amount_to_withdraw > branch_balance:
+            raise HTTPException(
+                status_code=400,
+                detail=f"رصيد فرع \"{emp_branch_name or emp_branch_id}\" غير كافٍ في خزينة المالك. المتاح: {branch_balance:,.0f} IQD، المطلوب: {amount_to_withdraw:,.0f} IQD",
+            )
+        # سحب من خزينة المالك مرتبط بالفرع
+        withdrawal_id = str(uuid.uuid4())
+        await db.owner_withdrawals.insert_one({
+            "id": withdrawal_id,
+            "tenant_id": tenant_id,
+            "amount": amount_to_withdraw,
+            "date": f"{month}-28" if month else datetime.now(timezone.utc).date().isoformat(),
+            "salary_month": month,
+            "actual_payment_date": datetime.now(timezone.utc).date().isoformat(),
+            "beneficiary": f"راتب: {payroll.get('employee_name') or (emp or {}).get('name')}",
+            "description": f"صرف راتب شهر {month}" if month else "صرف راتب",
+            "category": "salary_payment",
+            "branch_id": emp_branch_id,
+            "branch_name": emp_branch_name,
+            "linked_payroll_id": payroll_id,
+            "created_by": current_user.get("full_name") or current_user.get("username"),
+            "created_at": datetime.now(timezone.utc).isoformat(),
+        })
+
     await db.payroll.update_one(
         {"id": payroll_id},
         {"$set": {
             "status": "paid",
             "paid_at": datetime.now(timezone.utc).isoformat(),
-            "paid_by": current_user["id"]
-        }}
+            "paid_by": current_user["id"],
+            "paid_amount": amount_to_withdraw,
+            "branch_id": emp_branch_id,
+            "branch_name": emp_branch_name,
+            "linked_owner_withdrawal_id": withdrawal_id,
+        }},
     )
-    return {"message": "تم صرف الراتب"}
+    return {
+        "message": "تم صرف الراتب وخصمه من خزينة المالك" if withdrawal_id else "تم صرف الراتب",
+        "amount_withdrawn": amount_to_withdraw,
+        "branch_name": emp_branch_name,
+    }
+
+
+# ==================== END OF SERVICE / TERMINATION (إنهاء خدمات) ====================
+async def _compute_employee_net(db, employee: dict, month: str) -> dict:
+    """يحسب صافي راتب الموظف للشهر حسب أيام العمل الفعلية + المتبقي بعد ما صُرف نقداً.
+    (نفس منطق /payroll/calculate)."""
+    employee_id = employee["id"]
+    basic_salary = employee.get("salary", 0)
+    salary_type = employee.get("salary_type", "monthly")
+    work_hours_per_day = employee.get("work_hours_per_day", 8) or 8
+    hourly_rate = basic_salary / (30 * work_hours_per_day) if work_hours_per_day > 0 else 0
+    daily_rate = basic_salary / 30
+
+    attendance = await db.attendance.find({"employee_id": employee_id, "date": {"$regex": f"^{month}"}}, {"_id": 0}).to_list(31)
+    worked_days = len([a for a in attendance if a.get("status") in ["present", "late", "early_leave"]])
+    total_worked_hours = sum(a.get("worked_hours", 0) for a in attendance)
+
+    if salary_type == "hourly":
+        earned_salary = round(total_worked_hours * hourly_rate, 2)
+    elif salary_type == "daily":
+        earned_salary = round(worked_days * daily_rate, 2)
+    else:
+        earned_salary = round(daily_rate * worked_days, 2)
+
+    approved_overtime = await db.overtime_requests.find({"employee_id": employee_id, "date": {"$regex": f"^{month}"}, "status": "approved"}, {"_id": 0}).to_list(100)
+    overtime_pay = round(sum(o.get("hours", 0) for o in approved_overtime) * hourly_rate * 1.5, 2)
+    deductions = await db.deductions.find({"employee_id": employee_id, "date": {"$regex": f"^{month}"}}, {"_id": 0}).to_list(100)
+    total_deductions = sum(d.get("amount", 0) for d in deductions)
+    bonuses = await db.bonuses.find({"employee_id": employee_id, "date": {"$regex": f"^{month}"}}, {"_id": 0}).to_list(100)
+    total_bonuses = sum(b.get("amount", 0) for b in bonuses)
+    # عند إنهاء الخدمة: نخصم كامل رصيد السلف المتبقي (وليس القسط الشهري فقط)
+    advances = await db.advances.find({"employee_id": employee_id, "status": "approved", "remaining_amount": {"$gt": 0}}, {"_id": 0}).to_list(100)
+    advance_remaining = sum(a.get("remaining_amount", 0) for a in advances)
+
+    net_salary = round(earned_salary + overtime_pay + total_bonuses - total_deductions - advance_remaining, 2)
+    payments = await db.salary_payments.find({"employee_id": employee_id, "salary_month": month}, {"_id": 0, "amount": 1}).to_list(2000)
+    paid_amount = round(sum(p.get("amount", 0) or 0 for p in payments), 2)
+    remaining = round(net_salary - paid_amount, 2)
+    return {
+        "worked_days": worked_days, "earned_salary": earned_salary, "overtime_pay": overtime_pay,
+        "total_bonuses": total_bonuses, "total_deductions": total_deductions,
+        "advance_remaining": advance_remaining, "net_salary": net_salary,
+        "paid_amount": paid_amount, "remaining": remaining,
+    }
+
+
+def _end_of_next_month_iso(date_str: str) -> str:
+    """نهاية الشهر الذي يلي شهر تاريخ الإنهاء (موعد الحذف من الأرشيف)."""
+    d = datetime.fromisoformat(date_str[:10])
+    y, m = (d.year + (1 if d.month == 12 else 0), 1 if d.month == 12 else d.month + 1)
+    last_day = calendar.monthrange(y, m)[1]
+    return datetime(y, m, last_day, 23, 59, 59, tzinfo=timezone.utc).isoformat()
+
+
+async def process_terminations(db, tenant_id: Optional[str] = None):
+    """يُنهي/يؤرشف ويحذف الموظفين المنتهية خدماتهم تلقائياً (يُستدعى عند جلب الموظفين).
+    - بعد 24 ساعة من الطلب: terminated_pending → terminated (يُخفى من القائمة + يُزال من البصمة).
+    - بعد نهاية الشهر التالي لتاريخ الإنهاء: حذف نهائي من الأرشيف.
+    """
+    now = datetime.now(timezone.utc)
+    now_iso = now.isoformat()
+    base = {"tenant_id": tenant_id} if tenant_id else {}
+    # 1) الإنهاء النهائي بعد 24 ساعة
+    pending = await db.employees.find({**base, "employment_status": "terminated_pending", "auto_finalize_at": {"$lte": now_iso}}, {"_id": 0, "id": 1, "termination_date": 1}).to_list(500)
+    for e in pending:
+        await db.employees.update_one({"id": e["id"]}, {"$set": {
+            "employment_status": "terminated",
+            "is_active": False,
+            "pending_device_removal": True,  # يُزال من جهاز البصمة عبر المزامنة
+            "archive_purge_at": _end_of_next_month_iso(e.get("termination_date") or now_iso),
+        }})
+    # 2) الحذف النهائي من الأرشيف بعد نهاية الشهر التالي
+    to_purge = await db.employees.find({**base, "employment_status": "terminated", "archive_purge_at": {"$lte": now_iso}}, {"_id": 0, "id": 1}).to_list(500)
+    for e in to_purge:
+        await db.employees.delete_one({"id": e["id"]})
+
+
+@router.post("/employees/{employee_id}/terminate")
+async def terminate_employee(employee_id: str, current_user: dict = Depends(get_current_user)):
+    """إنهاء خدمات موظف: خط أحمر + جدولة حذف بعد 24 ساعة + معاينة المستحقات."""
+    db = get_database()
+    if current_user["role"] not in [UserRole.ADMIN, UserRole.SUPER_ADMIN]:
+        raise HTTPException(status_code=403, detail="غير مصرح")
+    emp = await db.employees.find_one({"id": employee_id}, {"_id": 0})
+    if not emp:
+        raise HTTPException(status_code=404, detail="الموظف غير موجود")
+    if emp.get("employment_status") in ("terminated_pending", "terminated"):
+        raise HTTPException(status_code=400, detail="خدمات هذا الموظف منتهية بالفعل")
+
+    now = datetime.now(timezone.utc)
+    term_date = now.date().isoformat()
+    month = term_date[:7]
+    calc = await _compute_employee_net(db, emp, month)
+    await db.employees.update_one({"id": employee_id}, {"$set": {
+        "employment_status": "terminated_pending",
+        "termination_date": term_date,
+        "termination_month": month,
+        "termination_requested_at": now.isoformat(),
+        "auto_finalize_at": (now + timedelta(hours=24)).isoformat(),
+        "settlement_paid": False,
+        "settlement_preview": calc["remaining"],
+    }})
+    return {"message": "تم إنهاء خدمات الموظف — يمكن صرف المستحقات أو الإرجاع خلال 24 ساعة", "settlement_preview": calc["remaining"], "details": calc}
+
+
+@router.post("/employees/{employee_id}/terminate-payout")
+async def terminate_payout(employee_id: str, current_user: dict = Depends(get_current_user)):
+    """صرف مستحقات إنهاء الخدمة من خزينة المالك حسب فرع الموظف."""
+    db = get_database()
+    if current_user["role"] not in [UserRole.ADMIN, UserRole.SUPER_ADMIN]:
+        raise HTTPException(status_code=403, detail="غير مصرح")
+    emp = await db.employees.find_one({"id": employee_id}, {"_id": 0})
+    if not emp:
+        raise HTTPException(status_code=404, detail="الموظف غير موجود")
+    if emp.get("employment_status") != "terminated_pending":
+        raise HTTPException(status_code=400, detail="يجب إنهاء خدمات الموظف أولاً")
+    if emp.get("settlement_paid"):
+        raise HTTPException(status_code=400, detail="تم صرف المستحقات مسبقاً")
+
+    tenant_id = get_user_tenant_id(current_user)
+    month = emp.get("termination_month") or (emp.get("termination_date") or "")[:7]
+    calc = await _compute_employee_net(db, emp, month)
+    amount = round(max(calc["remaining"], 0), 2)
+    emp_branch_id = emp.get("branch_id")
+    emp_branch_name = None
+    if emp_branch_id:
+        br = await db.branches.find_one({"id": emp_branch_id}, {"_id": 0, "name": 1})
+        emp_branch_name = (br or {}).get("name")
+
+    withdrawal_id = None
+    if amount > 0 and emp_branch_id:
+        branch_q = {"branch_id": emp_branch_id}
+        if tenant_id:
+            branch_q["tenant_id"] = tenant_id
+        deps = await db.owner_deposits.find(branch_q, {"_id": 0, "amount": 1}).to_list(5000)
+        wds = await db.owner_withdrawals.find(branch_q, {"_id": 0, "amount": 1}).to_list(5000)
+        trs = await db.owner_profit_transfers.find(branch_q, {"_id": 0, "amount": 1}).to_list(5000)
+        balance = sum(d.get("amount", 0) for d in deps) - sum(w.get("amount", 0) for w in wds) - sum(t.get("amount", 0) for t in trs)
+        if amount > balance:
+            raise HTTPException(status_code=400, detail=f"رصيد فرع \"{emp_branch_name or emp_branch_id}\" غير كافٍ في خزينة المالك. المتاح: {balance:,.0f} IQD، المطلوب: {amount:,.0f} IQD")
+        withdrawal_id = str(uuid.uuid4())
+        await db.owner_withdrawals.insert_one({
+            "id": withdrawal_id, "tenant_id": tenant_id, "amount": amount,
+            "date": emp.get("termination_date"), "actual_payment_date": datetime.now(timezone.utc).date().isoformat(),
+            "salary_month": month, "beneficiary": f"إنهاء خدمات: {emp.get('name')}",
+            "description": f"صرف مستحقات إنهاء خدمة — {emp.get('name')}",
+            "category": "end_of_service", "branch_id": emp_branch_id, "branch_name": emp_branch_name,
+            "linked_employee_id": employee_id,
+            "created_by": current_user.get("full_name") or current_user.get("username"),
+            "created_at": datetime.now(timezone.utc).isoformat(),
+        })
+    await db.employees.update_one({"id": employee_id}, {"$set": {
+        "settlement_paid": True, "settlement_amount": amount,
+        "settlement_withdrawal_id": withdrawal_id,
+        "settlement_paid_at": datetime.now(timezone.utc).isoformat(),
+    }})
+    return {
+        "message": "تم صرف المستحقات وخصمها من خزينة المالك" if withdrawal_id else "تم صرف المستحقات",
+        "amount": amount,
+        "branch_name": emp_branch_name,
+        "details": calc,
+        "month": month,
+        "paid_at": datetime.now(timezone.utc).isoformat(),
+        "employee": {
+            "name": emp.get("name"),
+            "position": emp.get("position"),
+            "phone": emp.get("phone"),
+            "hire_date": emp.get("hire_date"),
+            "termination_date": emp.get("termination_date"),
+            "branch_name": emp_branch_name,
+            "basic_salary": emp.get("salary") or emp.get("basic_salary"),
+        },
+    }
+
+
+@router.get("/employees/{employee_id}/settlement-receipt")
+async def get_settlement_receipt(employee_id: str, current_user: dict = Depends(get_current_user)):
+    """بيانات إيصال المخالصة النهائية (لإعادة الطباعة) — يعمل للموظف المنتهي/المصروف."""
+    db = get_database()
+    if current_user["role"] not in [UserRole.ADMIN, UserRole.SUPER_ADMIN, UserRole.MANAGER]:
+        raise HTTPException(status_code=403, detail="غير مصرح")
+    emp = await db.employees.find_one({"id": employee_id}, {"_id": 0})
+    if not emp:
+        raise HTTPException(status_code=404, detail="الموظف غير موجود")
+    month = emp.get("termination_month") or (emp.get("termination_date") or "")[:7]
+    calc = await _compute_employee_net(db, emp, month)
+    emp_branch_name = None
+    if emp.get("branch_id"):
+        br = await db.branches.find_one({"id": emp["branch_id"]}, {"_id": 0, "name": 1})
+        emp_branch_name = (br or {}).get("name")
+    amount = emp.get("settlement_amount")
+    if amount is None:
+        amount = round(max(calc["remaining"], 0), 2)
+    return {
+        "amount": amount,
+        "branch_name": emp_branch_name,
+        "details": calc,
+        "month": month,
+        "paid_at": emp.get("settlement_paid_at"),
+        "settlement_paid": bool(emp.get("settlement_paid")),
+        "employee": {
+            "name": emp.get("name"),
+            "position": emp.get("position"),
+            "phone": emp.get("phone"),
+            "hire_date": emp.get("hire_date"),
+            "termination_date": emp.get("termination_date"),
+            "branch_name": emp_branch_name,
+            "basic_salary": emp.get("salary") or emp.get("basic_salary"),
+        },
+    }
+
+
+
+@router.post("/employees/{employee_id}/reinstate")
+async def reinstate_employee(employee_id: str, current_user: dict = Depends(get_current_user)):
+    """إرجاع الموظف للعمل (خلال 24 ساعة فقط) — يعكس الصرف ويعيد الرصيد للخزينة."""
+    db = get_database()
+    if current_user["role"] not in [UserRole.ADMIN, UserRole.SUPER_ADMIN]:
+        raise HTTPException(status_code=403, detail="غير مصرح")
+    emp = await db.employees.find_one({"id": employee_id}, {"_id": 0})
+    if not emp:
+        raise HTTPException(status_code=404, detail="الموظف غير موجود")
+    if emp.get("employment_status") != "terminated_pending":
+        raise HTTPException(status_code=400, detail="لا يمكن الإرجاع — انتهت مهلة الـ24 ساعة أو الموظف غير منتهٍ")
+    auto_finalize_at = emp.get("auto_finalize_at")
+    if auto_finalize_at and datetime.now(timezone.utc).isoformat() >= auto_finalize_at:
+        raise HTTPException(status_code=400, detail="انتهت مهلة الـ24 ساعة — لا يمكن الإرجاع")
+
+    # عكس الصرف: حذف السحب من خزينة المالك (يعيد الرصيد للخزينة تلقائياً)
+    wid = emp.get("settlement_withdrawal_id")
+    if wid:
+        await db.owner_withdrawals.delete_one({"id": wid})
+    await db.employees.update_one({"id": employee_id}, {"$unset": {
+        "termination_date": "", "termination_month": "", "termination_requested_at": "",
+        "auto_finalize_at": "", "settlement_paid": "", "settlement_amount": "",
+        "settlement_withdrawal_id": "", "settlement_paid_at": "", "settlement_preview": "",
+    }, "$set": {"employment_status": "active", "is_active": True}})
+    return {"message": "تمت إعادة الموظف للعمل وإلغاء الصرف وإرجاع الرصيد للخزينة"}
+
 
 @router.post("/payroll/generate-all")
 async def generate_all_payrolls(month: str, current_user: dict = Depends(get_current_user)):

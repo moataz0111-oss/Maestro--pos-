@@ -120,9 +120,7 @@ export default function IncomingCallPopup() {
         setActiveCalls(filteredCalls);
       }
     } catch (error) {
-      if (error.name !== 'AbortError') {
-        console.error('Error fetching calls:', error);
-      }
+      /* صامت — يحدث عند انقطاع الإنترنت أو انتهاء مهلة الطلب */
     }
   }, [isRinging, playRingSound, stopRingSound]);
 

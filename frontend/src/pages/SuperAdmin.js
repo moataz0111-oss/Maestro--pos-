@@ -62,6 +62,9 @@ import {
   Package,
   AlertTriangle,
   ExternalLink,
+  Shield,
+  ShieldAlert,
+  LogIn,
   UserCheck,
   Layers,
   RotateCcw,
@@ -318,6 +321,10 @@ export default function SuperAdmin() {
   // لوحة معلومات الاشتراكات
   const [subscriptionsDashboard, setSubscriptionsDashboard] = useState(null);
   const [loadingDashboard, setLoadingDashboard] = useState(false);
+
+  // السجل الأمني (لمالك النظام الأعلى)
+  const [securityLog, setSecurityLog] = useState(null);
+  const [loadingSecurityLog, setLoadingSecurityLog] = useState(false);
   
   // أسعار الاشتراكات
   const [showPricesModal, setShowPricesModal] = useState(false);
@@ -767,6 +774,22 @@ export default function SuperAdmin() {
       setLoadingDashboard(false);
     }
   };
+
+  // جلب السجل الأمني (مالك النظام الأعلى فقط)
+  const fetchSecurityLog = async () => {
+    setLoadingSecurityLog(true);
+    try {
+      const token = localStorage.getItem('super_admin_token');
+      const headers = { Authorization: `Bearer ${token}` };
+      const res = await axios.get(`${API}/super-admin/security-log?limit=100`, { headers });
+      setSecurityLog(res.data);
+    } catch (error) {
+      console.error('Error fetching security log:', error);
+    } finally {
+      setLoadingSecurityLog(false);
+    }
+  };
+
 
   // حفظ أسعار الاشتراكات
   const saveSubscriptionPrices = async () => {
@@ -2627,8 +2650,8 @@ export default function SuperAdmin() {
           </CardHeader>
           <CardContent>
             {/* تبويبات لفصل العملاء الفعليين عن الحسابات التجريبية */}
-            <Tabs defaultValue="active" className="w-full">
-              <TabsList className="grid w-full grid-cols-4 mb-4 bg-gray-700/50">
+            <Tabs defaultValue="active" className="w-full" onValueChange={(v) => { if (v === 'security' && !securityLog) fetchSecurityLog(); }}>
+              <TabsList className="grid w-full grid-cols-5 mb-4 bg-gray-700/50">
                 <TabsTrigger value="active" className="data-[state=active]:bg-green-600">
                   <Users className="h-4 w-4 ml-2" />
                   {t('العملاء')} ({tenants.filter(t => !t.is_demo && t.subscription_type !== 'demo').length})
@@ -2644,6 +2667,10 @@ export default function SuperAdmin() {
                 <TabsTrigger value="all" className="data-[state=active]:bg-gray-600">
                   <Layers className="h-4 w-4 ml-2" />
                   {t('الكل')} ({tenants.length})
+                </TabsTrigger>
+                <TabsTrigger value="security" className="data-[state=active]:bg-red-600" data-testid="security-log-tab">
+                  <Shield className="h-4 w-4 ml-2" />
+                  {t('السجل الأمني')}
                 </TabsTrigger>
               </TabsList>
               
@@ -3105,6 +3132,115 @@ export default function SuperAdmin() {
                   )}
                 </div>
               </TabsContent>
+
+              {/* السجل الأمني — خاص بمالك النظام الأعلى */}
+              <TabsContent value="security">
+                <div className="space-y-4" data-testid="security-log-content">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2 text-red-400">
+                      <Shield className="h-5 w-5" />
+                      <span className="font-bold">{t('السجل الأمني وإدارة العملاء')}</span>
+                    </div>
+                    <Button onClick={fetchSecurityLog} variant="outline" size="sm" className="border-gray-600" data-testid="security-log-refresh">
+                      <RefreshCw className={`h-4 w-4 ${loadingSecurityLog ? 'animate-spin' : ''}`} />
+                    </Button>
+                  </div>
+
+                  {/* بطاقات الملخص */}
+                  <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+                    <div className="bg-gray-800/60 border border-gray-700 rounded-lg p-3 text-center">
+                      <p className="text-xs text-gray-400">{t('إجمالي العملاء')}</p>
+                      <p className="text-2xl font-bold text-white">{securityLog?.summary?.total ?? '—'}</p>
+                    </div>
+                    <div className="bg-green-900/30 border border-green-700/50 rounded-lg p-3 text-center">
+                      <p className="text-xs text-green-300">{t('نشط')}</p>
+                      <p className="text-2xl font-bold text-green-400">{securityLog?.summary?.active ?? '—'}</p>
+                    </div>
+                    <div className="bg-red-900/30 border border-red-700/50 rounded-lg p-3 text-center">
+                      <p className="text-xs text-red-300">{t('معطّل')}</p>
+                      <p className="text-2xl font-bold text-red-400">{securityLog?.summary?.disabled ?? '—'}</p>
+                    </div>
+                    <div className="bg-amber-900/30 border border-amber-700/50 rounded-lg p-3 text-center">
+                      <p className="text-xs text-amber-300">{t('اشتراك ينتهي قريباً')}</p>
+                      <p className="text-2xl font-bold text-amber-400">{securityLog?.summary?.expiring_soon ?? '—'}</p>
+                    </div>
+                    <div className="bg-rose-900/40 border border-rose-700/50 rounded-lg p-3 text-center">
+                      <p className="text-xs text-rose-300">{t('اشتراك منتهٍ')}</p>
+                      <p className="text-2xl font-bold text-rose-400">{securityLog?.summary?.expired ?? '—'}</p>
+                    </div>
+                  </div>
+
+                  {/* تنبيهات الاشتراك */}
+                  {((securityLog?.expired?.length || 0) + (securityLog?.expiring_soon?.length || 0)) > 0 && (
+                    <div className="bg-gray-800/50 border border-gray-700 rounded-lg p-3">
+                      <div className="flex items-center gap-2 mb-2 text-amber-400">
+                        <AlertTriangle className="h-4 w-4" />
+                        <span className="font-bold text-sm">{t('تنبيهات الاشتراك')}</span>
+                      </div>
+                      <div className="space-y-2">
+                        {(securityLog?.expired || []).map((s) => (
+                          <div key={s.id} className="flex items-center justify-between bg-rose-950/40 border border-rose-800/50 rounded px-3 py-2" data-testid={`sub-expired-${s.id}`}>
+                            <span className="text-sm text-white">{s.name}</span>
+                            <Badge className="bg-rose-600 text-white text-[11px]">{t('منتهٍ منذ')} {Math.abs(s.days_left)} {t('يوم')}</Badge>
+                          </div>
+                        ))}
+                        {(securityLog?.expiring_soon || []).map((s) => (
+                          <div key={s.id} className="flex items-center justify-between bg-amber-950/40 border border-amber-800/50 rounded px-3 py-2" data-testid={`sub-expiring-${s.id}`}>
+                            <span className="text-sm text-white">{s.name}</span>
+                            <Badge className="bg-amber-600 text-white text-[11px]">{t('متبقٍّ')} {s.days_left} {t('يوم')}</Badge>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* سجل أحداث الأمان */}
+                  <div className="bg-gray-800/50 border border-gray-700 rounded-lg p-3">
+                    <div className="flex items-center gap-2 mb-2 text-gray-300">
+                      <Activity className="h-4 w-4" />
+                      <span className="font-bold text-sm">{t('أحداث الأمان (دخول / خروج / انتحال)')}</span>
+                    </div>
+                    {loadingSecurityLog ? (
+                      <div className="text-center py-6"><RefreshCw className="h-5 w-5 animate-spin mx-auto text-gray-400" /></div>
+                    ) : (securityLog?.events?.length || 0) === 0 ? (
+                      <p className="text-center text-gray-500 py-6 text-sm">{t('لا توجد أحداث أمان')}</p>
+                    ) : (
+                      <div className="space-y-1.5 max-h-[420px] overflow-y-auto">
+                        {securityLog.events.map((ev, idx) => {
+                          const type = ev.event_type;
+                          const icon = type === 'login' ? <LogIn className="h-4 w-4 text-green-400" />
+                            : type === 'logout' ? <LogOut className="h-4 w-4 text-gray-400" />
+                            : type === 'impersonation' ? <ShieldAlert className="h-4 w-4 text-amber-400" />
+                            : <Activity className="h-4 w-4 text-blue-400" />;
+                          const label = type === 'login' ? t('تسجيل دخول')
+                            : type === 'logout' ? t('تسجيل خروج')
+                            : type === 'impersonation' ? t('انتحال هوية')
+                            : type;
+                          return (
+                            <div key={ev.id || idx} className="flex items-center justify-between gap-2 bg-gray-900/40 border border-gray-700/50 rounded px-3 py-2" data-testid={`security-event-${idx}`}>
+                              <div className="flex items-center gap-2 min-w-0">
+                                {icon}
+                                <div className="min-w-0">
+                                  <p className="text-sm text-white truncate">
+                                    <span className="font-bold">{label}</span> — {ev.user_name || ev.user_email || '—'}
+                                    {ev.user_role ? <span className="text-gray-400"> ({ev.user_role})</span> : null}
+                                  </p>
+                                  <p className="text-[11px] text-gray-500 truncate">{t('العميل')}: {ev.tenant_name}</p>
+                                </div>
+                              </div>
+                              <span className="text-[11px] text-gray-500 shrink-0 flex items-center gap-1">
+                                <Clock className="h-3 w-3" />
+                                {ev.created_at ? String(ev.created_at).slice(0, 16).replace('T', ' ') : ''}
+                              </span>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </TabsContent>
+
             </Tabs>
           </CardContent>
         </Card>

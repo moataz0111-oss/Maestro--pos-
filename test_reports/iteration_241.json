@@ -1,0 +1,52 @@
+{
+  "summary": "Iter 241 — Verified Task B (Dashboard quick-action label 'تقرير المشتريات الخارجية'), Task C (purchases-report invoice_image_url under /api/uploads/invoices/ resolves HTTP 200 PNG for purchase #104), Task D (price-increases report renders test material with 3 rows incl. 1000→1300 +30% and KPIs; backend POST /api/purchases-new returns 400 PRICE_INCREASE_REASON_REQUIRED without reason and 200 with reason + price_increase_log stored), and Driver-freed-on-reject (assigning + PUT /api/orders/{id}/reject clears driver_id/name/phone).",
+  "backend_issues": {
+    "critical": [
+      {
+        "endpoint": "GET /api/purchases-new",
+        "issue": "Returns 500 ResponseValidationError because existing seed documents p1/p2/p3 are missing 'payment_method' and 'created_by' fields required by the response_model. Use /api/purchases-report instead — that one works. Either backfill seeds or relax model with defaults.",
+        "priority": "HIGH"
+      }
+    ],
+    "minor": [
+      {
+        "endpoint": "GET /api/suppliers",
+        "issue": "Returns empty list [] in this fork even though seed docs claim 'مورد تجريبي أ' and 'مورد تجريبي ب' exist (purchases-report row supplier_id='', supplier_name='غير محدد'). Re-seed may be needed if Supplier Dues banner regression matters."
+      }
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "All pages with management-order-alerts", "issues": ["Left-side red 'طلب مرفوض من الكاشير' toasts from earlier rejected orders accumulate and partially overlap report filters/cards (zIndex), making some clicks miss. Auto-dismiss after N seconds or clamp max 3 visible."]}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iter241_external_purchases_and_driver.py",
+    "/app/test_reports/pytest/iter241.xml"
+  ],
+  "action_items": [
+    "[HIGH] Fix GET /api/purchases-new 500: backfill 'payment_method' & 'created_by' on seed purchases p1/p2/p3 or make the Pydantic response_model fields Optional with defaults.",
+    "[MED] Re-seed suppliers 'مورد تجريبي أ' / 'ب' so /api/suppliers is non-empty for SupplierDuesBanner & dropdown.",
+    "[LOW] Cap or auto-dismiss management-order-alerts toasts (they pile up across iterations and can obscure UI)."
+  ],
+  "critical_code_review_comments": [
+    "ExternalPurchasesReport.js: image URL normalization in imgUrl() works (verified /api/uploads/invoices/ src on purchase #104). Good.",
+    "PriceIncreaseReport.js: KPI cards + detailed table render correctly with 3 rows for 'مادة اختبار سعر'.",
+    "Backend create_purchase enforces +25% baseline correctly: 400 with detail.code=PRICE_INCREASE_REASON_REQUIRED; accepted with by_name reason; price_increase_log persisted on the purchase document.",
+    "reject_order and reject_customer_order both clear driver_id/driver_name/driver_phone — verified end-to-end (assign → reject → GET shows nulls).",
+    "Dashboard quick-action card with data-testid='quick-action-external-purchases-report' renders label 'تقرير المشتريات الخارجية' in centralized inventory mode.",
+    "Driver tracking badge (data-testid='driver-tracking-active-badge') was not automatically tested because Playwright headless requires explicit geolocation permission grant per browser context; recommend a small E2E with context.grant_permissions(['geolocation']) and a fake position for full coverage."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iter241_external_purchases_and_driver.py (new — 4 tests, all passing)"
+  ],
+  "success_rate": {"backend": "100% (4/4)", "frontend": "100% (B,C,D verified)"},
+  "test_credentials": "admin@maestroegp.com / admin123 ; driver phone 07801111111 PIN 1234",
+  "seed_data_creation": "Created 2 new purchases of 'مادة اختبار سعر' during reason-enforcement test (TST-REASON-OK-*) which extends the price increase chain to 1000→1300→1700→2720. Existing demo orders (#5003 etc.) were used to verify reject; their driver_id/name/phone now cleared. No seed deletions.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Use /api/purchases-report?start=YYYY-MM-DD&end=YYYY-MM-DD (NOT /api/purchases-new GET which 500s) to fetch purchases incl. invoice_image_url. Login: form has no data-testid for inputs — use locator('input[type=email]') with press_sequentially+delay; .fill() can race with the splash and yield unsubmitted form on first load. Post-login splash is ~12s. Toast pile-up of 'طلب مرفوض من الكاشير' obscures left side of all pages; click via .click(force=True) or scroll target into view. For driver-tracking-active-badge UI test, grant geolocation: context.grant_permissions(['geolocation']); context.set_geolocation({'latitude':33.31,'longitude':44.36}).",
+  "rca of the issue": "/api/purchases-new GET 500 RCA: server.py / inventory_system.py response_model declares 'payment_method' and 'created_by' as required, but seed purchases p1/p2/p3 in MongoDB lack those fields (only inserted as test fixtures earlier). FastAPI raises ResponseValidationError. Fix options: (a) make those fields Optional[...] = None in the Pydantic model, (b) add migration to backfill, or (c) drop /api/purchases-new GET if /api/purchases-report supersedes it."
+}

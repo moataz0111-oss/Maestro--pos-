@@ -56,16 +56,18 @@ self.addEventListener('push', (event) => {
 self.addEventListener('notificationclick', (event) => {
   console.log('[SW] Notification clicked');
   event.notification.close();
-  
-  const urlToOpen = event.notification.data?.url || '/';
-  
+
+  const ndata = event.notification.data || {};
+  const isCall = ndata.type === 'incoming_call';
+  const urlToOpen = ndata.url || '/';
+
   event.waitUntil(
     clients.matchAll({ type: 'window', includeUncontrolled: true })
       .then((clientList) => {
-        // إذا كان التطبيق مفتوحاً، ركز عليه
+        // إذا كان التطبيق مفتوحاً، ركز عليه (للمكالمة لا نعيد التوجيه كي تبقى شاشة التتبّع وتظهر المكالمة)
         for (const client of clientList) {
           if (client.url.includes(self.location.origin) && 'focus' in client) {
-            client.navigate(urlToOpen);
+            if (!isCall && ndata.url) client.navigate(urlToOpen);
             return client.focus();
           }
         }

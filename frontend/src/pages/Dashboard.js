@@ -79,6 +79,7 @@ import {
 import { useTheme } from '../context/ThemeContext';
 import TargetCelebration from '../components/TargetCelebration';
 import LowStockBanner from '../components/LowStockBanner';
+import SupplierDuesBanner from '../components/SupplierDuesBanner';
 import PriceAlertsBell from '../components/PriceAlertsBell';
 import InstallPWAButton from '../components/InstallPWAButton';
 import { toast } from 'sonner';
@@ -170,6 +171,7 @@ export default function Dashboard() {
   const [recentOrders, setRecentOrders] = useState([]);
   const [loading, setLoading] = useState(true);
   const [tenantInfo, setTenantInfo] = useState(null); // معلومات العميل (الشعار والاسم)
+  const [inventoryMode, setInventoryMode] = useState(null); // centralized | per_branch
   const [statsPeriod, setStatsPeriod] = useState('today'); // today, week, month, all_time
   const [dayStatus, setDayStatus] = useState(null); // حالة اليوم
   const [showDayCloseDialog, setShowDayCloseDialog] = useState(false);
@@ -274,6 +276,7 @@ export default function Dashboard() {
     fetchData();
     fetchDashboardSettings();
     fetchTenantInfo();
+    fetchInventoryMode();
     fetchDashboardBackgrounds();
     fetchDayStatus();
     autoOpenShift(); // فتح الوردية تلقائياً
@@ -573,6 +576,16 @@ export default function Dashboard() {
   }, [user?.id]);
 
   // جلب معلومات العميل (الشعار والاسم)
+  const fetchInventoryMode = async () => {
+    try {
+      const res = await axios.get(`${API}/inventory-settings`);
+      setInventoryMode(res.data?.inventory_mode || 'centralized');
+    } catch (e) {
+      setInventoryMode('centralized');
+    }
+  };
+
+
   const fetchTenantInfo = async () => {
     try {
       // إذا كان offline، استخدم البيانات المحلية
@@ -1563,6 +1576,7 @@ export default function Dashboard() {
     { label: t('التقييمات'), icon: Star, path: '/ratings', color: 'bg-gradient-to-br from-yellow-400 to-yellow-500', key: 'showRatings', id: 'ratings' },
     { label: t('المصاريف'), icon: Receipt, path: '/expenses', color: 'bg-gradient-to-br from-red-400 to-red-600', key: 'showExpenses', id: 'expenses' },
     { label: t('المشتريات'), icon: ShoppingBag, path: '/purchases-new', color: 'bg-gradient-to-br from-blue-500 to-blue-700', key: 'showPurchasing', id: 'purchasing' },
+    { label: inventoryMode === 'per_branch' ? t('مشتريات ومخزن الفرع') : t('تقرير المشتريات الخارجية'), icon: ShoppingBag, path: '/external-purchases-report', color: 'bg-gradient-to-br from-blue-600 to-indigo-700', key: 'showPurchasing', id: 'external-purchases-report' },
     { label: t('المخزن والتصنيع'), icon: Warehouse, path: '/warehouse-manufacturing', color: 'bg-gradient-to-br from-indigo-500 to-indigo-700', key: 'showWarehouse', id: 'warehouse-manufacturing' },
     { label: t('طلبات الفروع'), icon: Truck, path: '/branch-orders', color: 'bg-gradient-to-br from-lime-400 to-lime-600', key: 'showBranchOrders', id: 'branch-orders' },
     { label: t('تقارير المخزون'), icon: Package, path: '/inventory-reports', color: 'bg-gradient-to-br from-purple-500 to-purple-700', key: 'showInventoryReports', id: 'inventory-reports' },
@@ -1582,6 +1596,11 @@ export default function Dashboard() {
   
   // فلترة الأزرار حسب الإعدادات والصلاحيات
   const filteredActions = allQuickActions.filter(action => {
+    // بطاقات خاصة بوضع "مخزن منفصل لكل فرع" فقط — تُخفى في وضع المخزن المركزي
+    if (action.perBranchOnly && inventoryMode !== 'per_branch') return false;
+    // بطاقات خاصة بوضع "المخزن المركزي" فقط — تُخفى في وضع مخزن منفصل لكل فرع
+    if (action.centralOnly && inventoryMode !== 'centralized') return false;
+
     // التحقق من إعدادات الصفحة الرئيسية (إذا كان القيمة undefined أو true، نعرض الأيقونة)
     // فقط نخفيها إذا كانت القيمة === false بشكل صريح
     if (dashboardSettings[action.key] === false) return false;
@@ -1888,6 +1907,9 @@ export default function Dashboard() {
     <div className="min-h-screen bg-background" data-testid="dashboard">
       {/* تنبيه نقص المواد الخام للمالك */}
       <LowStockBanner user={user} />
+
+      {/* تنبيه استحقاق دفعات الموردين — سطر علوي مرة واحدة ثم يستقر في جرس أسفل اليسار */}
+      <SupplierDuesBanner user={user} />
 
       {/* احتفال تحقيق الهدف */}
       <TargetCelebration 

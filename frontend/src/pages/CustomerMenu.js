@@ -1,5 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useTranslation } from '../hooks/useTranslation';
+import { useWebRTCCall } from '../hooks/useWebRTCCall';
+import CallUI from '../components/CallUI';
 import { useParams, useSearchParams } from 'react-router-dom';
 import axios from 'axios';
 import { API_URL, BACKEND_URL } from '../utils/api';
@@ -176,6 +178,12 @@ export default function CustomerMenu() {
   const [searchQuery, setSearchQuery] = useState('');
   const [currentOrder, setCurrentOrder] = useState(null);
   const [orderHistory, setOrderHistory] = useState([]);
+
+  // مكالمة صوتية داخل التطبيق (زبون ↔ سائق)
+  const call = useWebRTCCall({ API, role: 'customer', orderId: currentOrder?.id, callerName: currentOrder?.customer_name || 'الزبون' });
+  useEffect(() => {
+    if (call.errorMsg) toast.error(call.errorMsg);
+  }, [call.errorMsg]);
   
   // Customer Info
   const [customerName, setCustomerName] = useState('');
@@ -930,7 +938,7 @@ export default function CustomerMenu() {
     }
   };
   const formatPrice = (price) => {
-    return new Intl.NumberFormat('en-US').format(price) + ' ' + t('د.ع');
+    return new Intl.NumberFormat('en-US').format(price) + ' ' + (lang === 'en' ? 'IQD' : 'د.ع');
   };
   const getSelectedBranchName = () => {
     const branch = branches.find(b => b.id === selectedBranch);
@@ -2259,13 +2267,16 @@ export default function CustomerMenu() {
       };
 
       const hasPhone = !!digits;
+      const inAppCallOpt = { key: 'inapp-call', label: t('اتصال داخل التطبيق'), icon: '📞', action: () => { setContactOpen(false); call.startCall(currentOrder.id, driver?.name || 'السائق'); } };
       const contactOptions = hasPhone ? [
+        inAppCallOpt,
         { key: 'wa-call', label: t('اتصال واتساب'), icon: '🟢', href: `https://wa.me/${waPhone}`, ext: true },
         { key: 'wa-msg', label: t('رسالة واتساب'), icon: '🟩', href: `https://wa.me/${waPhone}?text=${encodeURIComponent('مرحباً، بخصوص طلبي رقم #' + (currentOrder.order_number || ''))}`, ext: true },
-        { key: 'call', label: t('اتصال هاتفي'), icon: '📞', href: `tel:${digits}` },
+        { key: 'call', label: t('اتصال هاتفي عادي'), icon: '☎️', href: `tel:${digits}` },
         { key: 'sms', label: t('رسالة نصية (SMS)'), icon: '✉️', href: `sms:${digits}` },
         { key: 'inapp-chat', label: t('محادثة داخل التطبيق'), icon: '💬', action: () => { setContactOpen(false); setChatOpen(true); } },
       ] : [
+        inAppCallOpt,
         { key: 'inapp-chat', label: t('محادثة داخل التطبيق'), icon: '💬', action: () => { setContactOpen(false); setChatOpen(true); } },
       ];
       return (
@@ -2286,7 +2297,7 @@ export default function CustomerMenu() {
             </div>
             <button
               type="button"
-              onClick={() => setContactOpen(true)}
+              onClick={() => { call.primeMic(); setContactOpen(true); }}
               data-testid="driver-contact-btn"
               className="w-12 h-12 rounded-full bg-green-500 hover:bg-green-600 flex items-center justify-center text-white shadow-lg transition-transform hover:scale-110"
             >
@@ -2503,6 +2514,7 @@ export default function CustomerMenu() {
     };
     return (
       <div className="min-h-screen bg-gradient-to-br from-green-50 to-blue-50" dir="rtl">
+        <CallUI {...call} />
         {/* Header */}
         <header className="bg-gradient-to-r from-green-500 to-green-600 text-white shadow-lg">
           <div className="max-w-lg md:max-w-2xl lg:max-w-4xl mx-auto px-4 py-6 text-center">

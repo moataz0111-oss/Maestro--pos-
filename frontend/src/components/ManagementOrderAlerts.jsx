@@ -22,6 +22,7 @@ export const ManagementOrderAlerts = () => {
   const enabled = isAuthenticated && MANAGEMENT_ROLES.includes(user?.role);
 
   const poll = useCallback(async () => {
+    if (typeof navigator !== 'undefined' && navigator.onLine === false) return;
     try {
       const params = new URLSearchParams();
       if (branchId) params.append('branch_id', branchId);
@@ -47,14 +48,14 @@ export const ManagementOrderAlerts = () => {
   if (!enabled || alerts.length === 0) return null;
 
   return createPortal((
-    <div className="fixed bottom-4 left-4 z-[9998] flex flex-col gap-3 max-w-sm w-full" data-testid="management-order-alerts">
-      {alerts.slice(0, 4).map((a) => {
+    <div className="fixed bottom-4 left-4 z-[9998] flex flex-col gap-3 max-w-sm w-full pointer-events-none" data-testid="management-order-alerts">
+      {alerts.slice(0, 3).map((a) => {
         const isRejected = a.alert_kind === 'rejected';
         return (
           <div
             key={a.id}
             data-testid={`management-alert-${a.order_id}`}
-            className={`rounded-2xl shadow-2xl border overflow-hidden text-white animate-in slide-in-from-left-4 ${isRejected ? 'bg-gradient-to-b from-red-900 to-red-800 border-red-500/40' : 'bg-gradient-to-b from-amber-900 to-amber-800 border-amber-500/40'}`}
+            className={`pointer-events-auto rounded-2xl shadow-2xl border overflow-hidden text-white animate-in slide-in-from-left-4 ${isRejected ? 'bg-gradient-to-b from-red-900 to-red-800 border-red-500/40' : 'bg-gradient-to-b from-amber-900 to-amber-800 border-amber-500/40'}`}
           >
             <div className="flex items-center justify-between px-4 py-2 bg-black/20">
               <span className="flex items-center gap-2 text-sm font-bold">

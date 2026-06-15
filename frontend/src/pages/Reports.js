@@ -4110,7 +4110,6 @@ export default function Reports() {
               <TabsTrigger value="comprehensive" className="text-green-500 font-bold">{t('التقرير الشامل')}</TabsTrigger>
             )}
             <TabsTrigger value="sales">{t('المبيعات')}</TabsTrigger>
-            <TabsTrigger value="purchases">{t('المشتريات')}</TabsTrigger>
             <TabsTrigger value="expenses">{t('المصاريف')}</TabsTrigger>
             <TabsTrigger value="profit">{t('الأرباح')}</TabsTrigger>
             <TabsTrigger value="products">{t('الأصناف')}</TabsTrigger>
@@ -4380,7 +4379,7 @@ export default function Reports() {
           </TabsContent>
 
           {/* Purchases Report */}
-          <TabsContent value="purchases">
+          <TabsContent value="purchases" className="hidden">
             {purchasesReport && (
               <div className="space-y-6">
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">

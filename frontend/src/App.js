@@ -76,6 +76,7 @@ const CustomerMenu = lazy(() => import("./pages/CustomerMenu"));
 const CustomerInstall = lazy(() => import("./pages/CustomerInstall"));
 const RestaurantSelector = lazy(() => import("./pages/RestaurantSelector"));
 const PurchasesPage = lazy(() => import("./pages/PurchasesPage"));
+const ExternalPurchasesReport = lazy(() => import("./pages/ExternalPurchasesReport"));
 const Ratings = lazy(() => import("./pages/Ratings"));
 const DriverApp = lazy(() => import("./pages/DriverApp"));
 const PublicTracking = lazy(() => import("./pages/PublicTracking"));
@@ -513,6 +514,15 @@ function AppRoutes() {
         element={
           <ProtectedRoute>
             <PurchasesPage />
+          </ProtectedRoute>
+        } 
+      />
+      {/* تقرير المشتريات الخارجية */}
+      <Route 
+        path="/external-purchases-report" 
+        element={
+          <ProtectedRoute>
+            <ExternalPurchasesReport />
           </ProtectedRoute>
         } 
       />

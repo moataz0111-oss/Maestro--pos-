@@ -169,6 +169,7 @@ export default function POS() {
     return sessionStorage.getItem('pos_data_loaded') === 'true';
   });
   const [submitting, setSubmitting] = useState(false);
+  const submitLockRef = useRef(false);
   const [currentShift, setCurrentShift] = useState(null);
   const [kitchenDialogOpen, setKitchenDialogOpen] = useState(false);
   const [orderNotes, setOrderNotes] = useState('');
@@ -1718,6 +1719,19 @@ export default function POS() {
 
   // حفظ الطلب وإرسال للمطبخ (بدون دفع) - مع تحديث حالة الطباعة لكل منتج
   const handleSaveAndSendToKitchen = async () => {
+    // 🔒 قفل متزامن يمنع الإرسال المزدوج (حالة React غير فورية فتتجاوزها الضغطة المزدوجة)
+    if (submitLockRef.current) {
+      console.log('⛔ تم تجاهل ضغطة مكررة — الطلب قيد الإرسال');
+      return;
+    }
+    submitLockRef.current = true;
+    try {
+      await _handleSaveAndSendToKitchen();
+    } finally {
+      submitLockRef.current = false;
+    }
+  };
+  const _handleSaveAndSendToKitchen = async () => {
     if (cart.length === 0) {
       toast.error(t('السلة فارغة'));
       return;

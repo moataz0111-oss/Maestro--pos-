@@ -1,5 +1,5 @@
 // Service Worker لتطبيق السائق — يجعل التطبيق قابلاً للتثبيت (installable) ويعمل بأساسيات عند ضعف الشبكة
-const DRIVER_CACHE = 'driver-app-v1';
+const DRIVER_CACHE = 'driver-app-v4';
 const PRECACHE = ['/driver-app', '/manifest-driver.json', '/icons/icon-192.png', '/icons/icon-512.png'];
 
 self.addEventListener('install', (event) => {
@@ -60,12 +60,14 @@ self.addEventListener('push', (event) => {
 
 self.addEventListener('notificationclick', (event) => {
   event.notification.close();
-  const urlToOpen = (event.notification.data && event.notification.data.url) || '/driver-app';
+  const ndata = event.notification.data || {};
+  const isCall = ndata.type === 'incoming_call';
+  const urlToOpen = ndata.url || '/driver-app';
   event.waitUntil(
     clients.matchAll({ type: 'window', includeUncontrolled: true }).then((list) => {
       for (const client of list) {
         if (client.url.includes(self.location.origin) && 'focus' in client) {
-          client.navigate(urlToOpen);
+          if (!isCall) client.navigate(urlToOpen);
           return client.focus();
         }
       }

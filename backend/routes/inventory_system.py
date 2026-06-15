@@ -439,22 +439,23 @@ class PurchaseCreate(BaseModel):
     payment_method: str = "cash"  # cash, credit, transfer
     payment_status: str = "paid"  # paid, pending, partial
     notes: Optional[str] = None
+    price_increase_reasons: Optional[Dict[str, Any]] = None  # {by_id:{}, by_name:{}}
 
 class PurchaseResponse(BaseModel):
     id: str
     purchase_number: int
-    supplier_id: str
+    supplier_id: Optional[str] = None
     supplier_name: Optional[str] = None
     invoice_number: Optional[str] = None
     invoice_image_url: Optional[str] = None
-    items: List[Dict[str, Any]]
-    total_amount: float
-    payment_method: str
-    payment_status: str
-    status: str  # pending, sent_to_warehouse, received
+    items: List[Dict[str, Any]] = []
+    total_amount: float = 0.0
+    payment_method: Optional[str] = None
+    payment_status: Optional[str] = None
+    status: Optional[str] = None  # pending, sent_to_warehouse, received
     notes: Optional[str] = None
-    created_by: str
-    created_at: str
+    created_by: Optional[str] = None
+    created_at: Optional[str] = None
     sent_to_warehouse_at: Optional[str] = None
     sent_to_warehouse_by: Optional[str] = None
 
@@ -762,26 +763,91 @@ async def delete_supplier(supplier_id: str):
 # ==================== PURCHASES ROUTES (المشتريات) ====================
 
 @router.post("/purchases-new")
-async def create_purchase(purchase: PurchaseCreate):
-    """إنشاء فاتورة شراء جديدة"""
+async def create_purchase(purchase: PurchaseCreate, current_user: dict = Depends(get_current_user)):
+    """إنشاء فاتورة شراء جديدة (مشتريات خارجية مباشرة) — مع تتبّع وتبرير زيادة الأسعار +10%."""
     db = get_db()
-    
+    tenant_id = current_user.get("tenant_id")
+
     # الحصول على رقم الفاتورة التسلسلي
     last_purchase = await db.purchases_new.find_one(
         sort=[("purchase_number", -1)]
     )
     purchase_number = (last_purchase.get("purchase_number", 0) if last_purchase else 0) + 1
-    
+
     # جلب بيانات المورد
     supplier = await db.suppliers.find_one({"id": purchase.supplier_id}, {"_id": 0})
-    
+
+    # === كشف وتبرير زيادة السعر +10% أو أكثر مقارنةً بآخر فاتورة لنفس الصنف ===
+    PRICE_INCREASE_THRESHOLD_PCT = 10.0
+    reasons_by_id = (purchase.price_increase_reasons or {}).get("by_id") or {}
+    reasons_by_name = (purchase.price_increase_reasons or {}).get("by_name") or {}
+    missing_justifications = []
+    price_increase_log = []
+
+    for item in purchase.items:
+        new_cost = float(item.cost_per_unit or 0)
+        if new_cost <= 0:
+            continue
+        iname = (item.name or "").strip()
+        rm_id = item.raw_material_id
+        match_query: Dict[str, Any] = {}
+        if tenant_id:
+            match_query["tenant_id"] = tenant_id
+        if rm_id:
+            match_query["items.raw_material_id"] = rm_id
+        else:
+            match_query["items.name"] = iname
+        last_inv = await db.purchases_new.find_one(match_query, {"_id": 0}, sort=[("created_at", -1)])
+        if not last_inv:
+            continue
+        last_cost = 0.0
+        for li in (last_inv.get("items") or []):
+            if rm_id and li.get("raw_material_id") == rm_id:
+                last_cost = float(li.get("cost_per_unit", 0) or 0)
+                break
+            if (not rm_id) and (li.get("name") or "").strip() == iname:
+                last_cost = float(li.get("cost_per_unit", 0) or 0)
+                break
+        if last_cost <= 0:
+            continue
+        diff_pct = ((new_cost - last_cost) / last_cost) * 100.0
+        if diff_pct >= PRICE_INCREASE_THRESHOLD_PCT:
+            reason = ((reasons_by_id.get(rm_id) if rm_id else None) or reasons_by_name.get(iname) or "").strip()
+            if not reason:
+                missing_justifications.append({
+                    "raw_material_id": rm_id, "name": iname,
+                    "new_cost": round(new_cost, 2), "last_cost": round(last_cost, 2),
+                    "diff_pct": round(diff_pct, 2),
+                })
+            else:
+                price_increase_log.append({
+                    "raw_material_id": rm_id, "name": iname,
+                    "new_cost": round(new_cost, 2), "last_cost": round(last_cost, 2),
+                    "diff_pct": round(diff_pct, 2), "reason": reason,
+                    "supplier_name": last_inv.get("supplier_name"),
+                    "last_invoice_number": last_inv.get("invoice_number"),
+                    "last_purchase_date": last_inv.get("created_at"),
+                })
+
+    if missing_justifications:
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "code": "PRICE_INCREASE_REASON_REQUIRED",
+                "message": "يتطلب تبرير زيادة السعر +10% أو أكثر لبعض الأصناف",
+                "threshold_pct": PRICE_INCREASE_THRESHOLD_PCT,
+                "items_requiring_reason": missing_justifications,
+            },
+        )
+
     # حساب إجمالي كل صنف
     items_with_totals = []
     for item in purchase.items:
         item_dict = item.model_dump()
         item_dict["total_cost"] = item.quantity * item.cost_per_unit
         items_with_totals.append(item_dict)
-    
+
+    purchaser_name = current_user.get("full_name") or current_user.get("name") or current_user.get("username") or current_user.get("email") or "غير معروف"
     purchase_doc = {
         "id": str(uuid.uuid4()),
         "purchase_number": purchase_number,
@@ -795,22 +861,26 @@ async def create_purchase(purchase: PurchaseCreate):
         "payment_status": purchase.payment_status,
         "status": "pending",  # في انتظار الإرسال للمخزن
         "notes": purchase.notes,
-        "created_by": "system",  # سيتم تحديثه من التوكن
+        "price_increase_log": price_increase_log,  # ⭐ سجل تبريرات زيادة السعر +10% للمراجعة
+        "tenant_id": tenant_id,
+        "created_by": purchaser_name,
+        "created_by_id": current_user.get("id"),
+        "created_by_name": purchaser_name,
         "created_at": datetime.now(timezone.utc).isoformat(),
         "sent_to_warehouse_at": None,
         "sent_to_warehouse_by": None
     }
-    
+
     await db.purchases_new.insert_one(purchase_doc)
-    
+
     # تحديث إجمالي مشتريات المورد
     if supplier:
         await db.suppliers.update_one(
             {"id": purchase.supplier_id},
             {"$inc": {"total_purchases": purchase.total_amount}}
         )
-    
-    del purchase_doc["_id"]
+
+    purchase_doc.pop("_id", None)
     return purchase_doc
 
 
@@ -877,7 +947,7 @@ async def upload_invoice_image(
         await out_file.write(content)
     
     # تحديث رابط الصورة في الفاتورة
-    image_url = f"/uploads/invoices/{filename}"
+    image_url = f"/api/uploads/invoices/{filename}"
     await db.purchases_new.update_one(
         {"id": purchase_id},
         {"$set": {"invoice_image_url": image_url}}
@@ -991,6 +1061,306 @@ async def get_purchase(purchase_id: str):
     if not purchase:
         raise HTTPException(status_code=404, detail="الفاتورة غير موجودة")
     return purchase
+
+# ==================== EXTERNAL PURCHASES REPORT (تقرير المشتريات الخارجية) ====================
+
+def _purchase_payment_summary(p: dict) -> dict:
+    """يحسب المسدد والمتبقي وحالة الدفع لفاتورة شراء."""
+    total = float(p.get("total_amount") or 0)
+    payments = p.get("payments") or []
+    paid = float(p.get("paid_amount") if p.get("paid_amount") is not None else sum(float(x.get("amount") or 0) for x in payments))
+    # توافق قديم: فاتورة معلّمة مدفوعة بالكامل بدون سجل دفعات
+    if paid == 0 and p.get("payment_status") == "paid" and not payments:
+        paid = total
+    remaining = round(total - paid, 2)
+    if paid <= 0:
+        status = "unpaid"
+    elif remaining > 0.009:
+        status = "partial"
+    else:
+        status = "paid"
+    return {"paid_amount": round(paid, 2), "remaining_amount": max(remaining, 0), "pay_status": status}
+
+
+async def _total_treasury_balance(db, tenant_id: Optional[str]) -> float:
+    """إجمالي رصيد خزينة المالك (كل الفروع) = الإيداعات − السحوبات − تحويلات الأرباح."""
+    q = {"tenant_id": tenant_id} if tenant_id else {}
+    deps = await db.owner_deposits.find(q, {"_id": 0, "amount": 1}).to_list(20000)
+    wds = await db.owner_withdrawals.find(q, {"_id": 0, "amount": 1}).to_list(20000)
+    tfs = await db.owner_profit_transfers.find(q, {"_id": 0, "amount": 1}).to_list(20000)
+    return round(
+        sum(float(d.get("amount") or 0) for d in deps)
+        - sum(float(w.get("amount") or 0) for w in wds)
+        - sum(float(t.get("amount") or 0) for t in tfs),
+        2,
+    )
+
+
+@router.get("/purchases-report")
+async def purchases_report(
+    start: Optional[str] = None,
+    end: Optional[str] = None,
+    supplier_id: Optional[str] = None,
+    current_user: dict = Depends(get_current_user),
+):
+    """تقرير المشتريات الخارجية: الفواتير + الموردون + الدائن/المدين + حالة السداد + رصيد الخزينة."""
+    db = get_db()
+    tenant_id = get_user_tenant_id(current_user)
+
+    query: Dict[str, Any] = {}
+    if supplier_id:
+        query["supplier_id"] = supplier_id
+    if start or end:
+        rng: Dict[str, Any] = {}
+        if start:
+            rng["$gte"] = start
+        if end:
+            rng["$lte"] = end + "T23:59:59"
+        query["created_at"] = rng
+
+    raw = await db.purchases_new.find(query, {"_id": 0}).sort("created_at", -1).to_list(5000)
+
+    invoices = []
+    suppliers_map: Dict[str, Dict[str, Any]] = {}
+    total_amount = 0.0
+    total_paid = 0.0
+    for p in raw:
+        summ = _purchase_payment_summary(p)
+        amt = float(p.get("total_amount") or 0)
+        items = p.get("items") or []
+        qty_total = sum(float(it.get("quantity") or 0) for it in items)
+        inv = {
+            "id": p.get("id"),
+            "purchase_number": p.get("purchase_number"),
+            "supplier_id": p.get("supplier_id"),
+            "supplier_name": p.get("supplier_name") or "غير محدد",
+            "invoice_number": p.get("invoice_number"),
+            "invoice_image_url": p.get("invoice_image_url"),
+            "created_by": p.get("created_by") or "غير معروف",
+            "created_at": p.get("created_at"),
+            "items": items,
+            "items_count": len(items),
+            "total_quantity": qty_total,
+            "total_amount": amt,
+            "payment_method": p.get("payment_method"),
+            "status": p.get("status"),
+            "sent_to_warehouse_at": p.get("sent_to_warehouse_at"),
+            "payments": p.get("payments") or [],
+            **summ,
+        }
+        invoices.append(inv)
+        total_amount += amt
+        total_paid += summ["paid_amount"]
+
+        sid = p.get("supplier_id") or p.get("supplier_name") or "unknown"
+        if sid not in suppliers_map:
+            suppliers_map[sid] = {
+                "supplier_id": p.get("supplier_id"),
+                "supplier_name": p.get("supplier_name") or "غير محدد",
+                "invoice_count": 0, "total_amount": 0.0, "total_paid": 0.0,
+                "total_remaining": 0.0, "total_quantity": 0.0,
+            }
+        s = suppliers_map[sid]
+        s["invoice_count"] += 1
+        s["total_amount"] += amt
+        s["total_paid"] += summ["paid_amount"]
+        s["total_remaining"] += summ["remaining_amount"]
+        s["total_quantity"] += qty_total
+
+    # إثراء بيانات الموردين (هاتف/نوع)
+    sup_docs = {s["id"]: s for s in await db.suppliers.find({}, {"_id": 0}).to_list(2000)}
+    suppliers = []
+    for s in suppliers_map.values():
+        doc = sup_docs.get(s.get("supplier_id")) or {}
+        s["phone"] = doc.get("phone")
+        s["supplies"] = doc.get("supplies") or doc.get("category") or doc.get("notes")
+        s["total_amount"] = round(s["total_amount"], 2)
+        s["total_paid"] = round(s["total_paid"], 2)
+        s["total_remaining"] = round(s["total_remaining"], 2)
+        suppliers.append(s)
+    suppliers.sort(key=lambda x: x["total_amount"], reverse=True)
+
+    treasury_balance = await _total_treasury_balance(db, tenant_id)
+    total_remaining = round(total_amount - total_paid, 2)
+
+    return {
+        "summary": {
+            "total_amount": round(total_amount, 2),      # المدين (إجمالي الفواتير)
+            "total_paid": round(total_paid, 2),          # الدائن (المسدّد)
+            "total_remaining": max(total_remaining, 0),  # المتبقي
+            "invoice_count": len(invoices),
+            "supplier_count": len(suppliers),
+            "treasury_balance": treasury_balance,
+        },
+        "suppliers": suppliers,
+        "invoices": invoices,
+    }
+
+
+# مدة الأجل الافتراضية (تقديري) لاستحقاق فواتير الموردين غير المسددة
+DEFAULT_SUPPLIER_DUE_DAYS = 30
+
+
+def _parse_iso_date(val):
+    """يحاول قراءة تاريخ ISO ويعيد datetime (UTC) أو None."""
+    if not val:
+        return None
+    try:
+        s = str(val)
+        if len(s) == 10:  # YYYY-MM-DD
+            return datetime.fromisoformat(s).replace(tzinfo=timezone.utc)
+        return datetime.fromisoformat(s.replace("Z", "+00:00"))
+    except Exception:
+        return None
+
+
+@router.get("/supplier-payment-dues")
+async def supplier_payment_dues(current_user: dict = Depends(get_current_user)):
+    """استحقاقات دفعات الموردين (للجرس) — كل فاتورة غير مسددة/جزئية مع تاريخ الاستحقاق.
+
+    منطق الاستحقاق:
+      - إذا وُجد حقل due_date يدوي على الفاتورة → يُستخدم (تاريخ فعلي).
+      - وإلا → تاريخ الفاتورة + 30 يوم (تقديري estimated=True).
+      - أي فاتورة عليها متبقٍّ تُعتبر مستحقة وتظهر في القائمة.
+    """
+    db = get_db()
+    raw = await db.purchases_new.find({}, {"_id": 0}).sort("created_at", -1).to_list(5000)
+    now = datetime.now(timezone.utc)
+
+    items = []
+    overdue_count = 0
+    total_remaining = 0.0
+    for p in raw:
+        summ = _purchase_payment_summary(p)
+        remaining = summ["remaining_amount"]
+        if remaining <= 0.009:
+            continue
+        manual_due = _parse_iso_date(p.get("due_date"))
+        estimated = manual_due is None
+        created = _parse_iso_date(p.get("created_at")) or now
+        due_dt = manual_due or (created + timedelta(days=DEFAULT_SUPPLIER_DUE_DAYS))
+        days_overdue = (now.date() - due_dt.date()).days
+        is_overdue = days_overdue > 0
+        if is_overdue:
+            overdue_count += 1
+        total_remaining += remaining
+        items.append({
+            "id": p.get("id"),
+            "purchase_number": p.get("purchase_number"),
+            "supplier_id": p.get("supplier_id"),
+            "supplier_name": p.get("supplier_name") or "غير محدد",
+            "invoice_number": p.get("invoice_number"),
+            "total_amount": float(p.get("total_amount") or 0),
+            "paid_amount": summ["paid_amount"],
+            "remaining_amount": remaining,
+            "pay_status": summ["pay_status"],
+            "created_at": p.get("created_at"),
+            "due_date": due_dt.date().isoformat(),
+            "estimated": estimated,
+            "days_overdue": days_overdue,
+            "is_overdue": is_overdue,
+        })
+
+    # الأكثر تأخراً أولاً ثم الأقرب استحقاقاً
+    items.sort(key=lambda x: (-x["days_overdue"], x["due_date"]))
+
+    return {
+        "dues": items,
+        "total_count": len(items),
+        "overdue_count": overdue_count,
+        "total_remaining": round(total_remaining, 2),
+    }
+
+
+
+class PurchasePayment(BaseModel):
+    amount: float
+    payment_method: str = "cash"  # cash | card | bank_withdrawal | zain_cash
+    notes: Optional[str] = None
+
+
+@router.post("/purchases-new/{purchase_id}/pay")
+async def pay_purchase_invoice(purchase_id: str, payload: PurchasePayment, current_user: dict = Depends(get_current_user)):
+    """تسديد فاتورة مورد (كامل/جزئي) — يُخصم من إجمالي رصيد خزينة المالك."""
+    db = get_db()
+    if current_user["role"] not in [UserRole.ADMIN, UserRole.SUPER_ADMIN, UserRole.MANAGER]:
+        raise HTTPException(status_code=403, detail="غير مصرح — التسديد للمالك/المدير فقط")
+    tenant_id = get_user_tenant_id(current_user)
+
+    p = await db.purchases_new.find_one({"id": purchase_id}, {"_id": 0})
+    if not p:
+        raise HTTPException(status_code=404, detail="الفاتورة غير موجودة")
+
+    summ = _purchase_payment_summary(p)
+    remaining = summ["remaining_amount"]
+    amount = round(float(payload.amount or 0), 2)
+    if amount <= 0:
+        raise HTTPException(status_code=400, detail="المبلغ يجب أن يكون أكبر من صفر")
+    if amount > remaining + 0.01:
+        raise HTTPException(status_code=400, detail=f"المبلغ يتجاوز المتبقي على الفاتورة ({remaining:,.0f} IQD)")
+
+    # التحقق من رصيد الخزينة الكلي
+    balance = await _total_treasury_balance(db, tenant_id)
+    if amount > balance + 0.01:
+        raise HTTPException(status_code=400, detail=f"رصيد الخزينة غير كافٍ. المتاح: {balance:,.0f} IQD، المطلوب: {amount:,.0f} IQD")
+
+    now = datetime.now(timezone.utc).isoformat()
+    by_name = current_user.get("full_name") or current_user.get("username") or "النظام"
+    withdrawal_id = str(uuid.uuid4())
+    await db.owner_withdrawals.insert_one({
+        "id": withdrawal_id, "tenant_id": tenant_id, "amount": amount,
+        "date": now[:10], "actual_payment_date": now[:10],
+        "beneficiary": f"مورد: {p.get('supplier_name') or 'غير محدد'}",
+        "description": f"تسديد فاتورة مشتريات #{p.get('purchase_number')} — {p.get('supplier_name') or ''}",
+        "category": "purchase_payment", "payment_method": payload.payment_method,
+        "linked_purchase_id": purchase_id, "supplier_id": p.get("supplier_id"),
+        "notes": payload.notes, "created_by": by_name, "created_at": now,
+    })
+
+    payment_rec = {
+        "id": str(uuid.uuid4()), "amount": amount, "payment_method": payload.payment_method,
+        "withdrawal_id": withdrawal_id, "notes": payload.notes, "paid_by": by_name, "date": now,
+    }
+    new_paid = round(summ["paid_amount"] + amount, 2)
+    new_status = "paid" if new_paid >= float(p.get("total_amount") or 0) - 0.01 else "partial"
+    await db.purchases_new.update_one(
+        {"id": purchase_id},
+        {"$push": {"payments": payment_rec}, "$set": {"paid_amount": new_paid, "payment_status": new_status}},
+    )
+    return {
+        "message": "تم تسديد المبلغ وخصمه من الخزينة",
+        "paid_amount": new_paid,
+        "remaining_amount": max(round(float(p.get("total_amount") or 0) - new_paid, 2), 0),
+        "payment_status": new_status,
+        "treasury_balance": round(balance - amount, 2),
+    }
+
+
+@router.delete("/purchases-new/{purchase_id}/payments/{payment_id}")
+async def delete_purchase_payment(purchase_id: str, payment_id: str, current_user: dict = Depends(get_current_user)):
+    """إلغاء دفعة تسديد فاتورة — يعيد المبلغ للخزينة."""
+    db = get_db()
+    if current_user["role"] not in [UserRole.ADMIN, UserRole.SUPER_ADMIN]:
+        raise HTTPException(status_code=403, detail="غير مصرح")
+    p = await db.purchases_new.find_one({"id": purchase_id}, {"_id": 0})
+    if not p:
+        raise HTTPException(status_code=404, detail="الفاتورة غير موجودة")
+    payments = p.get("payments") or []
+    target = next((x for x in payments if x.get("id") == payment_id), None)
+    if not target:
+        raise HTTPException(status_code=404, detail="الدفعة غير موجودة")
+    if target.get("withdrawal_id"):
+        await db.owner_withdrawals.delete_one({"id": target["withdrawal_id"]})
+    remaining_payments = [x for x in payments if x.get("id") != payment_id]
+    new_paid = round(sum(float(x.get("amount") or 0) for x in remaining_payments), 2)
+    new_status = "unpaid" if new_paid <= 0 else ("paid" if new_paid >= float(p.get("total_amount") or 0) - 0.01 else "partial")
+    await db.purchases_new.update_one(
+        {"id": purchase_id},
+        {"$set": {"payments": remaining_payments, "paid_amount": new_paid, "payment_status": new_status}},
+    )
+    return {"message": "تم إلغاء الدفعة وإعادة المبلغ للخزينة", "paid_amount": new_paid, "payment_status": new_status}
+
+
 
 # ==================== PURCHASE REQUESTS (طلبات الشراء من المخزن) ====================
 

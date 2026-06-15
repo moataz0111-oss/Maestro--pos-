@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useTranslation } from '../hooks/useTranslation';
 import { API_URL } from '../utils/api';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import axios from 'axios';
 import { useAuth } from '../context/AuthContext';
 import { formatPrice } from '../utils/currency';
@@ -80,6 +80,17 @@ export default function PurchasesPage() {
   const [showDetailsDialog, setShowDetailsDialog] = useState(null);
   const [showUploadDialog, setShowUploadDialog] = useState(null);
   const [showCameraDialog, setShowCameraDialog] = useState(false);
+
+  // فتح الحوار تلقائياً عند القدوم من «المصاريف اليومية» (إضافة مورد / إنشاء فاتورة)
+  const location = useLocation();
+  useEffect(() => {
+    const od = location.state?.openDialog;
+    if (od === 'supplier') { setActiveTab('suppliers'); setShowSupplierDialog(true); }
+    else if (od === 'invoice') { setActiveTab('purchases'); setShowPurchaseDialog(true); }
+    // مسح الحالة حتى لا يُعاد الفتح
+    if (od) navigate(location.pathname, { replace: true, state: {} });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   const [ocrLoading, setOcrLoading] = useState(false);
   const [cameraStream, setCameraStream] = useState(null);
   const videoRef = useRef(null);
@@ -503,7 +514,7 @@ export default function PurchasesPage() {
             : t('تم تسعير الطلب وإنشاء فاتورة الشراء — أرسلها للمخزن')
         );
       } else {
-        await axios.post(`${API}/purchases-new`, purchaseForm, { headers });
+        await axios.post(`${API}/purchases-new`, { ...purchaseForm, price_increase_reasons: reasonsPayload || undefined }, { headers });
         toast.success(t('تم إنشاء فاتورة الشراء بنجاح'));
       }
       setShowPurchaseDialog(false);
@@ -764,7 +775,7 @@ export default function PurchasesPage() {
                         <div className="flex items-start justify-between gap-4">
                           <div className="flex-1">
                             <div className="flex items-center gap-2 mb-2 flex-wrap">
-                              <span className="font-bold text-lg">{t('فاتورة #{purchase.purchase_number}')}</span>
+                              <span className="font-bold text-lg">{t('فاتورة #')}{purchase.purchase_number}</span>
                               <Badge className={getStatusColor(purchase.status)}>
                                 {getStatusLabel(purchase.status)}
                               </Badge>
@@ -787,8 +798,8 @@ export default function PurchasesPage() {
                             </div>
                             
                             <div className="flex items-center gap-4 text-sm">
-                              <span>{t('عدد الأصناف: {purchase.items?.length || 0}')}</span>
-                              <span className="font-bold text-primary">{t('الإجمالي: {formatPrice(purchase.total_amount)}')}</span>
+                              <span>{t('عدد الأصناف:')} {purchase.items?.length || 0}</span>
+                              <span className="font-bold text-primary">{t('الإجمالي:')} {formatPrice(purchase.total_amount)}</span>
                             </div>
                             
                             {purchase.invoice_image_url ? (

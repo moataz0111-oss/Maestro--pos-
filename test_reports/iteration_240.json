@@ -1,0 +1,43 @@
+{
+  "summary": "Iter 240 - tested batch fixes: purchases report (purchases_new), supplier-payment-dues, super-admin security log, dashboard supplier-dues banner, Reports page hidden المشتريات tab, and Super-Admin السجل الأمني tab. All backend endpoints and frontend flows verified.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iter240_dues_and_security.py",
+    "/app/test_reports/pytest/iter240.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "Dashboard renders a cashier-register selection modal on first login that overlays the page — banner interactions still functional but Playwright element-level force-click sometimes fails silently because the overlay swallows pointer events. Consider auto-dismissing the cashier-modal when an admin lands on the dashboard with no open shift, or set proper pointer-events on backdrop.",
+    "Banner data-testids 'supplier-dues-toggle-btn'/'supplier-dues-dismiss-btn' need to be reachable with native pointer click; verified JS .click() works (React handlers fine)."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iter240_dues_and_security.py (new)"
+  ],
+  "success_rate": {"backend": "100% (4/4)", "frontend": "100%"},
+  "test_credentials": "admin@maestroegp.com/admin123 ; owner@maestroegp.com/owner123 + secret 271018",
+  "seed_data_creation": "Used existing seeded purchases_new (p1/p2/p3) and suppliers sup-a/sup-b. Did not modify or delete seed data.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Backend test file lives at /app/backend/tests/test_iter240_dues_and_security.py and supports `dues` key (current response shape) plus legacy `items` fallback. Super-admin login endpoint is /api/super-admin/login (or /api/auth/login works too). Security log tab is the 5th TabsTrigger (data-testid=security-log-tab) inside 'إدارة العملاء' card; clicking it lazy-fetches /api/super-admin/security-log. Cashier-register selection modal appears for admin on dashboard on first login and may intercept Playwright clicks — use JS .click() via page.evaluate() to fire React handlers reliably.",
+  "verified_endpoints": [
+    "GET /api/reports/purchases -> total_purchases=1000000, total_transactions=3, total_unpaid=700000, by_payment_status.pending=700000, by_supplier {مورد تجريبي أ:700000, مورد تجريبي ب:300000}",
+    "GET /api/supplier-payment-dues -> {dues:[p1,p2], total_count:2, overdue_count:1, total_remaining:700000} with due_date, estimated(bool), days_overdue, is_overdue, no paid leaks",
+    "GET /api/super-admin/security-log -> {events:[], summary:{total:2,active:1,disabled:1,expiring_soon:0,expired:1}, expiring_soon:[], expired:[Test Helper Tenant]} + 403 for admin role"
+  ],
+  "verified_ui_flows": [
+    "Dashboard: <SupplierDuesBanner/> sticky banner visible after admin login (overdue red gradient)",
+    "Banner toggle btn -> shows supplier-dues-expanded-list",
+    "Banner dismiss btn -> hides banner, shows floating supplier-dues-revive-btn bell with count badge",
+    "Revive bell -> restores banner",
+    "/reports tabs list contains: التقرير الشامل, المبيعات, المصاريف, الأرباح, الأصناف, التوصيل, إغلاق الصندوق, الإلغاءات, الخصومات, المرتجعات, الآجل, البطاقة, التقرير الذكي. 'المشتريات' TabsTrigger correctly REMOVED.",
+    "Super-admin /super-admin login (owner@maestroegp.com / owner123 / 271018) works; 'إدارة العملاء' card contains 5 tabs including 'السجل الأمني' (data-testid=security-log-tab). Click reveals security-log-content with summary cards (إجمالي العملاء=2, نشط=1, معطّل=1, اشتراك ينتهي قريباً=0, اشتراك منتهٍ=1), تنبيهات الاشتراك section, events feed with security-event-0..N, and security-log-refresh button."
+  ]
+}

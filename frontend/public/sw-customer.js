@@ -1,6 +1,6 @@
 // Service Worker for Customer Menu PWA
 // v3: network-first للمستندات والمانيفست (يضمن وصول التحديثات فوراً بدل الكاش القديم)
-const CACHE_NAME = 'customer-menu-v3';
+const CACHE_NAME = 'customer-menu-v6';
 const urlsToCache = [
   '/menu.html',
   '/icons/customer-icon-192.png',

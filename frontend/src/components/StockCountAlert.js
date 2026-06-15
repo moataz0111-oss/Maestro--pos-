@@ -71,6 +71,7 @@ export const StockCountAlert = ({ onOpenCount }) => {
   }, []);
 
   const poll = useCallback(async () => {
+    if (typeof navigator !== 'undefined' && navigator.onLine === false) return;
     try {
       // 🔒 خصوصية الجرد لكل فرع: مرّر الفرع المختار (المالك) — والباكند يحصر موظف الفرع بفرعه
       const bid = getBranchIdForApi ? getBranchIdForApi() : null;

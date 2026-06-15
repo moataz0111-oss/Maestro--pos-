@@ -242,6 +242,21 @@ export default function HR() {
   });
 
   const [editingEmployee, setEditingEmployee] = useState(null);
+  const [showArchive, setShowArchive] = useState(false);
+  const [archivedEmployees, setArchivedEmployees] = useState([]);
+
+  const fetchArchivedEmployees = async () => {
+    try {
+      const token = localStorage.getItem('token');
+      const res = await axios.get(`${API}/employees?status=archived`, { headers: { Authorization: `Bearer ${token}` } });
+      setArchivedEmployees(res.data || []);
+    } catch (e) { setArchivedEmployees([]); }
+  };
+  const toggleArchive = () => {
+    const next = !showArchive;
+    setShowArchive(next);
+    if (next) fetchArchivedEmployees();
+  };
   const [selectedEmployee, setSelectedEmployee] = useState(null);
   const [payrollPreview, setPayrollPreview] = useState(null);
 
@@ -928,6 +943,139 @@ export default function HR() {
       toast.error(t('فشل في حذف الموظف'));
     }
   };
+
+  // إنهاء خدمات الموظف (خط أحمر + جدولة حذف بعد 24 ساعة)
+  const handleTerminate = async (emp) => {
+    if (!window.confirm(t('إنهاء خدمات') + ` "${emp.name}"؟ ` + t('سيظهر بخط أحمر ويُحذف تلقائياً بعد 24 ساعة. يمكنك صرف المستحقات أو الإرجاع خلال هذه المدة.'))) return;
+    try {
+      const token = localStorage.getItem('token');
+      const res = await axios.post(`${API}/employees/${emp.id}/terminate`, {}, { headers: { Authorization: `Bearer ${token}` } });
+      toast.success(t('تم إنهاء الخدمات') + ` — ${t('المستحقات')}: ${formatPrice(res.data?.settlement_preview || 0)}`);
+      fetchData();
+    } catch (error) {
+      toast.error(error?.response?.data?.detail || t('فشل إنهاء الخدمات'));
+    }
+  };
+
+  // 🧾 طباعة إيصال مخالصة نهائية للموظف (A4)
+  const printSettlementReceipt = (emp, payout) => {
+    const d = payout?.details || {};
+    const empInfo = payout?.employee || {};
+    const w = window.open('', '_blank', 'width=800,height=900');
+    if (!w) { toast.error(t('فشل فتح نافذة الطباعة')); return; }
+    const row = (label, value, opts = {}) => `
+      <tr>
+        <td class="lbl ${opts.cls || ''}">${label}</td>
+        <td class="val ${opts.cls || ''}">${opts.minus ? '− ' : ''}${formatPrice(value || 0)}</td>
+      </tr>`;
+    w.document.write(`<!DOCTYPE html><html dir="rtl" lang="ar"><head><meta charset="utf-8"/>
+      <title>${t('إيصال مخالصة نهائية')} - ${empInfo.name || emp?.name || ''}</title>
+      <style>
+        * { box-sizing: border-box; }
+        body { font-family: 'Segoe UI', Tahoma, Arial, sans-serif; margin: 28px; color: #1a1a1a; }
+        .header { text-align: center; border-bottom: 3px solid #dc2626; padding-bottom: 12px; margin-bottom: 18px; }
+        .logo { font-size: 26px; font-weight: 800; color: #dc2626; letter-spacing: 1px; }
+        .title { font-size: 22px; font-weight: 800; margin-top: 6px; }
+        .sub { font-size: 13px; color: #555; margin-top: 4px; }
+        .info { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 24px; margin: 16px 0; font-size: 13px; }
+        .info div span { color: #64748b; }
+        table { width: 100%; border-collapse: collapse; font-size: 13px; margin-top: 8px; }
+        td { border: 1px solid #e2e8f0; padding: 9px 10px; }
+        td.lbl { text-align: right; } td.val { text-align: left; font-weight: 700; width: 35%; }
+        .minus td { color: #b91c1c; }
+        .net { background: #fef2f2; }
+        .net td { font-size: 18px; font-weight: 800; color: #dc2626; }
+        .paid { margin-top: 18px; text-align: center; background: #f0fdf4; border: 2px solid #16a34a; border-radius: 10px; padding: 14px; }
+        .paid .amt { font-size: 30px; font-weight: 800; color: #16a34a; }
+        .paid .src { font-size: 12px; color: #555; margin-top: 4px; }
+        .ack { margin-top: 18px; font-size: 12px; color: #444; background: #f8fafc; border-radius: 8px; padding: 12px; line-height: 1.8; }
+        .sign { display: flex; justify-content: space-between; margin-top: 40px; font-size: 13px; }
+        .sign div { text-align: center; width: 40%; }
+        .sign .line { border-top: 1px solid #333; margin-top: 36px; padding-top: 6px; }
+        .footer { margin-top: 24px; text-align: center; font-size: 11px; color: #94a3b8; border-top: 1px solid #e2e8f0; padding-top: 8px; }
+        @media print { body { margin: 12px; } .net, .paid, .logo { -webkit-print-color-adjust: exact; print-color-adjust: exact; } }
+      </style></head><body>
+      <div class="header">
+        <div class="logo">Maestro EGP</div>
+        <div class="title">${t('إيصال مخالصة نهائية')}</div>
+        <div class="sub">${t('تسوية مستحقات إنهاء الخدمة')}</div>
+      </div>
+      <div class="info">
+        <div><span>${t('اسم الموظف')}:</span> <b>${empInfo.name || emp?.name || '-'}</b></div>
+        <div><span>${t('الوظيفة')}:</span> <b>${empInfo.position || emp?.position || '-'}</b></div>
+        <div><span>${t('الفرع')}:</span> <b>${empInfo.branch_name || payout?.branch_name || '-'}</b></div>
+        <div><span>${t('تاريخ التعيين')}:</span> <b>${(empInfo.hire_date || '').slice(0,10) || '-'}</b></div>
+        <div><span>${t('تاريخ إنهاء الخدمة')}:</span> <b>${(empInfo.termination_date || '').slice(0,10) || '-'}</b></div>
+        <div><span>${t('شهر التسوية')}:</span> <b>${payout?.month || '-'}</b></div>
+      </div>
+      <table>
+        ${row(t('الراتب المكتسب'), d.earned_salary)}
+        ${row(t('قيمة العمل الإضافي'), d.overtime_pay)}
+        ${row(t('المكافآت'), d.total_bonuses)}
+        <tr class="minus">${`<td class="lbl">${t('الخصومات')}</td><td class="val">− ${formatPrice(d.total_deductions || 0)}</td>`}</tr>
+        <tr class="minus">${`<td class="lbl">${t('السلف المتبقية')}</td><td class="val">− ${formatPrice(d.advance_remaining || 0)}</td>`}</tr>
+        ${row(t('صافي المستحق'), d.net_salary)}
+        <tr class="minus">${`<td class="lbl">${t('المدفوع مسبقاً (دفعات الكشف)')}</td><td class="val">− ${formatPrice(d.paid_amount || 0)}</td>`}</tr>
+        <tr class="net"><td class="lbl">${t('صافي المخالصة المصروف')}</td><td class="val">${formatPrice(payout?.amount || d.remaining || 0)}</td></tr>
+      </table>
+      <div class="paid">
+        <div class="amt">${formatPrice(payout?.amount || 0)}</div>
+        <div class="src">${t('مصروف من خزينة المالك')} — ${t('فرع')}: ${empInfo.branch_name || payout?.branch_name || '-'}</div>
+        <div class="src">${t('تاريخ الصرف')}: ${new Date(payout?.paid_at || Date.now()).toLocaleString('en-GB')}</div>
+      </div>
+      <div class="ack">
+        ${t('أقرّ أنا الموظف الموقّع أدناه باستلامي كامل مستحقاتي المالية عن فترة عملي، وأنه لا يحق لي مطالبة المنشأة بأي حقوق أو مستحقات مالية إضافية بعد توقيعي على هذا الإيصال.')}
+      </div>
+      <div class="sign">
+        <div><div class="line">${t('توقيع الموظف')}</div></div>
+        <div><div class="line">${t('توقيع المحاسب / الإدارة')}</div></div>
+      </div>
+      <div class="footer"><p>${t('تم إنشاء هذا الإيصال من نظام Maestro EGP')}</p><p>${new Date().toLocaleString('en-GB')}</p></div>
+      <script>window.onload = function(){ window.print(); }</script>
+      </body></html>`);
+    w.document.close();
+  };
+
+  // صرف مستحقات إنهاء الخدمة من خزينة المالك حسب فرع الموظف
+  const handleTerminatePayout = async (emp) => {
+    if (!window.confirm(t('صرف المستحقات وإنهاء خدمات') + ` "${emp.name}" ` + t('من خزينة المالك حسب فرعه؟'))) return;
+    try {
+      const token = localStorage.getItem('token');
+      const res = await axios.post(`${API}/employees/${emp.id}/terminate-payout`, {}, { headers: { Authorization: `Bearer ${token}` } });
+      toast.success(`${t('تم صرف المستحقات')}: ${formatPrice(res.data?.amount || 0)} — ${res.data?.branch_name || ''}`);
+      if (window.confirm(t('هل تريد طباعة إيصال المخالصة النهائية؟'))) {
+        printSettlementReceipt(emp, res.data);
+      }
+      fetchData();
+    } catch (error) {
+      toast.error(error?.response?.data?.detail || t('فشل صرف المستحقات'));
+    }
+  };
+
+  // إعادة طباعة إيصال المخالصة النهائية لموظف منتهٍ/مصروف
+  const handleReprintSettlement = async (emp) => {
+    try {
+      const token = localStorage.getItem('token');
+      const res = await axios.get(`${API}/employees/${emp.id}/settlement-receipt`, { headers: { Authorization: `Bearer ${token}` } });
+      printSettlementReceipt(emp, res.data);
+    } catch (error) {
+      toast.error(error?.response?.data?.detail || t('فشل إصدار إيصال المخالصة'));
+    }
+  };
+
+  // إرجاع الموظف للعمل (خلال 24 ساعة) — يعكس الصرف ويعيد الرصيد للخزينة
+  const handleReinstate = async (emp) => {
+    if (!window.confirm(t('إرجاع') + ` "${emp.name}" ` + t('للعمل؟ سيُلغى الصرف ويُعاد الرصيد لخزينة المالك.'))) return;
+    try {
+      const token = localStorage.getItem('token');
+      await axios.post(`${API}/employees/${emp.id}/reinstate`, {}, { headers: { Authorization: `Bearer ${token}` } });
+      toast.success(t('تمت إعادة الموظف للعمل'));
+      fetchData();
+    } catch (error) {
+      toast.error(error?.response?.data?.detail || t('فشل إرجاع الموظف'));
+    }
+  };
+
 
   const resetEmployeeForm = () => {
     setEmployeeForm({
@@ -2514,6 +2662,10 @@ export default function HR() {
                   }} data-testid="push-all-biometric-btn">
                     <Fingerprint className="h-4 w-4 ml-1" /> {t('إصدار الكل للبصمة')}
                   </Button>
+                  <Button variant={showArchive ? 'default' : 'outline'} size="sm" onClick={toggleArchive}
+                    className={showArchive ? 'bg-red-600 hover:bg-red-700 text-white' : 'border-red-300 text-red-600 hover:bg-red-50'} data-testid="toggle-archive-btn">
+                    <UserX className="h-4 w-4 ml-1" /> {showArchive ? t('عرض الموظفين النشطين') : t('أرشيف المنتهية خدماتهم')}
+                  </Button>
                   <div className="relative">
                     <Search className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                     <Input
@@ -2695,18 +2847,24 @@ export default function HR() {
                       </tr>
                     </thead>
                     <tbody>
-                      {filteredEmployees.map(emp => (
-                        <tr key={emp.id} className="border-b hover:bg-muted/50">
+                      {(showArchive ? archivedEmployees : filteredEmployees).map(emp => {
+                        const isPending = emp.employment_status === 'terminated_pending';
+                        const isArchived = emp.employment_status === 'terminated';
+                        return (
+                        <tr key={emp.id} className={`border-b hover:bg-muted/50 ${(isPending || isArchived) ? 'bg-red-50/60' : ''}`} data-testid={`employee-row-${emp.id}`}>
                           <td className="p-3 font-medium">
                             <div className="flex items-center gap-2">
                               {emp.face_photo ? (
-                                <img src={emp.face_photo} alt="" className="w-8 h-8 rounded-full object-cover border border-primary/30" />
+                                <img src={emp.face_photo} alt="" className={`w-8 h-8 rounded-full object-cover border border-primary/30 ${isPending ? 'opacity-50' : ''}`} />
                               ) : (
                                 <div className="w-8 h-8 rounded-full bg-muted flex items-center justify-center text-xs font-bold text-muted-foreground">
                                   {(emp.name || '?').charAt(0)}
                                 </div>
                               )}
-                              {emp.name}
+                              <span className={(isPending || isArchived) ? 'line-through decoration-red-500 decoration-2 text-red-700' : ''}>{emp.name}</span>
+                              {(isPending || isArchived) && (
+                                <Badge className="bg-red-600 text-white mr-1" data-testid={`terminated-badge-${emp.id}`}>{isArchived ? t('منهي الخدمات') : t('إنهاء خدمات')}</Badge>
+                              )}
                               {emp.is_general_manager && (
                                 <Badge className="bg-amber-500/15 text-amber-700 border-amber-300 mr-1" data-testid={`gm-badge-${emp.id}`}>{t('مدير عام')}</Badge>
                               )}
@@ -2724,11 +2882,40 @@ export default function HR() {
                             )}
                           </td>
                           <td className="p-3">
-                            <Badge className={emp.is_active ? 'bg-green-500' : 'bg-red-500'}>
-                              {emp.is_active ? t('نشط') : t('معطل')}
-                            </Badge>
+                            {isArchived ? (
+                              <Badge className="bg-red-700 text-white">{t('منهي الخدمات')}</Badge>
+                            ) : isPending ? (
+                              <Badge className="bg-red-600 text-white">{t('إنهاء خدمات')}</Badge>
+                            ) : (
+                              <Badge className={emp.is_active ? 'bg-green-500' : 'bg-red-500'}>
+                                {emp.is_active ? t('نشط') : t('معطل')}
+                              </Badge>
+                            )}
                           </td>
                           <td className="p-3">
+                            {isArchived ? (
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <span className="text-xs text-muted-foreground">{t('منتهٍ نهائياً')} {emp.termination_date ? `(${emp.termination_date})` : ''}</span>
+                                <Button size="sm" variant="outline" className="border-red-400 text-red-600 hover:bg-red-50" onClick={() => handleReprintSettlement(emp)} data-testid={`settlement-receipt-${emp.id}`}>
+                                  <FileText className="h-4 w-4 ml-1" />{t('إيصال المخالصة')}
+                                </Button>
+                              </div>
+                            ) : isPending ? (
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <Button size="sm" className="bg-red-600 hover:bg-red-700 text-white" onClick={() => handleTerminatePayout(emp)} disabled={emp.settlement_paid} data-testid={`terminate-payout-${emp.id}`}>
+                                  <Banknote className="h-4 w-4 ml-1" />
+                                  {emp.settlement_paid ? t('تم صرف المستحقات') : t('صرف المستحقات وإنهاء الخدمات')}
+                                </Button>
+                                {emp.settlement_paid && (
+                                  <Button size="sm" variant="outline" className="border-red-400 text-red-600 hover:bg-red-50" onClick={() => handleReprintSettlement(emp)} data-testid={`settlement-receipt-${emp.id}`}>
+                                    <FileText className="h-4 w-4 ml-1" />{t('إيصال المخالصة')}
+                                  </Button>
+                                )}
+                                <Button size="sm" variant="outline" className="border-green-500 text-green-600 hover:bg-green-50" onClick={() => handleReinstate(emp)} data-testid={`reinstate-${emp.id}`}>
+                                  <RefreshCw className="h-4 w-4 ml-1" />{t('إرجاع للعمل')}
+                                </Button>
+                              </div>
+                            ) : (
                             <div className="flex items-center gap-2">
                               <Button size="sm" variant="outline" onClick={() => openBiometricPush(emp)} title={t('إصدار للبصمة')}
                                 className={emp.biometric_uid ? 'border-green-500 text-green-500' : ''} data-testid={`push-biometric-${emp.id}`}>
@@ -2769,13 +2956,20 @@ export default function HR() {
                                   <RefreshCw className="h-4 w-4" />
                                 </Button>
                               )}
+                              {hasRole(['admin', 'super_admin']) && (
+                                <Button size="sm" variant="outline" className="border-red-300 text-red-600 hover:bg-red-50" onClick={() => handleTerminate(emp)} title={t('إنهاء خدمات')} data-testid={`terminate-${emp.id}`}>
+                                  <UserX className="h-4 w-4" />
+                                </Button>
+                              )}
                               <Button size="sm" variant="destructive" onClick={() => handleDeleteEmployee(emp.id)} title={t('حذف')}>
                                 <Trash2 className="h-4 w-4" />
                               </Button>
                             </div>
+                            )}
                           </td>
                         </tr>
-                      ))}
+                        );
+                      })}
                     </tbody>
                   </table>
                 </div>
@@ -2908,8 +3102,19 @@ export default function HR() {
                                 {(() => {
                                   const pay = filteredPayrolls.find(p => p.employee_id === emp.id);
                                   const fullEmp = employees.find(x => x.id === emp.id) || emp;
+                                  const isPendingTerm = fullEmp.employment_status === 'terminated_pending';
                                   return (
                                     <div className="flex items-center gap-1 flex-wrap">
+                                      {isPendingTerm && (
+                                        <>
+                                          <Button size="sm" className="bg-red-600 hover:bg-red-700 text-white" onClick={() => handleTerminatePayout(fullEmp)} disabled={fullEmp.settlement_paid} data-testid={`report-terminate-payout-${emp.id}`}>
+                                            <Banknote className="h-4 w-4 ml-1" /> {fullEmp.settlement_paid ? t('تم صرف المستحقات') : t('صرف المستحقات وإنهاء الخدمات')}
+                                          </Button>
+                                          <Button size="sm" variant="outline" className="border-green-500 text-green-600 hover:bg-green-50" onClick={() => handleReinstate(fullEmp)} data-testid={`report-reinstate-${emp.id}`}>
+                                            <RefreshCw className="h-4 w-4 ml-1" />{t('إرجاع للعمل')}
+                                          </Button>
+                                        </>
+                                      )}
                                       {pay ? (
                                         <>
                                           {getPayrollStatusBadge(pay.status)}
