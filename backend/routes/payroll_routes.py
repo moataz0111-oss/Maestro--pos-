@@ -1207,3 +1207,280 @@ async def get_employee_account_statement(
         "totals": totals,
         "generated_at": datetime.now(timezone.utc).isoformat()
     }
+
+
+
+# ==================== أذونات وإجازات الموظفين (موافقة المالك) ====================
+# 3 أنواع: عطلة مرضية (sick) | إذن زمني/ساعات (hourly) | إجازة سفر (travel)
+# يُدخلها المدير → بانتظار موافقة المالك → عند الموافقة تُحتسب للموظف (مدفوعة، بلا خصم)
+# مع سجل/أرشيف كامل وإشعار للمالك.
+
+LEAVE_GRANT_ROLES = [UserRole.ADMIN, UserRole.SUPER_ADMIN, UserRole.MANAGER, UserRole.SUPERVISOR]
+LEAVE_APPROVE_ROLES = [UserRole.ADMIN, UserRole.SUPER_ADMIN]  # المالك فقط
+DEFAULT_ANNUAL_LEAVE = 21  # رصيد الإجازة السنوية الافتراضي (أيام)
+
+
+class LeavePermissionCreate(BaseModel):
+    employee_id: str
+    leave_type: str  # sick | hourly | travel
+    date_from: str   # YYYY-MM-DD
+    date_to: Optional[str] = None   # للمرضية/السفر (نطاق). للزمني = نفس اليوم
+    hours: Optional[float] = None   # للإذن الزمني
+    reason: Optional[str] = None
+
+
+def _days_inclusive(date_from: str, date_to: str) -> int:
+    a = datetime.fromisoformat(date_from[:10])
+    b = datetime.fromisoformat(date_to[:10])
+    return max((b - a).days + 1, 1)
+
+
+@router.post("/leave-permissions")
+async def create_leave_permission(payload: LeavePermissionCreate, current_user: dict = Depends(get_current_user)):
+    """المدير يُنشئ إذناً/إجازة → بانتظار موافقة المالك (لا تُحتسب على الموظف حتى يوافق المالك)."""
+    db = get_database()
+    if current_user["role"] not in LEAVE_GRANT_ROLES:
+        raise HTTPException(status_code=403, detail="غير مصرح بمنح الأذونات")
+    if payload.leave_type not in ("sick", "hourly", "travel"):
+        raise HTTPException(status_code=400, detail="نوع الإذن غير صحيح")
+
+    employee = await db.employees.find_one({"id": payload.employee_id}, {"_id": 0})
+    if not employee:
+        raise HTTPException(status_code=404, detail="الموظف غير موجود")
+
+    tenant_id = get_user_tenant_id(current_user)
+    branch_id = employee.get("branch_id")
+    branch_name = None
+    if branch_id:
+        br = await db.branches.find_one({"id": branch_id}, {"_id": 0, "name": 1})
+        branch_name = (br or {}).get("name")
+
+    # حساب التفاصيل حسب النوع
+    date_to = payload.date_to or payload.date_from
+    days = 0
+    hours = None
+    if payload.leave_type == "hourly":
+        hours = float(payload.hours or 0)
+        if hours <= 0:
+            raise HTTPException(status_code=400, detail="أدخل عدد الساعات للإذن الزمني")
+        date_to = payload.date_from
+    else:
+        days = _days_inclusive(payload.date_from, date_to)
+
+    # للسفر: تحقق من رصيد الإجازة السنوية
+    annual_balance = employee.get("annual_leave_balance")
+    if annual_balance is None:
+        annual_balance = DEFAULT_ANNUAL_LEAVE
+    if payload.leave_type == "travel" and days > annual_balance:
+        raise HTTPException(status_code=400, detail=f"رصيد الإجازة السنوية غير كافٍ. المتبقي: {annual_balance} يوم، المطلوب: {days} يوم")
+
+    manager_name = current_user.get("full_name") or current_user.get("name") or current_user.get("username") or current_user.get("email") or "المدير"
+    now_iso = datetime.now(timezone.utc).isoformat()
+    doc = {
+        "id": str(uuid.uuid4()),
+        "tenant_id": tenant_id,
+        "employee_id": payload.employee_id,
+        "employee_name": employee.get("name"),
+        "branch_id": branch_id,
+        "branch_name": branch_name,
+        "leave_type": payload.leave_type,
+        "date_from": payload.date_from,
+        "date_to": date_to,
+        "days": days,
+        "hours": hours,
+        "reason": (payload.reason or "").strip(),
+        "status": "pending",  # pending | approved | rejected
+        # توقيع المدير الذي منح الإذن
+        "granted_by": current_user["id"],
+        "granted_by_name": manager_name,
+        "granted_at": now_iso,
+        # الموافقة (المالك)
+        "approved_by": None,
+        "approved_by_name": None,
+        "approved_at": None,
+        "review_note": None,
+        "created_at": now_iso,
+    }
+    await db.leave_permissions.insert_one(doc)
+    doc.pop("_id", None)
+    return {"message": "تم إرسال الطلب — بانتظار موافقة المالك", "permission": doc}
+
+
+@router.get("/leave-permissions")
+async def list_leave_permissions(
+    status: Optional[str] = None,
+    employee_id: Optional[str] = None,
+    leave_type: Optional[str] = None,
+    branch_id: Optional[str] = None,
+    month: Optional[str] = None,
+    current_user: dict = Depends(get_current_user)
+):
+    """سجل/أرشيف الأذونات والإجازات (مع الفلاتر)."""
+    db = get_database()
+    query = build_tenant_query(current_user)
+    if status:
+        query["status"] = status
+    if employee_id:
+        query["employee_id"] = employee_id
+    if leave_type:
+        query["leave_type"] = leave_type
+    if branch_id:
+        query["branch_id"] = branch_id
+    if month:
+        query["date_from"] = {"$regex": f"^{month}"}
+    rows = await db.leave_permissions.find(query, {"_id": 0}).sort("created_at", -1).to_list(1000)
+    return rows
+
+
+@router.get("/leave-permissions/pending-count")
+async def leave_permissions_pending_count(current_user: dict = Depends(get_current_user)):
+    """عدد الأذونات بانتظار موافقة المالك (لشارة الإشعار)."""
+    db = get_database()
+    query = build_tenant_query(current_user)
+    query["status"] = "pending"
+    count = await db.leave_permissions.count_documents(query)
+    return {"pending": count}
+
+
+@router.put("/leave-permissions/{permission_id}/approve")
+async def approve_leave_permission(permission_id: str, current_user: dict = Depends(get_current_user)):
+    """موافقة المالك → تُحتسب للموظف (مدفوعة بلا خصم)."""
+    db = get_database()
+    if current_user["role"] not in LEAVE_APPROVE_ROLES:
+        raise HTTPException(status_code=403, detail="الموافقة متاحة للمالك فقط")
+    perm = await db.leave_permissions.find_one({"id": permission_id}, {"_id": 0})
+    if not perm:
+        raise HTTPException(status_code=404, detail="الطلب غير موجود")
+    if perm.get("status") != "pending":
+        raise HTTPException(status_code=400, detail="تمت معالجة هذا الطلب مسبقاً")
+
+    employee = await db.employees.find_one({"id": perm["employee_id"]}, {"_id": 0})
+    if not employee:
+        raise HTTPException(status_code=404, detail="الموظف غير موجود")
+
+    work_hours_per_day = employee.get("work_hours_per_day", 8) or 8
+    basic_salary = employee.get("salary", 0) or 0
+    hourly_rate = basic_salary / (30 * work_hours_per_day) if work_hours_per_day > 0 else 0
+    daily_rate = basic_salary / 30
+    leave_type = perm["leave_type"]
+    now_iso = datetime.now(timezone.utc).isoformat()
+
+    if leave_type in ("sick", "travel"):
+        # المرضية تُسجَّل كحضور مدفوع ضمن راتب الشهر؛ السفر/السنوية تُدفع كاملة من خزينة المالك (لا تُحتسب بالراتب الشهري لتفادي الدفع المزدوج)
+        att_status = "present" if leave_type == "sick" else "annual_leave"
+        a = datetime.fromisoformat(perm["date_from"][:10])
+        b = datetime.fromisoformat((perm.get("date_to") or perm["date_from"])[:10])
+        d = a
+        while d <= b:
+            ds = d.date().isoformat()
+            await db.attendance.update_one(
+                {"employee_id": perm["employee_id"], "date": ds},
+                {"$set": {
+                    "id": str(uuid.uuid4()),
+                    "employee_id": perm["employee_id"],
+                    "employee_name": employee.get("name"),
+                    "date": ds,
+                    "status": att_status,
+                    "worked_hours": work_hours_per_day,
+                    "source": "leave_approved",
+                    "leave_type": leave_type,
+                    "leave_permission_id": perm["id"],
+                    "notes": ("إجازة مرضية معتمدة" if leave_type == "sick" else "إجازة سنوية/سفر معتمدة (مدفوعة من الخزينة)"),
+                    "tenant_id": perm.get("tenant_id"),
+                }},
+                upsert=True
+            )
+            # إزالة خصومات الغياب التلقائية لذلك اليوم
+            await db.deductions.delete_many({
+                "employee_id": perm["employee_id"],
+                "date": ds,
+                "deduction_type": {"$in": ["absence", "absent"]}
+            })
+            d += timedelta(days=1)
+        # السفر/السنوية: خصم من رصيد الإجازة + دفع راتب الإجازة كسحب من خزينة المالك بخصمه من رصيد فرع الموظف
+        if leave_type == "travel":
+            cur_bal = employee.get("annual_leave_balance")
+            if cur_bal is None:
+                cur_bal = DEFAULT_ANNUAL_LEAVE
+            days = perm.get("days") or 0
+            new_bal = max(cur_bal - days, 0)
+            await db.employees.update_one({"id": perm["employee_id"]}, {"$set": {"annual_leave_balance": new_bal}})
+
+            # سحب راتب الإجازة السنوية من خزينة المالك باسم الموظف وخصمه من رصيد الفرع
+            leave_amount = round(days * daily_rate, 2)
+            withdrawal = {
+                "id": str(uuid.uuid4()),
+                "tenant_id": perm.get("tenant_id"),
+                "amount": leave_amount,
+                "date": now_iso[:10],
+                "beneficiary": employee.get("name"),
+                "description": f"إجازة سنوية مدفوعة — راتب كامل ({days} يوم) — {perm['date_from']} ← {perm.get('date_to')}",
+                "category": "payment",
+                "payment_method": "cash",
+                "branch_id": perm.get("branch_id"),
+                "branch_name": perm.get("branch_name"),
+                "external_source": None,
+                "source": "annual_leave_payout",
+                "leave_permission_id": perm["id"],
+                "created_by": current_user.get("username") or current_user.get("full_name"),
+                "created_at": now_iso,
+            }
+            await db.owner_withdrawals.insert_one(withdrawal)
+            await db.leave_permissions.update_one(
+                {"id": permission_id},
+                {"$set": {"payout_amount": leave_amount, "payout_withdrawal_id": withdrawal["id"]}}
+            )
+
+    elif leave_type == "hourly":
+        # الإذن الزمني: تُحتسب الساعات كعمل بلا خصم — نضيف مكافأة معادِلة تُلغي أي خصم انصراف مبكر لتلك الساعات
+        hrs = float(perm.get("hours") or 0)
+        amount = round(hrs * hourly_rate, 2)
+        await db.bonuses.insert_one({
+            "id": str(uuid.uuid4()),
+            "employee_id": perm["employee_id"],
+            "employee_name": employee.get("name"),
+            "bonus_type": "permission",
+            "amount": amount,
+            "hours": hrs,
+            "reason": f"إذن زمني معتمد ({hrs} ساعة) — {perm.get('reason') or ''}".strip(),
+            "date": perm["date_from"],
+            "tenant_id": perm.get("tenant_id"),
+            "leave_permission_id": perm["id"],
+            "created_by": current_user["id"],
+            "created_at": now_iso,
+        })
+
+    await db.leave_permissions.update_one(
+        {"id": permission_id},
+        {"$set": {
+            "status": "approved",
+            "approved_by": current_user["id"],
+            "approved_by_name": current_user.get("full_name") or current_user.get("username") or current_user.get("email"),
+            "approved_at": now_iso,
+        }}
+    )
+    return {"message": "تمت الموافقة — تم احتساب الإذن للموظف"}
+
+
+@router.put("/leave-permissions/{permission_id}/reject")
+async def reject_leave_permission(permission_id: str, note: Optional[str] = None, current_user: dict = Depends(get_current_user)):
+    """رفض المالك للطلب."""
+    db = get_database()
+    if current_user["role"] not in LEAVE_APPROVE_ROLES:
+        raise HTTPException(status_code=403, detail="الرفض متاح للمالك فقط")
+    perm = await db.leave_permissions.find_one({"id": permission_id}, {"_id": 0})
+    if not perm:
+        raise HTTPException(status_code=404, detail="الطلب غير موجود")
+    if perm.get("status") != "pending":
+        raise HTTPException(status_code=400, detail="تمت معالجة هذا الطلب مسبقاً")
+    await db.leave_permissions.update_one(
+        {"id": permission_id},
+        {"$set": {
+            "status": "rejected",
+            "approved_by": current_user["id"],
+            "approved_by_name": current_user.get("full_name") or current_user.get("username") or current_user.get("email"),
+            "approved_at": datetime.now(timezone.utc).isoformat(),
+            "review_note": (note or "").strip() or None,
+        }}
+    )
+    return {"message": "تم رفض الطلب"}

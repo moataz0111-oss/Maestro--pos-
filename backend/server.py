@@ -1896,7 +1896,7 @@ class EmployeeResponse(BaseModel):
     face_photo: Optional[str] = None
     face_photo_updated_at: Optional[str] = None
     is_general_manager: bool = False
-
+    annual_leave_balance: Optional[float] = None  # رصيد الإجازة السنوية (أيام)
     # إنهاء الخدمات
     employment_status: Optional[str] = "active"  # active | terminated_pending | terminated
     termination_date: Optional[str] = None
@@ -3812,6 +3812,28 @@ async def save_employee_face_photo(employee_id: str, request: Request, current_u
 
 
 # --- الحضور والانصراف ---
+# --- الحضور والانصراف ---
+
+def _calc_worked_hours_hhmm(check_in, check_out, break_out=None, break_in=None):
+    """حساب ساعات العمل من توقيتات HH:MM مع دعم الورديات الليلية وخصم الاستراحة."""
+    try:
+        def to_min(s):
+            h, m = str(s).split(":")[:2]
+            return int(h) * 60 + int(m)
+        mins = to_min(check_out) - to_min(check_in)
+        if mins < 0:
+            mins += 24 * 60  # وردية ليلية (انصراف بعد منتصف الليل)
+        if break_out and break_in:
+            bmins = to_min(break_in) - to_min(break_out)
+            if bmins < 0:
+                bmins += 24 * 60
+            if 0 < bmins < mins:
+                mins -= bmins
+        return round(mins / 60, 2)
+    except Exception:
+        return None
+
+
 
 @api_router.post("/attendance", response_model=AttendanceResponse)
 async def create_attendance(attendance: AttendanceCreate, current_user: dict = Depends(get_current_user)):
@@ -3827,12 +3849,10 @@ async def create_attendance(attendance: AttendanceCreate, current_user: dict = D
     # حساب ساعات العمل إذا توفر وقت الحضور والانصراف
     worked_hours = None
     if attendance.check_in and attendance.check_out:
-        try:
-            check_in = datetime.strptime(attendance.check_in, "%H:%M")
-            check_out = datetime.strptime(attendance.check_out, "%H:%M")
-            worked_hours = (check_out - check_in).seconds / 3600
-        except:
-            pass
+        worked_hours = _calc_worked_hours_hhmm(
+            attendance.check_in, attendance.check_out,
+            getattr(attendance, 'break_out', None), getattr(attendance, 'break_in', None)
+        )
     
     attendance_doc = {
         "id": str(uuid.uuid4()),
@@ -3903,12 +3923,11 @@ async def update_attendance(attendance_id: str, update: dict, current_user: dict
     worked_hours = record.get("worked_hours")
     
     if check_in and check_out:
-        try:
-            ci = datetime.strptime(check_in, "%H:%M")
-            co = datetime.strptime(check_out, "%H:%M")
-            worked_hours = (co - ci).seconds / 3600
-        except:
-            pass
+        worked_hours = _calc_worked_hours_hhmm(
+            check_in, check_out,
+            update.get("break_out", record.get("break_out")),
+            update.get("break_in", record.get("break_in"))
+        )
     
     update["worked_hours"] = worked_hours
     await db.attendance.update_one({"id": attendance_id}, {"$set": update})
@@ -4193,13 +4212,9 @@ async def get_employee_ratings(
             
             # حساب ساعات العمل
             if check_in and check_out:
-                try:
-                    ci = datetime.strptime(check_in, "%H:%M")
-                    co = datetime.strptime(check_out, "%H:%M")
-                    hours = (co - ci).seconds / 3600
+                hours = _calc_worked_hours_hhmm(check_in, check_out)
+                if hours:
                     total_work_hours += hours
-                except:
-                    pass
         
         # جلب الخصومات للشهر (من البيانات المجمعة)
         deductions = deductions_by_emp.get(emp_id, [])
@@ -13464,86 +13479,144 @@ async def get_branch_packaging_inventory(branch_id: Optional[str] = None, curren
 class OCRRequest(BaseModel):
     image_data: str  # Base64 encoded image
 
-@api_router.post("/purchase-invoices/ocr")
-async def extract_invoice_data(request: OCRRequest, current_user: dict = Depends(get_current_user)):
-    """استخراج بيانات الفاتورة من الصورة باستخدام AI"""
-    try:
-        from emergentintegrations.llm.chat import LlmChat, UserMessage, ImageContent
-        import os
-        import json
-        
-        api_key = os.environ.get('EMERGENT_LLM_KEY')
-        if not api_key:
-            raise HTTPException(status_code=500, detail="مفتاح API غير متوفر")
-        
-        # إزالة prefix من Base64 إذا وجد
-        image_base64 = request.image_data
-        if ',' in image_base64:
-            image_base64 = image_base64.split(',')[1]
-        
-        # إنشاء chat instance
-        chat = LlmChat(
-            api_key=api_key,
-            session_id=f"ocr-{current_user['id']}-{uuid.uuid4()}",
-            system_message="""أنت مساعد متخصص في استخراج بيانات الفواتير من الصور.
-قم بتحليل صورة الفاتورة واستخرج البيانات التالية بدقة:
-- رقم الفاتورة
-- اسم المورد/الشركة
-- قائمة الأصناف (الاسم، الكمية، الوحدة، السعر)
-- المجموع الكلي
-- أي ملاحظات مهمة
 
-أرجع النتيجة بصيغة JSON فقط بدون أي نص إضافي."""
-        ).with_model("gemini", "gemini-2.5-flash")
-        
-        # إنشاء محتوى الصورة
-        image_content = ImageContent(image_base64=image_base64)
-        
-        # إرسال الرسالة
-        user_message = UserMessage(
-            text="""حلل صورة الفاتورة هذه واستخرج البيانات بصيغة JSON التالية:
+# نماذج الرؤية: الأساسي Gemini + احتياطي OpenAI
+_OCR_VISION_MODELS = [
+    ("gemini", "gemini-3-flash-preview"),
+    ("openai", "gpt-5.4-mini"),
+]
+
+_OCR_SYSTEM_MESSAGE = """أنت مساعد متخصص في استخراج بيانات فواتير المشتريات من الصور (غالباً بالعربية).
+حلّل صورة الفاتورة بدقة واستخرج: رقم الفاتورة، اسم المورد/الشركة، قائمة الأصناف (الاسم، الكمية، الوحدة، سعر الوحدة)، المجموع الكلي، وأي ملاحظات.
+أرجع النتيجة بصيغة JSON صالحة فقط، بدون أي نص أو شرح إضافي."""
+
+_OCR_USER_PROMPT = """حلل صورة الفاتورة هذه واستخرج البيانات بصيغة JSON التالية حرفياً:
 {
     "invoice_number": "رقم الفاتورة أو null",
     "supplier_name": "اسم المورد/الشركة أو null",
     "items": [
-        {"name": "اسم الصنف", "quantity": الكمية_كرقم, "unit": "الوحدة", "unit_price": السعر_كرقم}
+        {"name": "اسم الصنف", "quantity": رقم, "unit": "الوحدة", "unit_price": رقم}
     ],
-    "total_amount": المجموع_كرقم,
-    "notes": "أي ملاحظات مهمة أو null"
+    "total_amount": رقم,
+    "notes": "ملاحظات أو null"
 }
+الأرقام يجب أن تكون أرقاماً (بلا فواصل آلاف ولا عملة). إذا تعذّر قراءة قيمة ضع null. أرجع JSON فقط."""
 
-إذا لم تتمكن من قراءة قيمة معينة، ضع null. أرجع JSON فقط.""",
-            file_contents=[image_content]
-        )
-        
-        response = await chat.send_message(user_message)
-        
-        # محاولة parse الـ JSON
+
+def _resize_invoice_image_b64(image_base64: str, max_side: int = 1600, quality: int = 80) -> str:
+    """تصغير/ضغط صورة الفاتورة لتفادي رفض الموديل بسبب الحجم الكبير (صور الموبايل)."""
+    import base64 as _b64
+    from io import BytesIO
+    from PIL import Image, ImageOps
+    try:
+        raw = _b64.b64decode(image_base64)
+        img = Image.open(BytesIO(raw))
+        # أول إطار فقط للصور المتحركة
         try:
-            # تنظيف الرد من أي markdown
-            clean_response = response.strip()
-            if clean_response.startswith('```'):
-                clean_response = clean_response.split('```')[1]
-                if clean_response.startswith('json'):
-                    clean_response = clean_response[4:]
-            clean_response = clean_response.strip()
-            
-            extracted_data = json.loads(clean_response)
-            return {
-                "success": True,
-                "data": extracted_data
-            }
-        except json.JSONDecodeError:
-            # إذا فشل parsing، أرجع الرد كما هو
-            return {
-                "success": False,
-                "raw_response": response,
-                "message": "لم نتمكن من تحويل النتيجة إلى بيانات منظمة"
-            }
-            
+            img.seek(0)
+        except Exception:
+            pass
+        img = ImageOps.exif_transpose(img)  # تصحيح دوران الموبايل
+        if img.mode not in ("RGB", "L"):
+            img = img.convert("RGB")
+        img.thumbnail((max_side, max_side), Image.LANCZOS)
+        buf = BytesIO()
+        img.convert("RGB").save(buf, format="JPEG", quality=quality, optimize=True)
+        return _b64.b64encode(buf.getvalue()).decode("utf-8")
     except Exception as e:
-        logging.error(f"OCR Error: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"خطأ في تحليل الصورة: {str(e)}")
+        logging.warning(f"OCR image resize failed, using original: {e}")
+        return image_base64
+
+
+def _extract_json_from_text(text: str):
+    """استخلاص JSON متين من رد الموديل (بلوك markdown أو أول كائن متوازن)."""
+    import json
+    import re
+    if not text:
+        return None
+    s = text.strip()
+    # 1) بلوك ```json ... ```
+    m = re.search(r"```(?:json)?\s*(.*?)```", s, re.DOTALL | re.IGNORECASE)
+    if m:
+        candidate = m.group(1).strip()
+        try:
+            return json.loads(candidate)
+        except Exception:
+            s = candidate
+    # 2) محاولة مباشرة
+    try:
+        return json.loads(s)
+    except Exception:
+        pass
+    # 3) استخراج أول كائن { } متوازن
+    start = s.find("{")
+    if start != -1:
+        depth = 0
+        for i in range(start, len(s)):
+            if s[i] == "{":
+                depth += 1
+            elif s[i] == "}":
+                depth -= 1
+                if depth == 0:
+                    try:
+                        return json.loads(s[start:i + 1])
+                    except Exception:
+                        break
+    return None
+
+
+@api_router.post("/purchase-invoices/ocr")
+async def extract_invoice_data(request: OCRRequest, current_user: dict = Depends(get_current_user)):
+    """استخراج بيانات الفاتورة من الصورة باستخدام AI (Gemini أساسي + OpenAI احتياطي، مع ضغط صورة وإعادة محاولة)."""
+    from emergentintegrations.llm.chat import LlmChat, UserMessage, ImageContent
+
+    api_key = os.environ.get('EMERGENT_LLM_KEY')
+    if not api_key:
+        raise HTTPException(status_code=500, detail="مفتاح API غير متوفر")
+
+    # إزالة prefix من Base64 إذا وجد ثم تصغير/ضغط الصورة
+    image_base64 = request.image_data or ""
+    if ',' in image_base64:
+        image_base64 = image_base64.split(',')[1]
+    image_base64 = image_base64.strip()
+    if not image_base64:
+        raise HTTPException(status_code=400, detail="لا توجد صورة")
+    image_base64 = await asyncio.to_thread(_resize_invoice_image_b64, image_base64)
+
+    last_raw = ""
+    last_error = ""
+    # جرّب كل موديل (الأساسي ثم الاحتياطي)
+    for provider, model_name in _OCR_VISION_MODELS:
+        try:
+            chat = LlmChat(
+                api_key=api_key,
+                session_id=f"ocr-{current_user['id']}-{uuid.uuid4()}",
+                system_message=_OCR_SYSTEM_MESSAGE,
+            ).with_model(provider, model_name)
+            user_message = UserMessage(
+                text=_OCR_USER_PROMPT,
+                file_contents=[ImageContent(image_base64=image_base64)],
+            )
+            response = await chat.send_message(user_message)
+            last_raw = response or ""
+            extracted = _extract_json_from_text(last_raw)
+            if extracted is not None and isinstance(extracted, dict):
+                extracted.setdefault("items", [])
+                return {"success": True, "data": extracted, "model": model_name}
+            logging.warning(f"OCR JSON parse failed on {model_name}; trying next model")
+        except Exception as e:
+            last_error = str(e)
+            logging.error(f"OCR error on {provider}/{model_name}: {e}")
+            continue
+
+    # فشلت كل المحاولات
+    if last_raw:
+        return {
+            "success": False,
+            "raw_response": last_raw,
+            "message": "لم نتمكن من تحويل النتيجة إلى بيانات منظمة. حاول بصورة أوضح.",
+        }
+    raise HTTPException(status_code=500, detail=f"خطأ في تحليل الصورة: {last_error or 'تعذّر الاتصال بخدمة التحليل'}")
 
 # Suppliers endpoints extracted to routes/suppliers_routes.py
 
@@ -16574,7 +16647,39 @@ async def _auto_process_attendance_internal(current_user: dict):
                 pass
 
         daily_punches[(uid, date_part)].append(time_part)
-    
+
+    # === فصل الشفتات (Shift Separation) ===
+    # المشكلة: بصمتان في نفس اليوم التقويمي تخصّان شفتين مختلفين تُدمجان كشفت
+    # واحد ضخم (~24 ساعة)، مثل انصراف 00:09 (نهاية شفت الليلة السابقة) +
+    # حضور 23:57 (بداية شفت الليلة). الحل: لو امتدّت بصمات اليوم أكثر من حد
+    # أقصى معقول لشفت واحد، فالبصمات المبكرة (فجراً، قبل أكبر فجوة) هي انصراف
+    # الليلة السابقة وتُنقل لليوم السابق، ويبقى بصمات شفت اليوم وحدها.
+    MAX_SHIFT_MINUTES = 16 * 60       # 16 ساعة كحد أقصى لشفت واحد
+    EARLY_MORNING_CUTOFF = 11 * 60    # بصمة قبل 11 صباحاً تُعتبر انصراف الليلة السابقة
+    for _key in list(daily_punches.keys()):
+        _uid_k, _date_k = _key
+        _pts = sorted(set(daily_punches[_key]))
+        if len(_pts) < 2:
+            continue
+        _span = _to_min_helper(_pts[-1]) - _to_min_helper(_pts[0])
+        if _span <= MAX_SHIFT_MINUTES:
+            continue
+        # ابحث عن أكبر فجوة زمنية بين بصمتين متتاليتين (نقطة الفصل بين الشفتين)
+        _gap_idx, _gap_val = -1, -1
+        for _i in range(1, len(_pts)):
+            _g = _to_min_helper(_pts[_i]) - _to_min_helper(_pts[_i - 1])
+            if _g > _gap_val:
+                _gap_val, _gap_idx = _g, _i
+        _early = _pts[:_gap_idx]   # المجموعة المبكرة (فجراً) = انصراف الليلة السابقة
+        _late = _pts[_gap_idx:]    # مجموعة شفت اليوم
+        if _early and _to_min_helper(_early[0]) <= EARLY_MORNING_CUTOFF:
+            try:
+                _prev_d = (datetime.strptime(_date_k, "%Y-%m-%d") - timedelta(days=1)).strftime("%Y-%m-%d")
+                daily_punches[(_uid_k, _prev_d)].extend(_early)
+                daily_punches[_key] = _late
+            except Exception:
+                pass
+
     # 4. تحويل لسجلات حضور
     created_attendance = 0
     created_deductions = 0
@@ -16677,37 +16782,14 @@ async def _auto_process_attendance_internal(current_user: dict):
                 break_in = times[-2]
                 check_out = times[-1]
         
-        # حساب ساعات العمل
+        # حساب ساعات العمل (يدعم الورديات الليلية + خصم الاستراحة)
         worked_hours = 0
         if check_in and check_out and check_in != check_out:
-            try:
-                ci = datetime.strptime(check_in, "%H:%M")
-                co = datetime.strptime(check_out, "%H:%M")
-                worked_hours = round((co - ci).seconds / 3600, 2)
-                
-                # خصم وقت الاستراحة الفعلي من البصمات (إن وجد)
-                if break_out and break_in:
-                    try:
-                        bo = datetime.strptime(break_out, "%H:%M")
-                        bi = datetime.strptime(break_in, "%H:%M")
-                        actual_break_hours = round((bi - bo).seconds / 3600, 2)
-                        worked_hours = max(0, round(worked_hours - actual_break_hours, 2))
-                    except:
-                        pass
-                else:
-                    # fallback: خصم وقت الاستراحة المجدول للموظف
-                    break_start = emp.get("break_start")
-                    break_end = emp.get("break_end")
-                    if break_start and break_end:
-                        try:
-                            bs = datetime.strptime(break_start, "%H:%M")
-                            be = datetime.strptime(break_end, "%H:%M")
-                            break_hours = round((be - bs).seconds / 3600, 2)
-                            worked_hours = max(0, round(worked_hours - break_hours, 2))
-                        except:
-                            pass
-            except:
-                pass
+            # خصم استراحة فعلية من البصمات إن وُجدت، وإلا الاستراحة المجدولة للموظف
+            b_out = break_out if (break_out and break_in) else emp.get("break_start")
+            b_in = break_in if (break_out and break_in) else emp.get("break_end")
+            calc = _calc_worked_hours_hhmm(check_in, check_out, b_out, b_in)
+            worked_hours = calc if calc is not None else 0
         
         # حساب التأخير
         late_minutes = 0
@@ -20879,7 +20961,7 @@ async def get_menu_link(request: Request, current_user: dict = Depends(get_curre
         base_url = f"{parsed.scheme}://{parsed.netloc}"
     else:
         # fallback للـ environment variable
-        base_url = os.environ.get('REACT_APP_BACKEND_URL', 'https://maestro-pos-system.preview.emergentagent.com')
+        base_url = os.environ.get('REACT_APP_BACKEND_URL', 'https://pos-ocr-invoice.preview.emergentagent.com')
     
     menu_url = f"{base_url}/menu/{tenant.get('menu_slug', tenant_id)}"
     

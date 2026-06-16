@@ -1,0 +1,37 @@
+{
+  "summary": "Full backend + frontend validation of HR Leave-Permissions feature (sick / hourly / travel) with manager→owner approval workflow. 7/7 backend tests pass and full UI flow works: 3 attendance-tab buttons, dialog with all fields, success toast, archive list with badge, approve flow with pending-count decrement.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "GET /api/employees and /api/employees/{id}", "issue": "Response omits annual_leave_balance — UI cannot display the employee's remaining balance and tests must read it from MongoDB directly. Consider including the field so the travel-leave dialog can warn before submission."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_leave_permissions_full.py",
+    "/app/backend/tests/test_leave_permissions.py",
+    "/app/test_reports/pytest/iter242_leave.xml"
+  ],
+  "action_items": [
+    "(Optional/minor) Include annual_leave_balance in GET /api/employees + GET /api/employees/{id} responses so the travel-leave dialog can show remaining days and the UI can pre-validate before sending the request."
+  ],
+  "critical_code_review_comments": [
+    "payroll_routes.py is now ~1460 lines — leave-permissions endpoints append to an already large file. Consider extracting LeavePermissionCreate model + 5 endpoints into routes/leave_permissions_routes.py (mounted under same prefix) to keep files under ~700 lines per the code-review guideline.",
+    "Approve handler trusts that perm.days is correct without re-validating that date_to >= date_from on approval (it's validated at create). Acceptable since rows are immutable in pending state.",
+    "Bonus uses field name `bonus_type` (consistent with other bonuses) — fine; the review-request wording 'type permission' is informal."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_leave_permissions_full.py (NEW — 7 cases)"
+  ],
+  "success_rate": {"backend": "100% (7/7)", "frontend": "100% on the scoped flows"},
+  "test_credentials": "admin@maestroegp.com / admin123 (owner). cashier1@maestroegp.com / cash123 (negative role-gating).",
+  "seed_data_creation": "Created several TEST_-prefixed leave_permissions documents (hourly, sick, travel) on employee 'موظف 1' (id c2420786-...). All approved or pending. No production data altered.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Backend endpoints under /api/leave-permissions are fully wired (create / list / pending-count / approve / reject) in /app/backend/routes/payroll_routes.py (lines ~1225-1459). UI on /hr → tab الحضور shows the 3 buttons; tab الأذونات والإجازات shows the archive + pending badge. Toast text on submit: 'تم الإرسال — بانتظار موافقة المالك'. After approve, sick → attendance docs with source=leave_approved; travel → employee.annual_leave_balance decreases; hourly → bonus document with bonus_type=permission. annual_leave_balance is not exposed via REST API — read from db.employees if you need to verify.",
+  "rca of the issue": "n/a — feature works as specified; only a minor enhancement noted re: exposing annual_leave_balance in employee API response."
+}

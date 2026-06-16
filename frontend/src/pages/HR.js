@@ -81,7 +81,9 @@ import {
   Upload,
   RefreshCw,
   Bell,
-  Calculator
+  Calculator,
+  Plane,
+  Stethoscope
 } from 'lucide-react';
 import { toast, Toaster } from 'sonner';
 import BiometricDevices from '../components/BiometricDevices';
@@ -206,6 +208,14 @@ export default function HR() {
   // Dialogs
   const [employeeDialogOpen, setEmployeeDialogOpen] = useState(false);
   const [attendanceDialogOpen, setAttendanceDialogOpen] = useState(false);
+  // أذونات وإجازات الموظفين (بموافقة المالك)
+  const [leavePermissions, setLeavePermissions] = useState([]);
+  const [leavesLoading, setLeavesLoading] = useState(false);
+  const [leavePendingCount, setLeavePendingCount] = useState(0);
+  const [leaveDialog, setLeaveDialog] = useState(null); // null | 'sick' | 'hourly' | 'travel'
+  const [leaveForm, setLeaveForm] = useState({ employee_id: '', date_from: '', date_to: '', hours: '', reason: '' });
+  const [leaveSubmitting, setLeaveSubmitting] = useState(false);
+  const [leaveStatusFilter, setLeaveStatusFilter] = useState('all');
   const [advanceDialogOpen, setAdvanceDialogOpen] = useState(false);
   // احتساب قسط سلفة سابقة يدوياً في الشهر الحالي
   const [advanceDeductOpen, setAdvanceDeductOpen] = useState(false);
@@ -527,6 +537,12 @@ export default function HR() {
       fetchEmployeeRatings();
     }
   }, [activeTab, selectedMonth, dateMode, startDate, endDate, selectedYear, selectedBranchId]);
+
+  // جلب الأذونات/الإجازات + عدد الطلبات المعلقة (للشارة)
+  useEffect(() => {
+    fetchLeavePermissions();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTab, selectedBranchId]);
 
   // 💰 جلب الكشف اليومي
   const fetchDailyPayroll = async () => {
@@ -1116,8 +1132,127 @@ export default function HR() {
     }
   };
 
+  // ===== أذونات وإجازات الموظفين (بموافقة المالك) =====
+  const canGrantLeave = ['admin', 'super_admin', 'manager', 'supervisor'].includes(user?.role);
+  const canApproveLeave = ['admin', 'super_admin'].includes(user?.role);
+
+  const fetchLeavePermissions = async () => {
+    try {
+      setLeavesLoading(true);
+      const token = localStorage.getItem('token');
+      const headers = { Authorization: `Bearer ${token}` };
+      const branchId = getBranchIdForApi();
+      const q = branchId ? `?branch_id=${branchId}` : '';
+      const [list, pend] = await Promise.all([
+        axios.get(`${API}/leave-permissions${q}`, { headers }),
+        axios.get(`${API}/leave-permissions/pending-count`, { headers }).catch(() => ({ data: { pending: 0 } })),
+      ]);
+      setLeavePermissions(list.data || []);
+      setLeavePendingCount((pend.data && pend.data.pending) || 0);
+    } catch (error) {
+      showApiError(error, t('فشل في جلب الأذونات'));
+    } finally {
+      setLeavesLoading(false);
+    }
+  };
+
+  const openLeaveDialog = (type) => {
+    setLeaveForm({ employee_id: '', date_from: new Date().toISOString().slice(0, 10), date_to: new Date().toISOString().slice(0, 10), hours: '', reason: '' });
+    setLeaveDialog(type);
+  };
+
+  const handleCreateLeave = async (e) => {
+    e.preventDefault();
+    if (!leaveForm.employee_id) { toast.error(t('اختر الموظف')); return; }
+    try {
+      setLeaveSubmitting(true);
+      const token = localStorage.getItem('token');
+      const payload = {
+        employee_id: leaveForm.employee_id,
+        leave_type: leaveDialog,
+        date_from: leaveForm.date_from,
+        date_to: leaveDialog === 'hourly' ? leaveForm.date_from : leaveForm.date_to,
+        hours: leaveDialog === 'hourly' ? parseFloat(leaveForm.hours || 0) : undefined,
+        reason: leaveForm.reason,
+      };
+      await axios.post(`${API}/leave-permissions`, payload, { headers: { Authorization: `Bearer ${token}` } });
+      toast.success(t('تم الإرسال — بانتظار موافقة المالك'));
+      setLeaveDialog(null);
+      fetchLeavePermissions();
+    } catch (error) {
+      showApiError(error, t('فشل في إرسال الطلب'));
+    } finally {
+      setLeaveSubmitting(false);
+    }
+  };
+
+  const handleApproveLeave = async (id) => {
+    try {
+      const token = localStorage.getItem('token');
+      await axios.put(`${API}/leave-permissions/${id}/approve`, {}, { headers: { Authorization: `Bearer ${token}` } });
+      toast.success(t('تمت الموافقة — تم احتساب الإذن للموظف'));
+      fetchLeavePermissions();
+      fetchData();
+    } catch (error) {
+      showApiError(error, t('فشل في الموافقة'));
+    }
+  };
+
+  const handleRejectLeave = async (id) => {
+    try {
+      const token = localStorage.getItem('token');
+      await axios.put(`${API}/leave-permissions/${id}/reject`, {}, { headers: { Authorization: `Bearer ${token}` } });
+      toast.success(t('تم رفض الطلب'));
+      fetchLeavePermissions();
+    } catch (error) {
+      showApiError(error, t('فشل في الرفض'));
+    }
+  };
+
+  const typeLabelMap = { sick: 'عطلة مرضية', hourly: 'إذن ساعات', travel: 'إجازة سفر/سنوية' };
+  const statusLabelMap = { pending: 'بانتظار الموافقة', approved: 'معتمد', rejected: 'مرفوض' };
+
+  const printLeavesReport = () => {
+    const filtered = (leavePermissions || []).filter(p => leaveStatusFilter === 'all' || p.status === leaveStatusFilter);
+    const rows = filtered.map((p, i) => `
+      <tr>
+        <td>${i + 1}</td>
+        <td>${p.employee_name || '-'}</td>
+        <td>${p.branch_name || '-'}</td>
+        <td>${typeLabelMap[p.leave_type] || p.leave_type}</td>
+        <td>${p.leave_type === 'hourly' ? (p.hours + ' ساعة') : (p.date_from + ' ← ' + p.date_to + ' (' + p.days + ' يوم)')}</td>
+        <td>${p.payout_amount != null ? Number(p.payout_amount).toLocaleString() : '-'}</td>
+        <td>${p.reason || '-'}</td>
+        <td>${p.granted_by_name || '-'}</td>
+        <td>${statusLabelMap[p.status] || p.status}${p.approved_by_name ? ('<br/><small>اعتمده: ' + p.approved_by_name + '</small>') : ''}</td>
+      </tr>`).join('');
+    const html = `<!DOCTYPE html><html dir="rtl" lang="ar"><head><meta charset="utf-8"><title>تقرير الأذونات والإجازات</title>
+      <style>
+        body{font-family:'Cairo',Arial,sans-serif;padding:24px;color:#1a1a2e}
+        h1{font-size:20px;text-align:center;margin:0 0 4px}
+        .sub{text-align:center;color:#666;font-size:12px;margin-bottom:16px}
+        table{width:100%;border-collapse:collapse;font-size:12px}
+        th,td{border:1px solid #ddd;padding:6px 8px;text-align:right}
+        th{background:#0b1430;color:#fff}
+        tr:nth-child(even){background:#f7f7fb}
+        @media print{button{display:none}}
+      </style></head><body>
+      <h1>تقرير الأذونات والإجازات — Maestro EGP</h1>
+      <div class="sub">تاريخ الطباعة: ${new Date().toLocaleString('ar-EG')} — عدد السجلات: ${filtered.length}</div>
+      <table><thead><tr>
+        <th>#</th><th>الموظف</th><th>الفرع</th><th>النوع</th><th>التفاصيل</th><th>راتب الإجازة</th><th>السبب</th><th>منحه المدير</th><th>الحالة</th>
+      </tr></thead><tbody>${rows}</tbody></table>
+      </body></html>`;
+    const w = window.open('', '_blank');
+    if (!w) { toast.error(t('فشل فتح نافذة الطباعة')); return; }
+    w.document.write(html);
+    w.document.close();
+    setTimeout(() => { w.focus(); w.print(); }, 400);
+  };
+
   // Advance handlers
   
+
   // Face Photo handlers
   const handleFetchFacePhoto = async (emp) => {
     if (!emp.biometric_uid) {
@@ -2616,6 +2751,14 @@ export default function HR() {
             <TabsTrigger value="attendance" className="flex items-center gap-2">
               <Calendar className="h-4 w-4" /> {t('الحضور')}
             </TabsTrigger>
+            <TabsTrigger value="leaves" className="flex items-center gap-2 relative" data-testid="leaves-tab">
+              <Plane className="h-4 w-4" /> {t('الأذونات والإجازات')}
+              {leavePendingCount > 0 && (
+                <span data-testid="leaves-pending-badge" className="absolute -top-1 -left-1 bg-red-600 text-white text-[10px] font-bold rounded-full min-w-[18px] h-[18px] flex items-center justify-center px-1">
+                  {leavePendingCount}
+                </span>
+              )}
+            </TabsTrigger>
             <TabsTrigger value="advances" className="flex items-center gap-2">
               <CreditCard className="h-4 w-4" /> {t('السلف')}
             </TabsTrigger>
@@ -3483,8 +3626,22 @@ export default function HR() {
           {/* Attendance Tab */}
           <TabsContent value="attendance">
             <Card>
-              <CardHeader className="flex flex-row items-center justify-between">
+              <CardHeader className="flex flex-row items-center justify-between flex-wrap gap-2">
                 <CardTitle>{t('سجل الحضور')} - {dateLabel}</CardTitle>
+                <div className="flex items-center gap-2 flex-wrap">
+                {canGrantLeave && (
+                  <>
+                    <Button variant="outline" className="border-rose-300 text-rose-700 hover:bg-rose-50" onClick={() => openLeaveDialog('sick')} data-testid="btn-sick-leave">
+                      <Stethoscope className="h-4 w-4 ml-1" /> {t('عطلة مرضية')}
+                    </Button>
+                    <Button variant="outline" className="border-amber-300 text-amber-700 hover:bg-amber-50" onClick={() => openLeaveDialog('hourly')} data-testid="btn-hourly-leave">
+                      <Clock className="h-4 w-4 ml-1" /> {t('إذن ساعات')}
+                    </Button>
+                    <Button variant="outline" className="border-sky-300 text-sky-700 hover:bg-sky-50" onClick={() => openLeaveDialog('travel')} data-testid="btn-travel-leave">
+                      <Plane className="h-4 w-4 ml-1" /> {t('إجازة سفر')}
+                    </Button>
+                  </>
+                )}
                 <Dialog open={attendanceDialogOpen} onOpenChange={setAttendanceDialogOpen}>
                   <DialogTrigger asChild>
                     <Button><Plus className="h-4 w-4 ml-2" /> {t('تسجيل حضور')}</Button>
@@ -3541,6 +3698,7 @@ export default function HR() {
                     </form>
                   </DialogContent>
                 </Dialog>
+                </div>
               </CardHeader>
               <CardContent>
                 <div className="overflow-x-auto">
@@ -3581,14 +3739,17 @@ export default function HR() {
                         const effBreakOut = att.break_out || (hasAnyPunch ? emp?.break_start : null);
                         const effBreakIn = att.break_in || (hasAnyPunch ? emp?.break_end : null);
                         let dispHours = att.worked_hours;
-                        if ((dispHours == null) && effCheckIn && effCheckOut) {
-                          const [ih, im] = effCheckIn.split(':').map(Number);
-                          const [oh, om] = effCheckOut.split(':').map(Number);
-                          if (!isNaN(ih) && !isNaN(oh)) {
-                            let mins = (oh * 60 + om) - (ih * 60 + im);
-                            if (mins < 0) mins += 24 * 60;
-                            dispHours = mins / 60;
+                        if (effCheckIn && effCheckOut) {
+                          const toMin = (s) => { const [h, m] = String(s).split(':').map(Number); return (isNaN(h) ? 0 : h) * 60 + (isNaN(m) ? 0 : m); };
+                          let mins = toMin(effCheckOut) - toMin(effCheckIn);
+                          if (mins < 0) mins += 24 * 60; // وردية ليلية (انصراف بعد منتصف الليل)
+                          // خصم وقت الاستراحة إن وُجد
+                          if (hasBreak && effBreakOut && effBreakIn) {
+                            let bmins = toMin(effBreakIn) - toMin(effBreakOut);
+                            if (bmins < 0) bmins += 24 * 60;
+                            if (bmins > 0 && bmins < mins) mins -= bmins;
                           }
+                          dispHours = mins / 60;
                         }
                         return (
                         <tr key={att.id} className="border-b hover:bg-muted/50">
@@ -3613,6 +3774,122 @@ export default function HR() {
               </CardContent>
             </Card>
           </TabsContent>
+
+          <TabsContent value="leaves">
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between flex-wrap gap-2">
+                <div>
+                  <CardTitle className="flex items-center gap-2">
+                    <Plane className="h-5 w-5 text-sky-600" /> {t('سجل الأذونات والإجازات')}
+                  </CardTitle>
+                  <p className="text-sm text-muted-foreground mt-1">{t('أرشيف كامل لكل الأذونات — يمنحها المدير ويعتمدها المالك')}</p>
+                </div>
+                <div className="flex items-center gap-2">
+                  {canGrantLeave && (
+                    <>
+                      <Button size="sm" variant="outline" className="border-rose-300 text-rose-700 hover:bg-rose-50" onClick={() => openLeaveDialog('sick')}>
+                        <Stethoscope className="h-4 w-4 ml-1" /> {t('عطلة مرضية')}
+                      </Button>
+                      <Button size="sm" variant="outline" className="border-amber-300 text-amber-700 hover:bg-amber-50" onClick={() => openLeaveDialog('hourly')}>
+                        <Clock className="h-4 w-4 ml-1" /> {t('إذن ساعات')}
+                      </Button>
+                      <Button size="sm" variant="outline" className="border-sky-300 text-sky-700 hover:bg-sky-50" onClick={() => openLeaveDialog('travel')}>
+                        <Plane className="h-4 w-4 ml-1" /> {t('إجازة سفر')}
+                      </Button>
+                    </>
+                  )}
+                  <Select value={leaveStatusFilter} onValueChange={setLeaveStatusFilter}>
+                    <SelectTrigger className="w-36" data-testid="leaves-status-filter"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">{t('الكل')}</SelectItem>
+                      <SelectItem value="pending">{t('بانتظار الموافقة')}</SelectItem>
+                      <SelectItem value="approved">{t('معتمد')}</SelectItem>
+                      <SelectItem value="rejected">{t('مرفوض')}</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <Button size="sm" variant="outline" onClick={printLeavesReport} data-testid="print-leaves-btn">
+                    <Printer className="h-4 w-4 ml-1" /> {t('طباعة')}
+                  </Button>
+                </div>
+              </CardHeader>
+              <CardContent>
+                {leavesLoading ? (
+                  <div className="text-center py-10 text-muted-foreground">{t('جاري التحميل...')}</div>
+                ) : (() => {
+                  const typeLabel = { sick: t('عطلة مرضية'), hourly: t('إذن ساعات'), travel: t('إجازة سفر') };
+                  const filtered = (leavePermissions || []).filter(p => leaveStatusFilter === 'all' || p.status === leaveStatusFilter);
+                  if (filtered.length === 0) {
+                    return (
+                      <div className="text-center py-10 text-muted-foreground" data-testid="leaves-empty">
+                        <ClipboardList className="h-12 w-12 mx-auto mb-3 opacity-40" />
+                        <p>{t('لا توجد أذونات أو إجازات')}</p>
+                      </div>
+                    );
+                  }
+                  return (
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-sm">
+                        <thead>
+                          <tr className="border-b text-muted-foreground">
+                            <th className="text-right py-2 px-2">{t('الموظف')}</th>
+                            <th className="text-right py-2 px-2">{t('الفرع')}</th>
+                            <th className="text-right py-2 px-2">{t('النوع')}</th>
+                            <th className="text-right py-2 px-2">{t('التفاصيل')}</th>
+                            <th className="text-right py-2 px-2">{t('السبب')}</th>
+                            <th className="text-right py-2 px-2">{t('منحه المدير')}</th>
+                            <th className="text-right py-2 px-2">{t('الحالة')}</th>
+                            <th className="text-right py-2 px-2">{t('الإجراء')}</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {filtered.map((p) => (
+                            <tr key={p.id} className="border-b hover:bg-muted/40" data-testid={`leave-row-${p.id}`}>
+                              <td className="py-2 px-2 font-medium">{p.employee_name}</td>
+                              <td className="py-2 px-2">{p.branch_name || '-'}</td>
+                              <td className="py-2 px-2">
+                                <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs ${p.leave_type === 'sick' ? 'bg-rose-100 text-rose-700' : p.leave_type === 'hourly' ? 'bg-amber-100 text-amber-700' : 'bg-sky-100 text-sky-700'}`}>
+                                  {typeLabel[p.leave_type] || p.leave_type}
+                                </span>
+                              </td>
+                              <td className="py-2 px-2 whitespace-nowrap">
+                                {p.leave_type === 'hourly' ? `${p.hours} ${t('ساعة')}` : `${p.date_from} ← ${p.date_to} (${p.days} ${t('يوم')})`}
+                                {p.leave_type === 'travel' && p.payout_amount != null && (
+                                  <div className="text-[10px] text-emerald-700 mt-0.5">{t('راتب الإجازة')}: {Number(p.payout_amount).toLocaleString()} — {t('سُحب من خزينة الفرع')}</div>
+                                )}
+                              </td>
+                              <td className="py-2 px-2 max-w-[180px] truncate" title={p.reason}>{p.reason || '-'}</td>
+                              <td className="py-2 px-2 whitespace-nowrap">{p.granted_by_name}</td>
+                              <td className="py-2 px-2">
+                                {p.status === 'pending' && <span className="px-2 py-0.5 rounded-full text-xs bg-amber-100 text-amber-700">{t('بانتظار الموافقة')}</span>}
+                                {p.status === 'approved' && <span className="px-2 py-0.5 rounded-full text-xs bg-green-100 text-green-700">{t('معتمد')} ✓</span>}
+                                {p.status === 'rejected' && <span className="px-2 py-0.5 rounded-full text-xs bg-red-100 text-red-700">{t('مرفوض')}</span>}
+                                {p.status === 'approved' && p.approved_by_name && <div className="text-[10px] text-muted-foreground mt-0.5">{t('اعتمده')}: {p.approved_by_name}</div>}
+                              </td>
+                              <td className="py-2 px-2">
+                                {p.status === 'pending' && canApproveLeave ? (
+                                  <div className="flex items-center gap-1">
+                                    <Button size="sm" className="bg-green-600 hover:bg-green-700 h-7 px-2" onClick={() => handleApproveLeave(p.id)} data-testid={`approve-leave-${p.id}`}>
+                                      <CheckCircle className="h-4 w-4" />
+                                    </Button>
+                                    <Button size="sm" variant="destructive" className="h-7 px-2" onClick={() => handleRejectLeave(p.id)} data-testid={`reject-leave-${p.id}`}>
+                                      <XCircle className="h-4 w-4" />
+                                    </Button>
+                                  </div>
+                                ) : p.status === 'pending' ? (
+                                  <span className="text-xs text-muted-foreground">{t('بانتظار المالك')}</span>
+                                ) : '-'}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  );
+                })()}
+              </CardContent>
+            </Card>
+          </TabsContent>
+
 
           {/* Advances Tab */}
           <TabsContent value="advances">
@@ -4400,6 +4677,84 @@ export default function HR() {
             </Card>
           </TabsContent>
         </Tabs>
+
+        {/* نموذج منح إذن/إجازة */}
+        <Dialog open={!!leaveDialog} onOpenChange={(o) => !o && setLeaveDialog(null)}>
+          <DialogContent className="max-w-md" data-testid="leave-form-dialog">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                {leaveDialog === 'sick' && <><Stethoscope className="h-5 w-5 text-rose-600" /> {t('منح عطلة مرضية')}</>}
+                {leaveDialog === 'hourly' && <><Clock className="h-5 w-5 text-amber-600" /> {t('منح إذن ساعات')}</>}
+                {leaveDialog === 'travel' && <><Plane className="h-5 w-5 text-sky-600" /> {t('منح إجازة سفر')}</>}
+              </DialogTitle>
+            </DialogHeader>
+            <form onSubmit={handleCreateLeave} className="space-y-4">
+              <div>
+                <Label>{t('الموظف')}</Label>
+                <Select value={leaveForm.employee_id} onValueChange={(v) => setLeaveForm({ ...leaveForm, employee_id: v })}>
+                  <SelectTrigger data-testid="leave-employee-select"><SelectValue placeholder={t('اختر الموظف')} /></SelectTrigger>
+                  <SelectContent>
+                    {employees.map((emp) => (
+                      <SelectItem key={emp.id} value={emp.id}>{emp.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                {leaveDialog === 'travel' && leaveForm.employee_id && (() => {
+                  const e = employees.find(x => x.id === leaveForm.employee_id);
+                  const bal = e?.annual_leave_balance != null ? e.annual_leave_balance : 21;
+                  return <p className="text-xs text-sky-700 mt-1">{t('رصيد الإجازة السنوية المتبقي')}: {bal} {t('يوم')}</p>;
+                })()}
+              </div>
+
+              {leaveDialog === 'hourly' ? (
+                <>
+                  <div>
+                    <Label>{t('التاريخ')}</Label>
+                    <Input type="date" value={leaveForm.date_from} onChange={(e) => setLeaveForm({ ...leaveForm, date_from: e.target.value })} data-testid="leave-date-from" />
+                  </div>
+                  <div>
+                    <Label>{t('عدد الساعات المسموح بها')}</Label>
+                    <Input type="number" step="0.5" min="0.5" placeholder="مثال: 2" value={leaveForm.hours} onChange={(e) => setLeaveForm({ ...leaveForm, hours: e.target.value })} data-testid="leave-hours" />
+                    <p className="text-xs text-muted-foreground mt-1">{t('تُحتسب هذه الساعات كعمل بلا أي خصم على الموظف')}</p>
+                  </div>
+                </>
+              ) : (
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <Label>{t('من تاريخ')}</Label>
+                    <Input type="date" value={leaveForm.date_from} onChange={(e) => setLeaveForm({ ...leaveForm, date_from: e.target.value })} data-testid="leave-date-from" />
+                  </div>
+                  <div>
+                    <Label>{t('إلى تاريخ')}</Label>
+                    <Input type="date" value={leaveForm.date_to} onChange={(e) => setLeaveForm({ ...leaveForm, date_to: e.target.value })} data-testid="leave-date-to" />
+                  </div>
+                  <div className="col-span-2 flex flex-wrap gap-2">
+                    <button type="button" className="text-xs px-2 py-1 rounded-md border hover:bg-muted" onClick={() => { const d = new Date(leaveForm.date_from); d.setDate(d.getDate() + 6); setLeaveForm({ ...leaveForm, date_to: d.toISOString().slice(0, 10) }); }}>{t('أسبوع')}</button>
+                    <button type="button" className="text-xs px-2 py-1 rounded-md border hover:bg-muted" data-testid="leave-full-month-btn" onClick={() => { const d = new Date(leaveForm.date_from); const end = new Date(d.getFullYear(), d.getMonth() + 1, 0); setLeaveForm({ ...leaveForm, date_to: end.toISOString().slice(0, 10) }); }}>{t('شهر كامل')}</button>
+                  </div>
+                </div>
+                )}
+
+              <div>
+                <Label>{t('السبب / ملاحظات')}</Label>
+                <Textarea value={leaveForm.reason} onChange={(e) => setLeaveForm({ ...leaveForm, reason: e.target.value })} placeholder={t('سبب الإذن')} rows={2} data-testid="leave-reason" />
+              </div>
+
+              <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 text-xs text-amber-800 flex items-start gap-2">
+                <Bell className="h-4 w-4 mt-0.5 flex-shrink-0" />
+                <span>{t('سيتم إرسال الطلب للمالك للموافقة. لن يُحتسب للموظف إلا بعد موافقة المالك.')}</span>
+              </div>
+
+              <div className="flex justify-end gap-2">
+                <Button type="button" variant="outline" onClick={() => setLeaveDialog(null)}>{t('إلغاء')}</Button>
+                <Button type="submit" disabled={leaveSubmitting} data-testid="leave-submit-btn">
+                  {leaveSubmitting ? t('جاري الإرسال...') : t('إرسال للموافقة')}
+                </Button>
+              </div>
+            </form>
+          </DialogContent>
+        </Dialog>
+
 
         {/* Payroll Preview Dialog */}
         <Dialog open={payrollDialogOpen} onOpenChange={setPayrollDialogOpen}>

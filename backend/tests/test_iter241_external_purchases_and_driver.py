@@ -9,7 +9,7 @@ import time
 import requests
 import pytest
 
-BASE_URL = os.environ.get('REACT_APP_BACKEND_URL', 'https://maestro-pos-system.preview.emergentagent.com').rstrip('/')
+BASE_URL = os.environ.get('REACT_APP_BACKEND_URL', 'https://pos-ocr-invoice.preview.emergentagent.com').rstrip('/')
 
 
 @pytest.fixture(scope="session")
