@@ -9701,8 +9701,9 @@ class SystemInvoiceSettings(BaseModel):
     system_website: Optional[str] = None  # موقع النظام
     footer_text: Optional[str] = None  # نص إضافي في التذييل
     show_system_branding: bool = True  # عرض شعار وبيانات النظام
-    promo_text: Optional[str] = "نظام إدارة متكامل للمطاعم والكافيهات"  # نص الدعاية
+    promo_text: Optional[str] = "نظام محاسبي وإداري متكامل للمؤسسات والمطاعم والمشاريع التجارية الكبرى"  # نص الدعاية
     cta_text: Optional[str] = "للحصول على نسختك تواصل معنا"  # نص التحفيز للتواصل
+    system_intro: Optional[str] = "منصة شاملة ذكية ومتطورة تدير العمليات، والمخزون، والتصنيع، والمشتريات، والتوصيل، والموارد البشرية والمالية في نظام واحد دقيق يعمل حتى بدون إنترنت."  # نص تعريف النظام
 
 class TenantInvoiceSettings(BaseModel):
     """إعدادات الفاتورة للعميل (المطعم)"""
@@ -16627,6 +16628,9 @@ async def _auto_process_attendance_internal(current_user: dict):
         else:
             continue
 
+        # احتفظ بالتاريخ التقويمي الحقيقي للبصمة لترتيب زمني صحيح لاحقاً
+        orig_date = date_part
+
         # === دعم الشفت الليلي ===
         # لو shift_end < shift_start (مثل 22:00 → 06:00)، البصمات بعد منتصف الليل
         # وقبل (shift_end + ساعتين سماحية) تُنسب لـ business_date = اليوم السابق
@@ -16646,39 +16650,64 @@ async def _auto_process_attendance_internal(current_user: dict):
             except Exception:
                 pass
 
-        daily_punches[(uid, date_part)].append(time_part)
+        # نخزّن (التاريخ التقويمي الحقيقي، HH:MM) — مفتاح التجميع هو business_date
+        daily_punches[(uid, date_part)].append((orig_date, time_part))
 
-    # === فصل الشفتات (Shift Separation) ===
-    # المشكلة: بصمتان في نفس اليوم التقويمي تخصّان شفتين مختلفين تُدمجان كشفت
-    # واحد ضخم (~24 ساعة)، مثل انصراف 00:09 (نهاية شفت الليلة السابقة) +
-    # حضور 23:57 (بداية شفت الليلة). الحل: لو امتدّت بصمات اليوم أكثر من حد
-    # أقصى معقول لشفت واحد، فالبصمات المبكرة (فجراً، قبل أكبر فجوة) هي انصراف
-    # الليلة السابقة وتُنقل لليوم السابق، ويبقى بصمات شفت اليوم وحدها.
+    # === فصل الشفتات + ترتيب زمني صحيح (Shift Separation) ===
+    # نحوّل كل مجموعة إلى قائمة HH:MM مرتّبة زمنياً (بالاعتماد على التاريخ التقويمي
+    # الحقيقي لكل بصمة، لا الترتيب النصي — هذا يصلح ترتيب الشفت الليلي 22:00→00:09).
+    # ثم لو امتدّت بصمات يوم العمل أكثر من حدّ شفت واحد (16 ساعة) فهذا يعني شفتين
+    # مدموجين (مثل انصراف 00:09 + حضور 23:57): نفصل عند أكبر فجوة ونُرحّل المجموعة
+    # المبكرة (انصراف الليلة السابقة) إلى يوم العمل السابق.
     MAX_SHIFT_MINUTES = 16 * 60       # 16 ساعة كحد أقصى لشفت واحد
-    EARLY_MORNING_CUTOFF = 11 * 60    # بصمة قبل 11 صباحاً تُعتبر انصراف الليلة السابقة
+    SHIFT_GAP_MINUTES = 6 * 60        # فجوة ≥ 6 ساعات بين بصمتين = شفت منفصل
+
+    def _entries_to_sorted_dts(entries):
+        """يحوّل [(orig_date, HH:MM)] إلى datetimes حقيقية مرتّبة زمنياً."""
+        dts = []
+        for od, tp in entries:
+            try:
+                dts.append(datetime.strptime(f"{od} {tp}", "%Y-%m-%d %H:%M"))
+            except Exception:
+                continue
+        dts.sort()
+        return dts
+
+    # المرور الأول: الفصل/الترحيل للمجموعات الممتدة أكثر من شفت
     for _key in list(daily_punches.keys()):
         _uid_k, _date_k = _key
-        _pts = sorted(set(daily_punches[_key]))
-        if len(_pts) < 2:
+        _dts = _entries_to_sorted_dts(daily_punches[_key])
+        if not _dts:
+            daily_punches[_key] = []
             continue
-        _span = _to_min_helper(_pts[-1]) - _to_min_helper(_pts[0])
-        if _span <= MAX_SHIFT_MINUTES:
-            continue
-        # ابحث عن أكبر فجوة زمنية بين بصمتين متتاليتين (نقطة الفصل بين الشفتين)
-        _gap_idx, _gap_val = -1, -1
-        for _i in range(1, len(_pts)):
-            _g = _to_min_helper(_pts[_i]) - _to_min_helper(_pts[_i - 1])
-            if _g > _gap_val:
-                _gap_val, _gap_idx = _g, _i
-        _early = _pts[:_gap_idx]   # المجموعة المبكرة (فجراً) = انصراف الليلة السابقة
-        _late = _pts[_gap_idx:]    # مجموعة شفت اليوم
-        if _early and _to_min_helper(_early[0]) <= EARLY_MORNING_CUTOFF:
-            try:
-                _prev_d = (datetime.strptime(_date_k, "%Y-%m-%d") - timedelta(days=1)).strftime("%Y-%m-%d")
-                daily_punches[(_uid_k, _prev_d)].extend(_early)
-                daily_punches[_key] = _late
-            except Exception:
-                pass
+        if len(_dts) >= 2:
+            _span_min = (_dts[-1] - _dts[0]).total_seconds() / 60.0
+            if _span_min > MAX_SHIFT_MINUTES:
+                # ابحث عن أكبر فجوة (نقطة الفصل بين الشفتين)
+                _gap_idx, _gap_val = -1, -1.0
+                for _i in range(1, len(_dts)):
+                    _g = (_dts[_i] - _dts[_i - 1]).total_seconds() / 60.0
+                    if _g > _gap_val:
+                        _gap_val, _gap_idx = _g, _i
+                if _gap_val >= SHIFT_GAP_MINUTES:
+                    _early = _dts[:_gap_idx]   # انصراف الليلة السابقة
+                    _late = _dts[_gap_idx:]    # شفت اليوم
+                    try:
+                        _prev_d = (datetime.strptime(_date_k, "%Y-%m-%d") - timedelta(days=1)).strftime("%Y-%m-%d")
+                        daily_punches[(_uid_k, _prev_d)].extend(
+                            [(dt.strftime("%Y-%m-%d"), dt.strftime("%H:%M")) for dt in _early]
+                        )
+                        daily_punches[_key] = [(dt.strftime("%Y-%m-%d"), dt.strftime("%H:%M")) for dt in _late]
+                        continue
+                    except Exception:
+                        pass
+        # خلاف ذلك: أعد التخزين كتواريخ/أوقات (سيُرتّب زمنياً في المرور الثاني)
+        daily_punches[_key] = [(dt.strftime("%Y-%m-%d"), dt.strftime("%H:%M")) for dt in _dts]
+
+    # المرور الثاني: تطبيع كل المجموعات إلى قوائم HH:MM مرتّبة زمنياً
+    for _key in list(daily_punches.keys()):
+        _dts = _entries_to_sorted_dts(daily_punches[_key])
+        daily_punches[_key] = [dt.strftime("%H:%M") for dt in _dts]
 
     # 4. تحويل لسجلات حضور
     created_attendance = 0
@@ -16706,13 +16735,33 @@ async def _auto_process_attendance_internal(current_user: dict):
             except Exception:
                 return -1
 
-        # 1) دمج البصمات المتقاربة (≤ 5 دقائق) — تكرار خاطئ
+        def _order_shift_times(tlist):
+            """ترتيب بصمات شفت واحد زمنياً مع دعم عبور منتصف الليل (الدوران عند أكبر فجوة)."""
+            ts = sorted(set(tlist))
+            if len(ts) < 2:
+                return ts
+            mins = [_to_min(t) for t in ts]
+            best_i, best_gap = len(ts) - 1, -1
+            for i in range(len(ts)):
+                nxt = mins[(i + 1) % len(ts)] + (1440 if i + 1 == len(ts) else 0)
+                gap = nxt - mins[i]
+                if gap > best_gap:
+                    best_gap, best_i = gap, i
+            start = (best_i + 1) % len(ts)
+            return ts[start:] + ts[:start]
+
+        def _gap_after(prev_t, t):
+            """فرق الدقائق من prev_t إلى t مع دوران منتصف الليل (دائماً 0..1439)."""
+            return (_to_min(t) - _to_min(prev_t)) % 1440
+
+        # 1) ترتيب زمني صحيح (يدعم الشفت الليلي) + دمج البصمات المتقاربة (≤ 5 دقائق)
+        ordered = _order_shift_times(times)
         deduped = []
-        for t in times:
+        for t in ordered:
             if not deduped:
                 deduped.append(t)
                 continue
-            if _to_min(t) - _to_min(deduped[-1]) <= 5:
+            if _gap_after(deduped[-1], t) <= 5:
                 continue  # تجاهل التكرار القريب
             deduped.append(t)
         times = deduped
@@ -16725,7 +16774,7 @@ async def _auto_process_attendance_internal(current_user: dict):
 
         if n == 2:
             # تحقق من فرق الزمن — لو < 60 دقيقة نعتبرها بصمة دخول مكررة فقط
-            diff = _to_min(times[1]) - _to_min(times[0])
+            diff = _gap_after(times[0], times[1])
             if diff >= 60:
                 check_out = times[1]
             # وإلا: check_out يبقى None (الموظف بصم مرتين متتاليتين بالخطأ)
@@ -16750,8 +16799,8 @@ async def _auto_process_attendance_internal(current_user: dict):
                 v = existing.get(fld)
                 if v:
                     existing_times.add(v)
-            # دمج مع times الجديدة وإعادة التوزيع
-            all_times = sorted(set(times) | existing_times)
+            # دمج مع times الجديدة وإعادة التوزيع (ترتيب زمني يدعم الشفت الليلي)
+            all_times = _order_shift_times(set(times) | existing_times)
 
             # دمج البصمات المتقاربة (≤ 5 دقائق) بعد الدمج
             merged = []
@@ -16759,7 +16808,7 @@ async def _auto_process_attendance_internal(current_user: dict):
                 if not merged:
                     merged.append(tt)
                     continue
-                if _to_min(tt) - _to_min(merged[-1]) <= 5:
+                if _gap_after(merged[-1], tt) <= 5:
                     continue
                 merged.append(tt)
             times = merged
@@ -16771,7 +16820,7 @@ async def _auto_process_attendance_internal(current_user: dict):
             break_in = None
             n = len(times)
             if n == 2:
-                diff = _to_min(times[1]) - _to_min(times[0])
+                diff = _gap_after(times[0], times[1])
                 if diff >= 60:
                     check_out = times[1]
             elif n == 3:

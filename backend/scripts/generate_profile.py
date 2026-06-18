@@ -162,21 +162,28 @@ body { font-family:'Cairo', sans-serif; color:#1f2433; margin:0; }
 .dark {
   height:297mm; width:210mm; position:relative; color:#fff;
   background: linear-gradient(160deg, #050A24 0%, #0c1738 45%, #1A2B5B 100%);
-  page-break-after: always;
+  page-break-after: always; overflow:hidden;
 }
-.cover-mid { position:absolute; top:30mm; left:18mm; right:18mm; text-align:center; }
-.cover-logo { width:28mm; height:28mm; display:block; margin:0 auto 8mm auto; }
-.cover-brand { font-size:42pt; font-weight:700; letter-spacing:.5px; direction:ltr; }
-.cover-brand .o { color:#5b9bd5; }
-.cover-rule { width:70mm; height:3px; background:#f6a623; border-radius:9px; margin:5mm auto 7mm auto; }
-.cover-sub { font-size:18pt; font-weight:700; color:#fff; line-height:1.8; }
+/* إطار ذهبي مزدوج فاخر (تصميم B) */
+.cover-frame { position:absolute; top:9mm; left:9mm; right:9mm; bottom:9mm;
+  border:0.5mm solid rgba(246,166,35,.5); border-radius:7mm; }
+.cover-frame-in { position:absolute; top:12mm; left:12mm; right:12mm; bottom:12mm;
+  border:0.3mm solid rgba(246,166,35,.2); border-radius:6mm; }
+/* علامة مائية سداسية كبيرة خلف الشعار */
+.cover-wm { position:absolute; top:62mm; left:50mm; width:110mm; height:110mm; opacity:0.05; }
+.cover-mid { position:absolute; top:46mm; left:22mm; right:22mm; text-align:center; }
+.cover-logo { width:42mm; height:42mm; display:block; margin:0 auto 7mm auto; }
+.cover-brand { font-size:44pt; font-weight:700; letter-spacing:.5px; direction:ltr; }
+.cover-brand .o { color:#f6a623; }
+.cover-rule { display:inline-block; width:60mm; height:3px; background:#f6a623; border-radius:9px; margin:5mm 0 7mm 0; }
+.cover-sub { font-size:18pt; font-weight:700; color:#eef2ff; line-height:1.8; }
 .cover-desc { font-size:11.5pt; color:#c3cae0; line-height:2; max-width:150mm; margin:6mm auto 0 auto; }
-.cover-bottom { position:absolute; bottom:24mm; left:18mm; right:18mm; }
-.cover-tag { text-align:center; font-size:10.5pt; color:#c3cae0; letter-spacing:1px; margin-bottom:8mm; }
-.cover-tag .en { color:#8a93ad; font-size:9pt; direction:ltr; }
-.cover-owner { display:block; text-align:center;
-  border-top:1px solid rgba(255,255,255,.18); padding-top:6mm; }
-.cover-year { font-size:26pt; font-weight:700; color:#f6a623; direction:ltr; margin-bottom:4mm; }
+.cover-bottom { position:absolute; bottom:22mm; left:22mm; right:22mm; text-align:center; }
+.cover-tag { text-align:center; font-size:10pt; color:#cdb37a; letter-spacing:3px; direction:ltr;
+  text-transform:uppercase; margin-bottom:7mm; }
+.cover-owner { display:inline-block; padding:6mm 18mm; border:0.4mm solid rgba(246,166,35,.45);
+  border-radius:20mm; background:rgba(0,0,0,.2); }
+.cover-year { font-size:22pt; font-weight:700; color:#f6a623; direction:ltr; margin-bottom:2mm; }
 .cover-dev { text-align:center; direction:ltr; }
 .cover-dev .nm { font-size:13pt; font-weight:700; }
 .cover-dev .rl { font-size:9.5pt; color:#aeb6cc; }
@@ -268,17 +275,20 @@ body { font-family:'Cairo', sans-serif; color:#1f2433; margin:0; }
 HTML_DOC = f"""<!DOCTYPE html>
 <html lang="ar" dir="rtl"><head><meta charset="utf-8"/><style>{CSS}</style></head><body>
 
-<!-- صفحة 1: الغلاف -->
+<!-- صفحة 1: الغلاف (تصميم B — إطار ذهبي فاخر) -->
 <div class="dark">
+  <div class="cover-frame"></div>
+  <div class="cover-frame-in"></div>
+  <img class="cover-wm" src="{LOGO}" alt=""/>
   <div class="cover-mid">
     <img class="cover-logo" src="{LOGO}" alt="Maestro EGP"/>
     <div class="cover-brand">Maestro <span class="o">EGP</span></div>
     <div class="cover-rule"></div>
-    <div class="cover-sub">نظام محاسبي وإداري متكامل<br/>للمطاعم والمشاريع</div>
+    <div class="cover-sub">نظام محاسبي وإداري متكامل<br/>للمؤسسات والمطاعم والمشاريع التجارية الكبرى</div>
     <div class="cover-desc">منصة شاملة ذكية ومتطورة تدير العمليات، والمخزون، والتصنيع، والمشتريات، والتوصيل، والموارد البشرية والمالية في نظام واحد دقيق يعمل حتى بدون إنترنت.</div>
   </div>
   <div class="cover-bottom">
-    <div class="cover-tag">ملف تعريفي للنظام <span class="en">— SYSTEM PROFILE</span></div>
+    <div class="cover-tag">System Profile — 2026</div>
     <div class="cover-owner">
       <div class="cover-year">2026</div>
       <div class="cover-dev">

@@ -1,0 +1,39 @@
+{
+  "summary": "Tested public /contact page (SystemContact.js). The intro modal, founder card (Moataz Mehana / معتز مهنا), close-buttons, and Arabic/English founder-message translations work perfectly. However, the four circular icon buttons (Call, WhatsApp, WhatsApp 2, Email) DO NOT RENDER because GET /api/system/invoice-settings is hanging / returning 502 — the settings object stays empty, so the conditional render `{phone1 && ...}` evaluates to false for every icon. The Kurdish-language render could not be verified for the same reason (icons never become visible). Tagline & system-name fall back to hardcoded defaults so the header still appears.",
+  "backend_issues": {
+    "critical": [
+      {"endpoint": "GET /api/system/invoice-settings", "issue": "Endpoint hangs (curl times out after 10s on both internal :8001 and public URL → Cloudflare 502). /api/health and /api/login-backgrounds respond fine, so the issue is specific to this route. Browser console on /contact shows: 'Failed to load resource: 502' and 'Failed to fetch settings: AxiosError'. Because settings is empty, none of the icon buttons render.", "priority": "CRITICAL"}
+    ],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "SystemContact icons container", "issue": "All four required icon buttons (contact-call-btn, contact-whatsapp-btn, contact-whatsapp2-btn, contact-email-btn) are absent at runtime because they depend on settings.system_phone / system_phone2 / system_email coming from the failing API. The container `data-testid=contact-icons` exists but is empty (hidden, 0 children). Captured screenshot confirms no icons in either desktop or 390px mobile view.", "selector": "[data-testid=\"contact-icons\"]", "priority": "CRITICAL"}
+    ],
+    "integration_issues": [
+      {"flow": "Contact page load → GET /api/system/invoice-settings", "issue": "API failure not surfaced to user (no error toast/banner). Page just silently hides all CTA icons.", "affected_selectors": ["[data-testid=\"contact-icons\"]", "[data-testid=\"contact-call-btn\"]"]}
+    ],
+    "design_issues": []
+  },
+  "test_report_links": [],
+  "action_items": [
+    "URGENT: Investigate why GET /api/system/invoice-settings hangs (Cloudflare 502). It is the sole data source for the public Contact page. Likely culprits: (a) a slow / blocking Mongo query without timeout, (b) the endpoint requires auth/tenant context that public requests cannot supply, (c) a deadlock with another resource. Other public endpoints like /api/health and /api/login-backgrounds respond instantly.",
+    "Add a defensive fallback / error state in /app/frontend/src/pages/SystemContact.js: when settings fetch fails or returns empty, still render the icon buttons using sensible defaults (system_phone, system_phone2, system_email from a public config) and/or show an error message, so the QR-code workflow is not broken when the backend is degraded.",
+    "Optionally cache the last good settings in localStorage so the contact page works even when the API is briefly down."
+  ],
+  "critical_code_review_comments": [
+    "SystemContact.js: Icon visibility is fully gated on data from a single uncached HTTP call. For a public marketing page reached via QR code, this is fragile — any API hiccup leaves customers with NO contact buttons. Recommend hard-coded fallback contact info or a static/SSR snapshot.",
+    "SystemContact.js: handleWhatsApp assumes Iraq +964 prefix unconditionally — fine here but document/clamp if internationalised.",
+    "Verified: WhatsApp 2 label correctly uses Latin '2' (label={t('واتساب') + ' 2'}) in all languages.",
+    "Verified: founder message is hard-coded as a JS array (no API dependency) and translates correctly via autoTranslate.js for en and ar; ku entries also exist in the dictionary.",
+    "Verified: close-x and close-btn both dismiss the intro modal."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "n/a (frontend-only request, but /system/invoice-settings is broken)", "frontend": "60% — intro modal & translations OK; icon rendering broken due to backend"},
+  "test_credentials": "N/A — public page, no auth needed",
+  "seed_data_creation": "None",
+  "retest_needed": true,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Re-run the same script (set localStorage 'app_language' before navigating, wait for [data-testid=contact-icons] to be visible) AFTER the /api/system/invoice-settings 502/timeout is fixed. Specifically verify: (1) 4 icons render (no website), (2) WhatsApp 2 uses Latin '2' in EN/AR/KU, (3) Kurdish tagline & intro modal render. Founder modal already verified working in AR and EN (English contains 'Maestro EGP was born', Arabic contains 'بدأت فكرة Maestro EGP'). The previous run hit Cloudflare 502 + Mongo connection refused early on but those self-recovered; the route /api/system/invoice-settings is still hanging at iteration end.",
+  "rca of the issue": "Root cause: GET /api/system/invoice-settings hangs (no response within 10s, Cloudflare returns 502). Backend process is alive (/api/health returns 200) and other endpoints respond, so this single endpoint is either doing a slow/blocking DB call without a timeout or it expects a tenant/auth context that the anonymous /contact page cannot provide. Reproduction: `curl http://0.0.0.0:8001/api/system/invoice-settings -m 10` → timeout. Mitigation in code: in SystemContact.js, render fallback icons & contact info when fetch fails, and add a maximum 4-5s axios timeout so the loading spinner doesn't linger."
+}
