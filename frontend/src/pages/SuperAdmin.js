@@ -1577,6 +1577,32 @@ export default function SuperAdmin() {
     }
   };
 
+  // مزامنة تلقائية للوارد: تجلب الرسائل وتُنشئ إشعاراً فورياً لكل بريد جديد (بدون تدخل المستخدم)
+  const syncInbox = async (notify = true) => {
+    try {
+      const res = await axios.get(`${API}/system/inbox/sync?limit=25`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (Array.isArray(res.data.messages) && res.data.messages.length > 0) {
+        setInboxMessages(res.data.messages);
+      }
+      if (notify && (res.data.new_count || 0) > 0) {
+        fetchNotifications(); // تحديث جرس الإشعارات فوراً
+        toast.success(`📧 ${t('وصلك بريد جديد')} (${res.data.new_count})`);
+        try {
+          const ctx = new (window.AudioContext || window.webkitAudioContext)();
+          const o = ctx.createOscillator();
+          const g = ctx.createGain();
+          o.connect(g); g.connect(ctx.destination);
+          o.frequency.value = 880; g.gain.value = 0.06;
+          o.start(); o.stop(ctx.currentTime + 0.18);
+        } catch (e) { /* الصوت اختياري */ }
+      }
+    } catch (error) {
+      /* صامت — التحديث التلقائي لا يزعج المستخدم */
+    }
+  };
+
 
   const saveSystemBranding = async () => {
     setBrandingLoading(true);
@@ -2039,6 +2065,7 @@ export default function SuperAdmin() {
       fetchCurrencySettings();
       fetchSalesSummary();
       fetchSubscriptionPrices();
+      syncInbox(false); // مزامنة أولى صامتة (تعليم الرسائل الحالية كمرئية)
     }
   }, [isAuthenticated]);
 
@@ -2055,6 +2082,15 @@ export default function SuperAdmin() {
         fetchNotifications();
         fetchExpiringSubscriptions();
       }, 30000);
+    }
+    return () => clearInterval(interval);
+  }, [isAuthenticated]);
+
+  // فحص تلقائي سريع للبريد الوارد كل 15 ثانية + إشعار فوري باسم المرسل والمحتوى
+  useEffect(() => {
+    let interval;
+    if (isAuthenticated) {
+      interval = setInterval(() => syncInbox(true), 15000);
     }
     return () => clearInterval(interval);
   }, [isAuthenticated]);

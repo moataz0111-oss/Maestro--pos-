@@ -1,44 +1,14 @@
 import React, { useEffect, useState } from 'react';
-import axios from 'axios';
-
-const API = process.env.REACT_APP_BACKEND_URL + '/api';
 
 /**
- * SplashScreen — شاشة بداية فاخرة تعرض "Maestro EGP" مع خلفية مطعم.
- * - تجلب خلفية من /api/login-backgrounds (يديرها المالك من Settings).
+ * SplashScreen — شاشة بداية موحّدة (نفس تصميم شاشة إعادة التحميل):
+ * خلفية زرقاء داكنة متدرّجة + شعار سداسي ذهبي + "Maestro EGP".
  * - تختفي بعد `durationMs` (افتراضي 4000ms) عبر استدعاء onComplete.
  * - تُستخدم بعد تسجيل الدخول وأثناء تحميل الصفحات.
  */
 export default function SplashScreen({ durationMs = 4000, onComplete }) {
-  const [bgUrl, setBgUrl] = useState(null);
-  const [overlayColor, setOverlayColor] = useState('rgba(0,0,0,0.55)');
   const [show, setShow] = useState(true);
   const [phase, setPhase] = useState('in'); // 'in' → 'out'
-
-  useEffect(() => {
-    let mounted = true;
-    // تجربة استخدام cache أولاً
-    const cached = sessionStorage.getItem('splash_bg_url');
-    if (cached) setBgUrl(cached);
-
-    axios.get(`${API}/login-backgrounds`)
-      .then(res => {
-        if (!mounted) return;
-        const data = res.data || {};
-        const active = (data.backgrounds || []).filter(b => b.is_active);
-        if (active.length > 0) {
-          const pick = active[Math.floor(Math.random() * active.length)];
-          if (pick?.image_url) {
-            setBgUrl(pick.image_url);
-            sessionStorage.setItem('splash_bg_url', pick.image_url);
-          }
-        }
-        if (data.overlay_color) setOverlayColor(data.overlay_color);
-      })
-      .catch(() => { /* silent — سنستخدم gradient افتراضي */ });
-
-    return () => { mounted = false; };
-  }, []);
 
   useEffect(() => {
     // بدء fade-out قبل 500ms من النهاية ثم استدعاء onComplete
@@ -58,18 +28,9 @@ export default function SplashScreen({ durationMs = 4000, onComplete }) {
       className={`fixed inset-0 z-[2147483647] flex items-center justify-center transition-opacity duration-500 ${phase === 'out' ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}
       data-testid="splash-screen"
       style={{
-        backgroundImage: bgUrl
-          ? `url(${bgUrl})`
-          : 'radial-gradient(ellipse at 50% 44%, #1a2f57 0%, #0d1a38 52%, #070e22 100%)',
-        backgroundSize: 'cover',
-        backgroundPosition: 'center',
+        background: 'radial-gradient(ellipse at 50% 44%, #1a2f57 0%, #0d1a38 52%, #070e22 100%)',
       }}
     >
-      {/* طبقة تعتيم */}
-      <div
-        className="absolute inset-0"
-        style={{ backgroundColor: overlayColor, backdropFilter: 'blur(2px)' }}
-      />
       {/* بريق ناعم */}
       <div className="absolute inset-0 pointer-events-none" style={{
         background: 'radial-gradient(ellipse at center, rgba(255,200,80,0.18) 0%, transparent 60%)',

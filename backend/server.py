@@ -166,8 +166,11 @@ def _smtp_send_sync(cfg: dict, to_emails, subject: str, html_content: str) -> bo
 
     msg = MIMEMultipart('alternative')
     msg['Subject'] = subject
-    msg['From'] = formataddr((cfg.get("from_name") or "Maestro EGP", sender))
+    from_name = (cfg.get("from_name") or "Maestro EGP").strip()
+    msg['From'] = formataddr((from_name, sender))
     msg['To'] = ', '.join(to_emails)
+    # ترويسة Reply-To بعنوان نظيف (بدون اسم العرض) لضمان نجاح الرد من عميل البريد
+    msg['Reply-To'] = sender
     msg.attach(MIMEText(html_content, 'html', 'utf-8'))
 
     if port == 465:
@@ -11595,9 +11598,100 @@ async def update_email_settings(payload: dict, current_user: dict = Depends(veri
     return {"success": True, "configured": bool(cfg.get("smtp_host") and cfg.get("smtp_user") and cfg.get("smtp_password"))}
 
 
+def _fetch_inbox_messages(host, user, password, limit=25):
+    """يجلب رسائل صندوق الوارد عبر IMAP (دالة متزامنة تُستدعى عبر to_thread)."""
+    import imaplib, email, hashlib
+    from email.header import decode_header
+    from email.utils import parseaddr
+
+    def _dec(val):
+        if not val:
+            return ""
+        parts = decode_header(val)
+        out = ""
+        for txt, enc in parts:
+            if isinstance(txt, bytes):
+                try:
+                    out += txt.decode(enc or "utf-8", errors="replace")
+                except Exception:
+                    out += txt.decode("utf-8", errors="replace")
+            else:
+                out += txt
+        return out
+
+    messages = []
+    imap = imaplib.IMAP4_SSL(host, 993, timeout=25)
+    try:
+        imap.login(user, password)
+        imap.select("INBOX")
+        typ, data = imap.search(None, "ALL")
+        ids = data[0].split()
+        ids = ids[-max(1, min(int(limit), 50)):]
+        for mid in reversed(ids):
+            typ, msg_data = imap.fetch(mid, "(RFC822)")
+            if typ != "OK" or not msg_data or not msg_data[0]:
+                continue
+            msg = email.message_from_bytes(msg_data[0][1])
+            from_raw = _dec(msg.get("From"))
+            from_name, from_addr = parseaddr(from_raw)
+            subject = _dec(msg.get("Subject"))
+            date = msg.get("Date", "")
+            msg_id = (msg.get("Message-ID") or msg.get("Message-Id") or "").strip()
+            if not msg_id:
+                msg_id = hashlib.md5(f"{date}|{from_raw}|{subject}".encode("utf-8", "replace")).hexdigest()
+            body_text, body_html = "", ""
+            if msg.is_multipart():
+                for part in msg.walk():
+                    ctype = part.get_content_type()
+                    disp = str(part.get("Content-Disposition") or "")
+                    if "attachment" in disp:
+                        continue
+                    try:
+                        payload = part.get_payload(decode=True)
+                        if not payload:
+                            continue
+                        charset = part.get_content_charset() or "utf-8"
+                        decoded = payload.decode(charset, errors="replace")
+                    except Exception:
+                        continue
+                    if ctype == "text/plain" and not body_text:
+                        body_text = decoded
+                    elif ctype == "text/html" and not body_html:
+                        body_html = decoded
+            else:
+                try:
+                    payload = msg.get_payload(decode=True)
+                    charset = msg.get_content_charset() or "utf-8"
+                    decoded = payload.decode(charset, errors="replace") if payload else ""
+                except Exception:
+                    decoded = ""
+                if msg.get_content_type() == "text/html":
+                    body_html = decoded
+                else:
+                    body_text = decoded
+            snippet = (body_text or "").strip().replace("\n", " ")[:140]
+            messages.append({
+                "message_id": msg_id,
+                "from": from_addr or from_raw,
+                "from_name": from_name or from_addr or from_raw,
+                "subject": subject,
+                "date": date,
+                "snippet": snippet,
+                "body_text": body_text[:20000],
+                "body_html": body_html[:50000],
+            })
+        return messages
+    finally:
+        try:
+            imap.logout()
+        except Exception:
+            pass
+
+
 @api_router.get("/system/inbox")
 async def get_inbox(limit: int = 25, current_user: dict = Depends(verify_super_admin)):
     """جلب آخر الرسائل الواردة من صندوق البريد عبر IMAP (Namecheap Private Email)."""
+    import imaplib, socket
     cfg = await _load_email_config()
     host = cfg.get("smtp_host") or "mail.privateemail.com"
     user = cfg.get("smtp_user")
@@ -11605,96 +11699,83 @@ async def get_inbox(limit: int = 25, current_user: dict = Depends(verify_super_a
     if not (user and password):
         raise HTTPException(status_code=400, detail="لم يتم إعداد البريد بعد (أدخل البريد وكلمة المرور)")
 
-    def _fetch():
-        import imaplib, email
-        from email.header import decode_header
-        from email.utils import parseaddr
+    try:
+        messages = await asyncio.to_thread(_fetch_inbox_messages, host, user, password, limit)
+        return {"messages": messages, "count": len(messages)}
+    except imaplib.IMAP4.error as e:
+        logger.error(f"IMAP login/select failed: {e}")
+        raise HTTPException(status_code=401, detail=f"فشل تسجيل الدخول إلى البريد عبر IMAP. تأكد أن كلمة المرور صحيحة وأن خدمة IMAP مُفعّلة في حساب privateemail.com. ({str(e)[:120]})")
+    except (TimeoutError, socket.timeout) as e:
+        logger.error(f"IMAP timeout: {e}")
+        raise HTTPException(status_code=504, detail="انتهت مهلة الاتصال بخادم البريد (993). حاول مرة أخرى.")
+    except Exception as e:
+        logger.error(f"IMAP inbox fetch failed: {type(e).__name__}: {e}")
+        raise HTTPException(status_code=502, detail=f"فشل الاتصال بصندوق البريد — {type(e).__name__}: {str(e)[:140]}")
 
-        def _dec(val):
-            if not val:
-                return ""
-            parts = decode_header(val)
-            out = ""
-            for txt, enc in parts:
-                if isinstance(txt, bytes):
-                    try:
-                        out += txt.decode(enc or "utf-8", errors="replace")
-                    except Exception:
-                        out += txt.decode("utf-8", errors="replace")
-                else:
-                    out += txt
-            return out
 
-        messages = []
-        imap = imaplib.IMAP4_SSL(host, 993, timeout=25)
-        try:
-            imap.login(user, password)
-            imap.select("INBOX")
-            typ, data = imap.search(None, "ALL")
-            ids = data[0].split()
-            ids = ids[-max(1, min(int(limit), 50)):]
-            for mid in reversed(ids):
-                typ, msg_data = imap.fetch(mid, "(RFC822)")
-                if typ != "OK" or not msg_data or not msg_data[0]:
-                    continue
-                msg = email.message_from_bytes(msg_data[0][1])
-                from_raw = _dec(msg.get("From"))
-                from_name, from_addr = parseaddr(from_raw)
-                subject = _dec(msg.get("Subject"))
-                date = msg.get("Date", "")
-                body_text, body_html = "", ""
-                if msg.is_multipart():
-                    for part in msg.walk():
-                        ctype = part.get_content_type()
-                        disp = str(part.get("Content-Disposition") or "")
-                        if "attachment" in disp:
-                            continue
-                        try:
-                            payload = part.get_payload(decode=True)
-                            if not payload:
-                                continue
-                            charset = part.get_content_charset() or "utf-8"
-                            decoded = payload.decode(charset, errors="replace")
-                        except Exception:
-                            continue
-                        if ctype == "text/plain" and not body_text:
-                            body_text = decoded
-                        elif ctype == "text/html" and not body_html:
-                            body_html = decoded
-                else:
-                    try:
-                        payload = msg.get_payload(decode=True)
-                        charset = msg.get_content_charset() or "utf-8"
-                        decoded = payload.decode(charset, errors="replace") if payload else ""
-                    except Exception:
-                        decoded = ""
-                    if msg.get_content_type() == "text/html":
-                        body_html = decoded
-                    else:
-                        body_text = decoded
-                snippet = (body_text or "").strip().replace("\n", " ")[:140]
-                messages.append({
-                    "from": from_addr or from_raw,
-                    "from_name": from_name or from_addr or from_raw,
-                    "subject": subject,
-                    "date": date,
-                    "snippet": snippet,
-                    "body_text": body_text[:20000],
-                    "body_html": body_html[:50000],
-                })
-            return messages
-        finally:
-            try:
-                imap.logout()
-            except Exception:
-                pass
+@api_router.get("/system/inbox/sync")
+async def sync_inbox(limit: int = 25, current_user: dict = Depends(verify_super_admin)):
+    """يجلب الوارد ويُنشئ إشعاراً فورياً لكل رسالة جديدة (للتحديث التلقائي بدون تدخل)."""
+    import imaplib, socket
+    cfg = await _load_email_config()
+    host = cfg.get("smtp_host") or "mail.privateemail.com"
+    user = cfg.get("smtp_user")
+    password = cfg.get("smtp_password")
+    if not (user and password):
+        # لا يوجد بريد مُعد بعد — أعد قائمة فارغة بهدوء (للتحديث التلقائي)
+        return {"messages": [], "count": 0, "new_count": 0, "configured": False}
 
     try:
-        messages = await asyncio.to_thread(_fetch)
-        return {"messages": messages, "count": len(messages)}
+        messages = await asyncio.to_thread(_fetch_inbox_messages, host, user, password, limit)
     except Exception as e:
-        logger.error(f"IMAP inbox fetch failed: {e}")
-        raise HTTPException(status_code=502, detail="فشل الاتصال بصندوق البريد — تحقق من البريد وكلمة المرور")
+        logger.error(f"IMAP sync fetch failed: {type(e).__name__}: {e}")
+        return {"messages": [], "count": 0, "new_count": 0, "error": str(e)[:140]}
+
+    # حالة الوارد المحفوظة (المعرفات التي سبق رؤيتها)
+    state = await db.email_inbox_state.find_one({"_id": "inbox"})
+    current_ids = [m["message_id"] for m in messages]
+    new_count = 0
+
+    if not state:
+        # أول مزامنة: علّم كل الرسائل الحالية كمرئية بدون إنشاء إشعارات (تجنّب الإغراق)
+        await db.email_inbox_state.insert_one({"_id": "inbox", "seen_ids": current_ids[:300],
+                                               "updated_at": datetime.now(timezone.utc).isoformat()})
+    else:
+        seen = set(state.get("seen_ids", []))
+        # الرسائل بترتيب الأحدث أولاً؛ ننشئ إشعارات للجديدة (نعكس لإنشائها بالترتيب الزمني)
+        new_msgs = [m for m in messages if m["message_id"] not in seen]
+        for m in reversed(new_msgs):
+            subj = m.get("subject") or "(بلا عنوان)"
+            sender = m.get("from_name") or m.get("from") or ""
+            snippet = (m.get("snippet") or "").strip()
+            body_preview = subj if not snippet else f"{subj} — {snippet}"
+            notif = {
+                "id": str(uuid.uuid4()),
+                "type": "new_email",
+                "title": f"📧 رسالة جديدة من {sender}",
+                "message": body_preview[:220],
+                "tenant_id": None,
+                "data": {
+                    "from": m.get("from"),
+                    "from_name": m.get("from_name"),
+                    "subject": subj,
+                    "date": m.get("date"),
+                    "snippet": snippet,
+                    "body_text": (m.get("body_text") or "")[:5000],
+                },
+                "is_read": False,
+                "created_at": datetime.now(timezone.utc).isoformat(),
+            }
+            await db.notifications.insert_one(notif)
+            new_count += 1
+        # حدّث المعرفات المرئية (آخر 300)
+        merged = current_ids + [i for i in state.get("seen_ids", []) if i not in current_ids]
+        await db.email_inbox_state.update_one(
+            {"_id": "inbox"},
+            {"$set": {"seen_ids": merged[:300], "updated_at": datetime.now(timezone.utc).isoformat()}}
+        )
+
+    return {"messages": messages, "count": len(messages), "new_count": new_count, "configured": True}
 
 
 @api_router.post("/system/test-email")
