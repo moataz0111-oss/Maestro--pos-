@@ -6358,7 +6358,7 @@ export default function Settings() {
                         setSoundSettings(newSettings);
                         saveSoundSettings(newSettings);
                       }}
-                      className="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-primary"
+                      className="w-full h-2 bg-[#1A284E] rounded-lg appearance-none cursor-pointer accent-primary"
                       disabled={!soundSettings.enabled}
                     />
                   </div>

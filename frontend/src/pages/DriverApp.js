@@ -11,6 +11,7 @@ import { formatPrice } from '../utils/currency';
 import { useTranslation } from '../hooks/useTranslation';
 import { useWebRTCCall } from '../hooks/useWebRTCCall';
 import CallUI from '../components/CallUI';
+import PermissionsGate from '../components/PermissionsGate';
 import {
   Truck,
   MapPin,
@@ -43,6 +44,7 @@ import { toast, Toaster } from 'sonner';
 import { MapContainer, TileLayer, Marker, Popup, useMap } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
+import { VoiceRecordButton, VoiceBubble, MessageTicks } from '../components/VoiceChat';
 
 const API = API_URL;
 
@@ -133,6 +135,7 @@ export default function DriverApp() {
   // حالات إضافية
   const [stats, setStats] = useState({ unpaid_total: 0, paid_today: 0, pending_orders: 0, completed_today: 0 });
   const [soundEnabled, setSoundEnabled] = useState(true);
+  const [incomingOrder, setIncomingOrder] = useState(null);
   const [isOnline, setIsOnline] = useState(navigator.onLine);
   const [isPWAInstallable, setIsPWAInstallable] = useState(false);
   const [deferredPrompt, setDeferredPrompt] = useState(null);
@@ -140,12 +143,17 @@ export default function DriverApp() {
   const previousOrdersRef = useRef([]);
   const audioRef = useRef(null);
   const handledNotifRef = useRef(new Set());
+  const ringRef = useRef(null);
+  const ringedOrderIdsRef = useRef(new Set());
 
   // مكالمة صوتية داخل التطبيق (سائق ↔ زبون)
   const call = useWebRTCCall({ API, role: 'driver', driverId: driver?.id, callerName: driver?.name || 'السائق' });
   useEffect(() => {
     if (call.errorMsg) toast.error(call.errorMsg);
   }, [call.errorMsg]);
+
+  // إيقاف الرنين عند مغادرة الصفحة
+  useEffect(() => () => { if (ringRef.current) { clearInterval(ringRef.current.iv); try { ringRef.current.ctx.close(); } catch (e) {} ringRef.current = null; } }, []);
 
   // تشغيل صوت الإشعار
   const playNotificationSound = () => {
@@ -160,23 +168,68 @@ export default function DriverApp() {
     }
   };
 
+  // رنين متواصل (مثل المكالمة الواردة) عبر Web Audio حتى يرد السائق
+  const startRing = useCallback(() => {
+    if (!soundEnabled) return;
+    if (ringRef.current) return; // يرنّ بالفعل
+    try {
+      const Ctx = window.AudioContext || window.webkitAudioContext;
+      if (!Ctx) return;
+      const ctx = new Ctx();
+      const ring = () => {
+        [0, 0.4].forEach((offset) => {
+          const osc = ctx.createOscillator();
+          const gain = ctx.createGain();
+          osc.connect(gain); gain.connect(ctx.destination);
+          osc.type = 'sine';
+          osc.frequency.value = 480 + offset * 200;
+          gain.gain.setValueAtTime(0.0001, ctx.currentTime + offset);
+          gain.gain.exponentialRampToValueAtTime(0.32, ctx.currentTime + offset + 0.05);
+          gain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + offset + 0.35);
+          osc.start(ctx.currentTime + offset);
+          osc.stop(ctx.currentTime + offset + 0.36);
+        });
+      };
+      ring();
+      const iv = setInterval(ring, 2000);
+      ringRef.current = { ctx, iv };
+      try { if (navigator.vibrate) navigator.vibrate([400, 200, 400, 200, 400]); } catch (e) { /* noop */ }
+    } catch (e) { /* noop */ }
+  }, [soundEnabled]);
+
+  const stopRing = useCallback(() => {
+    if (ringRef.current) {
+      clearInterval(ringRef.current.iv);
+      try { ringRef.current.ctx.close(); } catch (e) { /* noop */ }
+      ringRef.current = null;
+    }
+    try { if (navigator.vibrate) navigator.vibrate(0); } catch (e) { /* noop */ }
+  }, []);
+
+  const dismissIncoming = useCallback(() => {
+    stopRing();
+    setIncomingOrder(null);
+  }, [stopRing]);
+
   // التحقق من طلبات جديدة
   const checkForNewOrders = useCallback((newOrders) => {
     const activeOrders = newOrders.filter(o => o.status !== 'delivered' && o.status !== 'cancelled');
     const previousActiveOrders = previousOrdersRef.current.filter(o => o.status !== 'delivered' && o.status !== 'cancelled');
-    
-    const newOrderIds = activeOrders.map(o => o.id);
+
     const prevOrderIds = previousActiveOrders.map(o => o.id);
-    
-    const brandNewOrders = newOrderIds.filter(id => !prevOrderIds.includes(id));
-    
+
+    const brandNewOrders = activeOrders.filter(o => !prevOrderIds.includes(o.id) && !ringedOrderIdsRef.current.has(o.id));
+
     if (brandNewOrders.length > 0 && previousOrdersRef.current.length > 0) {
-      playNotificationSound();
+      const latest = brandNewOrders[brandNewOrders.length - 1];
+      brandNewOrders.forEach(o => ringedOrderIdsRef.current.add(o.id));
+      setIncomingOrder(latest);           // شاشة "مكالمة واردة" للطلب الجديد
+      startRing();                        // رنين متواصل حتى يرد السائق
       toast.success(`${t('لديك')} ${brandNewOrders.length} ${t('طلب جديد!')}`, { duration: 5000 });
     }
-    
+
     previousOrdersRef.current = newOrders;
-  }, [soundEnabled]);
+  }, [startRing, t]);
 
   // Register Service Worker for PWA and check install
   useEffect(() => {
@@ -392,7 +445,11 @@ export default function DriverApp() {
     const load = async () => {
       try {
         const res = await axios.get(`${API}/order-chat/${chatOrder.id}`);
-        setChatMessages(res.data.messages || []);
+        const msgs = res.data.messages || [];
+        setChatMessages(msgs);
+        if (msgs.some(m => m.sender === 'customer' && !m.read)) {
+          axios.post(`${API}/order-chat/${chatOrder.id}/read?viewer=driver`).catch(() => {});
+        }
       } catch (e) { /* noop */ }
     };
     load();
@@ -413,6 +470,25 @@ export default function DriverApp() {
       const res = await axios.get(`${API}/order-chat/${chatOrder.id}`);
       setChatMessages(res.data.messages || []);
     } catch (e) { toast.error(t('تعذّر إرسال الرسالة')); }
+  };
+
+  const sendDriverVoice = async (blob, duration) => {
+    if (!chatOrder) return;
+    const fd = new FormData();
+    fd.append('file', blob, 'voice.webm');
+    fd.append('sender', 'driver');
+    fd.append('sender_name', driver?.name || 'السائق');
+    fd.append('duration', String(duration));
+    try {
+      await axios.post(`${API}/order-chat/${chatOrder.id}/voice`, fd);
+      const res = await axios.get(`${API}/order-chat/${chatOrder.id}`);
+      setChatMessages(res.data.messages || []);
+    } catch (e) { toast.error(t('تعذّر إرسال الرسالة الصوتية')); }
+  };
+
+  const markDriverVoiceListened = async (msgId) => {
+    if (!chatOrder) return;
+    try { await axios.post(`${API}/order-chat/${chatOrder.id}/listened/${msgId}?viewer=driver`); } catch (e) { /* noop */ }
   };
 
   // تسجيل الخروج
@@ -524,7 +600,7 @@ export default function DriverApp() {
   // صفحة تسجيل الدخول
   if (!isLoggedIn) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-blue-500 to-green-500 flex items-center justify-center p-4" dir={isRTL ? 'rtl' : 'ltr'}>
+      <div className="min-h-screen bg-gradient-to-br from-[#1e3a78] via-[#0c1738] to-[#050A24] flex items-center justify-center p-4" dir={isRTL ? 'rtl' : 'ltr'}>
         <Toaster position="top-center" richColors />
         <Card className="w-full max-w-md shadow-2xl">
           <CardHeader className="text-center">
@@ -565,7 +641,7 @@ export default function DriverApp() {
             <Button
               onClick={loginDriver}
               disabled={loading || !isOnline}
-              className="w-full h-12 bg-gradient-to-r from-blue-500 to-green-500 hover:from-blue-600 hover:to-green-600"
+              className="w-full h-12 bg-gradient-to-r from-[#f6a623] to-[#ffd166] hover:from-[#ffd166] hover:to-[#f6a623] text-[#08122e] font-extrabold"
               data-testid="driver-login-btn"
             >
               {loading ? (
@@ -640,9 +716,49 @@ export default function DriverApp() {
     <div className="min-h-screen bg-gray-50" dir={isRTL ? 'rtl' : 'ltr'}>
       <Toaster position="top-center" richColors />
       <CallUI {...call} />
+
+      {/* شاشة "طلب جديد وارد" مع رنين متواصل (مثل المكالمة) */}
+      {incomingOrder && (
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/80 backdrop-blur-sm" data-testid="driver-incoming-order">
+          <div className="w-full max-w-md mx-4 rounded-3xl bg-gradient-to-b from-[#070E22] to-[#0F1A3A] text-white shadow-2xl overflow-hidden border border-white/10 p-8 text-center">
+            <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-amber-500/15 border border-amber-400/30 mb-4 animate-pulse">
+              <Truck className="h-4 w-4 text-amber-300" />
+              <p className="text-sm font-semibold text-amber-200">{t('طلب توصيل جديد')}</p>
+            </div>
+            <div className="mx-auto my-3 w-20 h-20 rounded-full bg-gradient-to-br from-green-500 to-emerald-600 flex items-center justify-center shadow-2xl animate-bounce">
+              <Package className="h-10 w-10 text-white" />
+            </div>
+            <h2 className="text-3xl font-extrabold mb-1" data-testid="driver-incoming-order-number">#{incomingOrder.order_number || (incomingOrder.id || '').slice(0, 6)}</h2>
+            <p className="text-lg text-slate-200">{incomingOrder.customer_name || t('زبون')}</p>
+            <p className="text-sm text-slate-400 mt-1">{Number(incomingOrder.total || 0).toLocaleString()} IQD</p>
+            {incomingOrder.customer_phone && (
+              <p className="text-sm text-slate-400 mt-1 flex items-center justify-center gap-1" dir="ltr"><Phone className="h-4 w-4" /> {incomingOrder.customer_phone}</p>
+            )}
+            {(incomingOrder.delivery_address || incomingOrder.customer_address) && (
+              <p className="text-sm text-slate-400 mt-1 flex items-center justify-center gap-1"><MapPin className="h-4 w-4" /> {incomingOrder.delivery_address || incomingOrder.customer_address}</p>
+            )}
+            <div className="grid grid-cols-2 gap-3 mt-8">
+              <button
+                onClick={dismissIncoming}
+                data-testid="driver-incoming-dismiss"
+                className="py-4 rounded-2xl bg-white/10 hover:bg-white/20 text-white text-lg font-bold transition-colors"
+              >
+                {t('لاحقاً')}
+              </button>
+              <button
+                onClick={() => { setSelectedOrder(incomingOrder); setActiveTab('orders'); dismissIncoming(); }}
+                data-testid="driver-incoming-accept"
+                className="py-4 rounded-2xl bg-green-600 hover:bg-green-700 text-white text-lg font-bold shadow-lg transition-colors"
+              >
+                {t('عرض الطلب')}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
       
       {/* Header */}
-      <header className="sticky top-0 z-40 bg-gradient-to-r from-blue-500 to-green-500 text-white shadow-lg">
+      <header className="sticky top-0 z-40 bg-gradient-to-r from-[#0c1738] to-[#1e3a78] text-white shadow-lg border-b border-[#f6a623]/30">
         <div className="max-w-lg md:max-w-3xl xl:max-w-6xl mx-auto px-4 py-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
@@ -693,6 +809,8 @@ export default function DriverApp() {
       </header>
 
       <main className="max-w-lg md:max-w-3xl xl:max-w-6xl mx-auto px-4 py-4 space-y-4">
+        {/* طلب الصلاحيات (إشعارات + ميكروفون + رنين) — مرة واحدة */}
+        <PermissionsGate withMic={true} />
         {/* إحصائيات سريعة */}
         <div className="grid grid-cols-2 gap-3">
           <div className="bg-white rounded-xl p-4 shadow-sm border">
@@ -1019,12 +1137,14 @@ export default function DriverApp() {
               ) : chatMessages.map(m => (
                 <div key={m.id} className={`flex ${m.sender === 'driver' ? 'justify-end' : 'justify-start'}`}>
                   <div className={`max-w-[75%] px-3 py-2 rounded-2xl text-sm ${m.sender === 'driver' ? 'bg-blue-500 text-white rounded-br-sm' : 'bg-white border rounded-bl-sm'}`}>
-                    {m.text}
+                    {m.type === 'voice' ? <VoiceBubble url={m.audio_url} duration={m.duration} mine={m.sender === 'driver'} onListen={() => markDriverVoiceListened(m.id)} /> : m.text}
+                    {m.sender === 'driver' && <div className="flex justify-end mt-0.5"><MessageTicks msg={m} mine={true} /></div>}
                   </div>
                 </div>
               ))}
             </div>
             <div className="p-3 border-t flex items-center gap-2 bg-white">
+              <VoiceRecordButton onUpload={sendDriverVoice} accentClass="bg-blue-500 hover:bg-blue-600" testid="driver-voice-record-btn" />
               <Input value={chatText} onChange={(e) => setChatText(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') sendDriverChat(); }}
                 placeholder="اكتب رسالة..." data-testid="driver-chat-input" />
               <Button type="button" onClick={sendDriverChat} data-testid="driver-chat-send-btn" className="bg-blue-500 hover:bg-blue-600">

@@ -31,6 +31,7 @@ import {
   Banknote,
   Clock,
   CheckCircle,
+  XCircle,
   Truck,
   ChefHat,
   ArrowRight,
@@ -57,6 +58,8 @@ import { MapContainer, TileLayer, Marker, Popup, Polyline, useMapEvents } from '
 import 'leaflet/dist/leaflet.css';
 import L from 'leaflet';
 import { showApiError } from '../utils/apiError';
+import PermissionsGate from '../components/PermissionsGate';
+import { VoiceRecordButton, VoiceBubble, MessageTicks } from '../components/VoiceChat';
 // Fix Leaflet marker icon
 delete L.Icon.Default.prototype._getIconUrl;
 L.Icon.Default.mergeOptions({
@@ -256,6 +259,7 @@ export default function CustomerMenu() {
         if (res.data.order_id) {
           const orderRes = await axios.get(`${API}/customer/order/${tenantId}/${res.data.order_id}`);
           setCurrentOrder(orderRes.data.order);
+          registerPushNotifications(orderRes.data.order?.customer_phone);
           setStep('tracking');
           setCart([]);
           localStorage.removeItem(`cart_${tenantId}`);
@@ -272,13 +276,48 @@ export default function CustomerMenu() {
   };
   // تحديث الطلب الحالي تلقائياً أثناء التتبع (لإظهار أجور التوصيل وأي تغييرات على الفاتورة)
   const ratingPromptedRef = useRef(false);
+  const lastStatusRef = useRef(null);
+
+  // تنبيه صوتي قصير عند تغيّر حالة الطلب
+  const playStatusBeep = useCallback(() => {
+    try {
+      const ctx = new (window.AudioContext || window.webkitAudioContext)();
+      [0, 0.18].forEach((off, i) => {
+        const o = ctx.createOscillator(); const g = ctx.createGain();
+        o.connect(g); g.connect(ctx.destination);
+        o.type = 'sine'; o.frequency.value = i === 0 ? 660 : 880;
+        g.gain.setValueAtTime(0.0001, ctx.currentTime + off);
+        g.gain.exponentialRampToValueAtTime(0.25, ctx.currentTime + off + 0.04);
+        g.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + off + 0.22);
+        o.start(ctx.currentTime + off); o.stop(ctx.currentTime + off + 0.24);
+      });
+      try { if (navigator.vibrate) navigator.vibrate([200, 80, 200]); } catch (e) { /* noop */ }
+    } catch (e) { /* noop */ }
+  }, []);
   useEffect(() => {
     if (step !== 'tracking' || !currentOrder?.id || !tenantId) return;
+    lastStatusRef.current = currentOrder.status; // تهيئة الحالة المرجعية عند الدخول للتتبّع
+    const STATUS_LABELS = {
+      pending: t('قيد الانتظار'), preparing: t('قيد التحضير'), ready: t('جاهز للتوصيل'),
+      out_for_delivery: t('السائق في الطريق'), delivered: t('تم التسليم'),
+      completed: t('مكتمل'), cancelled: t('ملغى'), rejected: t('مرفوض'),
+    };
     const iv = setInterval(async () => {
       try {
         const res = await axios.get(`${API}/customer/order/${tenantId}/${currentOrder.id}`);
         if (res.data?.order) {
           const ord = res.data.order;
+          // كشف تغيّر حالة الطلب → تنبيه صوتي + مرئي فوري
+          const prev = lastStatusRef.current;
+          if (prev && ord.status && ord.status !== prev) {
+            playStatusBeep();
+            if (ord.status === 'cancelled' || ord.status === 'rejected') {
+              toast.error(`❌ ${t('طلبك')} #${ord.order_number || ''} ${t('تم رفضه/إلغاؤه')}`, { duration: 9000 });
+            } else {
+              toast.success(`🔔 ${t('تحديث الطلب')}: ${STATUS_LABELS[ord.status] || ord.status}`, { duration: 6000 });
+            }
+          }
+          lastStatusRef.current = ord.status;
           setCurrentOrder(ord);
           // فتح نافذة التقييم تلقائياً عند تسليم الطلب (مرة واحدة)
           if (!ratingPromptedRef.current && (ord.status === 'delivered' || ord.status === 'completed') && !ord.is_rated) {
@@ -287,9 +326,9 @@ export default function CustomerMenu() {
           }
         }
       } catch (e) { /* noop */ }
-    }, 15000);
+    }, 8000);
     return () => clearInterval(iv);
-  }, [step, currentOrder?.id, tenantId]);
+  }, [step, currentOrder?.id, tenantId, playStatusBeep, t]);
   // تسعير أجور التوصيل تلقائياً حسب موقع الزبون (إن كانت أجور المسافة مفعلة)
   useEffect(() => {
     if (!deliveryLocation || !tenantId) { setQuotedFee(null); setQuotedKm(null); setOutOfRange(false); return; }
@@ -378,7 +417,7 @@ export default function CustomerMenu() {
     window.location.href = `/menu.html?install=1${tenantId ? `&r=${encodeURIComponent(tenantId)}` : ''}`;
   };
   // تسجيل إشعارات Push للزبون
-  const registerPushNotifications = async () => {
+  const registerPushNotifications = async (phoneArg = null) => {
     try {
       if (!('serviceWorker' in navigator) || !('PushManager' in window) || !('Notification' in window)) {
         console.log('Push notifications not supported');
@@ -404,7 +443,7 @@ export default function CustomerMenu() {
       await axios.post(`${API}/push/subscribe`, {
         endpoint: sj.endpoint,
         keys: sj.keys,
-        phone: customerData.phone,
+        phone: phoneArg || customerData.phone,
         user_type: 'customer',
       });
       console.log('✅ Customer push subscription saved');
@@ -927,6 +966,8 @@ export default function CustomerMenu() {
         // Cash payment - show tracking
         toast.success(res.data.message);
         setCurrentOrder(res.data.order);
+        // إعادة تسجيل اشتراك الإشعارات برقم هاتف الزبون لضمان وصول إشعارات حالة الطلب
+        registerPushNotifications(res.data.order?.customer_phone);
         setCart([]);
         setStep('tracking');
         localStorage.removeItem(`cart_${tenantId}`);
@@ -1209,7 +1250,7 @@ export default function CustomerMenu() {
     return (
       <div className="min-h-screen bg-gradient-to-br from-orange-50 to-red-50" dir="rtl">
         {/* Header مع شعار المطعم */}
-        <header className="bg-gradient-to-r from-orange-500 to-red-500 text-white shadow-lg">
+        <header className="bg-gradient-to-r from-[#0c1738] to-[#1e3a78] text-white shadow-lg border-b border-[#f6a623]/30">
           <div className="max-w-lg md:max-w-2xl lg:max-w-4xl mx-auto px-4 py-6">
             <div className="flex items-center gap-4">
               {/* شعار المطعم - يجلب من بيانات المطعم أو يعرض شعار افتراضي */}
@@ -1261,6 +1302,8 @@ export default function CustomerMenu() {
         )}
         {/* Branch List */}
         <main className="max-w-lg md:max-w-2xl lg:max-w-4xl mx-auto px-4 py-6">
+          {/* طلب الصلاحيات (إشعارات + رنين + ميكروفون) — مرة واحدة */}
+          <PermissionsGate withMic={true} />
           <h2 className="text-xl font-bold text-gray-800 mb-4 flex items-center gap-2">
             <Store className="h-6 w-6 text-orange-500" />
             {t('الفروع المتاحة')}
@@ -1270,7 +1313,7 @@ export default function CustomerMenu() {
             {branches.map(branch => (
               <Card 
                 key={branch.id} 
-                className="cursor-pointer hover:shadow-lg transition-all hover:scale-[1.02] bg-neutral-900/95 border-2 border-orange-500/20 hover:border-orange-400"
+                className="cursor-pointer hover:shadow-lg transition-all hover:scale-[1.02] bg-[#070E22]/95 border-2 border-orange-500/20 hover:border-orange-400"
                 onClick={() => selectBranch(branch.id)}
                 data-testid={`branch-${branch.id}`}
               >
@@ -1309,7 +1352,7 @@ export default function CustomerMenu() {
     return (
       <div className="min-h-screen bg-gray-50 pb-24" dir="rtl">
         {/* Header مع شعار المطعم */}
-        <header className="sticky top-0 z-40 bg-gradient-to-r from-orange-500 to-red-500 text-white shadow-lg">
+        <header className="sticky top-0 z-40 bg-gradient-to-r from-[#0c1738] to-[#1e3a78] text-white shadow-lg border-b border-[#f6a623]/30">
           <div className="max-w-lg md:max-w-2xl lg:max-w-4xl mx-auto px-4 py-4">
             <div className="flex items-center gap-3">
               {/* شعار المطعم */}
@@ -1393,6 +1436,10 @@ export default function CustomerMenu() {
             </div>
           </div>
         </header>
+        {/* طلب الصلاحيات (إشعارات + رنين + ميكروفون) — يظهر في صفحة القائمة أيضاً، مرة واحدة */}
+        <div className="max-w-lg md:max-w-2xl lg:max-w-4xl mx-auto px-4 pt-3">
+          <PermissionsGate withMic={true} />
+        </div>
         {/* Install Banner */}
         {showInstallBanner && (
           <div className="bg-gradient-to-r from-blue-500 to-purple-500 text-white px-4 py-2">
@@ -2222,7 +2269,11 @@ export default function CustomerMenu() {
         const load = async () => {
           try {
             const res = await axios.get(`${API}/order-chat/${currentOrder.id}`);
-            setChatMessages(res.data.messages || []);
+            const msgs = res.data.messages || [];
+            setChatMessages(msgs);
+            if (msgs.some(m => m.sender === 'driver' && !m.read)) {
+              axios.post(`${API}/order-chat/${currentOrder.id}/read?viewer=customer`).catch(() => {});
+            }
           } catch (e) { /* noop */ }
         };
         load();
@@ -2266,6 +2317,23 @@ export default function CustomerMenu() {
         } catch (e) { toast.error('تعذّر إرسال الرسالة'); }
       };
 
+      const sendVoice = async (blob, duration) => {
+        const fd = new FormData();
+        fd.append('file', blob, 'voice.webm');
+        fd.append('sender', 'customer');
+        fd.append('sender_name', currentOrder.customer_name || 'الزبون');
+        fd.append('duration', String(duration));
+        try {
+          await axios.post(`${API}/order-chat/${currentOrder.id}/voice`, fd);
+          const res = await axios.get(`${API}/order-chat/${currentOrder.id}`);
+          setChatMessages(res.data.messages || []);
+        } catch (e) { toast.error('تعذّر إرسال الرسالة الصوتية'); }
+      };
+
+      const markVoiceListened = async (msgId) => {
+        try { await axios.post(`${API}/order-chat/${currentOrder.id}/listened/${msgId}?viewer=customer`); } catch (e) { /* noop */ }
+      };
+
       const hasPhone = !!digits;
       const inAppCallOpt = { key: 'inapp-call', label: t('اتصال داخل التطبيق'), icon: '📞', action: () => { setContactOpen(false); call.startCall(currentOrder.id, driver?.name || 'السائق'); } };
       const contactOptions = hasPhone ? [
@@ -2306,7 +2374,7 @@ export default function CustomerMenu() {
           </div>
           {/* خريطة تتبع السائق */}
           {hasLocation && (
-            <div className="rounded-xl overflow-hidden shadow-lg border border-gray-700">
+            <div className="rounded-xl overflow-hidden shadow-lg border border-[#2A3A66]">
               <div className="bg-gradient-to-r from-blue-600 to-green-500 text-white px-4 py-3 flex items-center gap-2">
                 <MapPin className="h-5 w-5" />
                 <span className="font-bold">تتبع السائق</span>
@@ -2495,12 +2563,14 @@ export default function CustomerMenu() {
                 ) : chatMessages.map(m => (
                   <div key={m.id} className={`flex ${m.sender === 'customer' ? 'justify-end' : 'justify-start'}`}>
                     <div className={`max-w-[75%] px-3 py-2 rounded-2xl text-sm ${m.sender === 'customer' ? 'bg-green-500 text-white rounded-br-sm' : 'bg-white border rounded-bl-sm'}`}>
-                      {m.text}
+                      {m.type === 'voice' ? <VoiceBubble url={m.audio_url} duration={m.duration} mine={m.sender === 'customer'} onListen={() => markVoiceListened(m.id)} /> : m.text}
+                      {m.sender === 'customer' && <div className="flex justify-end mt-0.5"><MessageTicks msg={m} mine={true} /></div>}
                     </div>
                   </div>
                 ))}
               </div>
               <div className="p-3 border-t flex items-center gap-2 bg-white rounded-b-lg">
+                <VoiceRecordButton onUpload={sendVoice} accentClass="bg-green-500 hover:bg-green-600" testid="customer-voice-record-btn" />
                 <Input value={chatText} onChange={(e) => setChatText(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') sendChat(); }}
                   placeholder="اكتب رسالة..." data-testid="chat-input" />
                 <Button type="button" onClick={sendChat} data-testid="chat-send-btn" className="bg-green-500 hover:bg-green-600">
@@ -2516,6 +2586,18 @@ export default function CustomerMenu() {
       <div className="min-h-screen bg-gradient-to-br from-green-50 to-blue-50" dir="rtl">
         <CallUI {...call} />
         {/* Header */}
+        {(currentOrder.status === 'cancelled' || currentOrder.status === 'rejected') ? (
+          <header className="bg-gradient-to-r from-red-600 to-rose-700 text-white shadow-lg" data-testid="order-rejected-header">
+            <div className="max-w-lg md:max-w-2xl lg:max-w-4xl mx-auto px-4 py-6 text-center">
+              <XCircle className="h-12 w-12 mx-auto mb-2" />
+              <h1 className="text-2xl font-bold">{t('تم رفض/إلغاء طلبك')}</h1>
+              <p className="text-red-100">رقم الطلب: #{currentOrder.order_number}</p>
+              {currentOrder.cancellation_reason && (
+                <p className="mt-2 text-sm bg-white/15 rounded-lg px-3 py-2 inline-block">{t('السبب')}: {currentOrder.cancellation_reason}</p>
+              )}
+            </div>
+          </header>
+        ) : (
         <header className="bg-gradient-to-r from-green-500 to-green-600 text-white shadow-lg">
           <div className="max-w-lg md:max-w-2xl lg:max-w-4xl mx-auto px-4 py-6 text-center">
             <CheckCircle className="h-12 w-12 mx-auto mb-2" />
@@ -2539,6 +2621,7 @@ export default function CustomerMenu() {
             </button>
           </div>
         </header>
+        )}
         <main className="max-w-lg md:max-w-2xl lg:max-w-4xl mx-auto px-4 py-6 space-y-4">
           {/* Driver Tracking - يظهر لطلبات التوصيل (يتحدّث تلقائياً عند إسناد السائق) */}
           {(currentOrder.order_type === 'delivery' || currentOrder.status === 'out_for_delivery' || currentOrder.driver_id) && (

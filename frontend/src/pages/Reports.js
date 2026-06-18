@@ -439,7 +439,7 @@ const ComprehensiveReportTab = ({
 
         {/* بطاقة صافي الربح - تظهر فقط إذا كانت صلاحية تقرير التحليل مفعلة */}
         {showBreakEvenReport !== false && (
-          <Card className={`bg-gradient-to-br ${netProfit >= 0 ? 'from-blue-500 to-blue-600' : 'from-gray-600 to-gray-700'} text-white border-0 shadow-lg`}>
+          <Card className={`bg-gradient-to-br ${netProfit >= 0 ? 'from-blue-500 to-blue-600' : 'from-gray-600 to-[#1A284E]'} text-white border-0 shadow-lg`}>
             <CardContent className="p-5">
               <div className="flex items-center justify-between">
                 <div>
@@ -1153,7 +1153,7 @@ const CreditReportTab = ({ creditReport, t, formatPrice, fetchReports, handlePri
                     className="mt-1"
                   />
                 </div>
-                <div className="bg-gray-100 dark:bg-gray-800 p-3 rounded-lg text-sm">
+                <div className="bg-gray-100 dark:bg-[#0F1A3A] p-3 rounded-lg text-sm">
                   <p className="flex items-center gap-2">
                     <Clock className="h-4 w-4" />
                     {t('التاريخ والوقت')}: {new Date().toLocaleString('ar-IQ')}
@@ -1561,7 +1561,7 @@ const CashRegisterClosingTab = ({ t, formatPrice, selectedBranchId, branches, ge
             type="date"
             value={dateRange.start}
             onChange={(e) => setDateRange(prev => ({ ...prev, start: e.target.value }))}
-            className="bg-gray-900/50 border-emerald-700/50 text-white w-40"
+            className="bg-[#070E22]/50 border-emerald-700/50 text-white w-40"
           />
         </div>
         <div>
@@ -1570,7 +1570,7 @@ const CashRegisterClosingTab = ({ t, formatPrice, selectedBranchId, branches, ge
             type="date"
             value={dateRange.end}
             onChange={(e) => setDateRange(prev => ({ ...prev, end: e.target.value }))}
-            className="bg-gray-900/50 border-emerald-700/50 text-white w-40"
+            className="bg-[#070E22]/50 border-emerald-700/50 text-white w-40"
           />
         </div>
         <div>
@@ -1578,7 +1578,7 @@ const CashRegisterClosingTab = ({ t, formatPrice, selectedBranchId, branches, ge
           <select
             value={localBranchId}
             onChange={(e) => setLocalBranchId(e.target.value)}
-            className="bg-gray-900/50 border border-emerald-700/50 text-white rounded-md px-3 py-2 w-44"
+            className="bg-[#070E22]/50 border border-emerald-700/50 text-white rounded-md px-3 py-2 w-44"
           >
             <option value="">{t('جميع الفروع')}</option>
             {branches?.map(branch => (
@@ -1598,9 +1598,9 @@ const CashRegisterClosingTab = ({ t, formatPrice, selectedBranchId, branches, ge
 
       {/* زر التبديل بين العرض المجمّع والفردي */}
       {closingsHistory.length > 0 && (
-        <div className="flex items-center gap-3 bg-gray-900/40 border border-emerald-700/30 rounded-lg p-3">
+        <div className="flex items-center gap-3 bg-[#070E22]/40 border border-emerald-700/30 rounded-lg p-3">
           <span className="text-sm text-emerald-300 font-medium">{t('طريقة العرض')}:</span>
-          <div className="flex bg-gray-800/60 rounded-lg p-0.5">
+          <div className="flex bg-[#0F1A3A]/60 rounded-lg p-0.5">
             <button
               onClick={() => setViewMode('individual')}
               className={`px-4 py-1.5 rounded-md text-sm font-medium transition-all ${viewMode === 'individual' ? 'bg-emerald-600 text-white shadow' : 'text-gray-400 hover:text-white'}`}
@@ -1708,7 +1708,7 @@ const CashRegisterClosingTab = ({ t, formatPrice, selectedBranchId, branches, ge
             const shiftOrders = closing.total_orders || closing.orders_count || 0;
             
             return (
-              <Card key={idx} className={`border transition-all cursor-pointer ${isExpanded ? 'border-emerald-500 bg-gray-900/60' : 'border-gray-700/40 bg-gray-900/30 hover:border-emerald-700/50'}`}>
+              <Card key={idx} className={`border transition-all cursor-pointer ${isExpanded ? 'border-emerald-500 bg-[#070E22]/60' : 'border-[#2A3A66]/40 bg-[#070E22]/30 hover:border-emerald-700/50'}`}>
                 {/* رأس الشفت - يُضغط للفتح/الإغلاق */}
                 <div
                   className="flex items-center justify-between p-4"
@@ -1776,7 +1776,7 @@ const CashRegisterClosingTab = ({ t, formatPrice, selectedBranchId, branches, ge
                 
                 {/* تفاصيل الشفت الكاملة */}
                 {isExpanded && (
-                  <div className="px-4 pb-4 space-y-4 border-t border-gray-700/30 pt-4">
+                  <div className="px-4 pb-4 space-y-4 border-t border-[#2A3A66]/30 pt-4">
                     {/* ملخص سريع */}
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                       <div className="bg-emerald-900/20 rounded-lg p-3 text-center">
@@ -1876,7 +1876,7 @@ const CashRegisterClosingTab = ({ t, formatPrice, selectedBranchId, branches, ge
                     
                     {/* طريقة الدفع + نوع الطلب */}
                     <div className="grid md:grid-cols-2 gap-4">
-                      <div className="bg-gray-800/30 rounded-lg p-3 space-y-2">
+                      <div className="bg-[#0F1A3A]/30 rounded-lg p-3 space-y-2">
                         <p className="text-sm font-bold text-emerald-300 mb-2">{t('حسب طريقة الدفع')}</p>
                         <div className="flex justify-between text-sm">
                           <span className="text-gray-300">{t('نقدي')}</span>
@@ -1897,7 +1897,7 @@ const CashRegisterClosingTab = ({ t, formatPrice, selectedBranchId, branches, ge
                           </div>
                         ))}
                       </div>
-                      <div className="bg-gray-800/30 rounded-lg p-3 space-y-2">
+                      <div className="bg-[#0F1A3A]/30 rounded-lg p-3 space-y-2">
                         <p className="text-sm font-bold text-teal-300 mb-2">{t('تفاصيل إضافية')}</p>
                         <div className="flex justify-between text-sm">
                           <span className="text-gray-300">{t('الخصومات')}</span>
@@ -1912,7 +1912,7 @@ const CashRegisterClosingTab = ({ t, formatPrice, selectedBranchId, branches, ge
                           <span className="text-white font-medium">{closing.refund_count || 0} ({formatPrice(closing.total_refunds || 0)})</span>
                         </div>
                         {closing.notes && (
-                          <div className="mt-2 p-2 bg-gray-700/30 rounded text-sm text-gray-300">
+                          <div className="mt-2 p-2 bg-[#1A284E]/30 rounded text-sm text-gray-300">
                             {t('ملاحظات')}: {closing.notes}
                           </div>
                         )}
@@ -1921,12 +1921,12 @@ const CashRegisterClosingTab = ({ t, formatPrice, selectedBranchId, branches, ge
 
                     {/* فئات النقود */}
                     {closing.denominations && Object.keys(closing.denominations).length > 0 && (
-                      <div className="bg-gray-800/30 rounded-lg p-3">
+                      <div className="bg-[#0F1A3A]/30 rounded-lg p-3">
                         <p className="text-sm font-bold text-cyan-300 mb-2">{t('فئات النقود')}</p>
                         <div className="grid grid-cols-4 md:grid-cols-7 gap-2">
                           {Object.entries(closing.denominations).sort((a,b) => Number(a[0]) - Number(b[0])).map(([denom, count]) => (
                             count > 0 && (
-                              <div key={denom} className="bg-gray-700/30 rounded p-2 text-center">
+                              <div key={denom} className="bg-[#1A284E]/30 rounded p-2 text-center">
                                 <p className="text-xs text-gray-400">{Number(denom).toLocaleString()}</p>
                                 <p className="text-white font-bold">{count}</p>
                               </div>
@@ -2032,24 +2032,24 @@ const CashRegisterClosingTab = ({ t, formatPrice, selectedBranchId, branches, ge
           {/* حسب نوع الطلب وطريقة الدفع */}
           <div className="grid md:grid-cols-2 gap-6">
             {/* حسب نوع الطلب */}
-            <Card className="bg-gradient-to-br from-gray-900/60 to-emerald-900/20 border-emerald-700/20">
+            <Card className="bg-gradient-to-br from-[#070E22]/60 to-emerald-900/20 border-emerald-700/20">
               <CardHeader>
                 <CardTitle className="text-lg text-emerald-300">{t('حسب نوع الطلب')}</CardTitle>
               </CardHeader>
               <CardContent className="space-y-3">
-                <div className="flex justify-between items-center p-2 rounded bg-gray-800/30">
+                <div className="flex justify-between items-center p-2 rounded bg-[#0F1A3A]/30">
                   <span className="text-gray-300 flex items-center gap-2">
                     <Building2 className="h-4 w-4 text-emerald-400" /> {t('داخلي')}
                   </span>
                   <span className="font-bold text-white">{formatPrice(report.by_order_type?.dine_in?.total || 0)}</span>
                 </div>
-                <div className="flex justify-between items-center p-2 rounded bg-gray-800/30">
+                <div className="flex justify-between items-center p-2 rounded bg-[#0F1A3A]/30">
                   <span className="text-gray-300 flex items-center gap-2">
                     <Package className="h-4 w-4 text-teal-400" /> {t('سفري')}
                   </span>
                   <span className="font-bold text-white">{formatPrice(report.by_order_type?.takeaway?.total || 0)}</span>
                 </div>
-                <div className="flex justify-between items-center p-2 rounded bg-gray-800/30">
+                <div className="flex justify-between items-center p-2 rounded bg-[#0F1A3A]/30">
                   <span className="text-gray-300 flex items-center gap-2">
                     <Truck className="h-4 w-4 text-cyan-400" /> {t('توصيل')}
                   </span>
@@ -2059,19 +2059,19 @@ const CashRegisterClosingTab = ({ t, formatPrice, selectedBranchId, branches, ge
             </Card>
 
             {/* حسب طريقة الدفع */}
-            <Card className="bg-gradient-to-br from-gray-900/60 to-teal-900/20 border-teal-700/20">
+            <Card className="bg-gradient-to-br from-[#070E22]/60 to-teal-900/20 border-teal-700/20">
               <CardHeader>
                 <CardTitle className="text-lg text-teal-300">{t('حسب طريقة الدفع')}</CardTitle>
               </CardHeader>
               <CardContent className="space-y-3">
-                <div className="flex justify-between items-center p-2 rounded bg-gray-800/30">
+                <div className="flex justify-between items-center p-2 rounded bg-[#0F1A3A]/30">
                   <span className="text-gray-300 flex items-center gap-2">
                     <Banknote className="h-4 w-4" /> {t('نقدي')}
                   </span>
                   <span className="font-bold text-emerald-400" data-testid="cash-total">{formatPrice(report.by_payment_method?.cash?.total || 0)}</span>
                 </div>
                 {(report.by_payment_method?.driver_cash?.total || 0) > 0 && (
-                  <div className="flex justify-between items-center p-2 rounded bg-gray-800/30">
+                  <div className="flex justify-between items-center p-2 rounded bg-[#0F1A3A]/30">
                     <span className="text-gray-300 flex items-center gap-2">
                       <Truck className="h-4 w-4 text-emerald-400" /> {t('توصيل داخلي')}
                     </span>
@@ -2086,13 +2086,13 @@ const CashRegisterClosingTab = ({ t, formatPrice, selectedBranchId, branches, ge
                     <span className="font-bold text-emerald-400" data-testid="internal-delivery-fees-total">{formatPrice(report.by_payment_method.internal_delivery_fees.total)}</span>
                   </div>
                 )}
-                <div className="flex justify-between items-center p-2 rounded bg-gray-800/30">
+                <div className="flex justify-between items-center p-2 rounded bg-[#0F1A3A]/30">
                   <span className="text-gray-300 flex items-center gap-2">
                     <CreditCard className="h-4 w-4" /> {t('بطاقة')}
                   </span>
                   <span className="font-bold text-blue-400">{formatPrice(report.by_payment_method?.card?.total || 0)}</span>
                 </div>
-                <div className="flex justify-between items-center p-2 rounded bg-gray-800/30">
+                <div className="flex justify-between items-center p-2 rounded bg-[#0F1A3A]/30">
                   <span className="text-gray-300 flex items-center gap-2">
                     <Clock className="h-4 w-4" /> {t('آجل')}
                   </span>
@@ -2100,7 +2100,7 @@ const CashRegisterClosingTab = ({ t, formatPrice, selectedBranchId, branches, ge
                 </div>
                 {/* شركات التوصيل */}
                 {Object.entries(report.delivery_apps || {}).map(([appName, data]) => (
-                  <div key={appName} className="flex justify-between items-center p-2 rounded bg-gray-800/30">
+                  <div key={appName} className="flex justify-between items-center p-2 rounded bg-[#0F1A3A]/30">
                     <span className="text-gray-300 flex items-center gap-2">
                       <Truck className="h-4 w-4" /> {appName}
                     </span>
@@ -2113,7 +2113,7 @@ const CashRegisterClosingTab = ({ t, formatPrice, selectedBranchId, branches, ge
 
           {/* حسب الكاشير */}
           {report.by_cashier && report.by_cashier.length > 0 && (
-            <Card className="bg-gradient-to-br from-gray-900/60 to-cyan-900/20 border-cyan-700/20">
+            <Card className="bg-gradient-to-br from-[#070E22]/60 to-cyan-900/20 border-cyan-700/20">
               <CardHeader>
                 <CardTitle className="text-lg text-cyan-300 flex items-center gap-2">
                   <User className="h-5 w-5" /> {t('حسب الكاشير')}
@@ -2135,7 +2135,7 @@ const CashRegisterClosingTab = ({ t, formatPrice, selectedBranchId, branches, ge
                     </thead>
                     <tbody>
                       {report.by_cashier.map((cashier, idx) => (
-                        <tr key={idx} className="border-b border-gray-700/30 text-white hover:bg-gray-800/30">
+                        <tr key={idx} className="border-b border-[#2A3A66]/30 text-white hover:bg-[#0F1A3A]/30">
                           <td className="py-3">{cashier.cashier_name}</td>
                           <td className="py-3">{cashier.orders_count}</td>
                           <td className="py-3 font-bold text-emerald-400">{formatPrice(cashier.total_sales)}</td>
@@ -2153,7 +2153,7 @@ const CashRegisterClosingTab = ({ t, formatPrice, selectedBranchId, branches, ge
           )}
 
           {/* المصروفات */}
-          <Card className="bg-gradient-to-br from-gray-900/60 to-red-900/20 border-red-700/20">
+          <Card className="bg-gradient-to-br from-[#070E22]/60 to-red-900/20 border-red-700/20">
             <CardHeader>
               <CardTitle className="text-lg text-red-300 flex items-center gap-2">
                 <Receipt className="h-5 w-5" /> {t('المصروفات')} ({formatPrice(report?.expenses?.total || 0)})
@@ -2163,7 +2163,7 @@ const CashRegisterClosingTab = ({ t, formatPrice, selectedBranchId, branches, ge
               {report?.expenses?.items && report.expenses.items.length > 0 ? (
                 <div className="space-y-2">
                   {report.expenses.items.map((expense, idx) => (
-                    <div key={idx} className="flex justify-between items-center py-3 px-3 rounded bg-gray-800/30 border-b border-gray-700/30">
+                    <div key={idx} className="flex justify-between items-center py-3 px-3 rounded bg-[#0F1A3A]/30 border-b border-[#2A3A66]/30">
                       <div>
                         <span className="text-white">{expense.description}</span>
                         <span className="text-gray-500 text-sm mr-2">({expense.created_by || 'غير محدد'})</span>
@@ -2180,7 +2180,7 @@ const CashRegisterClosingTab = ({ t, formatPrice, selectedBranchId, branches, ge
 
           {/* سجل الإغلاقات السابقة */}
           {closingsHistory.length > 0 && (
-            <Card className="bg-gradient-to-br from-gray-900/60 to-emerald-900/20 border-emerald-700/20">
+            <Card className="bg-gradient-to-br from-[#070E22]/60 to-emerald-900/20 border-emerald-700/20">
               <CardHeader>
                 <CardTitle className="text-lg text-emerald-300">{t('سجل إغلاقات الصندوق السابقة')}</CardTitle>
               </CardHeader>
@@ -2200,7 +2200,7 @@ const CashRegisterClosingTab = ({ t, formatPrice, selectedBranchId, branches, ge
                     </thead>
                     <tbody>
                       {closingsHistory.map((closing, idx) => (
-                        <tr key={idx} className="border-b border-gray-700/30 text-white hover:bg-gray-800/30">
+                        <tr key={idx} className="border-b border-[#2A3A66]/30 text-white hover:bg-[#0F1A3A]/30">
                           <td className="py-3">{new Date(closing.closed_at).toLocaleString('ar-IQ')}</td>
                           <td className="py-3">{closing.cashier_name}</td>
                           <td className="py-3">{formatPrice(closing.total_sales)}</td>
@@ -2233,7 +2233,7 @@ const CashRegisterClosingTab = ({ t, formatPrice, selectedBranchId, branches, ge
 
       {/* نموذج استلام نقد الشفت */}
       <Dialog open={!!receiveDialog} onOpenChange={(o) => !o && setReceiveDialog(null)}>
-        <DialogContent className="bg-gray-900 border-gray-700 text-white max-w-md" data-testid="receive-shift-dialog">
+        <DialogContent className="bg-[#070E22] border-[#2A3A66] text-white max-w-md" data-testid="receive-shift-dialog">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2 text-cyan-400">
               <Wallet className="h-5 w-5" />
@@ -2242,7 +2242,7 @@ const CashRegisterClosingTab = ({ t, formatPrice, selectedBranchId, branches, ge
           </DialogHeader>
           {receiveDialog && (
             <div className="space-y-4">
-              <div className="bg-gray-800/50 rounded-lg p-3 text-sm space-y-1">
+              <div className="bg-[#0F1A3A]/50 rounded-lg p-3 text-sm space-y-1">
                 <div className="flex justify-between"><span className="text-gray-400">{t('الكاشير')}</span><span className="font-bold">{receiveDialog.closing.cashier_name}</span></div>
                 <div className="flex justify-between"><span className="text-gray-400">{t('اليوم التشغيلي')}</span><span>{receiveDialog.closing.business_date || '-'}</span></div>
                 <div className="flex justify-between"><span className="text-gray-400">{t('الفرع')}</span><span>{receiveDialog.closing.branch_name || '-'}</span></div>
@@ -2252,27 +2252,27 @@ const CashRegisterClosingTab = ({ t, formatPrice, selectedBranchId, branches, ge
                 <Label className="text-gray-300">{t('المبلغ الفعلي المُستلم')}</Label>
                 <Input type="number" value={receiveForm.received_amount}
                   onChange={(e) => setReceiveForm(f => ({ ...f, received_amount: e.target.value }))}
-                  className="bg-gray-800 border-gray-700 text-white" data-testid="receive-amount-input" />
+                  className="bg-[#0F1A3A] border-[#2A3A66] text-white" data-testid="receive-amount-input" />
               </div>
               <div>
                 <Label className="text-gray-300">{t('مصاريف خارجية بعد الإغلاق (اختياري)')}</Label>
                 <Input type="number" value={receiveForm.external_expenses}
                   onChange={(e) => setReceiveForm(f => ({ ...f, external_expenses: e.target.value }))}
-                  placeholder="0" className="bg-gray-800 border-gray-700 text-white" data-testid="receive-external-expenses-input" />
+                  placeholder="0" className="bg-[#0F1A3A] border-[#2A3A66] text-white" data-testid="receive-external-expenses-input" />
               </div>
               {parseFloat(receiveForm.external_expenses) > 0 && (
                 <div>
                   <Label className="text-gray-300">{t('سبب المصاريف الخارجية')}</Label>
                   <Input value={receiveForm.external_expenses_note}
                     onChange={(e) => setReceiveForm(f => ({ ...f, external_expenses_note: e.target.value }))}
-                    className="bg-gray-800 border-gray-700 text-white" data-testid="receive-external-note-input" />
+                    className="bg-[#0F1A3A] border-[#2A3A66] text-white" data-testid="receive-external-note-input" />
                 </div>
               )}
               <div>
                 <Label className="text-gray-300">{t('المُستلِم (اختياري)')}</Label>
                 <Input value={receiveForm.received_by}
                   onChange={(e) => setReceiveForm(f => ({ ...f, received_by: e.target.value }))}
-                  className="bg-gray-800 border-gray-700 text-white" data-testid="receive-by-input" />
+                  className="bg-[#0F1A3A] border-[#2A3A66] text-white" data-testid="receive-by-input" />
               </div>
               <div className="bg-cyan-900/30 border border-cyan-700/40 rounded-lg p-3 text-center">
                 <p className="text-xs text-cyan-300">{t('المبلغ المُودَع في الخزينة')}</p>
@@ -2510,7 +2510,7 @@ const CardReportTab = ({ cardReport, t, formatPrice, fetchReports }) => {
                     className="mt-1"
                   />
                 </div>
-                <div className="bg-gray-100 dark:bg-gray-800 p-3 rounded-lg text-sm">
+                <div className="bg-gray-100 dark:bg-[#0F1A3A] p-3 rounded-lg text-sm">
                   <p className="flex items-center gap-2">
                     <Clock className="h-4 w-4" />
                     {t('التاريخ والوقت')}: {new Date().toLocaleString('ar-IQ')}

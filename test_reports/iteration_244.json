@@ -1,0 +1,50 @@
+{
+  "summary": "Verified iter244 'perms+push+reject+navy-gold theme'. Backend: VAPID public key, push/subscribe (driver+customer), inbox/sync graceful, reject-order flow surfacing is_rejected/cancellation_reason via /api/customer/order — ALL 5 PYTEST CASES PASS (test_perms_push_inbox_reject_iter242.py). Frontend: Driver app /driver-app renders with the new navy+gold theme (Maestro EGP gold logo on dark navy gradient), login (07801111111/1234) succeeds, dashboard sticky header is navy+gold, and the permissions banner data-testid='permissions-gate' + button data-testid='enable-permissions-btn' are visible. Customer menu /menu/default renders with navy+gold header (linear-gradient #0C1738 → #1E3A78, gold M logo) — no crash, products visible, add-to-cart works. ISSUE: PermissionsGate is mounted ONLY inside the branch-list view in CustomerMenu.js (line 1305); when the tenant resolves to a single branch (current seed) or the user has a cached branch, the customer lands directly on the product/menu view and never sees the permissions banner — review request asked for it on /menu/default.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {
+        "component": "CustomerMenu.js",
+        "issue": "PermissionsGate is rendered only inside the branch-list <main> (line ~1305). With a single seeded branch / cached branch selection the user skips the branch-list and never sees the banner. Add <PermissionsGate withMic={true} /> at the top of the menu/product view (around the second header ~line 1354) too — or hoist it above the conditional branch/menu rendering.",
+        "selector": "[data-testid='permissions-gate']",
+        "priority": "MEDIUM"
+      }
+    ],
+    "integration_issues": [],
+    "design_issues": [
+      {
+        "screen": "Driver login",
+        "issues": ["Navy gradient bg + gold 'Maestro EGP' logo + gold submit button — consistent identity, no contrast issues observed."]
+      },
+      {
+        "screen": "Customer menu header",
+        "issues": ["Header uses linear-gradient(rgb(12,23,56) → rgb(30,58,120)) with gold accent — matches unified identity."]
+      }
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_perms_push_inbox_reject_iter242.py",
+    "/app/test_reports/pytest/iter242_results.xml"
+  ],
+  "action_items": [
+    "Add <PermissionsGate withMic={true} /> at the top of the product/menu view in CustomerMenu.js (currently only in branch-list at line 1305). Without this, customers landing on /menu/default with a single/cached branch never see the permissions banner."
+  ],
+  "critical_code_review_comments": [
+    "CustomerMenu.js is 2699 lines — well above the 700-line guideline; should be split into BranchList, Menu, Cart/Checkout, OrderStatus sub-components.",
+    "PermissionsGate placement creates a coverage gap (see action item).",
+    "Reject endpoint correctly clears driver_id/driver_name/driver_phone and sets is_rejected, cancellation_reason, cancelled_at, rejected_at, rejected_by_name — confirmed via the customer order endpoint (see test payload)."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_perms_push_inbox_reject_iter242.py"
+  ],
+  "success_rate": {"backend": "100% (5/5)", "frontend": "90% (driver perms-gate visible, customer perms-gate missing on menu view)"},
+  "test_credentials": "Driver phone 07801111111 / PIN 1234 — works. Admin admin@maestroegp.com / admin123 — works for reject endpoint.",
+  "seed_data_creation": "Test created customer order #6180002 (id e9f7ce35-...) for tenant 'default' via /api/customer/order/default, then rejected it via /api/orders/{id}/reject. Two TEST_ push subscriptions also inserted (driver 07801111111, customer 07701234567 — dummy FCM endpoints).",
+  "retest_needed": true,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Backend endpoints for push/inbox/reject are all green via /app/backend/tests/test_perms_push_inbox_reject_iter242.py. Re-run with: pytest backend/tests/test_perms_push_inbox_reject_iter242.py -v. Only remaining gap is the customer-menu PermissionsGate placement. Verify with: visit /menu/default in incognito and check [data-testid='permissions-gate'] is present on first render (after splash unmounts).",
+  "rca of the issue": "PermissionsGate gap RCA: in CustomerMenu.js, the gate is mounted inside the JSX subtree that renders only when the branch-list step is active (around line 1303). The component tree returns a different subtree (product list) once a branch is selected, and that subtree does not include PermissionsGate. Because tenant 'default' currently exposes a single seeded branch (auto-selected) the customer skips the branch-list step. Fix: render <PermissionsGate withMic={true} /> inside the outer wrapper (above the step conditional) so it appears regardless of the chosen step. Reproduction: open /menu/default in incognito → splash → product list (no banner). Expected: banner visible until user clicks 'enable' and grants permissions."
+}

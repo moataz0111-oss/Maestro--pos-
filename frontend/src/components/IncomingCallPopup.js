@@ -241,8 +241,8 @@ export default function IncomingCallPopup() {
         >
           <Card className={`w-[420px] overflow-hidden shadow-2xl border-2 ${
             call.status === 'ringing' 
-              ? 'border-green-500 bg-gradient-to-b from-green-900/95 to-gray-900/98' 
-              : 'border-blue-500 bg-gradient-to-b from-blue-900/95 to-gray-900/98'
+              ? 'border-green-500 bg-gradient-to-b from-green-900/95 to-[#070E22]/98' 
+              : 'border-blue-500 bg-gradient-to-b from-blue-900/95 to-[#070E22]/98'
           } backdrop-blur-xl`}>
             {/* Header */}
             <div className={`p-4 ${
@@ -317,7 +317,7 @@ export default function IncomingCallPopup() {
               
               {/* آخر طلب */}
               {call.last_order && (
-                <div className="mt-3 p-3 bg-gray-800/70 rounded-lg border border-gray-700">
+                <div className="mt-3 p-3 bg-[#0F1A3A]/70 rounded-lg border border-[#2A3A66]">
                   <div className="flex items-center gap-2 text-sm text-gray-400 mb-2">
                     <Clock className="h-4 w-4" />
                     آخر طلب

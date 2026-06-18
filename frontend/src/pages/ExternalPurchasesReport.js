@@ -239,7 +239,7 @@ export default function ExternalPurchasesReport() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-blue-50/40 dark:from-slate-950 dark:to-slate-900 text-foreground" dir="rtl">
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-blue-50/40 dark:from-[#070E22] dark:to-[#070E22] text-foreground" dir="rtl">
       <Toaster position="top-center" richColors />
 
       {/* الترويسة */}

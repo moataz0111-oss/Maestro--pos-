@@ -1154,7 +1154,7 @@ export default function Delivery() {
                 </div>
 
                 {/* الخريطة المتقدمة */}
-                <div className="rounded-xl overflow-hidden border border-gray-700">
+                <div className="rounded-xl overflow-hidden border border-[#2A3A66]">
                   <DriverTrackingMap 
                     drivers={driverLocations}
                     orders={pendingOrders}

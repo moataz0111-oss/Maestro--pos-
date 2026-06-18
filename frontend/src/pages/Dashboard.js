@@ -1576,11 +1576,11 @@ export default function Dashboard() {
     { label: t('التقييمات'), icon: Star, path: '/ratings', color: 'bg-gradient-to-br from-yellow-400 to-yellow-500', key: 'showRatings', id: 'ratings' },
     { label: t('المصاريف'), icon: Receipt, path: '/expenses', color: 'bg-gradient-to-br from-red-400 to-red-600', key: 'showExpenses', id: 'expenses' },
     { label: t('المشتريات'), icon: ShoppingBag, path: '/purchases-new', color: 'bg-gradient-to-br from-blue-500 to-blue-700', key: 'showPurchasing', id: 'purchasing' },
-    { label: inventoryMode === 'per_branch' ? t('مشتريات ومخزن الفرع') : t('تقرير المشتريات الخارجية'), icon: ShoppingBag, path: '/external-purchases-report', color: 'bg-gradient-to-br from-blue-600 to-indigo-700', key: 'showPurchasing', id: 'external-purchases-report' },
+    { label: inventoryMode === 'per_branch' ? t('مشتريات ومخزن الفرع') : t('تقرير المشتريات الخارجية'), icon: ShoppingBag, path: '/external-purchases-report', color: 'bg-gradient-to-br from-blue-600 to-indigo-700', key: 'showExternalPurchasesReport', id: 'external-purchases-report' },
     { label: t('المخزن والتصنيع'), icon: Warehouse, path: '/warehouse-manufacturing', color: 'bg-gradient-to-br from-indigo-500 to-indigo-700', key: 'showWarehouse', id: 'warehouse-manufacturing' },
     { label: t('طلبات الفروع'), icon: Truck, path: '/branch-orders', color: 'bg-gradient-to-br from-lime-400 to-lime-600', key: 'showBranchOrders', id: 'branch-orders' },
     { label: t('تقارير المخزون'), icon: Package, path: '/inventory-reports', color: 'bg-gradient-to-br from-purple-500 to-purple-700', key: 'showInventoryReports', id: 'inventory-reports' },
-    { label: t('تقرير زيادة الأسعار'), icon: TrendingUp, path: '/reports/price-increases', color: 'bg-gradient-to-br from-red-500 to-red-700', key: 'showInventoryReports', id: 'price-increase-report' },
+    { label: t('تقرير زيادة الأسعار'), icon: TrendingUp, path: '/reports/price-increases', color: 'bg-gradient-to-br from-red-500 to-red-700', key: 'showPriceIncreaseReport', id: 'price-increase-report' },
     { label: t('التوصيل'), icon: Truck, path: '/delivery', color: 'bg-gradient-to-br from-orange-500 to-orange-700', key: 'showDelivery', id: 'delivery' },
     { label: t('الحجوزات'), icon: CalendarDays, path: '/reservations', color: 'bg-gradient-to-br from-rose-400 to-rose-600', key: 'showReservations', id: 'reservations' },
     { label: t('الموارد البشرية'), icon: UserCog, path: '/hr', color: 'bg-gradient-to-br from-green-400 to-green-600', key: 'showHR', id: 'hr' },
@@ -1658,6 +1658,9 @@ export default function Dashboard() {
       'showSettings': 'settings',
       'showOwnerWallet': 'owner_wallet',
       'showExternalBranches': 'external_branches',
+      'showExternalPurchasesReport': 'inventory',
+      'showPriceIncreaseReport': 'inventory',
+      'showCaptainsManagement': 'orders',
     };
     
     const requiredPermission = permissionMap[action.key];

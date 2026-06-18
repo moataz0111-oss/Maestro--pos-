@@ -219,7 +219,7 @@ export default function ImageCropper({
 
   return (
     <Dialog open={open} onOpenChange={handleClose}>
-      <DialogContent className="bg-gray-800 text-white max-w-2xl max-h-[90vh] overflow-hidden">
+      <DialogContent className="bg-[#0F1A3A] text-white max-w-2xl max-h-[90vh] overflow-hidden">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Crop className="h-5 w-5 text-blue-400" />
@@ -250,7 +250,7 @@ export default function ImageCropper({
           {/* منطقة القص */}
           {imageSrc && (
             <>
-              <div className="relative bg-gray-900 rounded-lg overflow-hidden max-h-[400px] flex items-center justify-center">
+              <div className="relative bg-[#070E22] rounded-lg overflow-hidden max-h-[400px] flex items-center justify-center">
                 <ReactCrop
                   crop={crop}
                   onChange={(c) => setCrop(c)}
@@ -275,7 +275,7 @@ export default function ImageCropper({
               </div>
 
               {/* أدوات التعديل */}
-              <div className="flex flex-wrap items-center justify-center gap-2 p-3 bg-gray-700/50 rounded-lg">
+              <div className="flex flex-wrap items-center justify-center gap-2 p-3 bg-[#1A284E]/50 rounded-lg">
                 {/* تدوير */}
                 <Button
                   variant="outline"

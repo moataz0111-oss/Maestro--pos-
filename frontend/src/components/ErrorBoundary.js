@@ -22,7 +22,7 @@ class ErrorBoundary extends React.Component {
   render() {
     if (this.state.hasError) {
       return (
-        <div className="min-h-screen flex items-center justify-center bg-gray-900 text-white p-4">
+        <div className="min-h-screen flex items-center justify-center bg-[#070E22] text-white p-4">
           <div className="text-center max-w-md">
             <div className="w-20 h-20 bg-red-500/20 rounded-full flex items-center justify-center mx-auto mb-6">
               <svg className="w-10 h-10 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -46,13 +46,13 @@ class ErrorBoundary extends React.Component {
                   sessionStorage.clear();
                   window.location.href = '/login';
                 }}
-                className="w-full px-6 py-3 bg-gray-700 hover:bg-gray-600 rounded-lg font-medium transition-colors"
+                className="w-full px-6 py-3 bg-[#1A284E] hover:bg-gray-600 rounded-lg font-medium transition-colors"
               >
                 مسح البيانات وإعادة تسجيل الدخول
               </button>
             </div>
             {this.state.error && (
-              <div className="mt-6 p-4 bg-gray-800 rounded-lg text-left text-sm overflow-auto max-h-48">
+              <div className="mt-6 p-4 bg-[#0F1A3A] rounded-lg text-left text-sm overflow-auto max-h-48">
                 <p className="text-red-400 font-mono">{this.state.error.toString()}</p>
                 {this.state.errorInfo && (
                   <pre className="text-gray-500 mt-2 text-xs">

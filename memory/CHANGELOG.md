@@ -4493,3 +4493,21 @@ for ing in recipe:
 - زر تبديل "أرشيف المنتهية خدماتهم" (status=archived) لعرض المنهية خدماتهم. نفس أزرار الصرف/الإرجاع تظهر في تقرير الرواتب.
 - نقاط النهاية: POST /employees/{id}/terminate | /terminate-payout | /reinstate. GET /employees?status=archived.
 - تحقق: backend pytest 5/5 (terminate→payout→reinstate reversal + auto-finalize→archive)، frontend e2e 7/7 (وكيل الاختبار).
+
+## fork iter245 — رسائل صوتية في محادثة الزبون/السائق (18 يونيو 2026)
+- ميزة جديدة: رسائل صوتية (Voice Notes) داخل المحادثة بين الزبون والسائق في الواجهات الثلاث: CustomerMenu, DriverApp, PublicTracking.
+- Backend: POST /api/order-chat/{order_id}/voice (multipart: file, sender, sender_name, duration). يحفظ في UPLOAD_DIR/voice/ ويُقدّم عبر /api/uploads/voice/. حد 5MB. يُنشئ doc بـ type='voice', audio_url, duration ويُرسل Push للطرف الآخر.
+- Frontend: مكوّن مشترك /app/frontend/src/components/VoiceChat.jsx (VoiceRecordButton بالميكروفون + VoiceBubble مشغّل). testids: customer-voice-record-btn / driver-voice-record-btn / track-voice-record-btn / voice-bubble / voice-play-btn.
+- SW cache bumped: sw-offline v24, sw-customer v13, sw-driver v11.
+- إصلاح بدء التشغيل: Backend كان FATAL (نقص حزم python) + mongod متوقف — أُعيد التشغيل.
+- تحقق: backend pytest 6/6، frontend e2e 100% (وكيل الاختبار iteration_245).
+- ملاحظات المستخدم: ربط الفواتير بالمخزون والمقارنة السعرية و QR موجودة مسبقاً ولا حاجة للعمل عليها الآن.
+
+## fork iter246-247 — توحيد الهوية الكحلية/الذهبية + إيصالات القراءة + مفاتيح ميزات ناقصة (18 يونيو 2026)
+- إيصالات القراءة بنمط واتساب في محادثة الطلب: نص ✓→✓✓ (تم الرؤية)، صوت ✓✓ ذهبي (تم الاستماع). نقاط نهاية جديدة POST /api/order-chat/{id}/read و /listened/{message_id}. مكوّن MessageTicks في VoiceChat.jsx. مُختبر end-to-end.
+- مفاتيح ميزات ناقصة في نافذة "صلاحيات الميزات" (SuperAdmin): showCaptainsManagement (إدارة الطلبات والكابتن)، showExternalPurchasesReport (تقرير المشتريات الخارجية)، showPriceIncreaseReport (تقرير زيادة الأسعار). أُضيفت في allowed_features + default_settings + get_tenant_features + Dashboard keys/permissionMap. تحقق: التعطيل يُخفي الأيقونة والتفعيل يُظهرها (curl end-to-end).
+- توحيد الثيم: الوضع الليلي أصبح كحلي (#070E22) بدل الأسود عبر متغيرات CSS في index.css (.dark: background/card/popover/secondary/muted/border navy + primary/accent/ring ذهبي).
+- لوحة SuperAdmin: كل bg-gray-900/800/700 + border-gray حُوّلت للكحلي (#070E22/#0F1A3A/#1A284E/#2A3A66) + شريط ذهبي علوي بالهيدر.
+- تحويل شامل: 140 توكن رمادي/سليت داكن عبر 21 ملف (pages+components عدا ui) → كحلي موحّد، مع الحفاظ على الذهبي. 
+- SW cache: sw-offline v27, sw-customer v15, sw-driver v13.
+- ملاحظة: أُعيد ضبط tenant=default (أزيلت enabled_features التجريبية) كي يرى حساب الإدارة كل الميزات.

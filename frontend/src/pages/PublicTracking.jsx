@@ -10,6 +10,7 @@ import { MapContainer, TileLayer, Marker, Popup, Polyline } from 'react-leaflet'
 import 'leaflet/dist/leaflet.css';
 import L from 'leaflet';
 import { Phone, MapPin, MessageCircle, Truck, Loader2, Send, X, Star } from 'lucide-react';
+import { VoiceRecordButton, VoiceBubble, MessageTicks } from '../components/VoiceChat';
 
 const API = API_URL;
 
@@ -97,7 +98,7 @@ export default function PublicTracking() {
 
   useEffect(() => {
     if (!chatOpen) return;
-    const load = async () => { try { const r = await axios.get(`${API}/order-chat/${orderId}`); setMessages(r.data.messages || []); } catch (e) {} };
+    const load = async () => { try { const r = await axios.get(`${API}/order-chat/${orderId}`); const msgs = r.data.messages || []; setMessages(msgs); if (msgs.some(m => m.sender === 'driver' && !m.read)) { axios.post(`${API}/order-chat/${orderId}/read?viewer=customer`).catch(() => {}); } } catch (e) {} };
     load();
     const iv = setInterval(load, 3000);
     return () => clearInterval(iv);
@@ -111,24 +112,40 @@ export default function PublicTracking() {
     } catch (e) { /* noop */ }
   };
 
+  const sendVoice = async (blob, duration) => {
+    const fd = new FormData();
+    fd.append('file', blob, 'voice.webm');
+    fd.append('sender', 'customer');
+    fd.append('sender_name', 'الزبون');
+    fd.append('duration', String(duration));
+    try {
+      await axios.post(`${API}/order-chat/${orderId}/voice`, fd);
+      const r = await axios.get(`${API}/order-chat/${orderId}`); setMessages(r.data.messages || []);
+    } catch (e) { /* noop */ }
+  };
+
+  const markVoiceListened = async (msgId) => {
+    try { await axios.post(`${API}/order-chat/${orderId}/listened/${msgId}?viewer=customer`); } catch (e) { /* noop */ }
+  };
+
   const digits = (driver?.phone || '').replace(/\D/g, '');
   const waPhone = digits.startsWith('964') ? digits : '964' + digits.replace(/^0/, '');
   const status = info?.order_status;
   const idx = STATUS_STEPS.findIndex(s => s.key === status);
 
   if (loading) {
-    return <div className="min-h-screen flex items-center justify-center bg-slate-900"><Loader2 className="h-10 w-10 animate-spin text-green-400" /></div>;
+    return <div className="min-h-screen flex items-center justify-center bg-[#070E22]"><Loader2 className="h-10 w-10 animate-spin text-green-400" /></div>;
   }
 
   return (
-    <div dir="rtl" className="min-h-screen bg-slate-900 text-white" data-testid="public-tracking-page">
+    <div dir="rtl" className="min-h-screen bg-[#070E22] text-white" data-testid="public-tracking-page">
       <div className="bg-gradient-to-r from-blue-600 to-green-500 p-4 text-center">
         <h1 className="text-lg font-bold">تتبّع طلبك</h1>
         <p className="text-sm text-blue-100">#{orderId?.slice(-6)}</p>
       </div>
 
       {/* شريط الحالة */}
-      <div className="flex items-center justify-between px-4 py-3 bg-slate-800/60">
+      <div className="flex items-center justify-between px-4 py-3 bg-[#0F1A3A]/60">
         {STATUS_STEPS.map((s, i) => (
           <div key={s.key} className="flex flex-col items-center flex-1">
             <div className={`w-3 h-3 rounded-full ${i <= idx ? 'bg-green-400' : 'bg-slate-600'}`}></div>
@@ -145,7 +162,7 @@ export default function PublicTracking() {
           <p className="text-xs text-slate-400 mt-1">يساعدنا رأيك على تحسين الخدمة</p>
         </div>
       ) : status === 'delivered' ? (
-        <div className="mx-4 mt-3 p-4 rounded-xl bg-slate-800/70 border border-white/10" data-testid="rating-form">
+        <div className="mx-4 mt-3 p-4 rounded-xl bg-[#0F1A3A]/70 border border-white/10" data-testid="rating-form">
           <p className="font-bold mb-2 flex items-center gap-2"><Star className="h-5 w-5 text-amber-400" /> قيّم تجربتك</p>
           <StarRow label="🍽️ الطعام" value={foodR} onChange={setFoodR} testid="rate-food" />
           <StarRow label="🏪 المطعم" value={restR} onChange={setRestR} testid="rate-restaurant" />
@@ -155,7 +172,7 @@ export default function PublicTracking() {
             onChange={(e) => setRatingNotes(e.target.value)}
             placeholder="ملاحظات (اختياري)..."
             data-testid="rating-notes"
-            className="w-full mt-2 rounded-lg bg-slate-900/60 border border-white/10 px-3 py-2 text-sm text-white placeholder:text-slate-500 focus:outline-none focus:border-amber-400"
+            className="w-full mt-2 rounded-lg bg-[#070E22]/60 border border-white/10 px-3 py-2 text-sm text-white placeholder:text-slate-500 focus:outline-none focus:border-amber-400"
             rows={2}
           />
           <button
@@ -171,7 +188,7 @@ export default function PublicTracking() {
 
       {/* ملخص الفاتورة */}
       {Number(info?.order_total) > 0 && (
-        <div className="mx-4 mt-3 p-3 rounded-xl bg-slate-800/60 border border-white/10 text-sm space-y-1" data-testid="track-order-summary">
+        <div className="mx-4 mt-3 p-3 rounded-xl bg-[#0F1A3A]/60 border border-white/10 text-sm space-y-1" data-testid="track-order-summary">
           {Number(info?.delivery_fee) > 0 && (
             <div className="flex justify-between text-blue-300">
               <span>🚗 رسوم خدمة التوصيل</span>
@@ -193,7 +210,7 @@ export default function PublicTracking() {
         </div>
       ) : (
         <div className="p-4 space-y-4">
-          <div className="flex items-center gap-3 p-3 rounded-xl bg-slate-800 border border-white/10">
+          <div className="flex items-center gap-3 p-3 rounded-xl bg-[#0F1A3A] border border-white/10">
             <div className="w-12 h-12 rounded-full bg-gradient-to-br from-blue-500 to-green-500 flex items-center justify-center text-lg font-bold">{driver.name?.[0] || '🛵'}</div>
             <div className="flex-1">
               <p className="font-bold" data-testid="track-driver-name">{driver.name}</p>
@@ -220,7 +237,7 @@ export default function PublicTracking() {
               </MapContainer>
             </div>
           ) : (
-            <div className="text-center py-10 bg-slate-800/60 rounded-xl text-slate-400 flex items-center gap-2 justify-center"><MapPin className="h-5 w-5" /> موقع السائق غير متاح حالياً</div>
+            <div className="text-center py-10 bg-[#0F1A3A]/60 rounded-xl text-slate-400 flex items-center gap-2 justify-center"><MapPin className="h-5 w-5" /> موقع السائق غير متاح حالياً</div>
           )}
         </div>
       )}
@@ -235,11 +252,12 @@ export default function PublicTracking() {
             <div className="flex-1 overflow-y-auto p-3 space-y-2 bg-gray-50">
               {messages.length === 0 ? <p className="text-center text-sm text-gray-400 py-8">ابدأ المحادثة</p> : messages.map(m => (
                 <div key={m.id} className={`flex ${m.sender === 'customer' ? 'justify-end' : 'justify-start'}`}>
-                  <div className={`max-w-[75%] px-3 py-2 rounded-2xl text-sm ${m.sender === 'customer' ? 'bg-green-500 text-white' : 'bg-white border'}`}>{m.text}</div>
+                  <div className={`max-w-[75%] px-3 py-2 rounded-2xl text-sm ${m.sender === 'customer' ? 'bg-green-500 text-white' : 'bg-white border'}`}>{m.type === 'voice' ? <VoiceBubble url={m.audio_url} duration={m.duration} mine={m.sender === 'customer'} onListen={() => markVoiceListened(m.id)} /> : m.text}{m.sender === 'customer' && <div className="flex justify-end mt-0.5"><MessageTicks msg={m} mine={true} /></div>}</div>
                 </div>
               ))}
             </div>
             <div className="p-3 border-t flex items-center gap-2 bg-white">
+              <VoiceRecordButton onUpload={sendVoice} accentClass="bg-green-500 hover:bg-green-600" testid="track-voice-record-btn" />
               <input value={text} onChange={(e) => setText(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') send(); }} placeholder="اكتب رسالة..." data-testid="track-chat-input" className="flex-1 border rounded-lg px-3 py-2 text-sm" />
               <button onClick={send} data-testid="track-chat-send" className="bg-green-500 text-white rounded-lg p-2"><Send className="h-4 w-4" /></button>
             </div>

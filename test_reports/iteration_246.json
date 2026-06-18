@@ -1,0 +1,28 @@
+{
+  "summary": "Iter246 read-receipts (text + voice) fully verified. Backend 5/5 pytests PASS (/app/backend/tests/test_order_chat_read_iter246.py): (1) new text msg defaults read=false and persists; (2) POST /api/order-chat/{order_id}/read?viewer=driver marks customer-side messages read=true (with read_at) and does NOT mark driver's own messages; (3) viewer=customer does NOT mark customer's own; (4) POST /api/order-chat/{order_id}/voice creates type=voice with read=false & listened=false defaults, and POST /api/order-chat/{order_id}/listened/{id}?viewer=driver sets listened=true AND read=true with listened_at/read_at; (5) listened?viewer=customer on a customer-owned voice does NOT update (updated=0). Frontend (PublicTracking /track/252ccd0a-…): track-chat-btn → track-chat-overlay opens successfully; MessageTicks render on customer's own bubbles — counted msg-tick-sent=2, msg-tick-read=8, msg-tick-listened=3, msg-tick-delivered=3 on the existing seeded customer messages; voice-bubble=7 and voice-play-btn=7 still render correctly; sending a new text from the UI POSTs to /api/order-chat/{order_id}, the bubble renders, and msg-tick-sent count grows by 1 (new msg defaults read=false → single grey tick). Confirmed driver-side bubbles (white) have NO ticks (mine=false) — correct.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_order_chat_read_iter246.py",
+    "/app/test_reports/pytest/iter246_read_results.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "PublicTracking.jsx load(): the read-endpoint POST is correctly gated by `msgs.some(m => m.sender==='driver' && !m.read)` so it only fires when there's something to mark. This is efficient and avoids needless network. Note that in my run the call list was empty because driver-side msgs were already marked read by the backend test suite — behaviour is correct.",
+    "Server.py mark_order_chat_read & mark_order_chat_listened correctly scope updates to `sender == other` so a viewer never marks their own messages. Listened endpoint additionally requires type=voice — good (text msgs won't accidentally flip listened=true).",
+    "MessageTicks renders msg-tick-delivered when a voice message has read=true but listened=false. This is good UX (✓✓ grey = delivered/read, ✓✓ blue = listened) but the spec used 'تم الرؤية' (read) / 'تم الاستماع' (listened) only for text/voice respectively — the extra delivered grey state on voice may not be in the original spec but is a sensible refinement; please confirm with PM.",
+    "Tester loop-prevention finding for main agent: my first playwright click used force=True and the React onClick did NOT fire (overlay didn't open). Removing force=True made it work. This explains the previous testing agent's report that overlay would not open. The button itself is fine — pointerEvents=auto, opacity=1, not disabled, no overlapping element."
+  ],
+  "updated_files": ["/app/backend/tests/test_order_chat_read_iter246.py"],
+  "success_rate": {"backend": "100% (5/5)", "frontend": "100% (overlay opens, MessageTicks + voice-bubble render, send works, ticks update)"},
+  "test_credentials": "Public tracking unauthenticated. Order id 252ccd0a-e564-4a37-bb6c-974f8668169d (driver demo-drv-1 already assigned from iter245).",
+  "seed_data_creation": "Added 4 TEST_iter246_* text messages and 2 TEST_iter246_* voice messages (.webm) to order 252ccd0a-… via API + 1 TEST_iter246_send_<ts> via UI. All prefixed TEST_ for easy cleanup.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Run `pytest backend/tests/test_order_chat_read_iter246.py -v` to retest read/listened endpoints. For UI: open https://pwa-driver-track.preview.emergentagent.com/track/252ccd0a-e564-4a37-bb6c-974f8668169d → click track-chat-btn (DO NOT use force=True on this button or React onClick may not fire) → overlay should appear, customer bubbles should have a msg-tick-* element. The read endpoint is conditionally fired (only when there is at least one unread driver msg), so to observe the call you may first POST a driver text msg before opening the chat.",
+  "rca of the issue": "Main agent's earlier playwright attempt failed to open the overlay because of using force=True on the click — that path bypasses React's synthetic event system in this case. Removing force resolved it. No app code change needed."
+}

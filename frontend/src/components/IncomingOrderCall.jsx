@@ -286,7 +286,7 @@ export const IncomingOrderCall = () => {
 
   return createPortal((
     <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/80 backdrop-blur-sm" style={{ pointerEvents: 'auto' }} data-testid="incoming-order-call">
-      <div className="w-full max-w-md mx-4 rounded-3xl bg-gradient-to-b from-slate-900 to-slate-800 text-white shadow-2xl overflow-hidden border border-white/10">
+      <div className="w-full max-w-md mx-4 rounded-3xl bg-gradient-to-b from-[#070E22] to-[#0F1A3A] text-white shadow-2xl overflow-hidden border border-white/10">
         {!accepted ? (
           <div className="p-8 text-center">
             <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-amber-500/15 border border-amber-400/30 mb-4">

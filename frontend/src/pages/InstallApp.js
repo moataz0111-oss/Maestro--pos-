@@ -40,8 +40,8 @@ export default function InstallApp() {
   };
   if (isStandalone) {
     return (
-      <div className="min-h-screen bg-gray-900 flex items-center justify-center p-4">
-        <Card className="max-w-md w-full bg-gray-800 border-green-500">
+      <div className="min-h-screen bg-[#070E22] flex items-center justify-center p-4">
+        <Card className="max-w-md w-full bg-[#0F1A3A] border-green-500">
           <CardContent className="p-8 text-center">
             <div className="w-20 h-20 bg-green-500 rounded-full flex items-center justify-center mx-auto mb-4">
               <Check className="h-10 w-10 text-white" />
@@ -60,7 +60,7 @@ export default function InstallApp() {
     );
   }
   return (
-    <div className="min-h-screen bg-gray-900 p-4" dir="rtl">
+    <div className="min-h-screen bg-[#070E22] p-4" dir="rtl">
       <div className="max-w-md mx-auto">
         {/* Header */}
         <div className="text-center py-8">
@@ -86,17 +86,17 @@ export default function InstallApp() {
         )}
         {/* iOS Instructions */}
         {isIOS && (
-          <Card className="bg-gray-800 border-gray-700 mb-4">
+          <Card className="bg-[#0F1A3A] border-[#2A3A66] mb-4">
             <CardHeader>
               <CardTitle className="text-white flex items-center gap-2">
-                <div className="w-8 h-8 bg-gray-700 rounded-lg flex items-center justify-center">
+                <div className="w-8 h-8 bg-[#1A284E] rounded-lg flex items-center justify-center">
                   🍎
                 </div>
                 تثبيت على iPhone/iPad
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
-              <div className="flex items-start gap-3 p-3 bg-gray-700/50 rounded-lg">
+              <div className="flex items-start gap-3 p-3 bg-[#1A284E]/50 rounded-lg">
                 <div className="w-8 h-8 bg-blue-500 rounded-full flex items-center justify-center text-white font-bold shrink-0">
                   1
                 </div>
@@ -106,7 +106,7 @@ export default function InstallApp() {
                 </div>
               </div>
               
-              <div className="flex items-start gap-3 p-3 bg-gray-700/50 rounded-lg">
+              <div className="flex items-start gap-3 p-3 bg-[#1A284E]/50 rounded-lg">
                 <div className="w-8 h-8 bg-blue-500 rounded-full flex items-center justify-center text-white font-bold shrink-0">
                   2
                 </div>
@@ -118,7 +118,7 @@ export default function InstallApp() {
                 </div>
               </div>
               
-              <div className="flex items-start gap-3 p-3 bg-gray-700/50 rounded-lg">
+              <div className="flex items-start gap-3 p-3 bg-[#1A284E]/50 rounded-lg">
                 <div className="w-8 h-8 bg-blue-500 rounded-full flex items-center justify-center text-white font-bold shrink-0">
                   3
                 </div>
@@ -130,7 +130,7 @@ export default function InstallApp() {
                 </div>
               </div>
               
-              <div className="flex items-start gap-3 p-3 bg-gray-700/50 rounded-lg">
+              <div className="flex items-start gap-3 p-3 bg-[#1A284E]/50 rounded-lg">
                 <div className="w-8 h-8 bg-green-500 rounded-full flex items-center justify-center text-white font-bold shrink-0">
                   4
                 </div>
@@ -144,17 +144,17 @@ export default function InstallApp() {
         )}
         {/* Android Instructions */}
         {isAndroid && (
-          <Card className="bg-gray-800 border-gray-700 mb-4">
+          <Card className="bg-[#0F1A3A] border-[#2A3A66] mb-4">
             <CardHeader>
               <CardTitle className="text-white flex items-center gap-2">
-                <div className="w-8 h-8 bg-gray-700 rounded-lg flex items-center justify-center">
+                <div className="w-8 h-8 bg-[#1A284E] rounded-lg flex items-center justify-center">
                   🤖
                 </div>
                 تثبيت على Android
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
-              <div className="flex items-start gap-3 p-3 bg-gray-700/50 rounded-lg">
+              <div className="flex items-start gap-3 p-3 bg-[#1A284E]/50 rounded-lg">
                 <div className="w-8 h-8 bg-green-500 rounded-full flex items-center justify-center text-white font-bold shrink-0">
                   1
                 </div>
@@ -164,7 +164,7 @@ export default function InstallApp() {
                 </div>
               </div>
               
-              <div className="flex items-start gap-3 p-3 bg-gray-700/50 rounded-lg">
+              <div className="flex items-start gap-3 p-3 bg-[#1A284E]/50 rounded-lg">
                 <div className="w-8 h-8 bg-green-500 rounded-full flex items-center justify-center text-white font-bold shrink-0">
                   2
                 </div>
@@ -176,7 +176,7 @@ export default function InstallApp() {
                 </div>
               </div>
               
-              <div className="flex items-start gap-3 p-3 bg-gray-700/50 rounded-lg">
+              <div className="flex items-start gap-3 p-3 bg-[#1A284E]/50 rounded-lg">
                 <div className="w-8 h-8 bg-green-500 rounded-full flex items-center justify-center text-white font-bold shrink-0">
                   3
                 </div>
@@ -186,7 +186,7 @@ export default function InstallApp() {
                 </div>
               </div>
               
-              <div className="flex items-start gap-3 p-3 bg-gray-700/50 rounded-lg">
+              <div className="flex items-start gap-3 p-3 bg-[#1A284E]/50 rounded-lg">
                 <div className="w-8 h-8 bg-green-500 rounded-full flex items-center justify-center text-white font-bold shrink-0">
                   4
                 </div>
@@ -200,7 +200,7 @@ export default function InstallApp() {
         )}
         {/* Generic Instructions */}
         {!isIOS && !isAndroid && (
-          <Card className="bg-gray-800 border-gray-700 mb-4">
+          <Card className="bg-[#0F1A3A] border-[#2A3A66] mb-4">
             <CardHeader>
               <CardTitle className="text-white">تعليمات التثبيت</CardTitle>
             </CardHeader>
@@ -217,7 +217,7 @@ export default function InstallApp() {
         {/* Open Driver Page */}
         <Button 
           variant="outline"
-          className="w-full border-gray-600 text-gray-300 hover:bg-gray-800"
+          className="w-full border-gray-600 text-gray-300 hover:bg-[#0F1A3A]"
           onClick={() => window.location.href = '/driver'}
         >
           <ExternalLink className="h-5 w-5 ml-2" />

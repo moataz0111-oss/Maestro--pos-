@@ -1204,7 +1204,7 @@ export default function PurchasesPage() {
               <Label className="mb-2 block">{t('صورة الفاتورة')}</Label>
               {purchaseForm.imagePreview ? (
                 <div className="space-y-3">
-                  <div className="relative bg-gray-100 dark:bg-gray-800 rounded-lg p-2">
+                  <div className="relative bg-gray-100 dark:bg-[#0F1A3A] rounded-lg p-2">
                     <img 
                       src={purchaseForm.imagePreview} 
                       alt="فاتورة" 

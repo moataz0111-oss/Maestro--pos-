@@ -788,7 +788,7 @@ export default function BranchOrders() {
                             </div>
                             
                             {/* شريط التقدم */}
-                            <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2 mb-2">
+                            <div className="w-full bg-gray-200 dark:bg-[#1A284E] rounded-full h-2 mb-2">
                               <div 
                                 className="bg-gradient-to-r from-green-500 to-orange-500 h-2 rounded-full transition-all"
                                 style={{ width: `${((item.sold_quantity || 0) / (item.received_quantity || item.quantity || 1)) * 100}%` }}
@@ -855,7 +855,7 @@ export default function BranchOrders() {
                             </div>
                             
                             {/* شريط التقدم */}
-                            <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2 mb-2">
+                            <div className="w-full bg-gray-200 dark:bg-[#1A284E] rounded-full h-2 mb-2">
                               <div 
                                 className={`h-2 rounded-full transition-all ${
                                   item.remaining_quantity <= 10 ? 'bg-red-500' :

@@ -7363,7 +7363,7 @@ export default function WarehouseManufacturing() {
                           step="any"
                           value={item.quantity}
                           onChange={(e) => updateBranchTransferQty(idx, e.target.value)}
-                          className="w-24 bg-white dark:bg-gray-800 text-black dark:text-white border-gray-300 dark:border-gray-600"
+                          className="w-24 bg-white dark:bg-[#0F1A3A] text-black dark:text-white border-gray-300 dark:border-gray-600"
                           data-testid={`branch-transfer-qty-${idx}`}
                         />
                         <Select

@@ -84,7 +84,7 @@ export default function CallUI({
   }[callState] || '';
 
   return (
-    <div className="fixed inset-0 z-[3000] flex flex-col items-center justify-between bg-gradient-to-b from-slate-900 via-slate-800 to-slate-900 text-white py-16 px-6" data-testid="call-ui-overlay">
+    <div className="fixed inset-0 z-[3000] flex flex-col items-center justify-between bg-gradient-to-b from-[#070E22] via-[#0F1A3A] to-[#070E22] text-white py-16 px-6" data-testid="call-ui-overlay">
       <audio ref={remoteAudioRef} autoPlay playsInline />
 
       {/* أعلى: اسم الطرف الآخر والحالة */}

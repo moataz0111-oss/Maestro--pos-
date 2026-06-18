@@ -92,7 +92,7 @@ const KitchenOrderCard = ({ order, onStatusChange, onItemComplete, t }) => {
   const urgency = getUrgencyLevel(order.created_at, order.order_type);
   
   const urgencyStyles = {
-    normal: 'border-gray-700',
+    normal: 'border-[#2A3A66]',
     warning: 'border-yellow-500 animate-pulse',
     critical: 'border-red-500 animate-pulse ring-2 ring-red-500/50'
   };
@@ -107,10 +107,10 @@ const KitchenOrderCard = ({ order, onStatusChange, onItemComplete, t }) => {
   };
 
   return (
-    <Card className={`bg-gray-800 border-2 ${urgencyStyles[urgency]} transition-all hover:scale-[1.02]`}>
+    <Card className={`bg-[#0F1A3A] border-2 ${urgencyStyles[urgency]} transition-all hover:scale-[1.02]`}>
       <CardContent className="p-0">
         {/* Header */}
-        <div className={`${typeConfig.bgColor} p-4 border-b border-gray-700`}>
+        <div className={`${typeConfig.bgColor} p-4 border-b border-[#2A3A66]`}>
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
               <div className={`w-12 h-12 ${typeConfig.color} rounded-xl flex items-center justify-center shadow-lg`}>
@@ -162,7 +162,7 @@ const KitchenOrderCard = ({ order, onStatusChange, onItemComplete, t }) => {
             <div 
               key={idx} 
               className={`flex items-start gap-3 p-3 rounded-lg transition-colors ${
-                item.completed ? 'bg-green-500/10 opacity-60' : 'bg-gray-700/50 hover:bg-gray-700'
+                item.completed ? 'bg-green-500/10 opacity-60' : 'bg-[#1A284E]/50 hover:bg-[#1A284E]'
               }`}
             >
               <button
@@ -192,7 +192,7 @@ const KitchenOrderCard = ({ order, onStatusChange, onItemComplete, t }) => {
         </div>
         
         {/* Footer */}
-        <div className="p-4 border-t border-gray-700 bg-gray-900/50">
+        <div className="p-4 border-t border-[#2A3A66] bg-[#070E22]/50">
           <Button
             onClick={handleComplete}
             disabled={isUpdating}
@@ -432,14 +432,14 @@ export default function KitchenDisplay() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gray-900 flex items-center justify-center">
+      <div className="min-h-screen bg-[#070E22] flex items-center justify-center">
         <RefreshCw className="h-12 w-12 text-yellow-500 animate-spin" />
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gray-900 text-white" dir="rtl">
+    <div className="min-h-screen bg-[#070E22] text-white" dir="rtl">
       <Toaster position="top-center" richColors />
       
       {/* Offline Banner */}
@@ -456,7 +456,7 @@ export default function KitchenDisplay() {
       </audio>
       
       {/* Header */}
-      <header className="bg-gray-800 border-b border-gray-700 px-6 py-4 sticky top-0 z-50">
+      <header className="bg-[#0F1A3A] border-b border-[#2A3A66] px-6 py-4 sticky top-0 z-50">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-4">
             <Button 
@@ -480,7 +480,7 @@ export default function KitchenDisplay() {
           
           <div className="flex items-center gap-3">
             {/* Stats */}
-            <div className="flex items-center gap-4 px-4 py-2 bg-gray-700/50 rounded-xl">
+            <div className="flex items-center gap-4 px-4 py-2 bg-[#1A284E]/50 rounded-xl">
               <div className="text-center">
                 <p className="text-2xl font-bold text-yellow-400">{pendingOrders.length}</p>
                 <p className="text-xs text-gray-400">{t('new_orders')}</p>

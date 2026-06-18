@@ -7,8 +7,21 @@ import { API_URL } from '../utils/api';
 
 const API = API_URL;
 
-// مفتاح VAPID العام (يمكن تغييره في الإنتاج)
-const VAPID_PUBLIC_KEY = 'BEl62iUYgUivxIkv69yViEuiBIa-Ib9-SkvMeAtA3LFgDzkrxZJjSgSnfckjBJuBkr3qBUYIHBQFLXYp5Nksh8U';
+// مفتاح VAPID العام — يُجلب ديناميكياً من الخادم لضمان مطابقته للمفتاح الخاص
+let VAPID_PUBLIC_KEY = null;
+
+const fetchVapidKey = async () => {
+  if (VAPID_PUBLIC_KEY) return VAPID_PUBLIC_KEY;
+  try {
+    const res = await fetch(`${API}/push/vapid-public-key`);
+    const data = await res.json();
+    VAPID_PUBLIC_KEY = data.public_key || data.publicKey || data.vapid_public_key;
+    return VAPID_PUBLIC_KEY;
+  } catch (e) {
+    console.error('Failed to fetch VAPID key:', e);
+    return null;
+  }
+};
 
 /**
  * التحقق من دعم المتصفح للإشعارات
@@ -64,36 +77,42 @@ const urlBase64ToUint8Array = (base64String) => {
 /**
  * تسجيل اشتراك Push
  */
-export const subscribeToPush = async (token) => {
+export const subscribeToPush = async (token, phone = null, userType = 'admin') => {
   if (!isPushSupported()) {
     console.log('Push notifications not supported');
     return null;
   }
-  
+
   try {
     // التأكد من وجود إذن
     if (Notification.permission !== 'granted') {
       const granted = await requestNotificationPermission();
       if (!granted) return null;
     }
-    
+
+    const vapidKey = await fetchVapidKey();
+    if (!vapidKey) {
+      console.error('❌ لا يمكن جلب مفتاح VAPID من الخادم');
+      return null;
+    }
+
     // الحصول على Service Worker
     const registration = await navigator.serviceWorker.ready;
-    
+
     // التحقق من وجود اشتراك سابق
     let subscription = await registration.pushManager.getSubscription();
-    
+
     if (!subscription) {
       // إنشاء اشتراك جديد
       subscription = await registration.pushManager.subscribe({
         userVisibleOnly: true,
-        applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY)
+        applicationServerKey: urlBase64ToUint8Array(vapidKey)
       });
     }
-    
+
     // إرسال الاشتراك للخادم
     const subscriptionJson = subscription.toJSON();
-    const response = await fetch(`${API}/sync/push/subscribe`, {
+    const response = await fetch(`${API}/push/subscribe`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -102,10 +121,11 @@ export const subscribeToPush = async (token) => {
       body: JSON.stringify({
         endpoint: subscriptionJson.endpoint,
         keys: subscriptionJson.keys,
-        device_name: getDeviceName()
+        phone: phone,
+        user_type: userType
       })
     });
-    
+
     if (response.ok) {
       console.log('✅ تم تسجيل اشتراك Push بنجاح');
       return subscription;
@@ -129,16 +149,11 @@ export const unsubscribeFromPush = async (token) => {
     
     if (subscription) {
       // إلغاء من الخادم
-      await fetch(`${API}/sync/push/unsubscribe`, {
-        method: 'POST',
+      await fetch(`${API}/push/unsubscribe?endpoint=${encodeURIComponent(subscription.endpoint)}`, {
+        method: 'DELETE',
         headers: {
-          'Content-Type': 'application/json',
           'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify({
-          endpoint: subscription.endpoint,
-          keys: subscription.toJSON().keys
-        })
+        }
       });
       
       // إلغاء من المتصفح
@@ -194,7 +209,7 @@ export const showLocalNotification = async (title, body, data = {}) => {
  */
 export const getSubscribedDevices = async (token) => {
   try {
-    const response = await fetch(`${API}/sync/push/subscriptions`, {
+    const response = await fetch(`${API}/push/subscriptions`, {
       headers: {
         'Authorization': `Bearer ${token}`
       }

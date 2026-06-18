@@ -65,7 +65,7 @@ export default function PayrollPrint() {
       <div ref={printRef} className="max-w-3xl mx-auto bg-white shadow-lg print:shadow-none">
         <div className="p-8">
           {/* Header */}
-          <div className="text-center border-b-2 border-gray-800 pb-4 mb-6">
+          <div className="text-center border-b-2 border-[#2A3A66] pb-4 mb-6">
             <h1 className="text-2xl font-bold text-gray-900">كشف راتب</h1>
             <p className="text-gray-600">Payroll Statement</p>
             <p className="text-sm text-gray-500 mt-2">
@@ -218,7 +218,7 @@ export default function PayrollPrint() {
             const earned = payroll.earned_salary != null ? payroll.earned_salary : payroll.basic_salary;
             const overtime = payroll.overtime_pay || 0;
             return (
-            <div className="border-t-2 border-gray-800 pt-4 mt-6">
+            <div className="border-t-2 border-[#2A3A66] pt-4 mt-6">
             <table className="w-full">
               <tbody>
                 <tr>
@@ -246,7 +246,7 @@ export default function PayrollPrint() {
                   <td className="py-2 text-orange-600">- استقطاع السلف</td>
                   <td className="py-2 text-left text-orange-600">-{payroll.advance_deduction?.toLocaleString()} د.ع</td>
                 </tr>
-                <tr className="border-t-2 border-gray-800 font-bold text-xl">
+                <tr className="border-t-2 border-[#2A3A66] font-bold text-xl">
                   <td className="py-3">صافي الراتب</td>
                   <td className="py-3 text-left text-primary">{payroll.net_salary?.toLocaleString()} د.ع</td>
                 </tr>

@@ -302,6 +302,9 @@ export default function SuperAdmin() {
     showOwnerWallet: true,
     showExternalBranches: true,
     showComprehensiveReport: true,
+    showCaptainsManagement: true,
+    showExternalPurchasesReport: true,
+    showPriceIncreaseReport: true,
     // خيارات الإعدادات
     settingsUsers: true,
     settingsCustomers: true,
@@ -1947,6 +1950,9 @@ export default function SuperAdmin() {
       showSmartReports: true,
       showPurchasing: true,
       showBranchOrders: true,
+      showCaptainsManagement: true,
+      showExternalPurchasesReport: true,
+      showPriceIncreaseReport: true,
       settingsUsers: true,
       settingsCustomers: true,
       settingsBranches: true,
@@ -1982,6 +1988,9 @@ export default function SuperAdmin() {
       showSmartReports: false,
       showPurchasing: false,
       showBranchOrders: false,
+      showCaptainsManagement: false,
+      showExternalPurchasesReport: false,
+      showPriceIncreaseReport: false,
       settingsUsers: false,
       settingsCustomers: false,
       settingsBranches: false,
@@ -2107,13 +2116,13 @@ export default function SuperAdmin() {
   // Login/Register Screen
   if (!isAuthenticated) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-gray-900 via-purple-900 to-gray-900 flex items-center justify-center p-4" dir="rtl">
+      <div className="min-h-screen bg-gradient-to-br from-[#070E22] via-[#13245C] to-[#070E22] flex items-center justify-center p-4" dir="rtl">
         <Toaster position="top-center" richColors />
         
-        <Card className="w-full max-w-md bg-gray-800/50 border-gray-700 backdrop-blur">
+        <Card className="w-full max-w-md bg-[#0F1A3A]/50 border-[#2A3A66] backdrop-blur">
           <CardHeader className="text-center">
-            <div className="w-16 h-16 bg-purple-500/20 rounded-2xl flex items-center justify-center mx-auto mb-4">
-              <Crown className="h-8 w-8 text-purple-400" />
+            <div className="w-16 h-16 bg-amber-500/20 rounded-2xl flex items-center justify-center mx-auto mb-4">
+              <Crown className="h-8 w-8 text-amber-400" />
             </div>
             <CardTitle className="text-2xl text-white">Maestro EGP</CardTitle>
             <CardDescription className="text-gray-400">
@@ -2130,7 +2139,7 @@ export default function SuperAdmin() {
                     type="email"
                     value={loginForm.email}
                     onChange={(e) => setLoginForm({...loginForm, email: e.target.value})}
-                    className="bg-gray-700/50 border-gray-600 text-white"
+                    className="bg-[#1A284E]/50 border-[#2A3A66] text-white"
                     placeholder="owner@maestroegp.com"
                     required
                   />
@@ -2142,7 +2151,7 @@ export default function SuperAdmin() {
                     type="password"
                     value={loginForm.password}
                     onChange={(e) => setLoginForm({...loginForm, password: e.target.value})}
-                    className="bg-gray-700/50 border-gray-600 text-white"
+                    className="bg-[#1A284E]/50 border-[#2A3A66] text-white"
                     required
                   />
                 </div>
@@ -2153,13 +2162,13 @@ export default function SuperAdmin() {
                     type="password"
                     value={loginForm.secret_key}
                     onChange={(e) => setLoginForm({...loginForm, secret_key: e.target.value})}
-                    className="bg-gray-700/50 border-gray-600 text-white"
+                    className="bg-[#1A284E]/50 border-[#2A3A66] text-white"
                     placeholder="••••••••••••"
                     required
                   />
                 </div>
                 
-                <Button type="submit" className="w-full bg-purple-600 hover:bg-purple-700" disabled={loading}>
+                <Button type="submit" className="w-full bg-amber-600 hover:bg-amber-700" disabled={loading}>
                   {loading ? t('جاري الدخول...') : t('تسجيل الدخول')}
                 </Button>
                 
@@ -2168,7 +2177,7 @@ export default function SuperAdmin() {
                   <button 
                     type="button"
                     onClick={() => setShowRegister(true)}
-                    className="text-purple-400 hover:underline"
+                    className="text-amber-400 hover:underline"
                   >
                     {t('إنشاء حساب')}
                   </button>
@@ -2182,7 +2191,7 @@ export default function SuperAdmin() {
                     type="text"
                     value={registerForm.full_name}
                     onChange={(e) => setRegisterForm({...registerForm, full_name: e.target.value})}
-                    className="bg-gray-700/50 border-gray-600 text-white"
+                    className="bg-[#1A284E]/50 border-[#2A3A66] text-white"
                     required
                   />
                 </div>
@@ -2193,7 +2202,7 @@ export default function SuperAdmin() {
                     type="email"
                     value={registerForm.email}
                     onChange={(e) => setRegisterForm({...registerForm, email: e.target.value})}
-                    className="bg-gray-700/50 border-gray-600 text-white"
+                    className="bg-[#1A284E]/50 border-[#2A3A66] text-white"
                     required
                   />
                 </div>
@@ -2204,7 +2213,7 @@ export default function SuperAdmin() {
                     type="password"
                     value={registerForm.password}
                     onChange={(e) => setRegisterForm({...registerForm, password: e.target.value})}
-                    className="bg-gray-700/50 border-gray-600 text-white"
+                    className="bg-[#1A284E]/50 border-[#2A3A66] text-white"
                     required
                   />
                 </div>
@@ -2215,13 +2224,13 @@ export default function SuperAdmin() {
                     type="password"
                     value={registerForm.secret_key}
                     onChange={(e) => setRegisterForm({...registerForm, secret_key: e.target.value})}
-                    className="bg-gray-700/50 border-gray-600 text-white"
+                    className="bg-[#1A284E]/50 border-[#2A3A66] text-white"
                     placeholder={t('مفتاح السر للتسجيل')}
                     required
                   />
                 </div>
                 
-                <Button type="submit" className="w-full bg-purple-600 hover:bg-purple-700" disabled={loading}>
+                <Button type="submit" className="w-full bg-amber-600 hover:bg-amber-700" disabled={loading}>
                   {loading ? t('جاري الإنشاء...') : t('إنشاء الحساب')}
                 </Button>
                 
@@ -2230,7 +2239,7 @@ export default function SuperAdmin() {
                   <button 
                     type="button"
                     onClick={() => setShowRegister(false)}
-                    className="text-purple-400 hover:underline"
+                    className="text-amber-400 hover:underline"
                   >
                     {t('تسجيل الدخول')}
                   </button>
@@ -2246,8 +2255,8 @@ export default function SuperAdmin() {
   // مكون بطاقة العميل
   const TenantCard = ({ tenant, isDemo = false }) => (
     <div 
-      className={`flex items-center justify-between p-4 rounded-lg hover:bg-gray-700/50 transition-colors ${
-        isDemo ? 'bg-yellow-900/20 border border-yellow-700/30' : 'bg-gray-700/30'
+      className={`flex items-center justify-between p-4 rounded-lg hover:bg-[#1A284E]/50 transition-colors ${
+        isDemo ? 'bg-yellow-900/20 border border-yellow-700/30' : 'bg-[#1A284E]/30'
       }`}
     >
       <div className="flex items-center gap-4">
@@ -2306,7 +2315,7 @@ export default function SuperAdmin() {
           </Button>
           {/* الميزات والصلاحيات */}
           <Button variant="ghost" size="icon" onClick={() => openFeaturesModal(tenant)} className="hover:bg-gray-600" title={t('الميزات والصلاحيات')}>
-            <Settings className="h-4 w-4 text-purple-400" />
+            <Settings className="h-4 w-4 text-amber-400" />
           </Button>
           {/* التفاصيل */}
           <Button variant="ghost" size="icon" onClick={() => viewTenantDetails(tenant)} className="hover:bg-gray-600" title={t('التفاصيل')}>
@@ -2341,7 +2350,7 @@ export default function SuperAdmin() {
           </Button>
           {/* تصفير المخزون */}
           <Button variant="ghost" size="icon" onClick={() => { setSelectedTenant(tenant); setShowResetInventoryConfirm(true); }} className="hover:bg-gray-600" title={t('تصفير المخزون')}>
-            <Package className="h-4 w-4 text-purple-400" />
+            <Package className="h-4 w-4 text-amber-400" />
           </Button>
           {/* تصفير الموارد البشرية */}
           <Button variant="ghost" size="icon" onClick={() => { setSelectedTenant(tenant); setShowResetHRConfirm(true); }} className="hover:bg-gray-600" title={t('تصفير الموارد البشرية')} data-testid={`reset-hr-${tenant.id}`}>
@@ -2358,11 +2367,12 @@ export default function SuperAdmin() {
 
   // Main Dashboard
   return (
-    <div className="min-h-screen bg-gray-900 text-white" dir="rtl">
+    <div className="min-h-screen bg-[#070E22] text-white" dir="rtl">
       <Toaster position="top-center" richColors />
       
       {/* Header */}
-      <header className="bg-gray-800 border-b border-gray-700 px-6 py-4 sticky top-0 z-50">
+      <header className="relative bg-[#0F1A3A] border-b-2 border-amber-500/40 px-6 py-4 sticky top-0 z-50">
+        <div className="absolute inset-x-0 top-0 h-0.5 bg-gradient-to-r from-transparent via-amber-400/70 to-transparent" />
         <div className="max-w-7xl mx-auto flex items-center justify-between">
           <div className="flex items-center gap-4">
             <Button 
@@ -2373,8 +2383,8 @@ export default function SuperAdmin() {
             >
               <ArrowLeft className="h-5 w-5" />
             </Button>
-            <div className="w-10 h-10 bg-purple-500/20 rounded-xl flex items-center justify-center">
-              <Crown className="h-5 w-5 text-purple-400" />
+            <div className="w-10 h-10 bg-amber-500/20 rounded-xl flex items-center justify-center">
+              <Crown className="h-5 w-5 text-amber-400" />
             </div>
             <div>
               <h1 className="text-xl font-bold">Maestro EGP</h1>
@@ -2401,10 +2411,10 @@ export default function SuperAdmin() {
               
               {/* قائمة الإشعارات المنسدلة */}
               {showNotifications && (
-                <div className="absolute left-0 top-12 w-96 bg-gray-800 border border-gray-700 rounded-xl shadow-2xl z-50 overflow-hidden">
-                  <div className="p-4 border-b border-gray-700 flex items-center justify-between">
+                <div className="absolute left-0 top-12 w-96 bg-[#0F1A3A] border border-[#2A3A66] rounded-xl shadow-2xl z-50 overflow-hidden">
+                  <div className="p-4 border-b border-[#2A3A66] flex items-center justify-between">
                     <h3 className="font-bold flex items-center gap-2">
-                      <Bell className="h-4 w-4 text-purple-400" />
+                      <Bell className="h-4 w-4 text-amber-400" />
                       {t('الإشعارات')}
                     </h3>
                     <div className="flex items-center gap-2">
@@ -2412,7 +2422,7 @@ export default function SuperAdmin() {
                         <Settings className="h-4 w-4" />
                       </Button>
                       {unreadCount > 0 && (
-                        <Button size="sm" variant="ghost" onClick={markAllNotificationsAsRead} className="text-xs text-purple-400">
+                        <Button size="sm" variant="ghost" onClick={markAllNotificationsAsRead} className="text-xs text-amber-400">
                           {t('تعليم الكل كمقروء')}
                         </Button>
                       )}
@@ -2421,7 +2431,7 @@ export default function SuperAdmin() {
                   
                   {/* تنبيه الاشتراكات المنتهية */}
                   {(expiringSubscriptions.expiring_soon.length > 0 || expiringSubscriptions.already_expired.length > 0) && (
-                    <div className="p-3 bg-orange-500/10 border-b border-gray-700">
+                    <div className="p-3 bg-orange-500/10 border-b border-[#2A3A66]">
                       <p className="text-xs text-orange-400 flex items-center gap-2">
                         <AlertTriangle className="h-4 w-4" />
                         {expiringSubscriptions.already_expired.length > 0 && (
@@ -2445,7 +2455,7 @@ export default function SuperAdmin() {
                         {notifications.map((notification) => (
                           <div 
                             key={notification.id} 
-                            className={`p-3 hover:bg-gray-700/50 cursor-pointer ${!notification.is_read ? 'bg-purple-500/5' : ''}`}
+                            className={`p-3 hover:bg-[#1A284E]/50 cursor-pointer ${!notification.is_read ? 'bg-amber-500/5' : ''}`}
                             onClick={() => markNotificationAsRead(notification.id)}
                           >
                             <div className="flex items-start justify-between">
@@ -2474,7 +2484,7 @@ export default function SuperAdmin() {
                   </ScrollArea>
                   
                   {notifications.length > 0 && (
-                    <div className="p-3 border-t border-gray-700">
+                    <div className="p-3 border-t border-[#2A3A66]">
                       <Button size="sm" variant="ghost" onClick={clearAllNotifications} className="w-full text-red-400 hover:text-red-300">
                         <Trash2 className="h-4 w-4 ml-2" />
                         {t('حذف جميع الإشعارات')}
@@ -2492,7 +2502,7 @@ export default function SuperAdmin() {
               variant="outline" 
               size="sm" 
               onClick={() => setShowInvoiceSettings(true)}
-              className="border-gray-600 text-gray-300 hover:bg-gray-700"
+              className="border-[#2A3A66] text-gray-300 hover:bg-[#1A284E]"
             >
               <Palette className="h-4 w-4 ml-2" />
               {t('الهوية البصرية')}
@@ -2508,21 +2518,21 @@ export default function SuperAdmin() {
       <main className="max-w-7xl mx-auto p-6 space-y-6">
         {/* Stats Cards */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-          <Card className="bg-gray-800/50 border-gray-700">
+          <Card className="bg-[#0F1A3A]/50 border-[#2A3A66]">
             <CardContent className="p-6">
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm text-gray-400">{t('إجمالي العملاء')}</p>
                   <p className="text-3xl font-bold mt-1">{stats?.total_tenants || 0}</p>
                 </div>
-                <div className="w-12 h-12 bg-purple-500/20 rounded-xl flex items-center justify-center">
-                  <Building2 className="h-6 w-6 text-purple-400" />
+                <div className="w-12 h-12 bg-amber-500/20 rounded-xl flex items-center justify-center">
+                  <Building2 className="h-6 w-6 text-amber-400" />
                 </div>
               </div>
             </CardContent>
           </Card>
           
-          <Card className="bg-gray-800/50 border-gray-700">
+          <Card className="bg-[#0F1A3A]/50 border-[#2A3A66]">
             <CardContent className="p-6">
               <div className="flex items-center justify-between">
                 <div>
@@ -2536,7 +2546,7 @@ export default function SuperAdmin() {
             </CardContent>
           </Card>
           
-          <Card className="bg-gray-800/50 border-gray-700">
+          <Card className="bg-[#0F1A3A]/50 border-[#2A3A66]">
             <CardContent className="p-6">
               <div className="flex items-center justify-between">
                 <div>
@@ -2550,7 +2560,7 @@ export default function SuperAdmin() {
             </CardContent>
           </Card>
           
-          <Card className="bg-gray-800/50 border-gray-700">
+          <Card className="bg-[#0F1A3A]/50 border-[#2A3A66]">
             <CardContent className="p-6">
               <div className="flex items-center justify-between">
                 <div>
@@ -2567,7 +2577,7 @@ export default function SuperAdmin() {
 
         {/* Subscription Stats */}
         {stats?.subscription_stats && Object.keys(stats.subscription_stats).length > 0 && (
-          <Card className="bg-gray-800/50 border-gray-700">
+          <Card className="bg-[#0F1A3A]/50 border-[#2A3A66]">
             <CardHeader>
               <CardTitle className="text-lg">{t('الاشتراكات')}</CardTitle>
             </CardHeader>
@@ -2581,8 +2591,8 @@ export default function SuperAdmin() {
                   <p className="text-2xl font-bold text-blue-400">{stats.subscription_stats.basic || 0}</p>
                   <p className="text-sm text-gray-400">{t('أساسي')}</p>
                 </div>
-                <div className="text-center p-4 bg-purple-500/10 rounded-lg">
-                  <p className="text-2xl font-bold text-purple-400">{stats.subscription_stats.premium || 0}</p>
+                <div className="text-center p-4 bg-amber-500/10 rounded-lg">
+                  <p className="text-2xl font-bold text-amber-400">{stats.subscription_stats.premium || 0}</p>
                   <p className="text-sm text-gray-400">{t('مميز')}</p>
                 </div>
               </div>
@@ -2591,7 +2601,7 @@ export default function SuperAdmin() {
         )}
 
         {/* Currency Reports Card - تقارير العملات */}
-        <Card className="bg-gray-800/50 border-gray-700">
+        <Card className="bg-[#0F1A3A]/50 border-[#2A3A66]">
           <CardHeader className="flex flex-row items-center justify-between">
             <CardTitle className="text-lg flex items-center gap-2">
               <Coins className="h-5 w-5 text-yellow-400" />
@@ -2605,10 +2615,10 @@ export default function SuperAdmin() {
                   fetchSalesSummary(value);
                 }}
               >
-                <SelectTrigger className="w-40 bg-gray-700/50 border-gray-600">
+                <SelectTrigger className="w-40 bg-[#1A284E]/50 border-[#2A3A66]">
                   <SelectValue placeholder={t('اختر العملة')} />
                 </SelectTrigger>
-                <SelectContent className="bg-gray-800 border-gray-700">
+                <SelectContent className="bg-[#0F1A3A] border-[#2A3A66]">
                   <SelectItem value="USD">🇺🇸 {t('دولار أمريكي')}</SelectItem>
                   <SelectItem value="IQD">🇮🇶 {t('دينار عراقي')}</SelectItem>
                   <SelectItem value="SAR">🇸🇦 {t('ريال سعودي')}</SelectItem>
@@ -2623,7 +2633,7 @@ export default function SuperAdmin() {
                 onClick={fetchLiveRates} 
                 variant="outline" 
                 size="sm" 
-                className="border-gray-600 gap-2"
+                className="border-[#2A3A66] gap-2"
                 disabled={loadingLiveRates}
               >
                 {loadingLiveRates ? <Loader2 className="h-4 w-4 animate-spin" /> : <ArrowUpDown className="h-4 w-4" />}
@@ -2633,7 +2643,7 @@ export default function SuperAdmin() {
                 onClick={() => setShowCurrencySettingsModal(true)} 
                 variant="outline" 
                 size="icon" 
-                className="border-gray-600"
+                className="border-[#2A3A66]"
               >
                 <Settings className="h-4 w-4" />
               </Button>
@@ -2642,7 +2652,7 @@ export default function SuperAdmin() {
           <CardContent>
             {loadingSalesSummary ? (
               <div className="flex items-center justify-center py-12">
-                <Loader2 className="h-8 w-8 animate-spin text-purple-500" />
+                <Loader2 className="h-8 w-8 animate-spin text-amber-500" />
                 <span className="mr-3 text-gray-400">{t('جاري تحميل البيانات...')}</span>
               </div>
             ) : salesSummary ? (
@@ -2677,14 +2687,14 @@ export default function SuperAdmin() {
                     </div>
                   </div>
                   
-                  <div className="bg-gradient-to-br from-purple-500/20 to-purple-600/10 rounded-xl p-4 border border-purple-500/20">
+                  <div className="bg-gradient-to-br from-amber-500/20 to-amber-600/10 rounded-xl p-4 border border-amber-500/20">
                     <div className="flex items-center gap-3">
-                      <div className="p-2 bg-purple-500/20 rounded-lg">
-                        <Building2 className="h-5 w-5 text-purple-400" />
+                      <div className="p-2 bg-amber-500/20 rounded-lg">
+                        <Building2 className="h-5 w-5 text-amber-400" />
                       </div>
                       <div>
                         <p className="text-sm text-gray-400">{t('العملاء النشطين')}</p>
-                        <p className="text-2xl font-bold text-purple-400">
+                        <p className="text-2xl font-bold text-amber-400">
                           {salesSummary.active_tenants || 0}
                         </p>
                       </div>
@@ -2694,14 +2704,14 @@ export default function SuperAdmin() {
 
                 {/* تفاصيل المبيعات حسب العميل */}
                 {salesSummary.tenant_sales && salesSummary.tenant_sales.length > 0 && (
-                  <div className="bg-gray-700/30 rounded-xl p-4">
+                  <div className="bg-[#1A284E]/30 rounded-xl p-4">
                     <h3 className="font-bold mb-4 flex items-center gap-2">
                       <BarChart3 className="h-5 w-5 text-blue-400" />
                       {t('المبيعات حسب العميل')} ({t('بـ')} {currencySettings.preferred_currency})
                     </h3>
                     <div className="space-y-2">
                       {salesSummary.tenant_sales.map((tenant, idx) => (
-                        <div key={idx} className="flex items-center justify-between bg-gray-800/50 rounded-lg p-3">
+                        <div key={idx} className="flex items-center justify-between bg-[#0F1A3A]/50 rounded-lg p-3">
                           <div className="flex items-center gap-3">
                             <span className="text-gray-400">{idx + 1}.</span>
                             <span className="font-medium">{lang === 'en' ? (tenant.name_en || tenant.name) : (tenant.name || tenant.name_en)}</span>
@@ -2722,7 +2732,7 @@ export default function SuperAdmin() {
 
                 {/* أسعار الصرف الحية */}
                 {liveRates && liveRates.rates && (
-                  <div className="bg-gray-700/30 rounded-xl p-4">
+                  <div className="bg-[#1A284E]/30 rounded-xl p-4">
                     <h3 className="font-bold mb-4 flex items-center gap-2">
                       <ArrowUpDown className="h-5 w-5 text-yellow-400" />
                       {t('أسعار الصرف')} {liveRates.success ? t('(حية)') : t('(ثابتة)')}
@@ -2734,7 +2744,7 @@ export default function SuperAdmin() {
                     </h3>
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                       {Object.entries(liveRates.rates).map(([code, rates]) => (
-                        <div key={code} className="bg-gray-800/50 rounded-lg p-3 text-center">
+                        <div key={code} className="bg-[#0F1A3A]/50 rounded-lg p-3 text-center">
                           <p className="text-lg font-bold">{code}</p>
                           <p className="text-sm text-gray-400">
                             1 USD = {rates.rate_from_usd?.toFixed(code === 'IQD' ? 0 : 4) || '-'}
@@ -2755,7 +2765,7 @@ export default function SuperAdmin() {
         </Card>
 
         {/* Tenants List */}
-        <Card className="bg-gray-800/50 border-gray-700">
+        <Card className="bg-[#0F1A3A]/50 border-[#2A3A66]">
           <CardHeader className="flex flex-row items-center justify-between">
             <CardTitle className="text-lg">{t('إدارة العملاء')}</CardTitle>
             <div className="flex items-center gap-3">
@@ -2765,13 +2775,13 @@ export default function SuperAdmin() {
                   placeholder={t('بحث...')}
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  className="pr-10 bg-gray-700/50 border-gray-600 w-64"
+                  className="pr-10 bg-[#1A284E]/50 border-[#2A3A66] w-64"
                 />
               </div>
-              <Button onClick={() => fetchData()} variant="outline" size="icon" className="border-gray-600">
+              <Button onClick={() => fetchData()} variant="outline" size="icon" className="border-[#2A3A66]">
                 <RefreshCw className="h-4 w-4" />
               </Button>
-              <Button onClick={() => setShowNewTenant(true)} className="bg-purple-600 hover:bg-purple-700 gap-2">
+              <Button onClick={() => setShowNewTenant(true)} className="bg-amber-600 hover:bg-amber-700 gap-2">
                 <Plus className="h-4 w-4" />
                 {t('عميل جديد')}
               </Button>
@@ -2780,7 +2790,7 @@ export default function SuperAdmin() {
           <CardContent>
             {/* تبويبات لفصل العملاء الفعليين عن الحسابات التجريبية */}
             <Tabs defaultValue="active" className="w-full" onValueChange={(v) => { if (v === 'security' && !securityLog) fetchSecurityLog(); }}>
-              <TabsList className="grid w-full grid-cols-5 mb-4 bg-gray-700/50">
+              <TabsList className="grid w-full grid-cols-5 mb-4 bg-[#1A284E]/50">
                 <TabsTrigger value="active" className="data-[state=active]:bg-green-600">
                   <Users className="h-4 w-4 ml-2" />
                   {t('العملاء')} ({tenants.filter(t => !t.is_demo && t.subscription_type !== 'demo').length})
@@ -2789,7 +2799,7 @@ export default function SuperAdmin() {
                   <Play className="h-4 w-4 ml-2" />
                   {t('التجريبية')} ({tenants.filter(t => t.is_demo || t.subscription_type === 'demo').length})
                 </TabsTrigger>
-                <TabsTrigger value="subscriptions" className="data-[state=active]:bg-purple-600">
+                <TabsTrigger value="subscriptions" className="data-[state=active]:bg-amber-600">
                   <Calendar className="h-4 w-4 ml-2" />
                   {t('الاشتراكات')}
                 </TabsTrigger>
@@ -2878,13 +2888,13 @@ export default function SuperAdmin() {
                         </div>
                       </div>
                       
-                      <div className="bg-gradient-to-br from-purple-500/20 to-purple-600/10 rounded-xl p-4 border border-purple-500/20">
+                      <div className="bg-gradient-to-br from-amber-500/20 to-amber-600/10 rounded-xl p-4 border border-amber-500/20">
                         <div className="flex items-center gap-3">
-                          <div className="p-2 bg-purple-500/20 rounded-lg">
-                            <TrendingUp className="h-5 w-5 text-purple-400" />
+                          <div className="p-2 bg-amber-500/20 rounded-lg">
+                            <TrendingUp className="h-5 w-5 text-amber-400" />
                           </div>
                           <div>
-                            <p className="text-2xl font-bold text-purple-400">
+                            <p className="text-2xl font-bold text-amber-400">
                               {devicesStats.totalMaxDevices > 0 
                                 ? Math.round((devicesStats.activeDevices / devicesStats.totalMaxDevices) * 100) 
                                 : 0}%
@@ -2896,7 +2906,7 @@ export default function SuperAdmin() {
                     </div>
 
                     {/* قائمة العملاء مع أجهزتهم */}
-                    <div className="bg-gray-700/30 rounded-xl p-4">
+                    <div className="bg-[#1A284E]/30 rounded-xl p-4">
                       <h3 className="font-bold text-lg mb-4 flex items-center gap-2">
                         <Monitor className="h-5 w-5 text-orange-400" />
                         {t('إدارة أجهزة العملاء')}
@@ -2909,7 +2919,7 @@ export default function SuperAdmin() {
                           tenants.map(tenant => (
                             <div 
                               key={tenant.id}
-                              className="flex items-center justify-between p-4 bg-gray-800/50 rounded-lg hover:bg-gray-700/50 transition-colors"
+                              className="flex items-center justify-between p-4 bg-[#0F1A3A]/50 rounded-lg hover:bg-[#1A284E]/50 transition-colors"
                             >
                               <div className="flex items-center gap-4">
                                 <div className={`w-3 h-3 rounded-full ${tenant.is_active ? 'bg-green-500' : 'bg-red-500'}`} />
@@ -2938,7 +2948,7 @@ export default function SuperAdmin() {
                                     <Button 
                                       variant="outline" 
                                       size="sm" 
-                                      className="h-8 w-8 p-0 border-gray-600"
+                                      className="h-8 w-8 p-0 border-[#2A3A66]"
                                       onClick={() => {
                                         const current = tenant.max_devices || 5;
                                         if (current > 1) updateMaxDevices(tenant.id, current - 1);
@@ -2951,7 +2961,7 @@ export default function SuperAdmin() {
                                     <Button 
                                       variant="outline" 
                                       size="sm" 
-                                      className="h-8 w-8 p-0 border-gray-600"
+                                      className="h-8 w-8 p-0 border-[#2A3A66]"
                                       onClick={() => updateMaxDevices(tenant.id, (tenant.max_devices || 5) + 1)}
                                     >
                                       <Plus className="h-4 w-4" />
@@ -2982,7 +2992,7 @@ export default function SuperAdmin() {
 
                     {/* قائمة كل الأجهزة */}
                     {allDevices.length > 0 && (
-                      <div className="bg-gray-700/30 rounded-xl p-4">
+                      <div className="bg-[#1A284E]/30 rounded-xl p-4">
                         <h3 className="font-bold text-lg mb-4 flex items-center gap-2">
                           <Layers className="h-5 w-5 text-blue-400" />
                           {t('جميع الأجهزة المرخصة')} ({allDevices.length})
@@ -2991,7 +3001,7 @@ export default function SuperAdmin() {
                         <div className="overflow-x-auto">
                           <table className="w-full">
                             <thead>
-                              <tr className="border-b border-gray-600">
+                              <tr className="border-b border-[#2A3A66]">
                                 <th className="text-right py-3 px-4 text-gray-400 font-medium">{t('العميل')}</th>
                                 <th className="text-right py-3 px-4 text-gray-400 font-medium">{t('معرف الجهاز')}</th>
                                 <th className="text-right py-3 px-4 text-gray-400 font-medium">{t('تاريخ التفعيل')}</th>
@@ -3001,10 +3011,10 @@ export default function SuperAdmin() {
                             </thead>
                             <tbody>
                               {allDevices.map((device, idx) => (
-                                <tr key={idx} className="border-b border-gray-700/50 hover:bg-gray-700/30">
+                                <tr key={idx} className="border-b border-[#2A3A66]/50 hover:bg-[#1A284E]/30">
                                   <td className="py-3 px-4">{device.tenantName}</td>
                                   <td className="py-3 px-4">
-                                    <code className="text-xs bg-gray-800 px-2 py-1 rounded">
+                                    <code className="text-xs bg-[#0F1A3A] px-2 py-1 rounded">
                                       {device.device_id?.slice(0, 25)}...
                                     </code>
                                   </td>
@@ -3041,7 +3051,7 @@ export default function SuperAdmin() {
               <TabsContent value="subscriptions">
                 {loadingDashboard ? (
                   <div className="flex items-center justify-center py-12">
-                    <Loader2 className="h-8 w-8 animate-spin text-purple-500" />
+                    <Loader2 className="h-8 w-8 animate-spin text-amber-500" />
                     <span className="mr-3 text-gray-400">{t('جاري تحميل البيانات...')}</span>
                   </div>
                 ) : subscriptionsDashboard ? (
@@ -3084,13 +3094,13 @@ export default function SuperAdmin() {
                         </div>
                       </div>
                       
-                      <div className="bg-gradient-to-br from-purple-500/20 to-purple-600/10 rounded-xl p-4 border border-purple-500/20">
+                      <div className="bg-gradient-to-br from-amber-500/20 to-amber-600/10 rounded-xl p-4 border border-amber-500/20">
                         <div className="flex items-center gap-3">
-                          <div className="p-2 bg-purple-500/20 rounded-lg">
-                            <DollarSign className="h-5 w-5 text-purple-400" />
+                          <div className="p-2 bg-amber-500/20 rounded-lg">
+                            <DollarSign className="h-5 w-5 text-amber-400" />
                           </div>
                           <div>
-                            <p className="text-2xl font-bold text-purple-400">
+                            <p className="text-2xl font-bold text-amber-400">
                               ${(subscriptionsDashboard.expected_revenue.total_monthly || 0).toLocaleString('en-US')}
                             </p>
                             <p className="text-xs text-gray-400">{t('إيراد شهري متوقع')}</p>
@@ -3101,7 +3111,7 @@ export default function SuperAdmin() {
 
                     <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                       {/* الاشتراكات القريبة من الانتهاء */}
-                      <div className="bg-gray-700/30 rounded-xl p-4">
+                      <div className="bg-[#1A284E]/30 rounded-xl p-4">
                         <div className="flex items-center gap-2 mb-4">
                           <Clock className="h-5 w-5 text-orange-400" />
                           <h3 className="font-bold">{t('قريبة من الانتهاء')}</h3>
@@ -3115,7 +3125,7 @@ export default function SuperAdmin() {
                         ) : (
                           <div className="space-y-2">
                             {subscriptionsDashboard.expiring_soon_list.map((tenant) => (
-                              <div key={tenant.id} className="bg-gray-800/50 rounded-lg p-3 flex items-center justify-between">
+                              <div key={tenant.id} className="bg-[#0F1A3A]/50 rounded-lg p-3 flex items-center justify-between">
                                 <div>
                                   <p className="font-medium">{lang === 'en' ? (tenant.name_en || tenant.name) : (tenant.name || tenant.name_en)}</p>
                                   <p className="text-xs text-gray-400">{tenant.owner_email}</p>
@@ -3134,7 +3144,7 @@ export default function SuperAdmin() {
                       </div>
                       
                       {/* الاشتراكات المنتهية */}
-                      <div className="bg-gray-700/30 rounded-xl p-4">
+                      <div className="bg-[#1A284E]/30 rounded-xl p-4">
                         <div className="flex items-center gap-2 mb-4">
                           <AlertTriangle className="h-5 w-5 text-red-400" />
                           <h3 className="font-bold">{t('اشتراكات منتهية')}</h3>
@@ -3145,7 +3155,7 @@ export default function SuperAdmin() {
                         ) : (
                           <div className="space-y-2">
                             {subscriptionsDashboard.expired_list.map((tenant) => (
-                              <div key={tenant.id} className="bg-gray-800/50 rounded-lg p-3 flex items-center justify-between">
+                              <div key={tenant.id} className="bg-[#0F1A3A]/50 rounded-lg p-3 flex items-center justify-between">
                                 <div>
                                   <p className="font-medium">{lang === 'en' ? (tenant.name_en || tenant.name) : (tenant.name || tenant.name_en)}</p>
                                   <p className="text-xs text-gray-400">{tenant.owner_email}</p>
@@ -3164,7 +3174,7 @@ export default function SuperAdmin() {
 
                     {/* الإيرادات المتوقعة من التجديدات */}
                     {subscriptionsDashboard.expected_revenue.details.length > 0 && (
-                      <div className="bg-gradient-to-br from-green-500/10 to-purple-500/10 rounded-xl p-4 border border-green-500/20">
+                      <div className="bg-gradient-to-br from-green-500/10 to-amber-500/10 rounded-xl p-4 border border-green-500/20">
                         <div className="flex items-center gap-2 mb-4">
                           <TrendingUp className="h-5 w-5 text-green-400" />
                           <h3 className="font-bold">{t('الإيرادات المتوقعة من التجديدات')}</h3>
@@ -3175,7 +3185,7 @@ export default function SuperAdmin() {
                         
                         <div className="space-y-2">
                           {subscriptionsDashboard.expected_revenue.details.map((item, idx) => (
-                            <div key={idx} className="bg-gray-800/30 rounded-lg p-3 flex items-center justify-between">
+                            <div key={idx} className="bg-[#0F1A3A]/30 rounded-lg p-3 flex items-center justify-between">
                               <div>
                                 <p className="font-medium">{item.tenant_name}</p>
                                 <p className="text-xs text-gray-400">
@@ -3197,7 +3207,7 @@ export default function SuperAdmin() {
                     )}
 
                     {/* إحصائيات أنواع الاشتراكات وأسعارها */}
-                    <div className="bg-gray-700/30 rounded-xl p-4">
+                    <div className="bg-[#1A284E]/30 rounded-xl p-4">
                       <div className="flex items-center justify-between mb-4">
                         <div className="flex items-center gap-2">
                           <BarChart3 className="h-5 w-5 text-blue-400" />
@@ -3207,7 +3217,7 @@ export default function SuperAdmin() {
                           size="sm" 
                           variant="outline" 
                           onClick={() => setShowPricesModal(true)}
-                          className="border-purple-500 text-purple-400 hover:bg-purple-500/20"
+                          className="border-amber-500 text-amber-400 hover:bg-amber-500/20"
                         >
                           <DollarSign className="h-4 w-4 ml-1" />
                           {t('تعديل الأسعار')}
@@ -3221,10 +3231,10 @@ export default function SuperAdmin() {
                             gold: { emoji: '🥇', label: t('ذهبية'), bgColor: 'bg-yellow-900/30', textColor: 'text-yellow-400', borderColor: 'border-yellow-600/50' },
                             silver: { emoji: '🥈', label: t('فضية'), bgColor: 'bg-gray-600/30', textColor: 'text-gray-300', borderColor: 'border-gray-500/50' },
                             bronze: { emoji: '🥉', label: t('برونزية'), bgColor: 'bg-amber-900/30', textColor: 'text-amber-400', borderColor: 'border-amber-700/50' },
-                            demo: { emoji: '📋', label: t('عرض'), bgColor: 'bg-gray-800/30', textColor: 'text-gray-400', borderColor: 'border-gray-600/50' },
+                            demo: { emoji: '📋', label: t('عرض'), bgColor: 'bg-[#0F1A3A]/30', textColor: 'text-gray-400', borderColor: 'border-[#2A3A66]/50' },
                             trial: { emoji: '⏳', label: t('تجريبي'), bgColor: 'bg-blue-900/30', textColor: 'text-blue-400', borderColor: 'border-blue-600/50' }
                           };
-                          const config = typeConfig[type] || { emoji: '❓', label: t('غير محدد'), bgColor: 'bg-gray-800/30', textColor: 'text-gray-400', borderColor: 'border-gray-600/50' };
+                          const config = typeConfig[type] || { emoji: '❓', label: t('غير محدد'), bgColor: 'bg-[#0F1A3A]/30', textColor: 'text-gray-400', borderColor: 'border-[#2A3A66]/50' };
                           
                           return (
                             <div key={type} className={`${config.bgColor} rounded-lg p-3 text-center border ${config.borderColor}`}>
@@ -3270,14 +3280,14 @@ export default function SuperAdmin() {
                       <Shield className="h-5 w-5" />
                       <span className="font-bold">{t('السجل الأمني وإدارة العملاء')}</span>
                     </div>
-                    <Button onClick={fetchSecurityLog} variant="outline" size="sm" className="border-gray-600" data-testid="security-log-refresh">
+                    <Button onClick={fetchSecurityLog} variant="outline" size="sm" className="border-[#2A3A66]" data-testid="security-log-refresh">
                       <RefreshCw className={`h-4 w-4 ${loadingSecurityLog ? 'animate-spin' : ''}`} />
                     </Button>
                   </div>
 
                   {/* بطاقات الملخص */}
                   <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
-                    <div className="bg-gray-800/60 border border-gray-700 rounded-lg p-3 text-center">
+                    <div className="bg-[#0F1A3A]/60 border border-[#2A3A66] rounded-lg p-3 text-center">
                       <p className="text-xs text-gray-400">{t('إجمالي العملاء')}</p>
                       <p className="text-2xl font-bold text-white">{securityLog?.summary?.total ?? '—'}</p>
                     </div>
@@ -3301,7 +3311,7 @@ export default function SuperAdmin() {
 
                   {/* تنبيهات الاشتراك */}
                   {((securityLog?.expired?.length || 0) + (securityLog?.expiring_soon?.length || 0)) > 0 && (
-                    <div className="bg-gray-800/50 border border-gray-700 rounded-lg p-3">
+                    <div className="bg-[#0F1A3A]/50 border border-[#2A3A66] rounded-lg p-3">
                       <div className="flex items-center gap-2 mb-2 text-amber-400">
                         <AlertTriangle className="h-4 w-4" />
                         <span className="font-bold text-sm">{t('تنبيهات الاشتراك')}</span>
@@ -3324,7 +3334,7 @@ export default function SuperAdmin() {
                   )}
 
                   {/* سجل أحداث الأمان */}
-                  <div className="bg-gray-800/50 border border-gray-700 rounded-lg p-3">
+                  <div className="bg-[#0F1A3A]/50 border border-[#2A3A66] rounded-lg p-3">
                     <div className="flex items-center gap-2 mb-2 text-gray-300">
                       <Activity className="h-4 w-4" />
                       <span className="font-bold text-sm">{t('أحداث الأمان (دخول / خروج / انتحال)')}</span>
@@ -3346,7 +3356,7 @@ export default function SuperAdmin() {
                             : type === 'impersonation' ? t('انتحال هوية')
                             : type;
                           return (
-                            <div key={ev.id || idx} className="flex items-center justify-between gap-2 bg-gray-900/40 border border-gray-700/50 rounded px-3 py-2" data-testid={`security-event-${idx}`}>
+                            <div key={ev.id || idx} className="flex items-center justify-between gap-2 bg-[#070E22]/40 border border-[#2A3A66]/50 rounded px-3 py-2" data-testid={`security-event-${idx}`}>
                               <div className="flex items-center gap-2 min-w-0">
                                 {icon}
                                 <div className="min-w-0">
@@ -3377,7 +3387,7 @@ export default function SuperAdmin() {
 
       {/* Modal: إنشاء عميل جديد */}
       <Dialog open={showNewTenant} onOpenChange={setShowNewTenant}>
-        <DialogContent className="bg-gray-800 border-gray-700 text-white max-w-2xl">
+        <DialogContent className="bg-[#0F1A3A] border-[#2A3A66] text-white max-w-2xl">
           <DialogHeader>
             <DialogTitle className="text-xl">{t('إنشاء عميل جديد')}</DialogTitle>
           </DialogHeader>
@@ -3390,7 +3400,7 @@ export default function SuperAdmin() {
                   type="button"
                   variant={newTenantForm.is_demo ? "outline" : "default"}
                   className={`h-20 flex flex-col items-center justify-center gap-2 ${
-                    !newTenantForm.is_demo ? 'bg-green-600 hover:bg-green-700 border-green-500' : 'border-gray-600 hover:bg-gray-700'
+                    !newTenantForm.is_demo ? 'bg-green-600 hover:bg-green-700 border-green-500' : 'border-[#2A3A66] hover:bg-[#1A284E]'
                   }`}
                   onClick={() => setNewTenantForm({...newTenantForm, is_demo: false, subscription_type: 'trial'})}
                 >
@@ -3401,7 +3411,7 @@ export default function SuperAdmin() {
                   type="button"
                   variant={newTenantForm.is_demo ? "default" : "outline"}
                   className={`h-20 flex flex-col items-center justify-center gap-2 ${
-                    newTenantForm.is_demo ? 'bg-yellow-600 hover:bg-yellow-700 border-yellow-500' : 'border-gray-600 hover:bg-gray-700'
+                    newTenantForm.is_demo ? 'bg-yellow-600 hover:bg-yellow-700 border-yellow-500' : 'border-[#2A3A66] hover:bg-[#1A284E]'
                   }`}
                   onClick={() => setNewTenantForm({...newTenantForm, is_demo: true, subscription_type: 'demo'})}
                 >
@@ -3418,7 +3428,7 @@ export default function SuperAdmin() {
                   placeholder={t('مثال: مطعم السعادة')}
                   value={newTenantForm.name}
                   onChange={(e) => setNewTenantForm({...newTenantForm, name: e.target.value})}
-                  className="bg-gray-700/50 border-gray-600"
+                  className="bg-[#1A284E]/50 border-[#2A3A66]"
                 />
               </div>
               <div className="space-y-2">
@@ -3427,7 +3437,7 @@ export default function SuperAdmin() {
                   placeholder="saada-restaurant"
                   value={newTenantForm.slug}
                   onChange={(e) => setNewTenantForm({...newTenantForm, slug: e.target.value.toLowerCase().replace(/\s+/g, '-')})}
-                  className="bg-gray-700/50 border-gray-600"
+                  className="bg-[#1A284E]/50 border-[#2A3A66]"
                   dir="ltr"
                 />
               </div>
@@ -3440,7 +3450,7 @@ export default function SuperAdmin() {
                   placeholder={t('مثال: أحمد محمد')}
                   value={newTenantForm.owner_name}
                   onChange={(e) => setNewTenantForm({...newTenantForm, owner_name: e.target.value})}
-                  className="bg-gray-700/50 border-gray-600"
+                  className="bg-[#1A284E]/50 border-[#2A3A66]"
                 />
               </div>
               <div className="space-y-2">
@@ -3450,7 +3460,7 @@ export default function SuperAdmin() {
                   placeholder="example@email.com"
                   value={newTenantForm.owner_email}
                   onChange={(e) => setNewTenantForm({...newTenantForm, owner_email: e.target.value})}
-                  className="bg-gray-700/50 border-gray-600"
+                  className="bg-[#1A284E]/50 border-[#2A3A66]"
                   dir="ltr"
                 />
               </div>
@@ -3463,7 +3473,7 @@ export default function SuperAdmin() {
                   placeholder="009647xxxxxxxxx"
                   value={newTenantForm.owner_phone}
                   onChange={(e) => setNewTenantForm({...newTenantForm, owner_phone: e.target.value})}
-                  className="bg-gray-700/50 border-gray-600"
+                  className="bg-[#1A284E]/50 border-[#2A3A66]"
                   dir="ltr"
                 />
               </div>
@@ -3473,7 +3483,7 @@ export default function SuperAdmin() {
                   value={newTenantForm.subscription_type} 
                   onValueChange={(v) => setNewTenantForm({...newTenantForm, subscription_type: v})}
                 >
-                  <SelectTrigger className="bg-gray-700/50 border-gray-600">
+                  <SelectTrigger className="bg-[#1A284E]/50 border-[#2A3A66]">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -3495,10 +3505,10 @@ export default function SuperAdmin() {
                   value={String(newTenantForm.subscription_duration)} 
                   onValueChange={(v) => setNewTenantForm({...newTenantForm, subscription_duration: parseInt(v)})}
                 >
-                  <SelectTrigger className="bg-gray-700/50 border-gray-600">
+                  <SelectTrigger className="bg-[#1A284E]/50 border-[#2A3A66]">
                     <SelectValue />
                   </SelectTrigger>
-                  <SelectContent className="bg-gray-800 border-gray-700">
+                  <SelectContent className="bg-[#0F1A3A] border-[#2A3A66]">
                     <SelectItem value="1">{t('شهر واحد')}</SelectItem>
                     <SelectItem value="3">{t('3 أشهر')}</SelectItem>
                     <SelectItem value="6">{t('6 أشهر')}</SelectItem>
@@ -3516,7 +3526,7 @@ export default function SuperAdmin() {
                   min="1"
                   value={newTenantForm.max_branches}
                   onChange={(e) => setNewTenantForm({...newTenantForm, max_branches: parseInt(e.target.value) || 1})}
-                  className="bg-gray-700/50 border-gray-600"
+                  className="bg-[#1A284E]/50 border-[#2A3A66]"
                 />
               </div>
               <div className="space-y-2">
@@ -3526,16 +3536,16 @@ export default function SuperAdmin() {
                   min="1"
                   value={newTenantForm.max_users}
                   onChange={(e) => setNewTenantForm({...newTenantForm, max_users: parseInt(e.target.value) || 5})}
-                  className="bg-gray-700/50 border-gray-600"
+                  className="bg-[#1A284E]/50 border-[#2A3A66]"
                 />
               </div>
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setShowNewTenant(false)} className="border-gray-600">
+            <Button variant="outline" onClick={() => setShowNewTenant(false)} className="border-[#2A3A66]">
               {t('إلغاء')}
             </Button>
-            <Button onClick={createTenant} className="bg-purple-600 hover:bg-purple-700">
+            <Button onClick={createTenant} className="bg-amber-600 hover:bg-amber-700">
               <Plus className="h-4 w-4 ml-2" />
               {t('إنشاء العميل')}
             </Button>
@@ -3545,7 +3555,7 @@ export default function SuperAdmin() {
 
       {/* Modal: تأكيد الحذف */}
       <Dialog open={showDeleteConfirm} onOpenChange={setShowDeleteConfirm}>
-        <DialogContent className="bg-gray-800 border-gray-700 text-white">
+        <DialogContent className="bg-[#0F1A3A] border-[#2A3A66] text-white">
           <DialogHeader>
             <DialogTitle className="text-xl text-red-400">{t('تأكيد الحذف النهائي')}</DialogTitle>
           </DialogHeader>
@@ -3558,7 +3568,7 @@ export default function SuperAdmin() {
             </p>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setShowDeleteConfirm(false)} className="border-gray-600">
+            <Button variant="outline" onClick={() => setShowDeleteConfirm(false)} className="border-[#2A3A66]">
               {t('إلغاء')}
             </Button>
             <Button onClick={deleteTenant} className="bg-red-600 hover:bg-red-700">
@@ -3571,7 +3581,7 @@ export default function SuperAdmin() {
 
       {/* Modal: إعادة تعيين كلمة المرور */}
       <Dialog open={showResetPassword} onOpenChange={setShowResetPassword}>
-        <DialogContent className="bg-gray-800 border-gray-700 text-white">
+        <DialogContent className="bg-[#0F1A3A] border-[#2A3A66] text-white">
           <DialogHeader>
             <DialogTitle className="text-xl">{t('إعادة تعيين كلمة المرور')}</DialogTitle>
           </DialogHeader>
@@ -3586,12 +3596,12 @@ export default function SuperAdmin() {
                 placeholder={t('أدخل كلمة المرور الجديدة')}
                 value={newPassword}
                 onChange={(e) => setNewPassword(e.target.value)}
-                className="bg-gray-700/50 border-gray-600"
+                className="bg-[#1A284E]/50 border-[#2A3A66]"
               />
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setShowResetPassword(false)} className="border-gray-600">
+            <Button variant="outline" onClick={() => setShowResetPassword(false)} className="border-[#2A3A66]">
               {t('إلغاء')}
             </Button>
             <Button onClick={resetPassword} className="bg-yellow-600 hover:bg-yellow-700">
@@ -3604,7 +3614,7 @@ export default function SuperAdmin() {
 
       {/* Modal: تعديل العميل */}
       <Dialog open={showEditTenant} onOpenChange={setShowEditTenant}>
-        <DialogContent className="bg-gray-800 border-gray-700 text-white max-w-2xl">
+        <DialogContent className="bg-[#0F1A3A] border-[#2A3A66] text-white max-w-2xl">
           <DialogHeader>
             <DialogTitle className="text-xl">{t('تعديل بيانات العميل')}</DialogTitle>
           </DialogHeader>
@@ -3615,7 +3625,7 @@ export default function SuperAdmin() {
                 <Input
                   value={editTenantForm.name}
                   onChange={(e) => setEditTenantForm({...editTenantForm, name: e.target.value})}
-                  className="bg-gray-700/50 border-gray-600"
+                  className="bg-[#1A284E]/50 border-[#2A3A66]"
                 />
               </div>
               <div className="space-y-2">
@@ -3624,7 +3634,7 @@ export default function SuperAdmin() {
                   value={editTenantForm.subscription_type} 
                   onValueChange={(v) => setEditTenantForm({...editTenantForm, subscription_type: v})}
                 >
-                  <SelectTrigger className="bg-gray-700/50 border-gray-600">
+                  <SelectTrigger className="bg-[#1A284E]/50 border-[#2A3A66]">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -3643,7 +3653,7 @@ export default function SuperAdmin() {
                 <Input
                   value={editTenantForm.owner_name}
                   onChange={(e) => setEditTenantForm({...editTenantForm, owner_name: e.target.value})}
-                  className="bg-gray-700/50 border-gray-600"
+                  className="bg-[#1A284E]/50 border-[#2A3A66]"
                 />
               </div>
               <div className="space-y-2">
@@ -3651,7 +3661,7 @@ export default function SuperAdmin() {
                 <Input
                   value={editTenantForm.owner_email}
                   onChange={(e) => setEditTenantForm({...editTenantForm, owner_email: e.target.value})}
-                  className="bg-gray-700/50 border-gray-600"
+                  className="bg-[#1A284E]/50 border-[#2A3A66]"
                   dir="ltr"
                 />
               </div>
@@ -3662,7 +3672,7 @@ export default function SuperAdmin() {
                 <Input
                   value={editTenantForm.owner_phone}
                   onChange={(e) => setEditTenantForm({...editTenantForm, owner_phone: e.target.value})}
-                  className="bg-gray-700/50 border-gray-600"
+                  className="bg-[#1A284E]/50 border-[#2A3A66]"
                   dir="ltr"
                 />
               </div>
@@ -3673,7 +3683,7 @@ export default function SuperAdmin() {
                     type="button"
                     variant="outline"
                     size="icon"
-                    className="h-10 w-10 border-gray-600 hover:bg-red-500/20"
+                    className="h-10 w-10 border-[#2A3A66] hover:bg-red-500/20"
                     onClick={() => setEditTenantForm({...editTenantForm, max_branches: Math.max(1, (editTenantForm.max_branches || 1) - 1)})}
                   >
                     <Minus className="h-4 w-4" />
@@ -3682,14 +3692,14 @@ export default function SuperAdmin() {
                     type="number"
                     value={editTenantForm.max_branches}
                     onChange={(e) => setEditTenantForm({...editTenantForm, max_branches: parseInt(e.target.value) || 1})}
-                    className="bg-gray-700/50 border-gray-600 text-center"
+                    className="bg-[#1A284E]/50 border-[#2A3A66] text-center"
                     min="1"
                   />
                   <Button
                     type="button"
                     variant="outline"
                     size="icon"
-                    className="h-10 w-10 border-gray-600 hover:bg-green-500/20"
+                    className="h-10 w-10 border-[#2A3A66] hover:bg-green-500/20"
                     onClick={() => setEditTenantForm({...editTenantForm, max_branches: (editTenantForm.max_branches || 1) + 1})}
                   >
                     <Plus className="h-4 w-4" />
@@ -3705,7 +3715,7 @@ export default function SuperAdmin() {
                     type="button"
                     variant="outline"
                     size="icon"
-                    className="h-10 w-10 border-gray-600 hover:bg-red-500/20"
+                    className="h-10 w-10 border-[#2A3A66] hover:bg-red-500/20"
                     onClick={() => setEditTenantForm({...editTenantForm, max_users: Math.max(1, (editTenantForm.max_users || 5) - 1)})}
                   >
                     <Minus className="h-4 w-4" />
@@ -3714,14 +3724,14 @@ export default function SuperAdmin() {
                     type="number"
                     value={editTenantForm.max_users}
                     onChange={(e) => setEditTenantForm({...editTenantForm, max_users: parseInt(e.target.value) || 1})}
-                    className="bg-gray-700/50 border-gray-600 text-center"
+                    className="bg-[#1A284E]/50 border-[#2A3A66] text-center"
                     min="1"
                   />
                   <Button
                     type="button"
                     variant="outline"
                     size="icon"
-                    className="h-10 w-10 border-gray-600 hover:bg-green-500/20"
+                    className="h-10 w-10 border-[#2A3A66] hover:bg-green-500/20"
                     onClick={() => setEditTenantForm({...editTenantForm, max_users: (editTenantForm.max_users || 5) + 1})}
                   >
                     <Plus className="h-4 w-4" />
@@ -3731,7 +3741,7 @@ export default function SuperAdmin() {
             </div>
 
             {/* قسم إدارة الاشتراك والتجديد */}
-            <div className="border-t border-gray-700 pt-4 mt-4">
+            <div className="border-t border-[#2A3A66] pt-4 mt-4">
               <h3 className="text-sm font-bold text-yellow-400 mb-3 flex items-center gap-2">
                 <Calendar className="h-4 w-4" />
                 {t('إدارة الاشتراك')}
@@ -3743,7 +3753,7 @@ export default function SuperAdmin() {
                     type="date"
                     value={editTenantForm.subscription_end}
                     onChange={(e) => setEditTenantForm({...editTenantForm, subscription_end: e.target.value})}
-                    className="bg-gray-700/50 border-gray-600"
+                    className="bg-[#1A284E]/50 border-[#2A3A66]"
                   />
                   {editTenantForm.subscription_end && (
                     <p className="text-xs text-gray-400">
@@ -3761,7 +3771,7 @@ export default function SuperAdmin() {
                       type="button"
                       variant="outline"
                       size="icon"
-                      className="h-10 w-10 border-gray-600 hover:bg-red-500/20"
+                      className="h-10 w-10 border-[#2A3A66] hover:bg-red-500/20"
                       onClick={() => setEditTenantForm({...editTenantForm, extend_months: Math.max(0, (editTenantForm.extend_months || 0) - 1)})}
                     >
                       <Minus className="h-4 w-4" />
@@ -3770,14 +3780,14 @@ export default function SuperAdmin() {
                       type="number"
                       value={editTenantForm.extend_months}
                       onChange={(e) => setEditTenantForm({...editTenantForm, extend_months: parseInt(e.target.value) || 0})}
-                      className="bg-gray-700/50 border-gray-600 text-center"
+                      className="bg-[#1A284E]/50 border-[#2A3A66] text-center"
                       min="0"
                     />
                     <Button
                       type="button"
                       variant="outline"
                       size="icon"
-                      className="h-10 w-10 border-gray-600 hover:bg-green-500/20"
+                      className="h-10 w-10 border-[#2A3A66] hover:bg-green-500/20"
                       onClick={() => setEditTenantForm({...editTenantForm, extend_months: (editTenantForm.extend_months || 0) + 1})}
                     >
                       <Plus className="h-4 w-4" />
@@ -3796,7 +3806,7 @@ export default function SuperAdmin() {
                   type="button"
                   variant="outline"
                   size="sm"
-                  className="border-gray-600 hover:bg-blue-500/20"
+                  className="border-[#2A3A66] hover:bg-blue-500/20"
                   onClick={() => setEditTenantForm({...editTenantForm, extend_months: 1})}
                 >
                   +1 {t('شهر')}
@@ -3805,7 +3815,7 @@ export default function SuperAdmin() {
                   type="button"
                   variant="outline"
                   size="sm"
-                  className="border-gray-600 hover:bg-blue-500/20"
+                  className="border-[#2A3A66] hover:bg-blue-500/20"
                   onClick={() => setEditTenantForm({...editTenantForm, extend_months: 3})}
                 >
                   +3 {t('أشهر')}
@@ -3814,7 +3824,7 @@ export default function SuperAdmin() {
                   type="button"
                   variant="outline"
                   size="sm"
-                  className="border-gray-600 hover:bg-blue-500/20"
+                  className="border-[#2A3A66] hover:bg-blue-500/20"
                   onClick={() => setEditTenantForm({...editTenantForm, extend_months: 6})}
                 >
                   +6 {t('أشهر')}
@@ -3823,7 +3833,7 @@ export default function SuperAdmin() {
                   type="button"
                   variant="outline"
                   size="sm"
-                  className="border-gray-600 hover:bg-green-500/20"
+                  className="border-[#2A3A66] hover:bg-green-500/20"
                   onClick={() => setEditTenantForm({...editTenantForm, extend_months: 12})}
                 >
                   +1 {t('سنة')}
@@ -3832,7 +3842,7 @@ export default function SuperAdmin() {
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setShowEditTenant(false)} className="border-gray-600">
+            <Button variant="outline" onClick={() => setShowEditTenant(false)} className="border-[#2A3A66]">
               {t('إلغاء')}
             </Button>
             <Button onClick={updateTenant} className="bg-blue-600 hover:bg-blue-700">
@@ -3845,7 +3855,7 @@ export default function SuperAdmin() {
 
       {/* Modal: العرض المباشر */}
       <Dialog open={showLiveView} onOpenChange={setShowLiveView}>
-        <DialogContent className="bg-gray-800 border-gray-700 text-white max-w-4xl">
+        <DialogContent className="bg-[#0F1A3A] border-[#2A3A66] text-white max-w-4xl">
           <DialogHeader>
             <DialogTitle className="text-xl flex items-center gap-2">
               <Activity className="h-5 w-5 text-green-400" />
@@ -3854,27 +3864,27 @@ export default function SuperAdmin() {
           </DialogHeader>
           <div className="py-4 space-y-4">
             <div className="grid grid-cols-4 gap-4">
-              <Card className="bg-gray-700/50 border-gray-600">
+              <Card className="bg-[#1A284E]/50 border-[#2A3A66]">
                 <CardContent className="p-4 text-center">
                   <p className="text-2xl font-bold text-green-400">{liveStats?.orders_today || 0}</p>
                   <p className="text-sm text-gray-400">{t('طلبات اليوم')}</p>
                 </CardContent>
               </Card>
-              <Card className="bg-gray-700/50 border-gray-600">
+              <Card className="bg-[#1A284E]/50 border-[#2A3A66]">
                 <CardContent className="p-4 text-center">
                   <p className="text-2xl font-bold text-blue-400">{liveStats?.sales_today?.toFixed(2) || '0.00'}</p>
                   <p className="text-sm text-gray-400">{t('مبيعات اليوم')}</p>
                 </CardContent>
               </Card>
-              <Card className="bg-gray-700/50 border-gray-600">
+              <Card className="bg-[#1A284E]/50 border-[#2A3A66]">
                 <CardContent className="p-4 text-center">
                   <p className="text-2xl font-bold text-yellow-400">{liveStats?.active_orders || 0}</p>
                   <p className="text-sm text-gray-400">{t('طلبات نشطة')}</p>
                 </CardContent>
               </Card>
-              <Card className="bg-gray-700/50 border-gray-600">
+              <Card className="bg-[#1A284E]/50 border-[#2A3A66]">
                 <CardContent className="p-4 text-center">
-                  <p className="text-2xl font-bold text-purple-400">{liveStats?.users_count || 0}</p>
+                  <p className="text-2xl font-bold text-amber-400">{liveStats?.users_count || 0}</p>
                   <p className="text-sm text-gray-400">{t('المستخدمين')}</p>
                 </CardContent>
               </Card>
@@ -3885,7 +3895,7 @@ export default function SuperAdmin() {
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setShowLiveView(false)} className="border-gray-600">
+            <Button variant="outline" onClick={() => setShowLiveView(false)} className="border-[#2A3A66]">
               {t('إغلاق')}
             </Button>
           </DialogFooter>
@@ -3894,11 +3904,11 @@ export default function SuperAdmin() {
 
       {/* Modal: إدارة الميزات والصلاحيات */}
       <Dialog open={showFeaturesModal} onOpenChange={setShowFeaturesModal}>
-        <DialogContent className="bg-gray-800 border-gray-700 text-white max-w-4xl max-h-[85vh] overflow-hidden">
+        <DialogContent className="bg-[#0F1A3A] border-[#2A3A66] text-white max-w-4xl max-h-[85vh] overflow-hidden">
           <DialogHeader>
             <div className="flex items-center justify-between">
               <DialogTitle className="text-xl flex items-center gap-2">
-                <Settings className="h-5 w-5 text-purple-400" />
+                <Settings className="h-5 w-5 text-amber-400" />
                 {t('صلاحيات الميزات')} - {selectedTenant?.name}
               </DialogTitle>
               <div className="flex items-center gap-2">
@@ -3942,7 +3952,7 @@ export default function SuperAdmin() {
               <>
                 {/* الميزات الأساسية - جميع أيقونات الإجراءات السريعة */}
                 <div className="space-y-3">
-                  <h3 className="font-bold text-green-400 flex items-center gap-2 border-b border-gray-700 pb-2">
+                  <h3 className="font-bold text-green-400 flex items-center gap-2 border-b border-[#2A3A66] pb-2">
                     <Layers className="h-4 w-4" />
                     {t('الميزات الأساسية')}
                   </h3>
@@ -3969,8 +3979,11 @@ export default function SuperAdmin() {
                       { key: 'showReservations', label: t('الحجوزات'), icon: CalendarDays },
                       { key: 'showSettings', label: t('الإعدادات'), icon: Settings },
                       { key: 'showExternalBranches', label: t('الفروع الخارجية'), icon: Building2 },
+                      { key: 'showCaptainsManagement', label: t('إدارة الطلبات والكابتن'), icon: Users },
+                      { key: 'showExternalPurchasesReport', label: t('تقرير المشتريات الخارجية'), icon: ShoppingCart },
+                      { key: 'showPriceIncreaseReport', label: t('تقرير زيادة الأسعار'), icon: TrendingUp },
                     ].map(item => (
-                      <label key={item.key} className="flex items-center justify-between p-2 bg-gray-700/30 rounded-lg hover:bg-gray-700/50 cursor-pointer">
+                      <label key={item.key} className="flex items-center justify-between p-2 bg-[#1A284E]/30 rounded-lg hover:bg-[#1A284E]/50 cursor-pointer">
                         <div className="flex items-center gap-2">
                           <item.icon className="h-4 w-4 text-gray-400" />
                           <span className="text-xs">{item.label}</span>
@@ -3986,7 +3999,7 @@ export default function SuperAdmin() {
 
                 {/* ميزات الإعدادات - جميع تبويبات الإعدادات */}
                 <div className="space-y-3">
-                  <h3 className="font-bold text-yellow-400 flex items-center gap-2 border-b border-gray-700 pb-2">
+                  <h3 className="font-bold text-yellow-400 flex items-center gap-2 border-b border-[#2A3A66] pb-2">
                     <Settings className="h-4 w-4" />
                     {t('ميزات الإعدادات')}
                   </h3>
@@ -4008,7 +4021,7 @@ export default function SuperAdmin() {
                       { key: 'settingsInventory', label: t('إعدادات المخزون'), icon: Boxes },
                       { key: 'settingsPayment', label: t('الدفع الإلكتروني'), icon: CreditCard },
                     ].map(item => (
-                      <label key={item.key} className="flex items-center justify-between p-2 bg-gray-700/30 rounded-lg hover:bg-gray-700/50 cursor-pointer">
+                      <label key={item.key} className="flex items-center justify-between p-2 bg-[#1A284E]/30 rounded-lg hover:bg-[#1A284E]/50 cursor-pointer">
                         <div className="flex items-center gap-2">
                           <item.icon className="h-4 w-4 text-gray-400" />
                           <span className="text-xs">{item.label}</span>
@@ -4024,7 +4037,7 @@ export default function SuperAdmin() {
 
                 {/* ميزات التقارير */}
                 <div className="space-y-3">
-                  <h3 className="font-bold text-purple-400 flex items-center gap-2 border-b border-gray-700 pb-2">
+                  <h3 className="font-bold text-amber-400 flex items-center gap-2 border-b border-[#2A3A66] pb-2">
                     <BarChart3 className="h-4 w-4" />
                     {t('ميزات التقارير')}
                   </h3>
@@ -4034,7 +4047,7 @@ export default function SuperAdmin() {
                       { key: 'showComprehensiveReport', label: t('التقرير الشامل'), icon: FileText },
                 { key: 'showBreakEvenReport', label: t('تقرير تحليل الربح الصافي والتكاليف'), icon: TrendingUp },
                     ].map(item => (
-                      <label key={item.key} className="flex items-center justify-between p-3 bg-gray-700/30 rounded-lg hover:bg-gray-700/50 cursor-pointer">
+                      <label key={item.key} className="flex items-center justify-between p-3 bg-[#1A284E]/30 rounded-lg hover:bg-[#1A284E]/50 cursor-pointer">
                         <div className="flex items-center gap-2">
                           <item.icon className="h-5 w-5 text-gray-400" />
                           <span className="text-sm">{item.label}</span>
@@ -4051,10 +4064,10 @@ export default function SuperAdmin() {
             )}
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setShowFeaturesModal(false)} className="border-gray-600">
+            <Button variant="outline" onClick={() => setShowFeaturesModal(false)} className="border-[#2A3A66]">
               {t('إلغاء')}
             </Button>
-            <Button onClick={saveTenantFeatures} className="bg-purple-600 hover:bg-purple-700">
+            <Button onClick={saveTenantFeatures} className="bg-amber-600 hover:bg-amber-700">
               <Check className="h-4 w-4 ml-2" />
               {t('حفظ الميزات')}
             </Button>
@@ -4064,7 +4077,7 @@ export default function SuperAdmin() {
 
       {/* Modal: تأكيد تصفير المبيعات */}
       <Dialog open={showResetSalesConfirm} onOpenChange={setShowResetSalesConfirm}>
-        <DialogContent className="bg-gray-800 border-gray-700 text-white">
+        <DialogContent className="bg-[#0F1A3A] border-[#2A3A66] text-white">
           <DialogHeader>
             <DialogTitle className="text-xl text-orange-400">{t('تأكيد تصفير المبيعات')}</DialogTitle>
           </DialogHeader>
@@ -4077,7 +4090,7 @@ export default function SuperAdmin() {
             </p>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setShowResetSalesConfirm(false)} className="border-gray-600">
+            <Button variant="outline" onClick={() => setShowResetSalesConfirm(false)} className="border-[#2A3A66]">
               {t('إلغاء')}
             </Button>
             <Button onClick={resetTenantSales} className="bg-orange-600 hover:bg-orange-700">
@@ -4090,7 +4103,7 @@ export default function SuperAdmin() {
 
       {/* Modal: تصفير فرع محدد */}
       <Dialog open={showResetBranchDialog} onOpenChange={(open) => { setShowResetBranchDialog(open); if (!open) { setConfirmBranchReset(null); setTenantBranches([]); }}}>
-        <DialogContent className="bg-gray-800 border-gray-700 text-white max-w-lg" data-testid="reset-branch-dialog">
+        <DialogContent className="bg-[#0F1A3A] border-[#2A3A66] text-white max-w-lg" data-testid="reset-branch-dialog">
           <DialogHeader>
             <DialogTitle className="text-xl text-pink-400 flex items-center gap-2">
               <Store className="h-5 w-5" />
@@ -4115,7 +4128,7 @@ export default function SuperAdmin() {
                 {tenantBranches.map((b) => (
                   <div
                     key={b.id}
-                    className="flex items-center justify-between p-3 bg-gray-900 rounded-lg border border-gray-700"
+                    className="flex items-center justify-between p-3 bg-[#070E22] rounded-lg border border-[#2A3A66]"
                     data-testid={`branch-row-${b.id}`}
                   >
                     <div>
@@ -4128,7 +4141,7 @@ export default function SuperAdmin() {
                           size="sm"
                           variant="outline"
                           onClick={() => setConfirmBranchReset(null)}
-                          className="border-gray-600 text-xs h-8"
+                          className="border-[#2A3A66] text-xs h-8"
                           data-testid={`cancel-reset-${b.id}`}
                         >
                           {t('إلغاء')}
@@ -4163,7 +4176,7 @@ export default function SuperAdmin() {
             )}
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setShowResetBranchDialog(false)} className="border-gray-600">
+            <Button variant="outline" onClick={() => setShowResetBranchDialog(false)} className="border-[#2A3A66]">
               {t('إغلاق')}
             </Button>
           </DialogFooter>
@@ -4173,23 +4186,23 @@ export default function SuperAdmin() {
 
       {/* Modal: تأكيد تصفير المخزون */}
       <Dialog open={showResetInventoryConfirm} onOpenChange={setShowResetInventoryConfirm}>
-        <DialogContent className="bg-gray-800 border-gray-700 text-white">
+        <DialogContent className="bg-[#0F1A3A] border-[#2A3A66] text-white">
           <DialogHeader>
-            <DialogTitle className="text-xl text-purple-400">{t('تأكيد تصفير المخزون')}</DialogTitle>
+            <DialogTitle className="text-xl text-amber-400">{t('تأكيد تصفير المخزون')}</DialogTitle>
           </DialogHeader>
           <div className="py-4">
             <p className="text-gray-300">
               {t('هل أنت متأكد من تصفير مخزون')} <span className="font-bold text-white">{selectedTenant?.name}</span>؟
             </p>
-            <p className="text-purple-400 text-sm mt-2">
+            <p className="text-amber-400 text-sm mt-2">
               {t('سيتم حذف جميع بيانات المخزون والمشتريات. هذا الإجراء لا يمكن التراجع عنه.')}
             </p>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setShowResetInventoryConfirm(false)} className="border-gray-600">
+            <Button variant="outline" onClick={() => setShowResetInventoryConfirm(false)} className="border-[#2A3A66]">
               {t('إلغاء')}
             </Button>
-            <Button onClick={resetTenantInventory} className="bg-purple-600 hover:bg-purple-700">
+            <Button onClick={resetTenantInventory} className="bg-amber-600 hover:bg-amber-700">
               <Package className="h-4 w-4 ml-2" />
               {t('تصفير المخزون')}
             </Button>
@@ -4199,7 +4212,7 @@ export default function SuperAdmin() {
 
       {/* Modal: تأكيد تصفير الموارد البشرية */}
       <Dialog open={showResetHRConfirm} onOpenChange={setShowResetHRConfirm}>
-        <DialogContent className="bg-gray-800 border-gray-700 text-white">
+        <DialogContent className="bg-[#0F1A3A] border-[#2A3A66] text-white">
           <DialogHeader>
             <DialogTitle className="text-xl text-teal-400">{t('تأكيد تصفير الموارد البشرية')}</DialogTitle>
           </DialogHeader>
@@ -4212,7 +4225,7 @@ export default function SuperAdmin() {
             </p>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setShowResetHRConfirm(false)} className="border-gray-600">
+            <Button variant="outline" onClick={() => setShowResetHRConfirm(false)} className="border-[#2A3A66]">
               {t('إلغاء')}
             </Button>
             <Button onClick={resetTenantHR} className="bg-teal-600 hover:bg-teal-700" data-testid="confirm-reset-hr-btn">
@@ -4225,10 +4238,10 @@ export default function SuperAdmin() {
 
       {/* Modal: تفاصيل العميل */}
       <Dialog open={showTenantDetails} onOpenChange={setShowTenantDetails}>
-        <DialogContent className="bg-gray-800 border-gray-700 text-white max-w-3xl">
+        <DialogContent className="bg-[#0F1A3A] border-[#2A3A66] text-white max-w-3xl">
           <DialogHeader>
             <DialogTitle className="text-xl flex items-center gap-2">
-              <Building2 className="h-5 w-5 text-purple-400" />
+              <Building2 className="h-5 w-5 text-amber-400" />
               {t('تفاصيل العميل')} - {selectedTenant?.name}
             </DialogTitle>
           </DialogHeader>
@@ -4238,20 +4251,20 @@ export default function SuperAdmin() {
                 {/* معلومات أساسية */}
                 <div className="grid grid-cols-2 gap-6">
                   <div className="space-y-4">
-                    <h3 className="font-bold text-green-400 flex items-center gap-2 border-b border-gray-700 pb-2">
+                    <h3 className="font-bold text-green-400 flex items-center gap-2 border-b border-[#2A3A66] pb-2">
                       <Building2 className="h-4 w-4" />
                       {t('معلومات المطعم')}
                     </h3>
                     <div className="space-y-3">
-                      <div className="flex justify-between items-center p-2 bg-gray-700/30 rounded">
+                      <div className="flex justify-between items-center p-2 bg-[#1A284E]/30 rounded">
                         <span className="text-gray-400">{t('اسم المطعم')}</span>
                         <span className="font-medium">{tenantDetails.tenant?.name || selectedTenant?.name || '-'}</span>
                       </div>
-                      <div className="flex justify-between items-center p-2 bg-gray-700/30 rounded">
+                      <div className="flex justify-between items-center p-2 bg-[#1A284E]/30 rounded">
                         <span className="text-gray-400">{t('المعرف (Slug)')}</span>
                         <span className="font-medium text-blue-400" dir="ltr">/{tenantDetails.tenant?.slug || selectedTenant?.slug || '-'}</span>
                       </div>
-                      <div className="flex justify-between items-center p-2 bg-gray-700/30 rounded">
+                      <div className="flex justify-between items-center p-2 bg-[#1A284E]/30 rounded">
                         <span className="text-gray-400">{t('نوع الاشتراك')}</span>
                         <Badge className={
                           (tenantDetails.tenant?.subscription_type || selectedTenant?.subscription_type) === 'gold' ? 'bg-yellow-500/20 text-yellow-400' :
@@ -4265,7 +4278,7 @@ export default function SuperAdmin() {
                            (tenantDetails.tenant?.subscription_type || selectedTenant?.subscription_type) === 'demo' ? t('تجريبي') : t('فترة تجريبية')}
                         </Badge>
                       </div>
-                      <div className="flex justify-between items-center p-2 bg-gray-700/30 rounded">
+                      <div className="flex justify-between items-center p-2 bg-[#1A284E]/30 rounded">
                         <span className="text-gray-400">{t('الحالة')}</span>
                         <Badge className={(tenantDetails.tenant?.is_active !== false && selectedTenant?.is_active !== false) ? 'bg-green-500/20 text-green-400' : 'bg-red-500/20 text-red-400'}>
                           {(tenantDetails.tenant?.is_active !== false && selectedTenant?.is_active !== false) ? t('نشط') : t('معطل')}
@@ -4275,24 +4288,24 @@ export default function SuperAdmin() {
                   </div>
                   
                   <div className="space-y-4">
-                    <h3 className="font-bold text-blue-400 flex items-center gap-2 border-b border-gray-700 pb-2">
+                    <h3 className="font-bold text-blue-400 flex items-center gap-2 border-b border-[#2A3A66] pb-2">
                       <User className="h-4 w-4" />
                       {t('معلومات المالك')}
                     </h3>
                     <div className="space-y-3">
-                      <div className="flex justify-between items-center p-2 bg-gray-700/30 rounded">
+                      <div className="flex justify-between items-center p-2 bg-[#1A284E]/30 rounded">
                         <span className="text-gray-400">{t('اسم المالك')}</span>
                         <span className="font-medium">{tenantDetails.tenant?.owner_name || selectedTenant?.owner_name || '-'}</span>
                       </div>
-                      <div className="flex justify-between items-center p-2 bg-gray-700/30 rounded">
+                      <div className="flex justify-between items-center p-2 bg-[#1A284E]/30 rounded">
                         <span className="text-gray-400">{t('البريد الإلكتروني')}</span>
                         <span className="font-medium text-blue-400" dir="ltr">{tenantDetails.tenant?.owner_email || selectedTenant?.owner_email || '-'}</span>
                       </div>
-                      <div className="flex justify-between items-center p-2 bg-gray-700/30 rounded">
+                      <div className="flex justify-between items-center p-2 bg-[#1A284E]/30 rounded">
                         <span className="text-gray-400">{t('رقم الهاتف')}</span>
                         <span className="font-medium" dir="ltr">{tenantDetails.tenant?.owner_phone || selectedTenant?.owner_phone || '-'}</span>
                       </div>
-                      <div className="flex justify-between items-center p-2 bg-gray-700/30 rounded">
+                      <div className="flex justify-between items-center p-2 bg-[#1A284E]/30 rounded">
                         <span className="text-gray-400">{t('تاريخ الإنشاء')}</span>
                         <span className="font-medium">
                           {(tenantDetails.tenant?.created_at || selectedTenant?.created_at) 
@@ -4306,26 +4319,26 @@ export default function SuperAdmin() {
 
                 {/* إحصائيات وحدود */}
                 <div className="space-y-4">
-                  <h3 className="font-bold text-yellow-400 flex items-center gap-2 border-b border-gray-700 pb-2">
+                  <h3 className="font-bold text-yellow-400 flex items-center gap-2 border-b border-[#2A3A66] pb-2">
                     <BarChart3 className="h-4 w-4" />
                     {t('الحدود والإحصائيات')}
                   </h3>
                   <div className="grid grid-cols-4 gap-4">
-                    <div className="text-center p-4 bg-gray-700/30 rounded-lg">
+                    <div className="text-center p-4 bg-[#1A284E]/30 rounded-lg">
                       <p className="text-2xl font-bold text-blue-400">{tenantDetails.stats?.branches_count || tenantDetails.branches?.length || 0}</p>
                       <p className="text-sm text-gray-400">{t('الفروع')}</p>
                       <p className="text-xs text-gray-500 mt-1">{t('الحد')}: {tenantDetails.tenant?.max_branches || selectedTenant?.max_branches || '-'}</p>
                     </div>
-                    <div className="text-center p-4 bg-gray-700/30 rounded-lg">
+                    <div className="text-center p-4 bg-[#1A284E]/30 rounded-lg">
                       <p className="text-2xl font-bold text-green-400">{tenantDetails.stats?.users_count || tenantDetails.users?.length || 0}</p>
                       <p className="text-sm text-gray-400">{t('المستخدمين')}</p>
                       <p className="text-xs text-gray-500 mt-1">{t('الحد')}: {tenantDetails.tenant?.max_users || selectedTenant?.max_users || '-'}</p>
                     </div>
-                    <div className="text-center p-4 bg-gray-700/30 rounded-lg">
-                      <p className="text-2xl font-bold text-purple-400">{tenantDetails.stats?.orders_today || 0}</p>
+                    <div className="text-center p-4 bg-[#1A284E]/30 rounded-lg">
+                      <p className="text-2xl font-bold text-amber-400">{tenantDetails.stats?.orders_today || 0}</p>
                       <p className="text-sm text-gray-400">{t('طلبات اليوم')}</p>
                     </div>
-                    <div className="text-center p-4 bg-gray-700/30 rounded-lg">
+                    <div className="text-center p-4 bg-[#1A284E]/30 rounded-lg">
                       <p className="text-2xl font-bold text-yellow-400">{formatPrice(tenantDetails.stats?.total_sales || 0)}</p>
                       <p className="text-sm text-gray-400">{t('إجمالي المبيعات')}</p>
                     </div>
@@ -4335,13 +4348,13 @@ export default function SuperAdmin() {
                 {/* قائمة المستخدمين */}
                 {tenantDetails.users && tenantDetails.users.length > 0 && (
                   <div className="space-y-4">
-                    <h3 className="font-bold text-purple-400 flex items-center gap-2 border-b border-gray-700 pb-2">
+                    <h3 className="font-bold text-amber-400 flex items-center gap-2 border-b border-[#2A3A66] pb-2">
                       <Users className="h-4 w-4" />
                       {t('المستخدمين')} ({tenantDetails.users.length})
                     </h3>
                     <div className="max-h-40 overflow-y-auto space-y-2">
                       {tenantDetails.users.map((user, idx) => (
-                        <div key={idx} className="flex justify-between items-center p-2 bg-gray-700/30 rounded text-sm">
+                        <div key={idx} className="flex justify-between items-center p-2 bg-[#1A284E]/30 rounded text-sm">
                           <div className="flex items-center gap-2">
                             <User className="h-4 w-4 text-gray-400" />
                             <span>{user.full_name || user.username}</span>
@@ -4360,13 +4373,13 @@ export default function SuperAdmin() {
                 {/* قائمة الفروع */}
                 {tenantDetails.branches && tenantDetails.branches.length > 0 && (
                   <div className="space-y-4">
-                    <h3 className="font-bold text-green-400 flex items-center gap-2 border-b border-gray-700 pb-2">
+                    <h3 className="font-bold text-green-400 flex items-center gap-2 border-b border-[#2A3A66] pb-2">
                       <Building2 className="h-4 w-4" />
                       {t('الفروع')} ({tenantDetails.branches.length})
                     </h3>
                     <div className="grid grid-cols-2 gap-2">
                       {tenantDetails.branches.map((branch, idx) => (
-                        <div key={idx} className="flex items-center gap-2 p-2 bg-gray-700/30 rounded text-sm">
+                        <div key={idx} className="flex items-center gap-2 p-2 bg-[#1A284E]/30 rounded text-sm">
                           <div className={`w-2 h-2 rounded-full ${branch.is_active ? 'bg-green-500' : 'bg-red-500'}`} />
                           <span>{branch.name}</span>
                         </div>
@@ -4378,7 +4391,7 @@ export default function SuperAdmin() {
                 {/* الشعار إن وجد */}
                 {(tenantDetails.tenant?.logo_url || selectedTenant?.logo_url) && (
                   <div className="space-y-4">
-                    <h3 className="font-bold text-purple-400 flex items-center gap-2 border-b border-gray-700 pb-2">
+                    <h3 className="font-bold text-amber-400 flex items-center gap-2 border-b border-[#2A3A66] pb-2">
                       <ImageIcon className="h-4 w-4" />
                       {t('شعار المطعم')}
                     </h3>
@@ -4388,7 +4401,7 @@ export default function SuperAdmin() {
                           ? `${API}${(tenantDetails.tenant?.logo_url || selectedTenant?.logo_url).replace('/api', '')}` 
                           : (tenantDetails.tenant?.logo_url || selectedTenant?.logo_url)} 
                         alt="Logo" 
-                        className="h-24 w-24 object-contain bg-gray-700/50 rounded-lg p-2"
+                        className="h-24 w-24 object-contain bg-[#1A284E]/50 rounded-lg p-2"
                       />
                     </div>
                   </div>
@@ -4396,7 +4409,7 @@ export default function SuperAdmin() {
 
                 {/* إدارة الأجهزة المرخصة */}
                 <div className="space-y-4">
-                  <div className="flex justify-between items-center border-b border-gray-700 pb-2">
+                  <div className="flex justify-between items-center border-b border-[#2A3A66] pb-2">
                     <h3 className="font-bold text-orange-400 flex items-center gap-2">
                       <Monitor className="h-4 w-4" />
                       {t('الأجهزة المرخصة')}
@@ -4407,13 +4420,13 @@ export default function SuperAdmin() {
                   </div>
                   
                   {/* تعديل الحد الأقصى للأجهزة */}
-                  <div className="flex items-center gap-4 p-3 bg-gray-700/30 rounded-lg">
+                  <div className="flex items-center gap-4 p-3 bg-[#1A284E]/30 rounded-lg">
                     <span className="text-gray-400">{t('الحد الأقصى للأجهزة')}:</span>
                     <div className="flex items-center gap-2">
                       <Button 
                         variant="outline" 
                         size="sm" 
-                        className="h-8 w-8 p-0 border-gray-600"
+                        className="h-8 w-8 p-0 border-[#2A3A66]"
                         onClick={async () => {
                           const currentMax = tenantDetails.tenant?.max_devices || 5;
                           if (currentMax > 1) {
@@ -4436,7 +4449,7 @@ export default function SuperAdmin() {
                       <Button 
                         variant="outline" 
                         size="sm" 
-                        className="h-8 w-8 p-0 border-gray-600"
+                        className="h-8 w-8 p-0 border-[#2A3A66]"
                         onClick={async () => {
                           const currentMax = tenantDetails.tenant?.max_devices || 5;
                           try {
@@ -4460,7 +4473,7 @@ export default function SuperAdmin() {
                   {tenantDetails.devices && tenantDetails.devices.length > 0 ? (
                     <div className="space-y-2 max-h-40 overflow-y-auto">
                       {tenantDetails.devices.map((device, idx) => (
-                        <div key={idx} className="flex justify-between items-center p-3 bg-gray-700/30 rounded-lg">
+                        <div key={idx} className="flex justify-between items-center p-3 bg-[#1A284E]/30 rounded-lg">
                           <div className="flex items-center gap-3">
                             <div className={`w-3 h-3 rounded-full ${device.is_active ? 'bg-green-500' : 'bg-red-500'}`} />
                             <div>
@@ -4509,7 +4522,7 @@ export default function SuperAdmin() {
             )}
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setShowTenantDetails(false)} className="border-gray-600">
+            <Button variant="outline" onClick={() => setShowTenantDetails(false)} className="border-[#2A3A66]">
               {t('إغلاق')}
             </Button>
             <Button onClick={() => { setShowTenantDetails(false); openEditTenant(selectedTenant); }} className="bg-blue-600 hover:bg-blue-700">
@@ -4522,10 +4535,10 @@ export default function SuperAdmin() {
 
       {/* Modal: إعدادات الفواتير */}
       <Dialog open={showInvoiceSettings} onOpenChange={setShowInvoiceSettings}>
-        <DialogContent className="bg-gray-800 border-gray-700 text-white max-w-5xl max-h-[90vh] overflow-y-auto">
+        <DialogContent className="bg-[#0F1A3A] border-[#2A3A66] text-white max-w-5xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="text-xl flex items-center gap-2">
-              <Settings className="h-5 w-5 text-purple-400" />
+              <Settings className="h-5 w-5 text-amber-400" />
               {t('إعدادات النظام الرئيسي')}
             </DialogTitle>
             <DialogDescription className="text-gray-400">
@@ -4534,24 +4547,24 @@ export default function SuperAdmin() {
           </DialogHeader>
           
           <Tabs defaultValue="identity" className="w-full">
-            <TabsList className="grid w-full grid-cols-5 bg-gray-700/50">
-              <TabsTrigger value="identity" className="data-[state=active]:bg-purple-600">
+            <TabsList className="grid w-full grid-cols-5 bg-[#1A284E]/50">
+              <TabsTrigger value="identity" className="data-[state=active]:bg-amber-600">
                 <Crown className="h-4 w-4 ml-2" />
                 {t('هوية النظام')}
               </TabsTrigger>
-              <TabsTrigger value="owner" className="data-[state=active]:bg-purple-600">
+              <TabsTrigger value="owner" className="data-[state=active]:bg-amber-600">
                 <User className="h-4 w-4 ml-2" />
                 {t('إعدادات المالك')}
               </TabsTrigger>
-              <TabsTrigger value="email" className="data-[state=active]:bg-purple-600" data-testid="email-settings-tab">
+              <TabsTrigger value="email" className="data-[state=active]:bg-amber-600" data-testid="email-settings-tab">
                 <Mail className="h-4 w-4 ml-2" />
                 {t('البريد الإلكتروني')}
               </TabsTrigger>
-              <TabsTrigger value="invoice" className="data-[state=active]:bg-purple-600">
+              <TabsTrigger value="invoice" className="data-[state=active]:bg-amber-600">
                 <Receipt className="h-4 w-4 ml-2" />
                 {t('إعدادات الفواتير')}
               </TabsTrigger>
-              <TabsTrigger value="login" className="data-[state=active]:bg-purple-600">
+              <TabsTrigger value="login" className="data-[state=active]:bg-amber-600">
                 <Palette className="h-4 w-4 ml-2" />
                 {t('صفحة الدخول')}
               </TabsTrigger>
@@ -4560,7 +4573,7 @@ export default function SuperAdmin() {
             {/* تبويب هوية النظام */}
             <TabsContent value="identity" className="space-y-6 mt-4">
               <div className="space-y-4">
-                <h3 className="font-bold text-purple-400 flex items-center gap-2 border-b border-gray-700 pb-2">
+                <h3 className="font-bold text-amber-400 flex items-center gap-2 border-b border-[#2A3A66] pb-2">
                   <Crown className="h-4 w-4" />
                   {t('هوية النظام الرئيسي')}
                 </h3>
@@ -4574,7 +4587,7 @@ export default function SuperAdmin() {
                       placeholder="Maestro EGP"
                       value={invoiceSettings.system_name || ''}
                       onChange={(e) => setInvoiceSettings({...invoiceSettings, system_name: e.target.value})}
-                      className="bg-gray-700/50 border-gray-600 text-white"
+                      className="bg-[#1A284E]/50 border-[#2A3A66] text-white"
                     />
                   </div>
                   <div className="grid grid-cols-2 gap-4">
@@ -4585,7 +4598,7 @@ export default function SuperAdmin() {
                         placeholder={t('نظام إدارة المطاعم')}
                         value={invoiceSettings.system_name_ar || ''}
                         onChange={(e) => setInvoiceSettings({...invoiceSettings, system_name_ar: e.target.value})}
-                        className="bg-gray-700/50 border-gray-600 text-white"
+                        className="bg-[#1A284E]/50 border-[#2A3A66] text-white"
                       />
                     </div>
                     <div className="space-y-2">
@@ -4595,7 +4608,7 @@ export default function SuperAdmin() {
                         placeholder="Restaurant Management System"
                         value={invoiceSettings.system_name_en || ''}
                         onChange={(e) => setInvoiceSettings({...invoiceSettings, system_name_en: e.target.value})}
-                        className="bg-gray-700/50 border-gray-600 text-white"
+                        className="bg-[#1A284E]/50 border-[#2A3A66] text-white"
                         dir="ltr"
                       />
                     </div>
@@ -4608,7 +4621,7 @@ export default function SuperAdmin() {
                     {t('شعار النظام')}
                   </h4>
                   <div className="flex items-center gap-4">
-                    <div className="w-32 h-32 bg-gray-700/50 rounded-lg flex items-center justify-center border-2 border-dashed border-gray-600">
+                    <div className="w-32 h-32 bg-[#1A284E]/50 rounded-lg flex items-center justify-center border-2 border-dashed border-[#2A3A66]">
                       {invoiceSettings.system_logo_url ? (
                         <img 
                           src={invoiceSettings.system_logo_url.startsWith('/api') 
@@ -4630,7 +4643,7 @@ export default function SuperAdmin() {
                         placeholder={t('رابط الشعار (URL)')}
                         value={invoiceSettings.system_logo_url || ''}
                         onChange={(e) => setInvoiceSettings({...invoiceSettings, system_logo_url: e.target.value})}
-                        className="bg-gray-700/50 border-gray-600 text-white"
+                        className="bg-[#1A284E]/50 border-[#2A3A66] text-white"
                         dir="ltr"
                       />
                       <div className="relative">
@@ -4649,7 +4662,7 @@ export default function SuperAdmin() {
                         <div className="flex gap-2">
                           <Button 
                             variant="outline" 
-                            className="border-gray-600 flex-1"
+                            className="border-[#2A3A66] flex-1"
                             disabled={uploadingSystemLogo}
                             onClick={() => document.getElementById('system-logo-upload-1').click()}
                           >
@@ -4685,7 +4698,7 @@ export default function SuperAdmin() {
             {/* تبويب إعدادات المالك */}
             <TabsContent value="owner" className="space-y-6 mt-4">
               <div className="space-y-4">
-                <h3 className="font-bold text-blue-400 flex items-center gap-2 border-b border-gray-700 pb-2">
+                <h3 className="font-bold text-blue-400 flex items-center gap-2 border-b border-[#2A3A66] pb-2">
                   <User className="h-4 w-4" />
                   {t('بيانات المالك')} (Super Admin)
                 </h3>
@@ -4698,7 +4711,7 @@ export default function SuperAdmin() {
                       type="email"
                       value={ownerSettings?.email || ''}
                       disabled
-                      className="bg-gray-700/30 border-gray-600 text-gray-400"
+                      className="bg-[#1A284E]/30 border-[#2A3A66] text-gray-400"
                       dir="ltr"
                     />
                     <p className="text-xs text-gray-500">{t('لا يمكن تغيير البريد الإلكتروني')}</p>
@@ -4711,7 +4724,7 @@ export default function SuperAdmin() {
                       placeholder={t('اترك فارغاً إذا لم ترغب بالتغيير')}
                       value={newOwnerPassword}
                       onChange={(e) => setNewOwnerPassword(e.target.value)}
-                      className="bg-gray-700/50 border-gray-600 text-white"
+                      className="bg-[#1A284E]/50 border-[#2A3A66] text-white"
                       dir="ltr"
                     />
                   </div>
@@ -4723,7 +4736,7 @@ export default function SuperAdmin() {
                       placeholder={t('أعد كتابة كلمة المرور')}
                       value={confirmOwnerPassword}
                       onChange={(e) => setConfirmOwnerPassword(e.target.value)}
-                      className="bg-gray-700/50 border-gray-600 text-white"
+                      className="bg-[#1A284E]/50 border-[#2A3A66] text-white"
                       dir="ltr"
                     />
                   </div>
@@ -4735,7 +4748,7 @@ export default function SuperAdmin() {
                       placeholder={t('اترك فارغاً إذا لم ترغب بالتغيير')}
                       value={newOwnerSecretKey}
                       onChange={(e) => setNewOwnerSecretKey(e.target.value)}
-                      className="bg-gray-700/50 border-gray-600 text-white"
+                      className="bg-[#1A284E]/50 border-[#2A3A66] text-white"
                       dir="ltr"
                     />
                     <p className="text-xs text-gray-500">{t('المفتاح السري يُستخدم لتسجيل الدخول كمالك')}</p>
@@ -4762,15 +4775,15 @@ export default function SuperAdmin() {
               </div>
 
               {/* إعدادات عرض العملة للمالك */}
-              <div className="space-y-4 mt-6 pt-6 border-t border-gray-700">
-                <h3 className="font-bold text-green-400 flex items-center gap-2 border-b border-gray-700 pb-2">
+              <div className="space-y-4 mt-6 pt-6 border-t border-[#2A3A66]">
+                <h3 className="font-bold text-green-400 flex items-center gap-2 border-b border-[#2A3A66] pb-2">
                   <DollarSign className="h-4 w-4" />
                   {t('إعدادات عرض المبيعات')}
                 </h3>
                 <p className="text-sm text-gray-400">{t('تحديد العملة التي تريد عرض المبيعات بها (سيتم تحويل جميع العملات تلقائياً)')}</p>
                 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div className="p-4 bg-gray-800/50 rounded-lg border border-gray-700">
+                  <div className="p-4 bg-[#0F1A3A]/50 rounded-lg border border-[#2A3A66]">
                     <Label className="text-gray-300 flex items-center gap-2 mb-3">
                       <Globe className="h-4 w-4 text-blue-400" />
                       {t('عملة العرض الرئيسية')}
@@ -4781,7 +4794,7 @@ export default function SuperAdmin() {
                         localStorage.setItem('owner_display_currency', e.target.value);
                         toast.success(t('تم تغيير عملة العرض'));
                       }}
-                      className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white"
+                      className="w-full px-3 py-2 bg-[#1A284E] border border-[#2A3A66] rounded-lg text-white"
                     >
                       <option value="IQD">🇮🇶 {t('دينار عراقي')} (IQD)</option>
                       <option value="USD">🇺🇸 {t('دولار أمريكي')} ($)</option>
@@ -4792,9 +4805,9 @@ export default function SuperAdmin() {
                     <p className="text-xs text-gray-500 mt-2">{t('جميع المبيعات ستُعرض بهذه العملة')}</p>
                   </div>
                   
-                  <div className="p-4 bg-gray-800/50 rounded-lg border border-gray-700">
+                  <div className="p-4 bg-[#0F1A3A]/50 rounded-lg border border-[#2A3A66]">
                     <Label className="text-gray-300 flex items-center gap-2 mb-3">
-                      <Languages className="h-4 w-4 text-purple-400" />
+                      <Languages className="h-4 w-4 text-amber-400" />
                       {t('لغة لوحة التحكم')}
                     </Label>
                     <select
@@ -4804,7 +4817,7 @@ export default function SuperAdmin() {
                         toast.success(t('تم تغيير اللغة'));
                         setTimeout(() => window.location.reload(), 1000);
                       }}
-                      className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white"
+                      className="w-full px-3 py-2 bg-[#1A284E] border border-[#2A3A66] rounded-lg text-white"
                     >
                       <option value="ar">العربية</option>
                       <option value="en">English</option>
@@ -4826,7 +4839,7 @@ export default function SuperAdmin() {
             {/* تبويب البريد الإلكتروني (إرسال + استقبال) */}
             <TabsContent value="email" className="space-y-6 mt-4">
               <div className="space-y-4">
-                <h3 className="font-bold text-purple-400 flex items-center gap-2 border-b border-gray-700 pb-2">
+                <h3 className="font-bold text-amber-400 flex items-center gap-2 border-b border-[#2A3A66] pb-2">
                   <Mail className="h-4 w-4" />
                   {t('إعدادات البريد الإلكتروني (الإرسال والاستقبال)')}
                 </h3>
@@ -4849,7 +4862,7 @@ export default function SuperAdmin() {
                       type="email" dir="ltr" placeholder="owner@maestroegp.com"
                       value={emailSettings.smtp_user || ''}
                       onChange={(e) => setEmailSettings({ ...emailSettings, smtp_user: e.target.value, sender_email: e.target.value })}
-                      className="bg-gray-700/50 border-gray-600 text-white"
+                      className="bg-[#1A284E]/50 border-[#2A3A66] text-white"
                       data-testid="email-user-input"
                     />
                   </div>
@@ -4860,7 +4873,7 @@ export default function SuperAdmin() {
                       placeholder={emailSettings.password_set ? '•••••••• (' + t('محفوظة') + ')' : t('كلمة مرور صندوق البريد')}
                       value={emailPassword}
                       onChange={(e) => setEmailPassword(e.target.value)}
-                      className="bg-gray-700/50 border-gray-600 text-white"
+                      className="bg-[#1A284E]/50 border-[#2A3A66] text-white"
                       data-testid="email-password-input"
                     />
                     <p className="text-xs text-gray-500">{t('نفس كلمة المرور التي تفتح بها بريدك على privateemail.com')}</p>
@@ -4871,7 +4884,7 @@ export default function SuperAdmin() {
                       type="text" placeholder="Maestro EGP"
                       value={emailSettings.from_name || ''}
                       onChange={(e) => setEmailSettings({ ...emailSettings, from_name: e.target.value })}
-                      className="bg-gray-700/50 border-gray-600 text-white"
+                      className="bg-[#1A284E]/50 border-[#2A3A66] text-white"
                       data-testid="email-fromname-input"
                     />
                   </div>
@@ -4882,7 +4895,7 @@ export default function SuperAdmin() {
                         type="text" dir="ltr" placeholder="mail.privateemail.com"
                         value={emailSettings.smtp_host || ''}
                         onChange={(e) => setEmailSettings({ ...emailSettings, smtp_host: e.target.value })}
-                        className="bg-gray-700/50 border-gray-600 text-white"
+                        className="bg-[#1A284E]/50 border-[#2A3A66] text-white"
                         data-testid="email-host-input"
                       />
                     </div>
@@ -4892,7 +4905,7 @@ export default function SuperAdmin() {
                         type="number" dir="ltr" placeholder="465"
                         value={emailSettings.smtp_port || 465}
                         onChange={(e) => setEmailSettings({ ...emailSettings, smtp_port: parseInt(e.target.value) || 465 })}
-                        className="bg-gray-700/50 border-gray-600 text-white"
+                        className="bg-[#1A284E]/50 border-[#2A3A66] text-white"
                         data-testid="email-port-input"
                       />
                     </div>
@@ -4902,14 +4915,14 @@ export default function SuperAdmin() {
                 <Button
                   onClick={saveEmailSettings}
                   disabled={savingEmail}
-                  className="w-full bg-purple-600 hover:bg-purple-700"
+                  className="w-full bg-amber-600 hover:bg-amber-700"
                   data-testid="save-email-settings-btn"
                 >
                   {savingEmail ? (<><Loader2 className="h-4 w-4 ml-2 animate-spin" />{t('جاري الحفظ')}...</>) : (<><Save className="h-4 w-4 ml-2" />{t('حفظ إعدادات البريد')}</>)}
                 </Button>
 
                 {/* اختبار الإرسال */}
-                <div className="space-y-3 mt-4 pt-4 border-t border-gray-700">
+                <div className="space-y-3 mt-4 pt-4 border-t border-[#2A3A66]">
                   <h4 className="font-medium text-blue-400 flex items-center gap-2">
                     <Send className="h-4 w-4" />
                     {t('اختبار الإرسال')}
@@ -4919,7 +4932,7 @@ export default function SuperAdmin() {
                       type="email" dir="ltr" placeholder={t('أدخل بريداً لإرسال رسالة اختبارية')}
                       value={testEmailAddr}
                       onChange={(e) => setTestEmailAddr(e.target.value)}
-                      className="bg-gray-700/50 border-gray-600 text-white flex-1"
+                      className="bg-[#1A284E]/50 border-[#2A3A66] text-white flex-1"
                       data-testid="test-email-input"
                     />
                     <Button
@@ -4934,7 +4947,7 @@ export default function SuperAdmin() {
                 </div>
 
                 {/* صندوق الوارد (استقبال) */}
-                <div className="space-y-3 mt-4 pt-4 border-t border-gray-700">
+                <div className="space-y-3 mt-4 pt-4 border-t border-[#2A3A66]">
                   <div className="flex items-center justify-between">
                     <h4 className="font-medium text-green-400 flex items-center gap-2">
                       <Mail className="h-4 w-4" />
@@ -4944,7 +4957,7 @@ export default function SuperAdmin() {
                       onClick={fetchInbox}
                       disabled={loadingInbox}
                       variant="outline"
-                      className="border-gray-600 text-sm"
+                      className="border-[#2A3A66] text-sm"
                       data-testid="refresh-inbox-btn"
                     >
                       {loadingInbox ? (<><Loader2 className="h-4 w-4 ml-2 animate-spin" />{t('جاري التحميل')}...</>) : (<>🔄 {t('تحديث الوارد')}</>)}
@@ -4958,7 +4971,7 @@ export default function SuperAdmin() {
                         <div
                           key={idx}
                           onClick={() => setSelectedMessage(m)}
-                          className={`p-3 rounded-lg border cursor-pointer hover:bg-gray-700/40 transition-colors ${m.unread ? 'bg-gray-700/30 border-purple-500/40' : 'bg-gray-800/40 border-gray-700'}`}
+                          className={`p-3 rounded-lg border cursor-pointer hover:bg-[#1A284E]/40 transition-colors ${m.unread ? 'bg-[#1A284E]/30 border-amber-500/40' : 'bg-[#0F1A3A]/40 border-[#2A3A66]'}`}
                           data-testid={`inbox-message-${idx}`}
                         >
                           <div className="flex items-center justify-between gap-2">
@@ -4987,12 +5000,12 @@ export default function SuperAdmin() {
             <TabsContent value="invoice" className="space-y-6 mt-4">
               {/* شعار الفواتير */}
               <div className="space-y-4">
-                <h3 className="font-bold text-green-400 flex items-center gap-2 border-b border-gray-700 pb-2">
+                <h3 className="font-bold text-green-400 flex items-center gap-2 border-b border-[#2A3A66] pb-2">
                   <ImageIcon className="h-4 w-4" />
                   {t('شعار النظام (يظهر في جميع الفواتير)')}
                 </h3>
                 <div className="flex items-center gap-4">
-                  <div className="w-24 h-24 bg-gray-700/50 rounded-lg flex items-center justify-center border-2 border-dashed border-gray-600">
+                  <div className="w-24 h-24 bg-[#1A284E]/50 rounded-lg flex items-center justify-center border-2 border-dashed border-[#2A3A66]">
                     {invoiceSettings.system_logo_url ? (
                       <img 
                         src={invoiceSettings.system_logo_url.startsWith('/api') 
@@ -5021,7 +5034,7 @@ export default function SuperAdmin() {
                     <div className="flex gap-2">
                       <Button 
                         variant="outline" 
-                        className="border-gray-600"
+                        className="border-[#2A3A66]"
                         disabled={uploadingSystemLogo}
                         onClick={() => document.getElementById('system-logo-upload-2').click()}
                       >
@@ -5053,7 +5066,7 @@ export default function SuperAdmin() {
 
               {/* بيانات الاتصال */}
               <div className="space-y-4">
-                <h3 className="font-bold text-blue-400 flex items-center gap-2 border-b border-gray-700 pb-2">
+                <h3 className="font-bold text-blue-400 flex items-center gap-2 border-b border-[#2A3A66] pb-2">
                   <Phone className="h-4 w-4" />
                   {t('بيانات الاتصال')}
                 </h3>
@@ -5065,7 +5078,7 @@ export default function SuperAdmin() {
                       placeholder="01234567890"
                       value={invoiceSettings.system_phone || ''}
                       onChange={(e) => setInvoiceSettings({...invoiceSettings, system_phone: e.target.value})}
-                      className="bg-gray-700/50 border-gray-600 text-white"
+                      className="bg-[#1A284E]/50 border-[#2A3A66] text-white"
                       dir="ltr"
                     />
                   </div>
@@ -5076,7 +5089,7 @@ export default function SuperAdmin() {
                       placeholder="01234567890"
                       value={invoiceSettings.system_phone2 || ''}
                       onChange={(e) => setInvoiceSettings({...invoiceSettings, system_phone2: e.target.value})}
-                      className="bg-gray-700/50 border-gray-600 text-white"
+                      className="bg-[#1A284E]/50 border-[#2A3A66] text-white"
                       dir="ltr"
                     />
                   </div>
@@ -5087,7 +5100,7 @@ export default function SuperAdmin() {
                       placeholder="info@example.com"
                       value={invoiceSettings.system_email || ''}
                       onChange={(e) => setInvoiceSettings({...invoiceSettings, system_email: e.target.value})}
-                      className="bg-gray-700/50 border-gray-600 text-white"
+                      className="bg-[#1A284E]/50 border-[#2A3A66] text-white"
                       dir="ltr"
                     />
                   </div>
@@ -5098,7 +5111,7 @@ export default function SuperAdmin() {
                       placeholder="https://example.com"
                       value={invoiceSettings.system_website || ''}
                       onChange={(e) => setInvoiceSettings({...invoiceSettings, system_website: e.target.value})}
-                      className="bg-gray-700/50 border-gray-600 text-white"
+                      className="bg-[#1A284E]/50 border-[#2A3A66] text-white"
                       dir="ltr"
                     />
                   </div>
@@ -5107,7 +5120,7 @@ export default function SuperAdmin() {
 
               {/* محتوى الفاتورة */}
               <div className="space-y-4">
-                <h3 className="font-bold text-yellow-400 flex items-center gap-2 border-b border-gray-700 pb-2">
+                <h3 className="font-bold text-yellow-400 flex items-center gap-2 border-b border-[#2A3A66] pb-2">
                   <FileText className="h-4 w-4" />
                   {t('محتوى الفاتورة')}
                 </h3>
@@ -5119,7 +5132,7 @@ export default function SuperAdmin() {
                       placeholder={t('شكراً لزيارتكم')}
                       value={invoiceSettings.thank_you_message || ''}
                       onChange={(e) => setInvoiceSettings({...invoiceSettings, thank_you_message: e.target.value})}
-                      className="bg-gray-700/50 border-gray-600 text-white"
+                      className="bg-[#1A284E]/50 border-[#2A3A66] text-white"
                     />
                   </div>
                   <div className="space-y-2">
@@ -5129,14 +5142,14 @@ export default function SuperAdmin() {
                       placeholder={t('مثال: تابعونا على مواقع التواصل')}
                       value={invoiceSettings.footer_text || ''}
                       onChange={(e) => setInvoiceSettings({...invoiceSettings, footer_text: e.target.value})}
-                      className="bg-gray-700/50 border-gray-600 text-white"
+                      className="bg-[#1A284E]/50 border-[#2A3A66] text-white"
                     />
                   </div>
                 </div>
               </div>
 
               {/* خيارات العرض */}
-              <div className="flex items-center justify-between p-3 bg-gray-700/30 rounded-lg">
+              <div className="flex items-center justify-between p-3 bg-[#1A284E]/30 rounded-lg">
                 <div>
                   <p className="font-medium">{t('إظهار شعار وبيانات النظام في الفواتير')}</p>
                   <p className="text-sm text-gray-400">{t('سيظهر الشعار وبيانات الاتصال في جميع فواتير العملاء')}</p>
@@ -5149,7 +5162,7 @@ export default function SuperAdmin() {
 
               {/* معاينة الفاتورة */}
               <div className="space-y-4">
-                <h3 className="font-bold text-green-400 flex items-center gap-2 border-b border-gray-700 pb-2">
+                <h3 className="font-bold text-green-400 flex items-center gap-2 border-b border-[#2A3A66] pb-2">
                   <Eye className="h-4 w-4" />
                   {t('معاينة الفاتورة')}
                 </h3>
@@ -5181,7 +5194,7 @@ export default function SuperAdmin() {
             {/* تبويب صفحة الدخول */}
             <TabsContent value="login" className="space-y-6 mt-4">
               <div className="space-y-4">
-                <h3 className="font-bold text-blue-400 flex items-center gap-2 border-b border-gray-700 pb-2">
+                <h3 className="font-bold text-blue-400 flex items-center gap-2 border-b border-[#2A3A66] pb-2">
                   <Palette className="h-4 w-4" />
                   {t('خلفيات صفحة الدخول')}
                 </h3>
@@ -5189,7 +5202,7 @@ export default function SuperAdmin() {
 
                 {/* خيارات الحركة */}
                 <div className="grid grid-cols-2 gap-4">
-                  <div className="flex items-center justify-between p-3 bg-gray-700/30 rounded-lg">
+                  <div className="flex items-center justify-between p-3 bg-[#1A284E]/30 rounded-lg">
                     <div>
                       <p className="font-medium">{t('تفعيل الحركة')}</p>
                       <p className="text-xs text-gray-400">{t('تفعيل حركة الخلفيات')}</p>
@@ -5199,7 +5212,7 @@ export default function SuperAdmin() {
                       onCheckedChange={(checked) => setBackgroundSettings({...backgroundSettings, animation_enabled: checked})}
                     />
                   </div>
-                  <div className="flex items-center justify-between p-3 bg-gray-700/30 rounded-lg">
+                  <div className="flex items-center justify-between p-3 bg-[#1A284E]/30 rounded-lg">
                     <div>
                       <p className="font-medium">{t('تبديل تلقائي')}</p>
                       <p className="text-xs text-gray-400">{t('تبديل الخلفيات تلقائياً')}</p>
@@ -5218,10 +5231,10 @@ export default function SuperAdmin() {
                       value={backgroundSettings.transition_type} 
                       onValueChange={(value) => setBackgroundSettings({...backgroundSettings, transition_type: value})}
                     >
-                      <SelectTrigger className="bg-gray-700/50 border-gray-600">
+                      <SelectTrigger className="bg-[#1A284E]/50 border-[#2A3A66]">
                         <SelectValue placeholder={t('اختر نوع الانتقال')} />
                       </SelectTrigger>
-                      <SelectContent className="bg-gray-800 border-gray-700">
+                      <SelectContent className="bg-[#0F1A3A] border-[#2A3A66]">
                         <SelectItem value="fade">{t('Fade (تلاشي)')}</SelectItem>
                         <SelectItem value="slide">{t('Slide (انزلاق)')}</SelectItem>
                         <SelectItem value="zoom">{t('Zoom (تكبير)')}</SelectItem>
@@ -5235,10 +5248,10 @@ export default function SuperAdmin() {
                       value={String(backgroundSettings.transition_duration || 1.5)} 
                       onValueChange={(value) => setBackgroundSettings({...backgroundSettings, transition_duration: parseFloat(value)})}
                     >
-                      <SelectTrigger className="bg-gray-700/50 border-gray-600">
+                      <SelectTrigger className="bg-[#1A284E]/50 border-[#2A3A66]">
                         <SelectValue placeholder={t('اختر مدة الانتقال')} />
                       </SelectTrigger>
-                      <SelectContent className="bg-gray-800 border-gray-700">
+                      <SelectContent className="bg-[#0F1A3A] border-[#2A3A66]">
                         <SelectItem value="0.5">{t('0.5 ثانية')}</SelectItem>
                         <SelectItem value="1">{t('1 ثانية')}</SelectItem>
                         <SelectItem value="1.5">{t('1.5 ثانية')}</SelectItem>
@@ -5256,10 +5269,10 @@ export default function SuperAdmin() {
                       value={backgroundSettings.logo_animation} 
                       onValueChange={(value) => setBackgroundSettings({...backgroundSettings, logo_animation: value})}
                     >
-                      <SelectTrigger className="bg-gray-700/50 border-gray-600">
+                      <SelectTrigger className="bg-[#1A284E]/50 border-[#2A3A66]">
                         <SelectValue placeholder={t('اختر حركة الشعار')} />
                       </SelectTrigger>
-                      <SelectContent className="bg-gray-800 border-gray-700">
+                      <SelectContent className="bg-[#0F1A3A] border-[#2A3A66]">
                         <SelectItem value="none">{t('بدون حركة')}</SelectItem>
                         <SelectItem value="pulse">{t('Pulse (نبض)')}</SelectItem>
                         <SelectItem value="bounce">{t('Bounce (ارتداد)')}</SelectItem>
@@ -5272,11 +5285,11 @@ export default function SuperAdmin() {
 
               {/* شعار صفحة الدخول */}
               <div className="space-y-4">
-                <h3 className="font-bold text-green-400 flex items-center gap-2 border-b border-gray-700 pb-2">
+                <h3 className="font-bold text-green-400 flex items-center gap-2 border-b border-[#2A3A66] pb-2">
                   <ImageIcon className="h-4 w-4" />
                   {t('شعار صفحة تسجيل الدخول')}
                 </h3>
-                <div className="flex items-center justify-between p-3 bg-gray-700/30 rounded-lg">
+                <div className="flex items-center justify-between p-3 bg-[#1A284E]/30 rounded-lg">
                   <div>
                     <p className="font-medium">{t('تفعيل شعار صفحة الدخول')}</p>
                     <p className="text-xs text-gray-400">{t('إظهار شعار مخصص في صفحة تسجيل الدخول')}</p>
@@ -5289,7 +5302,7 @@ export default function SuperAdmin() {
                 
                 {backgroundSettings.show_logo && (
                   <div className="flex items-center gap-4">
-                    <div className="w-24 h-24 bg-gray-700/50 rounded-lg flex items-center justify-center border-2 border-dashed border-gray-600">
+                    <div className="w-24 h-24 bg-[#1A284E]/50 rounded-lg flex items-center justify-center border-2 border-dashed border-[#2A3A66]">
                       {backgroundSettings.logo_url ? (
                         <img 
                           src={backgroundSettings.logo_url.startsWith('/api') 
@@ -5308,7 +5321,7 @@ export default function SuperAdmin() {
                         placeholder={t('رابط خارجي للشعار')}
                         value={backgroundSettings.logo_url || ''}
                         onChange={(e) => setBackgroundSettings({...backgroundSettings, logo_url: e.target.value})}
-                        className="bg-gray-700/50 border-gray-600 text-white"
+                        className="bg-[#1A284E]/50 border-[#2A3A66] text-white"
                         dir="ltr"
                       />
                       <input
@@ -5321,7 +5334,7 @@ export default function SuperAdmin() {
                       <div className="flex gap-2">
                         <Button 
                           variant="outline" 
-                          className="border-gray-600 flex-1"
+                          className="border-[#2A3A66] flex-1"
                           onClick={() => document.getElementById('login-logo-upload').click()}
                           disabled={loginLogoUploading}
                         >
@@ -5363,7 +5376,7 @@ export default function SuperAdmin() {
 
               {/* لون التحكم */}
               <div className="space-y-4">
-                <h3 className="font-bold text-purple-400 flex items-center gap-2 border-b border-gray-700 pb-2">
+                <h3 className="font-bold text-amber-400 flex items-center gap-2 border-b border-[#2A3A66] pb-2">
                   <Palette className="h-4 w-4" />
                   {t('ألوان صفحة الدخول')}
                 </h3>
@@ -5381,14 +5394,14 @@ export default function SuperAdmin() {
                           const b = parseInt(hex.slice(5, 7), 16);
                           setBackgroundSettings({...backgroundSettings, overlay_color: `rgba(${r},${g},${b},0.5)`});
                         }}
-                        className="w-14 h-10 p-1 bg-gray-700/50 border-gray-600 cursor-pointer rounded"
+                        className="w-14 h-10 p-1 bg-[#1A284E]/50 border-[#2A3A66] cursor-pointer rounded"
                       />
                       <Input
                         type="text"
                         placeholder="rgba(0, 0, 0, 0.5)"
                         value={backgroundSettings.overlay_color || ''}
                         onChange={(e) => setBackgroundSettings({...backgroundSettings, overlay_color: e.target.value})}
-                        className="bg-gray-700/50 border-gray-600 text-white flex-1"
+                        className="bg-[#1A284E]/50 border-[#2A3A66] text-white flex-1"
                         dir="ltr"
                       />
                     </div>
@@ -5400,14 +5413,14 @@ export default function SuperAdmin() {
                         type="color"
                         value={backgroundSettings.text_color || '#ffffff'}
                         onChange={(e) => setBackgroundSettings({...backgroundSettings, text_color: e.target.value})}
-                        className="w-14 h-10 p-1 bg-gray-700/50 border-gray-600 cursor-pointer rounded"
+                        className="w-14 h-10 p-1 bg-[#1A284E]/50 border-[#2A3A66] cursor-pointer rounded"
                       />
                       <Input
                         type="text"
                         placeholder="#ffffff"
                         value={backgroundSettings.text_color || ''}
                         onChange={(e) => setBackgroundSettings({...backgroundSettings, text_color: e.target.value})}
-                        className="bg-gray-700/50 border-gray-600 text-white flex-1"
+                        className="bg-[#1A284E]/50 border-[#2A3A66] text-white flex-1"
                         dir="ltr"
                       />
                     </div>
@@ -5417,7 +5430,7 @@ export default function SuperAdmin() {
 
               {/* الخلفيات */}
               <div className="space-y-4">
-                <h3 className="font-bold text-yellow-400 flex items-center gap-2 border-b border-gray-700 pb-2">
+                <h3 className="font-bold text-yellow-400 flex items-center gap-2 border-b border-[#2A3A66] pb-2">
                   <ImageIcon className="h-4 w-4" />
                   {t('الخلفيات')} ({backgroundSettings.backgrounds?.length || 0})
                 </h3>
@@ -5430,7 +5443,7 @@ export default function SuperAdmin() {
                     const animType = bg.animation_type || bg.animation || 'fade';
                     const isEnabled = bg.is_active !== false && bg.enabled !== false;
                     return (
-                      <div key={bg.id || idx} className="relative group rounded-xl overflow-hidden bg-gray-700/30">
+                      <div key={bg.id || idx} className="relative group rounded-xl overflow-hidden bg-[#1A284E]/30">
                         {/* صورة الخلفية الكاملة */}
                         <div className="aspect-video relative">
                           <img 
@@ -5483,7 +5496,7 @@ export default function SuperAdmin() {
                           <Badge className="absolute top-2 left-2 bg-blue-500/90 text-white text-xs">{animType}</Badge>
                         </div>
                         {/* معلومات الخلفية */}
-                        <div className="p-3 bg-gray-800/80">
+                        <div className="p-3 bg-[#0F1A3A]/80">
                           <p className="text-sm font-medium text-white truncate">{t(bg.title) || t(bg.name) || t('خلفية')}</p>
                         </div>
                       </div>
@@ -5491,7 +5504,7 @@ export default function SuperAdmin() {
                   })}
                   {/* زر إضافة خلفية */}
                   <div 
-                    className="aspect-video bg-gray-700/30 rounded-xl flex flex-col items-center justify-center border-2 border-dashed border-gray-600 cursor-pointer hover:border-purple-500 hover:bg-gray-700/50 transition-all duration-300"
+                    className="aspect-video bg-[#1A284E]/30 rounded-xl flex flex-col items-center justify-center border-2 border-dashed border-[#2A3A66] cursor-pointer hover:border-amber-500 hover:bg-[#1A284E]/50 transition-all duration-300"
                     onClick={() => setShowAddBackground(true)}
                   >
                     <Plus className="h-10 w-10 text-gray-500 mb-2" />
@@ -5503,7 +5516,7 @@ export default function SuperAdmin() {
           </Tabs>
 
           <DialogFooter className="mt-4">
-            <Button variant="outline" onClick={() => setShowInvoiceSettings(false)} className="border-gray-600">
+            <Button variant="outline" onClick={() => setShowInvoiceSettings(false)} className="border-[#2A3A66]">
               {t('إلغاء')}</Button>
             <Button onClick={saveInvoiceSettings} className="bg-green-600 hover:bg-green-700">
               <Check className="h-4 w-4 ml-2" />
@@ -5515,10 +5528,10 @@ export default function SuperAdmin() {
 
       {/* Dialog إعدادات الإشعارات */}
       <Dialog open={showNotificationSettings} onOpenChange={setShowNotificationSettings}>
-        <DialogContent className="bg-gray-800 text-white max-w-lg">
+        <DialogContent className="bg-[#0F1A3A] text-white max-w-lg">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
-              <Bell className="h-5 w-5 text-purple-400" />
+              <Bell className="h-5 w-5 text-amber-400" />
               إعدادات الإشعارات
             </DialogTitle>
           </DialogHeader>
@@ -5531,10 +5544,10 @@ export default function SuperAdmin() {
                 value={String(notificationSettings.days_before_expiry)} 
                 onValueChange={(v) => setNotificationSettings({...notificationSettings, days_before_expiry: parseInt(v)})}
               >
-                <SelectTrigger className="bg-gray-700/50 border-gray-600 text-white">
+                <SelectTrigger className="bg-[#1A284E]/50 border-[#2A3A66] text-white">
                   <SelectValue />
                 </SelectTrigger>
-                <SelectContent className="bg-gray-800 border-gray-700">
+                <SelectContent className="bg-[#0F1A3A] border-[#2A3A66]">
                   <SelectItem value="3">{t('قبل 3 أيام')}</SelectItem>
                   <SelectItem value="7">{t('قبل أسبوع')}</SelectItem>
                   <SelectItem value="15">{t('قبل 15 يوم')}</SelectItem>
@@ -5547,7 +5560,7 @@ export default function SuperAdmin() {
             <div className="space-y-4">
               <Label className="text-gray-300">{t('أنواع الإشعارات')}</Label>
               
-              <div className="flex items-center justify-between p-3 bg-gray-700/30 rounded-lg opacity-50">
+              <div className="flex items-center justify-between p-3 bg-[#1A284E]/30 rounded-lg opacity-50">
                 <div className="flex items-center gap-2">
                   <Mail className="h-4 w-4 text-blue-400" />
                   <span className="text-sm">{t('إشعارات البريد الإلكتروني')}</span>
@@ -5560,9 +5573,9 @@ export default function SuperAdmin() {
                 />
               </div>
               
-              <div className="flex items-center justify-between p-3 bg-gray-700/30 rounded-lg">
+              <div className="flex items-center justify-between p-3 bg-[#1A284E]/30 rounded-lg">
                 <div className="flex items-center gap-2">
-                  <Bell className="h-4 w-4 text-purple-400" />
+                  <Bell className="h-4 w-4 text-amber-400" />
                   <span className="text-sm">{t('إشعارات المتصفح (Push)')}</span>
                 </div>
                 <Switch 
@@ -5576,7 +5589,7 @@ export default function SuperAdmin() {
             <div className="space-y-4">
               <Label className="text-gray-300">{t('أحداث الإشعارات')}</Label>
               
-              <div className="flex items-center justify-between p-3 bg-gray-700/30 rounded-lg">
+              <div className="flex items-center justify-between p-3 bg-[#1A284E]/30 rounded-lg">
                 <div className="flex items-center gap-2">
                   <Plus className="h-4 w-4 text-green-400" />
                   <span className="text-sm">{t('إشعار عند إضافة عميل جديد')}</span>
@@ -5587,7 +5600,7 @@ export default function SuperAdmin() {
                 />
               </div>
               
-              <div className="flex items-center justify-between p-3 bg-gray-700/30 rounded-lg">
+              <div className="flex items-center justify-between p-3 bg-[#1A284E]/30 rounded-lg">
                 <div className="flex items-center gap-2">
                   <Power className="h-4 w-4 text-orange-400" />
                   <span className="text-sm">{t('إشعار عند تفعيل/تعطيل عميل')}</span>
@@ -5601,9 +5614,9 @@ export default function SuperAdmin() {
           </div>
 
           <DialogFooter>
-            <Button variant="outline" onClick={() => setShowNotificationSettings(false)} className="border-gray-600">
+            <Button variant="outline" onClick={() => setShowNotificationSettings(false)} className="border-[#2A3A66]">
               {t('إلغاء')}</Button>
-            <Button onClick={saveNotificationSettings} className="bg-purple-600 hover:bg-purple-700">
+            <Button onClick={saveNotificationSettings} className="bg-amber-600 hover:bg-amber-700">
               <Check className="h-4 w-4 ml-2" />
               {t('حفظ الإعدادات')}
             </Button>
@@ -5613,7 +5626,7 @@ export default function SuperAdmin() {
 
       {/* Dialog عرض رسالة واردة */}
       <Dialog open={!!selectedMessage} onOpenChange={(o) => { if (!o) setSelectedMessage(null); }}>
-        <DialogContent className="bg-gray-800 border-gray-700 text-white max-w-2xl max-h-[85vh] overflow-y-auto" data-testid="message-detail-dialog">
+        <DialogContent className="bg-[#0F1A3A] border-[#2A3A66] text-white max-w-2xl max-h-[85vh] overflow-y-auto" data-testid="message-detail-dialog">
           <DialogHeader>
             <DialogTitle className="text-lg flex items-center gap-2">
               <Mail className="h-5 w-5 text-green-400" />
@@ -5636,7 +5649,7 @@ export default function SuperAdmin() {
 
       {/* Dialog تعديل أسعار الاشتراكات */}
       <Dialog open={showPricesModal} onOpenChange={setShowPricesModal}>
-        <DialogContent className="bg-gray-800 text-white max-w-lg">
+        <DialogContent className="bg-[#0F1A3A] text-white max-w-lg">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <DollarSign className="h-5 w-5 text-green-400" />
@@ -5661,7 +5674,7 @@ export default function SuperAdmin() {
                     dir="ltr"
                     value={subscriptionPrices.gold || ''}
                     onChange={(e) => setSubscriptionPrices({...subscriptionPrices, gold: parseFloat(e.target.value) || 0})}
-                    className="bg-gray-700/50 border-gray-600 text-white pl-6 text-center"
+                    className="bg-[#1A284E]/50 border-[#2A3A66] text-white pl-6 text-center"
                   />
                 </div>
                 <p className="text-xs text-gray-500 text-center">{t('/شهر')}</p>
@@ -5681,7 +5694,7 @@ export default function SuperAdmin() {
                     dir="ltr"
                     value={subscriptionPrices.silver || ''}
                     onChange={(e) => setSubscriptionPrices({...subscriptionPrices, silver: parseFloat(e.target.value) || 0})}
-                    className="bg-gray-700/50 border-gray-600 text-white pl-6 text-center"
+                    className="bg-[#1A284E]/50 border-[#2A3A66] text-white pl-6 text-center"
                   />
                 </div>
                 <p className="text-xs text-gray-500 text-center">{t('/شهر')}</p>
@@ -5701,7 +5714,7 @@ export default function SuperAdmin() {
                     dir="ltr"
                     value={subscriptionPrices.bronze || ''}
                     onChange={(e) => setSubscriptionPrices({...subscriptionPrices, bronze: parseFloat(e.target.value) || 0})}
-                    className="bg-gray-700/50 border-gray-600 text-white pl-6 text-center"
+                    className="bg-[#1A284E]/50 border-[#2A3A66] text-white pl-6 text-center"
                   />
                 </div>
                 <p className="text-xs text-gray-500 text-center">{t('/شهر')}</p>
@@ -5709,7 +5722,7 @@ export default function SuperAdmin() {
             </div>
 
             {/* ملخص الأسعار السنوية - محسوب تلقائياً */}
-            <div className="bg-gray-700/30 rounded-lg p-4">
+            <div className="bg-[#1A284E]/30 rounded-lg p-4">
               <p className="text-sm text-gray-400 mb-3">{t('ملخص الأسعار السنوية:')}</p>
               <div className="grid grid-cols-3 gap-3 text-sm" style={{direction: 'ltr'}}>
                 <div className="text-center p-2 bg-yellow-900/30 rounded-lg">
@@ -5732,7 +5745,7 @@ export default function SuperAdmin() {
           </div>
 
           <DialogFooter>
-            <Button variant="outline" onClick={() => setShowPricesModal(false)} className="border-gray-600">
+            <Button variant="outline" onClick={() => setShowPricesModal(false)} className="border-[#2A3A66]">
               {t('إلغاء')}</Button>
             <Button 
               onClick={saveSubscriptionPrices} 
@@ -5757,22 +5770,22 @@ export default function SuperAdmin() {
 
       {/* Dialog إضافة خلفية جديدة */}
       <Dialog open={showAddBackground} onOpenChange={setShowAddBackground}>
-        <DialogContent className="bg-gray-800 text-white max-w-lg">
+        <DialogContent className="bg-[#0F1A3A] text-white max-w-lg">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
-              <ImageIcon className="h-5 w-5 text-purple-400" />
+              <ImageIcon className="h-5 w-5 text-amber-400" />
               {t('إضافة خلفية جديدة')}
             </DialogTitle>
           </DialogHeader>
           
           <div className="space-y-4">
             {/* اختيار طريقة الإضافة */}
-            <div className="flex gap-2 p-1 bg-gray-700/50 rounded-lg">
+            <div className="flex gap-2 p-1 bg-[#1A284E]/50 rounded-lg">
               <button
                 onClick={() => setBackgroundUploadMode('url')}
                 className={`flex-1 py-2 px-3 rounded-md text-sm transition-all ${
                   backgroundUploadMode === 'url' 
-                    ? 'bg-purple-600 text-white' 
+                    ? 'bg-amber-600 text-white' 
                     : 'text-gray-400 hover:text-white'
                 }`}
               >
@@ -5782,7 +5795,7 @@ export default function SuperAdmin() {
                 onClick={() => setBackgroundUploadMode('device')}
                 className={`flex-1 py-2 px-3 rounded-md text-sm transition-all ${
                   backgroundUploadMode === 'device' 
-                    ? 'bg-purple-600 text-white' 
+                    ? 'bg-amber-600 text-white' 
                     : 'text-gray-400 hover:text-white'
                 }`}
               >
@@ -5798,7 +5811,7 @@ export default function SuperAdmin() {
                   value={newBackgroundUrl}
                   onChange={(e) => setNewBackgroundUrl(e.target.value)}
                   placeholder="https://example.com/image.jpg"
-                  className="bg-gray-700/50 border-gray-600 text-white"
+                  className="bg-[#1A284E]/50 border-[#2A3A66] text-white"
                 />
               </div>
             )}
@@ -5808,7 +5821,7 @@ export default function SuperAdmin() {
               <div className="space-y-3">
                 <Label className="text-gray-300">{t('اختر صورة')}</Label>
                 <div 
-                  className="border-2 border-dashed border-gray-600 rounded-lg p-6 text-center cursor-pointer hover:border-purple-500 transition-colors"
+                  className="border-2 border-dashed border-[#2A3A66] rounded-lg p-6 text-center cursor-pointer hover:border-amber-500 transition-colors"
                   onClick={() => document.getElementById('background-file-input').click()}
                 >
                   {backgroundPreviewUrl ? (
@@ -5861,7 +5874,7 @@ export default function SuperAdmin() {
                 value={newBackgroundTitle}
                 onChange={(e) => setNewBackgroundTitle(e.target.value)}
                 placeholder={t('مثال: خلفية المطعم')}
-                className="bg-gray-700/50 border-gray-600 text-white"
+                className="bg-[#1A284E]/50 border-[#2A3A66] text-white"
               />
             </div>
 
@@ -5869,10 +5882,10 @@ export default function SuperAdmin() {
             <div className="space-y-2">
               <Label className="text-gray-300">{t('نوع الحركة')}</Label>
               <Select value={newBackgroundAnimation} onValueChange={setNewBackgroundAnimation}>
-                <SelectTrigger className="bg-gray-700/50 border-gray-600 text-white">
+                <SelectTrigger className="bg-[#1A284E]/50 border-[#2A3A66] text-white">
                   <SelectValue />
                 </SelectTrigger>
-                <SelectContent className="bg-gray-800 border-gray-700">
+                <SelectContent className="bg-[#0F1A3A] border-[#2A3A66]">
                   <SelectItem value="fade">{t('تلاشي (Fade)')}</SelectItem>
                   <SelectItem value="zoom">{t('تكبير (Zoom)')}</SelectItem>
                   <SelectItem value="kenburns">{t('كين بيرنز (Ken Burns)')}</SelectItem>
@@ -5892,7 +5905,7 @@ export default function SuperAdmin() {
                 setSelectedBackgroundFile(null);
                 setBackgroundPreviewUrl('');
               }} 
-              className="border-gray-600"
+              className="border-[#2A3A66]"
             >
               {t('إلغاء')}
             </Button>
@@ -5909,7 +5922,7 @@ export default function SuperAdmin() {
                 }
               }}
               disabled={backgroundsLoading || (backgroundUploadMode === 'url' ? !newBackgroundUrl : !selectedBackgroundFile)}
-              className="bg-purple-600 hover:bg-purple-700"
+              className="bg-amber-600 hover:bg-amber-700"
             >
               {backgroundsLoading ? (
                 <>
@@ -5942,7 +5955,7 @@ export default function SuperAdmin() {
 
       {/* Modal: إعدادات العملات */}
       <Dialog open={showCurrencySettingsModal} onOpenChange={setShowCurrencySettingsModal}>
-        <DialogContent className="bg-gray-800 border-gray-700 text-white max-w-lg">
+        <DialogContent className="bg-[#0F1A3A] border-[#2A3A66] text-white max-w-lg">
           <DialogHeader>
             <DialogTitle className="text-xl flex items-center gap-2">
               <Coins className="h-5 w-5 text-yellow-400" />
@@ -5958,10 +5971,10 @@ export default function SuperAdmin() {
                 value={currencySettings.preferred_currency} 
                 onValueChange={(value) => setCurrencySettings({...currencySettings, preferred_currency: value})}
               >
-                <SelectTrigger className="bg-gray-700/50 border-gray-600">
+                <SelectTrigger className="bg-[#1A284E]/50 border-[#2A3A66]">
                   <SelectValue placeholder={t('اختر العملة')} />
                 </SelectTrigger>
-                <SelectContent className="bg-gray-800 border-gray-700">
+                <SelectContent className="bg-[#0F1A3A] border-[#2A3A66]">
                   <SelectItem value="USD">{t('🇺🇸 دولار أمريكي (USD)')}</SelectItem>
                   <SelectItem value="IQD">{t('🇮🇶 دينار عراقي (IQD)')}</SelectItem>
                   <SelectItem value="SAR">{t('🇸🇦 ريال سعودي (SAR)')}</SelectItem>
@@ -5981,7 +5994,7 @@ export default function SuperAdmin() {
                 <Button
                   type="button"
                   variant={!currencySettings.use_live_rates ? "default" : "outline"}
-                  className={`flex-1 ${!currencySettings.use_live_rates ? 'bg-blue-600' : 'border-gray-600'}`}
+                  className={`flex-1 ${!currencySettings.use_live_rates ? 'bg-blue-600' : 'border-[#2A3A66]'}`}
                   onClick={() => setCurrencySettings({...currencySettings, use_live_rates: false})}
                 >
                   <Banknote className="h-4 w-4 ml-2" />
@@ -5990,7 +6003,7 @@ export default function SuperAdmin() {
                 <Button
                   type="button"
                   variant={currencySettings.use_live_rates ? "default" : "outline"}
-                  className={`flex-1 ${currencySettings.use_live_rates ? 'bg-green-600' : 'border-gray-600'}`}
+                  className={`flex-1 ${currencySettings.use_live_rates ? 'bg-green-600' : 'border-[#2A3A66]'}`}
                   onClick={() => setCurrencySettings({...currencySettings, use_live_rates: true})}
                 >
                   <ArrowUpDown className="h-4 w-4 ml-2" />
@@ -6001,7 +6014,7 @@ export default function SuperAdmin() {
 
             {/* أسعار الصرف المخصصة (فقط إذا اختار أسعار ثابتة) */}
             {!currencySettings.use_live_rates && (
-              <div className="space-y-3 bg-gray-700/30 rounded-lg p-4">
+              <div className="space-y-3 bg-[#1A284E]/30 rounded-lg p-4">
                 <Label className="text-gray-300">{t('تعديل أسعار الصرف (مقابل الدولار)')}</Label>
                 <p className="text-xs text-gray-500">{t('أدخل كم وحدة من كل عملة تساوي 1 دولار')}</p>
                 
@@ -6025,7 +6038,7 @@ export default function SuperAdmin() {
                             [`${code}_USD`]: parseFloat(e.target.value) || defaultRate
                           }
                         })}
-                        className="bg-gray-700/50 border-gray-600"
+                        className="bg-[#1A284E]/50 border-[#2A3A66]"
                         placeholder={defaultRate.toString()}
                       />
                     </div>
@@ -6049,13 +6062,13 @@ export default function SuperAdmin() {
             <Button 
               variant="outline" 
               onClick={() => setShowCurrencySettingsModal(false)} 
-              className="border-gray-600"
+              className="border-[#2A3A66]"
             >
               {t('إلغاء')}</Button>
             <Button 
               onClick={saveCurrencySettings}
               disabled={savingCurrencySettings}
-              className="bg-purple-600 hover:bg-purple-700"
+              className="bg-amber-600 hover:bg-amber-700"
             >
               {savingCurrencySettings ? (
                 <>
@@ -6075,7 +6088,7 @@ export default function SuperAdmin() {
 
       {/* Dialog لعرض أجهزة عميل معين */}
       <Dialog open={showDevicesModal} onOpenChange={setShowDevicesModal}>
-        <DialogContent className="bg-gray-800 border-gray-700 text-white max-w-2xl">
+        <DialogContent className="bg-[#0F1A3A] border-[#2A3A66] text-white max-w-2xl">
           <DialogHeader>
             <DialogTitle className="text-xl flex items-center gap-2">
               <Monitor className="h-5 w-5 text-orange-400" />
@@ -6088,7 +6101,7 @@ export default function SuperAdmin() {
           
           <div className="space-y-4 py-4">
             {/* معلومات سريعة */}
-            <div className="flex items-center justify-between p-4 bg-gray-700/30 rounded-lg">
+            <div className="flex items-center justify-between p-4 bg-[#1A284E]/30 rounded-lg">
               <span className="text-gray-400">{t('الأجهزة المستخدمة')}</span>
               <span className="font-bold text-lg">
                 <span className={(selectedTenantForDevices?.devices_count || 0) >= (selectedTenantForDevices?.max_devices || 5) ? 'text-red-400' : 'text-green-400'}>
@@ -6103,12 +6116,12 @@ export default function SuperAdmin() {
               {allDevices
                 .filter(d => d.tenant_id === selectedTenantForDevices?.id)
                 .map((device, idx) => (
-                  <div key={idx} className="flex items-center justify-between p-4 bg-gray-700/50 rounded-lg">
+                  <div key={idx} className="flex items-center justify-between p-4 bg-[#1A284E]/50 rounded-lg">
                     <div className="flex items-center gap-3">
                       <div className={`w-3 h-3 rounded-full ${device.is_active ? 'bg-green-500' : 'bg-red-500'}`} />
                       <div>
                         <p className="font-medium">
-                          <code className="text-sm bg-gray-800 px-2 py-1 rounded">
+                          <code className="text-sm bg-[#0F1A3A] px-2 py-1 rounded">
                             {device.device_id?.slice(0, 30)}...
                           </code>
                         </p>
@@ -6146,7 +6159,7 @@ export default function SuperAdmin() {
           </div>
           
           <DialogFooter>
-            <Button variant="outline" onClick={() => setShowDevicesModal(false)} className="border-gray-600">
+            <Button variant="outline" onClick={() => setShowDevicesModal(false)} className="border-[#2A3A66]">
               {t('إغلاق')}
             </Button>
           </DialogFooter>

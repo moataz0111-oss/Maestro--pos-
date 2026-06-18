@@ -9434,7 +9434,11 @@ async def get_dashboard_settings(current_user: dict = Depends(get_current_user))
         "settingsKitchenSections": True,
         # التقارير
         "showBreakEvenReport": True,
-        "showInventoryReports": True
+        "showInventoryReports": True,
+        # ميزات جديدة في الإجراءات السريعة
+        "showCaptainsManagement": True,
+        "showExternalPurchasesReport": True,
+        "showPriceIncreaseReport": True
     }
     
     # جلب إعدادات لوحة القيادة المحفوظة
@@ -11927,6 +11931,8 @@ async def update_tenant_features(tenant_id: str, features: dict, current_user: d
         "showBranchOrders", "showWarehouse", "showPurchasing", "showExpenses",
         "showOwnerWallet", "showCoupons", "showLoyalty", "showCallLogs",
         "showHR", "showReservations", "showSettings", "showExternalBranches",
+        # ميزات جديدة في الإجراءات السريعة
+        "showCaptainsManagement", "showExternalPurchasesReport", "showPriceIncreaseReport",
         # ميزات إضافية
         "showInventory", "showCallCenter", "showRecipes", "showReviews",
         "showSmartReports", "showComprehensiveReport", "showBreakEvenReport",
@@ -12006,7 +12012,11 @@ async def get_tenant_features(tenant_id: str, current_user: dict = Depends(verif
         "settingsKitchenSections": True,
         # التقارير
         "showBreakEvenReport": True,
-        "showInventoryReports": True
+        "showInventoryReports": True,
+        # ميزات جديدة في الإجراءات السريعة
+        "showCaptainsManagement": True,
+        "showExternalPurchasesReport": True,
+        "showPriceIncreaseReport": True
     }
     
     # دمج الميزات المحفوظة مع الافتراضية
@@ -21427,7 +21437,7 @@ async def get_menu_link(request: Request, current_user: dict = Depends(get_curre
         base_url = f"{parsed.scheme}://{parsed.netloc}"
     else:
         # fallback للـ environment variable
-        base_url = os.environ.get('REACT_APP_BACKEND_URL', 'https://maestro-retail-hub.preview.emergentagent.com')
+        base_url = os.environ.get('REACT_APP_BACKEND_URL', 'https://pwa-driver-track.preview.emergentagent.com')
     
     menu_url = f"{base_url}/menu/{tenant.get('menu_slug', tenant_id)}"
     
@@ -21999,6 +22009,8 @@ async def send_order_chat(order_id: str, msg: OrderChatMessage):
         "sender": sender,
         "sender_name": msg.sender_name or ("الزبون" if sender == "customer" else "السائق"),
         "text": text[:1000],
+        "read": False,
+        "listened": False,
         "created_at": datetime.now(timezone.utc).isoformat(),
     }
     await db.order_chats.insert_one(doc)
@@ -22021,6 +22033,104 @@ async def send_order_chat(order_id: str, msg: OrderChatMessage):
         logger.warning(f"chat push failed: {_e}")
 
     return doc
+
+
+@api_router.post("/order-chat/{order_id}/voice")
+async def send_order_chat_voice(
+    order_id: str,
+    file: UploadFile = File(...),
+    sender: str = Form("customer"),
+    sender_name: Optional[str] = Form(None),
+    duration: Optional[float] = Form(0),
+):
+    """إرسال رسالة صوتية في محادثة الطلب - بدون مصادقة"""
+    order = await db.orders.find_one({"id": order_id}, {"_id": 0, "id": 1, "driver_id": 1, "customer_name": 1})
+    if not order:
+        raise HTTPException(status_code=404, detail="الطلب غير موجود")
+
+    data = await file.read()
+    if not data or len(data) == 0:
+        raise HTTPException(status_code=400, detail="الملف الصوتي فارغ")
+    if len(data) > 5 * 1024 * 1024:
+        raise HTTPException(status_code=400, detail="الرسالة الصوتية كبيرة جداً")
+
+    voice_dir = UPLOAD_DIR / "voice"
+    voice_dir.mkdir(exist_ok=True)
+    ext = "webm"
+    ct = (file.content_type or "").lower()
+    if "ogg" in ct:
+        ext = "ogg"
+    elif "mp4" in ct or "m4a" in ct or "aac" in ct:
+        ext = "mp4"
+    elif "mpeg" in ct or "mp3" in ct:
+        ext = "mp3"
+    fname = f"{uuid.uuid4()}.{ext}"
+    async with aiofiles.open(voice_dir / fname, "wb") as f:
+        await f.write(data)
+    audio_url = f"/api/uploads/voice/{fname}"
+
+    sender = sender if sender in ("customer", "driver") else "customer"
+    try:
+        dur = round(float(duration or 0), 1)
+    except Exception:
+        dur = 0
+    doc = {
+        "id": str(uuid.uuid4()),
+        "order_id": order_id,
+        "sender": sender,
+        "sender_name": sender_name or ("الزبون" if sender == "customer" else "السائق"),
+        "type": "voice",
+        "audio_url": audio_url,
+        "duration": dur,
+        "text": "🎤 رسالة صوتية",
+        "read": False,
+        "listened": False,
+        "created_at": datetime.now(timezone.utc).isoformat(),
+    }
+    await db.order_chats.insert_one(doc)
+    doc.pop("_id", None)
+
+    # إشعار Push فوري للطرف الآخر (رسالة صوتية)
+    try:
+        if sender == "customer" and order.get("driver_id"):
+            drv = await db.drivers.find_one({"id": order.get("driver_id")}, {"_id": 0, "phone": 1})
+            if drv and drv.get("phone"):
+                await send_push_notification(
+                    phone=drv.get("phone"),
+                    title=f"رسالة صوتية من {doc['sender_name']} 🎤",
+                    body="اضغط للاستماع",
+                    data={"type": "chat_message", "order_id": order_id, "url": "/driver-app"},
+                    user_type="driver",
+                    tag=f"chat-{order_id}",
+                )
+    except Exception as _e:
+        logger.warning(f"voice chat push failed: {_e}")
+
+    return doc
+
+
+@api_router.post("/order-chat/{order_id}/read")
+async def mark_order_chat_read(order_id: str, viewer: str = Query("customer")):
+    """تعليم رسائل الطرف الآخر كمقروءة (تم الرؤية) — viewer هو الطرف الذي فتح المحادثة."""
+    viewer = viewer if viewer in ("customer", "driver") else "customer"
+    other = "driver" if viewer == "customer" else "customer"
+    res = await db.order_chats.update_many(
+        {"order_id": order_id, "sender": other, "read": {"$ne": True}},
+        {"$set": {"read": True, "read_at": datetime.now(timezone.utc).isoformat()}},
+    )
+    return {"updated": res.modified_count}
+
+
+@api_router.post("/order-chat/{order_id}/listened/{message_id}")
+async def mark_order_chat_listened(order_id: str, message_id: str, viewer: str = Query("customer")):
+    """تعليم رسالة صوتية كمسموعة (تم الاستماع) — فقط إن كان viewer هو المستقبِل."""
+    viewer = viewer if viewer in ("customer", "driver") else "customer"
+    other = "driver" if viewer == "customer" else "customer"
+    res = await db.order_chats.update_one(
+        {"order_id": order_id, "id": message_id, "sender": other, "type": "voice"},
+        {"$set": {"listened": True, "read": True, "listened_at": datetime.now(timezone.utc).isoformat(), "read_at": datetime.now(timezone.utc).isoformat()}},
+    )
+    return {"updated": res.modified_count}
 
 
 # ==================== PUSH NOTIFICATIONS ROUTES ====================
@@ -22161,7 +22271,9 @@ async def notify_order_status_change(order_id: str, new_status: str):
         'preparing': ('جاري تحضير طلبك! 👨‍🍳', 'طلبك قيد التحضير الآن'),
         'ready': ('طلبك جاهز! ✅', 'طلبك جاهز للتوصيل'),
         'out_for_delivery': ('السائق في الطريق! 🚚', 'السائق في طريقه إليك'),
-        'delivered': ('تم التسليم! 🎉', 'استمتع بوجبتك! لا تنسى تقييم الطلب')
+        'delivered': ('تم التسليم! 🎉', 'استمتع بوجبتك! لا تنسى تقييم الطلب'),
+        'cancelled': ('تم رفض/إلغاء طلبك ❌', 'نعتذر، تم رفض أو إلغاء طلبك'),
+        'rejected': ('تم رفض طلبك ❌', 'نعتذر، تم رفض طلبك'),
     }
     
     if new_status in status_messages:

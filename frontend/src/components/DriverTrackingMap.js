@@ -623,9 +623,9 @@ export default function DriverTrackingMap({
       {/* Sidebar */}
       {showDriverList && (
         <div 
-          className={`absolute right-0 top-0 bottom-0 z-20 bg-gray-900/95 backdrop-blur-lg transition-all duration-300 ${
+          className={`absolute right-0 top-0 bottom-0 z-20 bg-[#070E22]/95 backdrop-blur-lg transition-all duration-300 ${
             showSidebar ? 'w-80' : 'w-0'
-          } overflow-hidden border-l border-gray-700`}
+          } overflow-hidden border-l border-[#2A3A66]`}
         >
           <div className="p-4 h-full flex flex-col">
             {/* Header */}
@@ -643,7 +643,7 @@ export default function DriverTrackingMap({
             
             {/* Stats */}
             <div className="grid grid-cols-3 gap-2 mb-4">
-              <div className="bg-gray-800 rounded-lg p-3 text-center">
+              <div className="bg-[#0F1A3A] rounded-lg p-3 text-center">
                 <p className="text-2xl font-bold text-white">{drivers.length}</p>
                 <p className="text-xs text-gray-400">{t('الكل')}</p>
               </div>
@@ -670,7 +670,7 @@ export default function DriverTrackingMap({
                     className={`p-3 rounded-xl cursor-pointer transition-all ${
                       selectedDriver?.id === driver.id
                         ? 'bg-blue-500/30 border border-blue-500'
-                        : 'bg-gray-800 hover:bg-gray-700 border border-transparent'
+                        : 'bg-[#0F1A3A] hover:bg-[#1A284E] border border-transparent'
                     } ${!hasLocation ? 'opacity-50' : ''}`}
                   >
                     <div className="flex items-center gap-3">
@@ -693,7 +693,7 @@ export default function DriverTrackingMap({
                     </div>
                     
                     {isBusy && driver.current_order && (
-                      <div className="mt-2 p-2 bg-gray-900/50 rounded-lg">
+                      <div className="mt-2 p-2 bg-[#070E22]/50 rounded-lg">
                         <p className="text-xs text-gray-400">
                           <span className="text-orange-400 font-medium">{t('طلب')} #{driver.current_order.order_number}</span>
                         </p>
@@ -721,7 +721,7 @@ export default function DriverTrackingMap({
       {showDriverList && !showSidebar && (
         <Button
           onClick={() => setShowSidebar(true)}
-          className="absolute right-4 top-4 z-20 bg-gray-900/90 hover:bg-gray-800"
+          className="absolute right-4 top-4 z-20 bg-[#070E22]/90 hover:bg-[#0F1A3A]"
         >
           <ChevronLeft className="h-5 w-5 ml-2" />
           {t('السائقين')} ({driversWithLocation.length})
@@ -731,7 +731,7 @@ export default function DriverTrackingMap({
       {/* Map Container */}
       <div 
         ref={mapContainerRef} 
-        className="flex-1 bg-gray-800"
+        className="flex-1 bg-[#0F1A3A]"
         style={{ marginRight: showSidebar && showDriverList ? '320px' : 0 }}
       />
       
@@ -739,21 +739,21 @@ export default function DriverTrackingMap({
       {showControls && (
         <div className="absolute left-4 top-4 z-10 space-y-2">
           {/* Zoom Controls */}
-          <div className="bg-gray-900/90 backdrop-blur rounded-xl overflow-hidden shadow-lg">
+          <div className="bg-[#070E22]/90 backdrop-blur rounded-xl overflow-hidden shadow-lg">
             <Button
               variant="ghost"
               size="icon"
               onClick={zoomIn}
-              className="w-10 h-10 text-white hover:bg-gray-700 rounded-none"
+              className="w-10 h-10 text-white hover:bg-[#1A284E] rounded-none"
             >
               <ZoomIn className="h-5 w-5" />
             </Button>
-            <div className="h-px bg-gray-700" />
+            <div className="h-px bg-[#1A284E]" />
             <Button
               variant="ghost"
               size="icon"
               onClick={zoomOut}
-              className="w-10 h-10 text-white hover:bg-gray-700 rounded-none"
+              className="w-10 h-10 text-white hover:bg-[#1A284E] rounded-none"
             >
               <ZoomOut className="h-5 w-5" />
             </Button>
@@ -762,14 +762,14 @@ export default function DriverTrackingMap({
           {/* Center Button */}
           <Button
             onClick={centerOnDrivers}
-            className="w-10 h-10 bg-gray-900/90 backdrop-blur hover:bg-gray-800 shadow-lg"
+            className="w-10 h-10 bg-[#070E22]/90 backdrop-blur hover:bg-[#0F1A3A] shadow-lg"
             size="icon"
           >
             <Locate className="h-5 w-5" />
           </Button>
           
           {/* Map Style Selector */}
-          <div className="bg-gray-900/90 backdrop-blur rounded-xl overflow-hidden shadow-lg">
+          <div className="bg-[#070E22]/90 backdrop-blur rounded-xl overflow-hidden shadow-lg">
             {['streets', 'satellite', 'dark'].map((style) => (
               <Button
                 key={style}
@@ -777,7 +777,7 @@ export default function DriverTrackingMap({
                 size="icon"
                 onClick={() => setMapStyle(style)}
                 className={`w-10 h-10 rounded-none ${
-                  mapStyle === style ? 'bg-blue-500/30 text-blue-400' : 'text-white hover:bg-gray-700'
+                  mapStyle === style ? 'bg-blue-500/30 text-blue-400' : 'text-white hover:bg-[#1A284E]'
                 }`}
               >
                 {style === 'streets' && <MapPin className="h-5 w-5" />}
@@ -791,7 +791,7 @@ export default function DriverTrackingMap({
           <Button
             onClick={() => setShowRoutes(!showRoutes)}
             className={`w-10 h-10 backdrop-blur shadow-lg ${
-              showRoutes ? 'bg-orange-500 hover:bg-orange-600' : 'bg-gray-900/90 hover:bg-gray-800'
+              showRoutes ? 'bg-orange-500 hover:bg-orange-600' : 'bg-[#070E22]/90 hover:bg-[#0F1A3A]'
             }`}
             size="icon"
           >
@@ -801,7 +801,7 @@ export default function DriverTrackingMap({
       )}
       
       {/* Legend */}
-      <div className="absolute left-4 bottom-4 z-10 bg-gray-900/90 backdrop-blur rounded-xl p-3 shadow-lg">
+      <div className="absolute left-4 bottom-4 z-10 bg-[#070E22]/90 backdrop-blur rounded-xl p-3 shadow-lg">
         <div className="space-y-2 text-sm">
           <div className="flex items-center gap-2">
             <span className="w-3 h-3 rounded-full bg-green-500" />
@@ -822,7 +822,7 @@ export default function DriverTrackingMap({
       
       {/* Loading Overlay */}
       {isLoading && (
-        <div className="absolute inset-0 bg-gray-900/50 flex items-center justify-center z-30">
+        <div className="absolute inset-0 bg-[#070E22]/50 flex items-center justify-center z-30">
           <RefreshCw className="h-8 w-8 text-white animate-spin" />
         </div>
       )}

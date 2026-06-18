@@ -8,7 +8,7 @@ import os
 import requests
 import pytest
 
-BASE_URL = (os.environ.get("REACT_APP_BACKEND_URL") or "https://maestro-retail-hub.preview.emergentagent.com").rstrip("/")
+BASE_URL = (os.environ.get("REACT_APP_BACKEND_URL") or "https://pwa-driver-track.preview.emergentagent.com").rstrip("/")
 ADMIN_EMAIL = "admin@maestroegp.com"
 ADMIN_PASSWORD = "admin123"
 OWNER_EMAIL = "owner@maestroegp.com"

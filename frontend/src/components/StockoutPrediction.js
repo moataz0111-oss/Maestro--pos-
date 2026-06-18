@@ -25,7 +25,7 @@ import { useAuth } from '../context/AuthContext';
 const API = API_URL;
 
 const STATUS_META = {
-  out_of_stock: { label: '⛔ نفد', cls: 'bg-gray-900 text-white', bar: '#1f2937' },
+  out_of_stock: { label: '⛔ نفد', cls: 'bg-[#070E22] text-white', bar: '#1f2937' },
   critical: { label: '🔴 حرج', cls: 'bg-red-500/20 text-red-700 dark:text-red-400', bar: '#ef4444' },
   warning: { label: '🟡 تحذير', cls: 'bg-amber-500/20 text-amber-700', bar: '#f59e0b' },
   safe: { label: '🟢 آمن', cls: 'bg-emerald-500/20 text-emerald-700', bar: '#10b981' },
