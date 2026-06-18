@@ -60,7 +60,7 @@ export default function SplashScreen({ durationMs = 4000, onComplete }) {
       style={{
         backgroundImage: bgUrl
           ? `url(${bgUrl})`
-          : 'linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f0f1e 100%)',
+          : 'radial-gradient(ellipse at 50% 44%, #1a2f57 0%, #0d1a38 52%, #070e22 100%)',
         backgroundSize: 'cover',
         backgroundPosition: 'center',
       }}
@@ -77,6 +77,8 @@ export default function SplashScreen({ durationMs = 4000, onComplete }) {
 
       {/* المحتوى */}
       <div className="relative z-10 flex flex-col items-center justify-center select-none">
+        {/* ✨ وميض ذهبي يلمع بعد انتهاء الحركة */}
+        <div className="splash-flash" aria-hidden="true" />
         {/* ⭐ الشعار: M هندسي ذهبي داخل سداسي يدور وينبض */}
         <div className="splash-logo-wrap" aria-hidden="true">
           <svg
@@ -251,6 +253,25 @@ export default function SplashScreen({ durationMs = 4000, onComplete }) {
         @keyframes splash-loader-move {
           0%   { transform: translateX(-100%); }
           100% { transform: translateX(420%); }
+        }
+        .splash-flash {
+          position: absolute;
+          left: 50%; top: 32%;
+          width: 46vmin; height: 46vmin;
+          transform: translate(-50%, -50%) scale(0.2);
+          border-radius: 50%;
+          background: radial-gradient(circle, rgba(255,238,170,0.95) 0%, rgba(255,209,102,0.55) 32%, transparent 70%);
+          opacity: 0;
+          pointer-events: none;
+          mix-blend-mode: screen;
+          filter: blur(2px);
+          animation: splash-flash 3.6s ease-out 2200ms infinite;
+        }
+        @keyframes splash-flash {
+          0%   { opacity: 0; transform: translate(-50%, -50%) scale(0.2); }
+          10%  { opacity: 0.95; transform: translate(-50%, -50%) scale(1); }
+          28%  { opacity: 0; transform: translate(-50%, -50%) scale(1.7); }
+          100% { opacity: 0; transform: translate(-50%, -50%) scale(1.7); }
         }
       `}</style>
     </div>

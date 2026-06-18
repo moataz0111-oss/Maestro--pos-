@@ -152,7 +152,7 @@ CSS = """
 @font-face { font-family:'Cairo'; font-weight: 700; src: url('file:///app/backend/static/fonts/Cairo-Variable.ttf'); }
 @page { size: A4; margin: 0; }
 @page content {
-  margin: 18mm 15mm 16mm 15mm;
+  margin: 18mm 15mm 10mm 15mm;
   @bottom-center { content: "Maestro EGP   •   Moataz Mehana   •   2026"; font-family:'Cairo'; font-size: 8.5pt; color:#9aa1b0; }
 }
 * { box-sizing: border-box; }
@@ -171,13 +171,13 @@ body { font-family:'Cairo', sans-serif; color:#1f2433; margin:0; }
   border:0.3mm solid rgba(246,166,35,.2); border-radius:6mm; }
 /* علامة مائية سداسية كبيرة خلف الشعار */
 .cover-wm { position:absolute; top:62mm; left:50mm; width:110mm; height:110mm; opacity:0.05; }
-.cover-mid { position:absolute; top:46mm; left:22mm; right:22mm; text-align:center; }
+.cover-mid { position:absolute; top:60mm; left:22mm; right:22mm; text-align:center; }
 .cover-logo { width:42mm; height:42mm; display:block; margin:0 auto 7mm auto; }
 .cover-brand { font-size:44pt; font-weight:700; letter-spacing:.5px; direction:ltr; }
 .cover-brand .o { color:#f6a623; }
 .cover-rule { display:inline-block; width:60mm; height:3px; background:#f6a623; border-radius:9px; margin:5mm 0 7mm 0; }
 .cover-sub { font-size:18pt; font-weight:700; color:#eef2ff; line-height:1.8; }
-.cover-desc { font-size:11.5pt; color:#c3cae0; line-height:2; max-width:150mm; margin:6mm auto 0 auto; }
+.cover-desc { font-size:11.5pt; color:#c3cae0; line-height:2.15; max-width:168mm; margin:7mm auto 0 auto; }
 .cover-bottom { position:absolute; bottom:22mm; left:22mm; right:22mm; text-align:center; }
 .cover-tag { text-align:center; font-size:10pt; color:#cdb37a; letter-spacing:3px; direction:ltr;
   text-transform:uppercase; margin-bottom:7mm; }
@@ -190,6 +190,9 @@ body { font-family:'Cairo', sans-serif; color:#1f2433; margin:0; }
 
 /* ===== صفحات المحتوى ===== */
 .page { page: content; }
+.closing-layout { width:100%; height:269mm; border-collapse:collapse; }
+.closing-mid { vertical-align:middle; text-align:center; padding-bottom:22mm; }
+.closing-bot { vertical-align:bottom; padding-bottom:0; }
 .sec-head { margin-bottom:5mm; text-align:center; }
 .sec-head .ar { font-size:21pt; font-weight:700; color:#0b1430; }
 .sec-head .en { font-size:9.5pt; font-weight:600; color:#f6a623; letter-spacing:2px; direction:ltr; text-transform:uppercase; }
@@ -261,15 +264,20 @@ body { font-family:'Cairo', sans-serif; color:#1f2433; margin:0; }
 .gold { color:#f6a623; font-weight:700; }
 
 /* الصفحة الختامية (بيضاء أنيقة + شريط أسفل باسم المؤسس) */
-.fmsg { font-size:12pt; color:#3b4357; line-height:2.35; text-align:center; max-width:162mm; margin:6mm auto 0 auto; }
-.fmsg p { margin:0 0 5mm 0; }
-.fstrip { margin-top:12mm; background:linear-gradient(160deg,#050A24,#1A2B5B); border-radius:14px;
-  padding:7mm 9mm; display:block; text-align:center; }
-.fstrip-logo { width:20mm; height:20mm; display:block; margin:0 auto 5mm auto; }
+.fmsg { font-size:11.5pt; color:#3b4357; line-height:2.05; text-align:center; max-width:162mm; display:inline-block; margin:0; }
+.fmsg p { margin:0 0 5mm 0; text-align:center; }
+.fstrip { margin-top:0; background:linear-gradient(160deg,#050A24,#1A2B5B); border-radius:12px;
+  padding:5mm 8mm; display:block; text-align:center; }
+.fstrip-logo { width:15mm; height:15mm; display:block; margin:0 auto 3mm auto; }
 .fstrip-txt { text-align:center; }
-.fstrip-txt .nm { font-size:15pt; font-weight:700; color:#fff; direction:ltr; }
-.fstrip-txt .ar { font-size:11pt; color:#f6a623; font-weight:700; margin-top:1mm; }
-.fstrip-txt .rl { font-size:9pt; color:#aeb6cc; direction:ltr; margin-top:1mm; }
+.fstrip-txt .nm { font-size:13pt; font-weight:700; color:#fff; direction:ltr; }
+.fstrip-txt .ar { font-size:10pt; color:#f6a623; font-weight:700; margin-top:1mm; }
+.fstrip-txt .rl { font-size:8.5pt; color:#aeb6cc; direction:ltr; margin-top:1mm; }
+.fstrip-contact { width:100%; margin-top:4mm; padding-top:3mm; border-top:1px solid rgba(246,166,35,0.35); direction:ltr; border-collapse:collapse; }
+.fstrip-contact td { padding:0 2mm; }
+.fc-email { color:#f6a623; font-weight:700; font-size:9pt; direction:ltr; text-align:left; }
+.fc-phone { color:#f6a623; font-weight:700; font-size:9pt; direction:ltr; text-align:right; }
+.phone-ico { display:inline-block; width:4.6mm; height:4.6mm; line-height:4.6mm; border-radius:50%; background:#f6a623; color:#081333; text-align:center; font-size:8pt; margin-right:1.6mm; vertical-align:middle; }
 """
 
 HTML_DOC = f"""<!DOCTYPE html>
@@ -347,7 +355,9 @@ HTML_DOC = f"""<!DOCTYPE html>
 </div>
 
 <!-- صفحة 7: الرسالة الختامية (بيضاء أنيقة) -->
-<div class="page">
+<div class="page closing-page">
+  <table class="closing-layout">
+  <tr><td class="closing-mid">
   <div class="sec-head"><div class="ar">رسالة المؤسس</div><div class="en">Founder's Message</div><div class="bar"></div></div>
   <div class="fmsg">
     <p>بدأت فكرة <span class="gold">Maestro EGP</span> من إيمانٍ عميق بأن الإدارة الناجحة تقوم على الدقة والوضوح والقرار السليم في الوقت المناسب. ومن هذا المبدأ وُلد هذا النظام ليكون رفيقاً ذكياً ومتطوراً لكل صاحب مؤسسةٍ يسعى للنمو دون أن يُثقله تعقيد الأنظمة أو كثرة التفاصيل.</p>
@@ -355,14 +365,22 @@ HTML_DOC = f"""<!DOCTYPE html>
     <p>وقد أُنجز هذا النظام على أيدي مختصين محترفين عالميين في مجال البرمجيات من أوروبا وشركاتٍ عالمية متطوّرة في الأنظمة، عبر فكرةٍ ذكية ومتطوّرة وعملٍ دؤوب تجاوز العامين من الجهد والتعب، ليتفوّق على أنظمةٍ رصينةٍ كبيرةٍ وعريقة في هذا المجال، ويمنح المشاريع إدارةً بأقل التكاليف الإدارية ويحدّ من الحاجة إلى الكوادر الإدارية الكبيرة — ليكون الأول في الشرق الأوسط والعالم.</p>
     <p>أتقدّم بخالص الشكر والتقدير لكل من وثق بهذا النظام واهتمّ به، ولكل من ساهم في تطويره ووصوله إلى هذه المرحلة. هذا الجهد مُهدًى لكل صاحب طموحٍ يؤمن بأن الإدارة الذكية المتطوّرة هي طريق النجاح.</p>
   </div>
+  </td></tr>
+  <tr><td class="closing-bot">
   <div class="fstrip">
     <img class="fstrip-logo" src="{LOGO}" alt="Maestro EGP"/>
     <div class="fstrip-txt">
       <div class="nm">Moataz <span style="color:#f6a623">Mehana</span></div>
       <div class="ar">معتز مهنا</div>
       <div class="rl">مؤسس ومطوّر نظام Maestro EGP — System Owner &amp; Developer</div>
+      <table class="fstrip-contact"><tr>
+        <td class="fc-email">✉ owner@maestroegp.com</td>
+        <td class="fc-phone"><span class="phone-ico">☎</span>+9647707775910</td>
+      </tr></table>
     </div>
   </div>
+  </td></tr>
+  </table>
 </div>
 
 </body></html>"""

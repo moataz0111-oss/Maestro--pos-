@@ -103,7 +103,7 @@
   },
   
   "test_credentials": {
-    "api_url": "https://pos-ocr-invoice.preview.emergentagent.com",
+    "api_url": "https://maestro-retail-hub.preview.emergentagent.com",
     "customer_menu_url": "/menu/default"
   },
   

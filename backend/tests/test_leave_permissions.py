@@ -2,7 +2,7 @@
 import os
 import requests
 
-API = os.environ.get("TEST_API_URL", "https://pos-ocr-invoice.preview.emergentagent.com") + "/api"
+API = os.environ.get("TEST_API_URL", "https://maestro-retail-hub.preview.emergentagent.com") + "/api"
 ADMIN = {"email": "admin@maestroegp.com", "password": "admin123"}
 
 

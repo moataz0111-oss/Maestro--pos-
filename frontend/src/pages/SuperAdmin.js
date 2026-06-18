@@ -77,6 +77,7 @@ import {
   Move,
   Maximize,
   X,
+  Send,
   Receipt,
   Loader2,
   Crop,
@@ -202,6 +203,16 @@ export default function SuperAdmin() {
   const [confirmOwnerPassword, setConfirmOwnerPassword] = useState('');
   const [newOwnerSecretKey, setNewOwnerSecretKey] = useState('');
   const [savingOwnerSettings, setSavingOwnerSettings] = useState(false);
+
+  // إعدادات البريد الإلكتروني (SMTP)
+  const [emailSettings, setEmailSettings] = useState({ smtp_host: 'mail.privateemail.com', smtp_port: 465, smtp_user: '', from_name: 'Maestro EGP', sender_email: '', password_set: false, configured: false });
+  const [emailPassword, setEmailPassword] = useState('');
+  const [savingEmail, setSavingEmail] = useState(false);
+  const [testEmailAddr, setTestEmailAddr] = useState('');
+  const [testingEmail, setTestingEmail] = useState(false);
+  const [inboxMessages, setInboxMessages] = useState([]);
+  const [loadingInbox, setLoadingInbox] = useState(false);
+  const [selectedMessage, setSelectedMessage] = useState(null);
 
   // Devices management state
   const [allDevices, setAllDevices] = useState([]);
@@ -1486,6 +1497,87 @@ export default function SuperAdmin() {
     }
   };
 
+  // ===== إعدادات البريد الإلكتروني =====
+  const fetchEmailSettings = async () => {
+    try {
+      const res = await axios.get(`${API}/system/email-settings`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      setEmailSettings(res.data);
+      if (res.data.sender_email) setTestEmailAddr(res.data.sender_email);
+    } catch (error) {
+      console.log('Error fetching email settings');
+    }
+  };
+
+  const saveEmailSettings = async () => {
+    if (!emailSettings.smtp_user) {
+      toast.error(t('يرجى إدخال البريد الإلكتروني'));
+      return;
+    }
+    setSavingEmail(true);
+    try {
+      const payload = {
+        smtp_host: emailSettings.smtp_host || 'mail.privateemail.com',
+        smtp_port: emailSettings.smtp_port || 465,
+        smtp_user: emailSettings.smtp_user,
+        from_name: emailSettings.from_name || 'Maestro EGP',
+        sender_email: emailSettings.sender_email || emailSettings.smtp_user,
+      };
+      if (emailPassword) payload.smtp_password = emailPassword;
+      await axios.put(`${API}/system/email-settings`, payload, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      toast.success(t('تم حفظ إعدادات البريد بنجاح'));
+      setEmailPassword('');
+      await fetchEmailSettings();
+    } catch (error) {
+      toast.error(getErrorMessage(error) || t('فشل في حفظ إعدادات البريد'));
+    } finally {
+      setSavingEmail(false);
+    }
+  };
+
+  const sendTestEmail = async () => {
+    if (!testEmailAddr) {
+      toast.error(t('يرجى إدخال بريد لإرسال الاختبار إليه'));
+      return;
+    }
+    setTestingEmail(true);
+    try {
+      const res = await axios.post(`${API}/system/test-email`, { email: testEmailAddr }, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (res.data.success) {
+        toast.success(t('تم إرسال بريد الاختبار بنجاح! تحقق من صندوق الوارد') + ` (${res.data.transport})`);
+      } else {
+        toast.error(t('فشل إرسال بريد الاختبار — تحقق من كلمة المرور'));
+      }
+    } catch (error) {
+      toast.error(getErrorMessage(error) || t('فشل إرسال بريد الاختبار — تحقق من كلمة المرور والإعدادات'));
+    } finally {
+      setTestingEmail(false);
+    }
+  };
+
+  const fetchInbox = async () => {
+    setLoadingInbox(true);
+    try {
+      const res = await axios.get(`${API}/system/inbox?limit=25`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      setInboxMessages(res.data.messages || []);
+      if ((res.data.messages || []).length === 0) {
+        toast.info(t('صندوق الوارد فارغ حالياً'));
+      }
+    } catch (error) {
+      toast.error(getErrorMessage(error) || t('فشل في جلب البريد الوارد — تحقق من كلمة المرور'));
+    } finally {
+      setLoadingInbox(false);
+    }
+  };
+
+
   const saveSystemBranding = async () => {
     setBrandingLoading(true);
     try {
@@ -1943,6 +2035,7 @@ export default function SuperAdmin() {
       fetchExpiringSubscriptions();
       fetchSubscriptionsDashboard();
       fetchOwnerSettings();
+      fetchEmailSettings();
       fetchCurrencySettings();
       fetchSalesSummary();
       fetchSubscriptionPrices();
@@ -4405,7 +4498,7 @@ export default function SuperAdmin() {
           </DialogHeader>
           
           <Tabs defaultValue="identity" className="w-full">
-            <TabsList className="grid w-full grid-cols-4 bg-gray-700/50">
+            <TabsList className="grid w-full grid-cols-5 bg-gray-700/50">
               <TabsTrigger value="identity" className="data-[state=active]:bg-purple-600">
                 <Crown className="h-4 w-4 ml-2" />
                 {t('هوية النظام')}
@@ -4413,6 +4506,10 @@ export default function SuperAdmin() {
               <TabsTrigger value="owner" className="data-[state=active]:bg-purple-600">
                 <User className="h-4 w-4 ml-2" />
                 {t('إعدادات المالك')}
+              </TabsTrigger>
+              <TabsTrigger value="email" className="data-[state=active]:bg-purple-600" data-testid="email-settings-tab">
+                <Mail className="h-4 w-4 ml-2" />
+                {t('البريد الإلكتروني')}
               </TabsTrigger>
               <TabsTrigger value="invoice" className="data-[state=active]:bg-purple-600">
                 <Receipt className="h-4 w-4 ml-2" />
@@ -4689,6 +4786,166 @@ export default function SuperAdmin() {
                 </div>
               </div>
             </TabsContent>
+
+            {/* تبويب البريد الإلكتروني (إرسال + استقبال) */}
+            <TabsContent value="email" className="space-y-6 mt-4">
+              <div className="space-y-4">
+                <h3 className="font-bold text-purple-400 flex items-center gap-2 border-b border-gray-700 pb-2">
+                  <Mail className="h-4 w-4" />
+                  {t('إعدادات البريد الإلكتروني (الإرسال والاستقبال)')}
+                </h3>
+                <p className="text-sm text-gray-400">
+                  {t('اربط بريد نظامك (Namecheap Private Email أو أي خادم). عند إنشاء أي عميل جديد تُرسَل بياناته تلقائياً، ويمكنك متابعة الرسائل الواردة هنا.')}
+                </p>
+
+                {/* حالة الاتصال */}
+                <div className={`p-3 rounded-lg border flex items-center gap-2 ${emailSettings.configured ? 'bg-green-500/10 border-green-500/30' : 'bg-yellow-500/10 border-yellow-500/30'}`} data-testid="email-status-banner">
+                  <div className={`h-2.5 w-2.5 rounded-full ${emailSettings.configured ? 'bg-green-400' : 'bg-yellow-400'}`} />
+                  <span className={`text-sm ${emailSettings.configured ? 'text-green-400' : 'text-yellow-400'}`}>
+                    {emailSettings.configured ? t('البريد مُفعّل وجاهز للإرسال والاستقبال ✅') : t('لم يكتمل الإعداد — أدخل البريد وكلمة المرور ثم احفظ')}
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label className="text-gray-300">{t('البريد الإلكتروني (اسم المستخدم)')}</Label>
+                    <Input
+                      type="email" dir="ltr" placeholder="owner@maestroegp.com"
+                      value={emailSettings.smtp_user || ''}
+                      onChange={(e) => setEmailSettings({ ...emailSettings, smtp_user: e.target.value, sender_email: e.target.value })}
+                      className="bg-gray-700/50 border-gray-600 text-white"
+                      data-testid="email-user-input"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="text-gray-300">{t('كلمة مرور البريد')}</Label>
+                    <Input
+                      type="password" dir="ltr"
+                      placeholder={emailSettings.password_set ? '•••••••• (' + t('محفوظة') + ')' : t('كلمة مرور صندوق البريد')}
+                      value={emailPassword}
+                      onChange={(e) => setEmailPassword(e.target.value)}
+                      className="bg-gray-700/50 border-gray-600 text-white"
+                      data-testid="email-password-input"
+                    />
+                    <p className="text-xs text-gray-500">{t('نفس كلمة المرور التي تفتح بها بريدك على privateemail.com')}</p>
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="text-gray-300">{t('اسم المُرسِل (يظهر للمستلم)')}</Label>
+                    <Input
+                      type="text" placeholder="Maestro EGP"
+                      value={emailSettings.from_name || ''}
+                      onChange={(e) => setEmailSettings({ ...emailSettings, from_name: e.target.value })}
+                      className="bg-gray-700/50 border-gray-600 text-white"
+                      data-testid="email-fromname-input"
+                    />
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="space-y-2">
+                      <Label className="text-gray-300">{t('خادم البريد (SMTP)')}</Label>
+                      <Input
+                        type="text" dir="ltr" placeholder="mail.privateemail.com"
+                        value={emailSettings.smtp_host || ''}
+                        onChange={(e) => setEmailSettings({ ...emailSettings, smtp_host: e.target.value })}
+                        className="bg-gray-700/50 border-gray-600 text-white"
+                        data-testid="email-host-input"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label className="text-gray-300">{t('المنفذ')}</Label>
+                      <Input
+                        type="number" dir="ltr" placeholder="465"
+                        value={emailSettings.smtp_port || 465}
+                        onChange={(e) => setEmailSettings({ ...emailSettings, smtp_port: parseInt(e.target.value) || 465 })}
+                        className="bg-gray-700/50 border-gray-600 text-white"
+                        data-testid="email-port-input"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                <Button
+                  onClick={saveEmailSettings}
+                  disabled={savingEmail}
+                  className="w-full bg-purple-600 hover:bg-purple-700"
+                  data-testid="save-email-settings-btn"
+                >
+                  {savingEmail ? (<><Loader2 className="h-4 w-4 ml-2 animate-spin" />{t('جاري الحفظ')}...</>) : (<><Save className="h-4 w-4 ml-2" />{t('حفظ إعدادات البريد')}</>)}
+                </Button>
+
+                {/* اختبار الإرسال */}
+                <div className="space-y-3 mt-4 pt-4 border-t border-gray-700">
+                  <h4 className="font-medium text-blue-400 flex items-center gap-2">
+                    <Send className="h-4 w-4" />
+                    {t('اختبار الإرسال')}
+                  </h4>
+                  <div className="flex gap-2 flex-col sm:flex-row">
+                    <Input
+                      type="email" dir="ltr" placeholder={t('أدخل بريداً لإرسال رسالة اختبارية')}
+                      value={testEmailAddr}
+                      onChange={(e) => setTestEmailAddr(e.target.value)}
+                      className="bg-gray-700/50 border-gray-600 text-white flex-1"
+                      data-testid="test-email-input"
+                    />
+                    <Button
+                      onClick={sendTestEmail}
+                      disabled={testingEmail}
+                      className="bg-blue-600 hover:bg-blue-700 whitespace-nowrap"
+                      data-testid="send-test-email-btn"
+                    >
+                      {testingEmail ? (<><Loader2 className="h-4 w-4 ml-2 animate-spin" />{t('جاري الإرسال')}...</>) : (<><Send className="h-4 w-4 ml-2" />{t('إرسال اختبار')}</>)}
+                    </Button>
+                  </div>
+                </div>
+
+                {/* صندوق الوارد (استقبال) */}
+                <div className="space-y-3 mt-4 pt-4 border-t border-gray-700">
+                  <div className="flex items-center justify-between">
+                    <h4 className="font-medium text-green-400 flex items-center gap-2">
+                      <Mail className="h-4 w-4" />
+                      {t('صندوق الوارد')}
+                    </h4>
+                    <Button
+                      onClick={fetchInbox}
+                      disabled={loadingInbox}
+                      variant="outline"
+                      className="border-gray-600 text-sm"
+                      data-testid="refresh-inbox-btn"
+                    >
+                      {loadingInbox ? (<><Loader2 className="h-4 w-4 ml-2 animate-spin" />{t('جاري التحميل')}...</>) : (<>🔄 {t('تحديث الوارد')}</>)}
+                    </Button>
+                  </div>
+                  <div className="space-y-2 max-h-80 overflow-y-auto" data-testid="inbox-list">
+                    {inboxMessages.length === 0 ? (
+                      <p className="text-sm text-gray-500 text-center py-6">{t('اضغط "تحديث الوارد" لجلب رسائلك')}</p>
+                    ) : (
+                      inboxMessages.map((m, idx) => (
+                        <div
+                          key={idx}
+                          onClick={() => setSelectedMessage(m)}
+                          className={`p-3 rounded-lg border cursor-pointer hover:bg-gray-700/40 transition-colors ${m.unread ? 'bg-gray-700/30 border-purple-500/40' : 'bg-gray-800/40 border-gray-700'}`}
+                          data-testid={`inbox-message-${idx}`}
+                        >
+                          <div className="flex items-center justify-between gap-2">
+                            <span className="text-sm font-medium text-white truncate" dir="ltr">{m.from_name || m.from || t('غير معروف')}</span>
+                            <span className="text-xs text-gray-500 whitespace-nowrap">{m.date || ''}</span>
+                          </div>
+                          <p className="text-sm text-gray-300 truncate mt-1">{m.subject || t('(بلا عنوان)')}</p>
+                          <p className="text-xs text-gray-500 truncate mt-0.5">{m.snippet || ''}</p>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </div>
+
+                <div className="p-4 bg-blue-500/10 border border-blue-500/30 rounded-lg">
+                  <p className="text-sm text-blue-400 flex items-center gap-2">
+                    <AlertCircle className="h-4 w-4 flex-shrink-0" />
+                    <span><strong>{t('Namecheap Private Email:')}</strong> {t('الخادم mail.privateemail.com، منفذ الإرسال 465. كلمة المرور هي نفسها كلمة مرور بريدك.')}</span>
+                  </p>
+                </div>
+              </div>
+            </TabsContent>
+
 
             {/* تبويب إعدادات الفواتير */}
             <TabsContent value="invoice" className="space-y-6 mt-4">
@@ -5317,6 +5574,29 @@ export default function SuperAdmin() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Dialog عرض رسالة واردة */}
+      <Dialog open={!!selectedMessage} onOpenChange={(o) => { if (!o) setSelectedMessage(null); }}>
+        <DialogContent className="bg-gray-800 border-gray-700 text-white max-w-2xl max-h-[85vh] overflow-y-auto" data-testid="message-detail-dialog">
+          <DialogHeader>
+            <DialogTitle className="text-lg flex items-center gap-2">
+              <Mail className="h-5 w-5 text-green-400" />
+              {selectedMessage?.subject || t('(بلا عنوان)')}
+            </DialogTitle>
+            <DialogDescription className="text-gray-400" dir="ltr">
+              {t('من')}: {selectedMessage?.from || ''} — {selectedMessage?.date || ''}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="mt-2 bg-white rounded-lg p-4 text-gray-900 overflow-x-auto" dir="auto">
+            {selectedMessage?.body_html ? (
+              <div dangerouslySetInnerHTML={{ __html: selectedMessage.body_html }} />
+            ) : (
+              <pre className="whitespace-pre-wrap font-sans text-sm">{selectedMessage?.body_text || selectedMessage?.snippet || ''}</pre>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
+
 
       {/* Dialog تعديل أسعار الاشتراكات */}
       <Dialog open={showPricesModal} onOpenChange={setShowPricesModal}>

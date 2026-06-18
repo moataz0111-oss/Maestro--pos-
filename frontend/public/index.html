@@ -131,11 +131,11 @@
         <noscript>You need to enable JavaScript to run this app.</noscript>
         <!-- ⭐ Initial loader يظهر قبل تشغيل React (يحلّ محل الشاشة السوداء) -->
         <style>
-          html, body { margin: 0; padding: 0; background: #0f0f1e; }
+          html, body { margin: 0; padding: 0; background: #070e22; }
           #initial-splash {
             position: fixed; inset: 0; z-index: 9999999;
             display: flex; flex-direction: column; align-items: center; justify-content: center;
-            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f0f1e 100%);
+            background: radial-gradient(ellipse at 50% 44%, #1a2f57 0%, #0d1a38 52%, #070e22 100%);
             color: #fff;
             transition: opacity 400ms ease;
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
@@ -143,6 +143,11 @@
           #initial-splash .glow {
             position: absolute; inset: 0; pointer-events: none;
             background: radial-gradient(ellipse at center, rgba(255,200,80,0.18) 0%, transparent 60%);
+          }
+          #initial-splash .watermark {
+            position: absolute; left: 50%; top: 50%;
+            width: 62vmin; height: 62vmin; transform: translate(-50%, -54%);
+            opacity: 0.06; pointer-events: none;
           }
           #initial-splash h1 {
             font-size: clamp(40px, 7.5vw, 116px);
@@ -225,9 +230,29 @@
           @keyframes splash-bar-move {
             0% { transform: translateX(-100%); } 100% { transform: translateX(420%); }
           }
+          #initial-splash .flash {
+            position: absolute; left: 50%; top: 38%;
+            width: 46vmin; height: 46vmin;
+            transform: translate(-50%, -50%) scale(0.2);
+            border-radius: 50%;
+            background: radial-gradient(circle, rgba(255,238,170,0.95) 0%, rgba(255,209,102,0.55) 32%, transparent 70%);
+            opacity: 0; pointer-events: none; mix-blend-mode: screen; filter: blur(2px);
+            animation: splash-flash 3.6s ease-out 2200ms infinite;
+          }
+          @keyframes splash-flash {
+            0%   { opacity: 0; transform: translate(-50%, -50%) scale(0.2); }
+            10%  { opacity: 0.95; transform: translate(-50%, -50%) scale(1); }
+            28%  { opacity: 0; transform: translate(-50%, -50%) scale(1.7); }
+            100% { opacity: 0; transform: translate(-50%, -50%) scale(1.7); }
+          }
         </style>
         <div id="initial-splash" aria-hidden="true">
           <div class="glow"></div>
+          <div class="flash"></div>
+          <svg class="watermark" viewBox="0 0 200 200">
+            <polygon points="100,30 158,62 158,138 100,170 42,138 42,62" fill="none" stroke="#ffd166" stroke-width="3"/>
+            <path d="M55 142 V70 L100 120 L145 70 V142" fill="none" stroke="#ffd166" stroke-width="8"/>
+          </svg>
           <svg viewBox="0 0 200 200" width="140" height="140" class="logo">
             <defs>
               <linearGradient id="g1" x1="0%" y1="0%" x2="100%" y2="100%">

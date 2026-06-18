@@ -83,7 +83,7 @@
   },
   
   "test_credentials": {
-    "api_url": "https://pos-ocr-invoice.preview.emergentagent.com",
+    "api_url": "https://maestro-retail-hub.preview.emergentagent.com",
     "admin_email": "admin@maestroegp.com",
     "admin_password": "admin123"
   },

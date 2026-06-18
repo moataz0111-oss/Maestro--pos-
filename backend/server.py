@@ -107,6 +107,121 @@ JWT_EXPIRATION_DAYS_OWNERS = 36500  # المالك والعملاء: 100 سنة 
 SENDGRID_API_KEY = os.environ.get('SENDGRID_API_KEY', '')
 SENDER_EMAIL = os.environ.get('SENDER_EMAIL', 'noreply@maestroegp.com')
 
+# SMTP Configuration (Namecheap Private Email / generic SMTP)
+SMTP_HOST = os.environ.get('SMTP_HOST', '')
+SMTP_PORT = int(os.environ.get('SMTP_PORT', '465') or 465)
+SMTP_USER = os.environ.get('SMTP_USER', '')
+SMTP_PASSWORD = os.environ.get('SMTP_PASSWORD', '')
+SMTP_FROM_NAME = os.environ.get('SMTP_FROM_NAME', 'Maestro EGP')
+
+
+async def _load_email_config() -> dict:
+    """Load email/SMTP config from DB (db.email_config id='global'), falling back to env vars.
+    The DB config (set by the owner in the control panel) takes priority over env."""
+    cfg = {
+        "smtp_host": SMTP_HOST,
+        "smtp_port": SMTP_PORT,
+        "smtp_user": SMTP_USER,
+        "smtp_password": SMTP_PASSWORD,
+        "from_name": SMTP_FROM_NAME,
+        "sender_email": SENDER_EMAIL,
+        "sendgrid_api_key": SENDGRID_API_KEY,
+    }
+    try:
+        doc = await db.email_config.find_one({"id": "global"})
+        if doc:
+            if doc.get("smtp_host"):
+                cfg["smtp_host"] = doc["smtp_host"]
+            if doc.get("smtp_port"):
+                cfg["smtp_port"] = int(doc["smtp_port"])
+            if doc.get("smtp_user"):
+                cfg["smtp_user"] = doc["smtp_user"]
+            if doc.get("smtp_password"):
+                cfg["smtp_password"] = doc["smtp_password"]
+            if doc.get("from_name"):
+                cfg["from_name"] = doc["from_name"]
+            if doc.get("sender_email"):
+                cfg["sender_email"] = doc["sender_email"]
+            if doc.get("sendgrid_api_key"):
+                cfg["sendgrid_api_key"] = doc["sendgrid_api_key"]
+    except Exception as e:
+        logger.error(f"Failed to load email config from DB: {e}")
+    return cfg
+
+
+def _smtp_send_sync(cfg: dict, to_emails, subject: str, html_content: str) -> bool:
+    """Send an HTML email synchronously via SMTP (SSL 465 or STARTTLS 587)."""
+    import smtplib
+    from email.mime.text import MIMEText
+    from email.mime.multipart import MIMEMultipart
+    from email.utils import formataddr
+
+    if isinstance(to_emails, str):
+        to_emails = [to_emails]
+    host = cfg["smtp_host"]
+    port = int(cfg.get("smtp_port") or 465)
+    user = cfg["smtp_user"]
+    password = cfg["smtp_password"]
+    sender = user or cfg.get("sender_email")
+
+    msg = MIMEMultipart('alternative')
+    msg['Subject'] = subject
+    msg['From'] = formataddr((cfg.get("from_name") or "Maestro EGP", sender))
+    msg['To'] = ', '.join(to_emails)
+    msg.attach(MIMEText(html_content, 'html', 'utf-8'))
+
+    if port == 465:
+        server = smtplib.SMTP_SSL(host, port, timeout=20)
+    else:
+        server = smtplib.SMTP(host, port, timeout=20)
+        server.starttls()
+    try:
+        server.login(user, password)
+        server.sendmail(sender, to_emails, msg.as_string())
+        return True
+    finally:
+        try:
+            server.quit()
+        except Exception:
+            pass
+
+
+async def send_system_email(to_emails, subject: str, html_content: str) -> bool:
+    """Unified email sender. Prefers SMTP (Namecheap Private Email); falls back to SendGrid.
+    Reads config from DB (owner control panel) or env. Returns True on success. Never raises."""
+    cfg = await _load_email_config()
+    # 1) SMTP (preferred)
+    if cfg.get("smtp_host") and cfg.get("smtp_user") and cfg.get("smtp_password"):
+        try:
+            ok = await asyncio.to_thread(_smtp_send_sync, cfg, to_emails, subject, html_content)
+            if ok:
+                logger.info(f"Email sent via SMTP to {to_emails}")
+                return True
+        except Exception as e:
+            logger.error(f"SMTP send failed: {e}")
+    # 2) SendGrid fallback
+    if cfg.get("sendgrid_api_key"):
+        try:
+            message = Mail(
+                from_email=cfg.get("sender_email") or SENDER_EMAIL,
+                to_emails=to_emails if isinstance(to_emails, list) else [to_emails],
+                subject=subject,
+                html_content=html_content,
+            )
+            sg = SendGridAPIClient(cfg["sendgrid_api_key"])
+            sg.send(message)
+            logger.info(f"Email sent via SendGrid to {to_emails}")
+            return True
+        except Exception as e:
+            logger.error(f"SendGrid send failed: {e}")
+    logger.warning("No email transport configured (SMTP/SendGrid) — email not sent")
+    return False
+
+
+async def email_transport_configured() -> bool:
+    cfg = await _load_email_config()
+    return bool((cfg.get("smtp_host") and cfg.get("smtp_user") and cfg.get("smtp_password")) or cfg.get("sendgrid_api_key"))
+
 # Static Files Configuration
 UPLOAD_DIR = ROOT_DIR / "uploads"
 UPLOAD_DIR.mkdir(exist_ok=True)
@@ -2252,8 +2367,8 @@ def user_can_access_branch(user: dict, branch_id: str) -> bool:
 # ==================== EMAIL SERVICE ====================
 
 async def send_shift_report_email(shift_data: dict, recipient_emails: List[str]):
-    if not SENDGRID_API_KEY or not recipient_emails:
-        logger.warning("SendGrid not configured or no recipients")
+    if not recipient_emails or not await email_transport_configured():
+        logger.warning("Email transport not configured or no recipients")
         return
     
     html_content = f"""
@@ -2288,22 +2403,18 @@ async def send_shift_report_email(shift_data: dict, recipient_emails: List[str])
     """
     
     try:
-        message = Mail(
-            from_email=SENDER_EMAIL,
-            to_emails=recipient_emails,
-            subject=f"تقرير إغلاق الصندوق - {shift_data.get('cashier_name', '')} - {datetime.now().strftime('%Y-%m-%d')}",
-            html_content=html_content
+        await send_system_email(
+            recipient_emails,
+            f"تقرير إغلاق الصندوق - {shift_data.get('cashier_name', '')} - {datetime.now().strftime('%Y-%m-%d')}",
+            html_content,
         )
-        sg = SendGridAPIClient(SENDGRID_API_KEY)
-        sg.send(message)
-        logger.info(f"Shift report email sent to {recipient_emails}")
     except Exception as e:
         logger.error(f"Failed to send email: {e}")
 
 async def send_welcome_email(recipient_email: str, tenant_name: str, owner_name: str, username: str, password: str):
     """إرسال بريد ترحيبي للعميل الجديد مع بيانات الدخول"""
-    if not SENDGRID_API_KEY or not recipient_email:
-        logger.warning("SendGrid not configured or no recipient")
+    if not recipient_email or not await email_transport_configured():
+        logger.warning("Email transport not configured or no recipient")
         return
     
     frontend_url = os.environ.get('FRONTEND_URL', 'https://maestroegp.com')
@@ -2315,8 +2426,8 @@ async def send_welcome_email(recipient_email: str, tenant_name: str, owner_name:
             
             <!-- Header -->
             <div style="text-align: center; margin-bottom: 30px;">
-                <h1 style="color: #D4AF37; font-size: 32px; margin: 0;">👑 Maestro EGP</h1>
-                <p style="color: #9ca3af; font-size: 14px; margin-top: 10px;">نظام إدارة المطاعم والكافيهات</p>
+                <img src="{frontend_url}/maestro-logo.png" alt="Maestro EGP" width="120" style="width:120px;height:120px;border-radius:22px;display:inline-block;box-shadow:0 8px 30px rgba(212,175,55,0.25);" />
+                <p style="color: #9ca3af; font-size: 14px; margin-top: 14px;">نظام محاسبي وإداري متكامل للمؤسسات والمطاعم والمشاريع الكبرى</p>
             </div>
             
             <!-- Welcome Message -->
@@ -2397,15 +2508,12 @@ async def send_welcome_email(recipient_email: str, tenant_name: str, owner_name:
     """
     
     try:
-        message = Mail(
-            from_email=SENDER_EMAIL,
-            to_emails=[recipient_email],
-            subject=f"🎉 مرحباً في {tenant_name} - بيانات الدخول",
-            html_content=html_content
+        await send_system_email(
+            [recipient_email],
+            f"🎉 مرحباً في {tenant_name} - بيانات الدخول",
+            html_content,
         )
-        sg = SendGridAPIClient(SENDGRID_API_KEY)
-        sg.send(message)
-        logger.info(f"Welcome email sent to {recipient_email}")
+        logger.info(f"Welcome email dispatched to {recipient_email}")
     except Exception as e:
         logger.error(f"Failed to send welcome email: {e}")
 
@@ -11416,6 +11524,208 @@ async def create_tenant(tenant: TenantCreate, background_tasks: BackgroundTasks,
         "access_url": f"/tenant/{tenant.slug}",
         "email_sent": True
     }
+
+PUBLIC_DIR = "/app/frontend/public"
+
+@api_router.get("/download/profile-pdf")
+async def download_profile_pdf():
+    """تحميل بروفايل PDF مباشرةً (يتجاوز الـ Service Worker)."""
+    from fastapi.responses import FileResponse
+    path = f"{PUBLIC_DIR}/Maestro-EGP-Profile.pdf"
+    if not os.path.exists(path):
+        raise HTTPException(status_code=404, detail="الملف غير موجود")
+    return FileResponse(path, media_type="application/pdf", filename="Maestro-EGP-Profile.pdf")
+
+
+@api_router.get("/download/logo")
+async def download_logo():
+    """تحميل الشعار الموحّد الدائري."""
+    from fastapi.responses import FileResponse
+    path = f"{PUBLIC_DIR}/maestro-logo-circle.png"
+    if not os.path.exists(path):
+        raise HTTPException(status_code=404, detail="الملف غير موجود")
+    return FileResponse(path, media_type="image/png", filename="maestro-logo.png")
+
+
+@api_router.get("/download/splash-video")
+async def download_splash_video():
+    """تحميل فيديو شاشة التحميل."""
+    from fastapi.responses import FileResponse
+    path = f"{PUBLIC_DIR}/maestro-splash.mp4"
+    if not os.path.exists(path):
+        raise HTTPException(status_code=404, detail="الملف غير موجود")
+    return FileResponse(path, media_type="video/mp4", filename="maestro-splash.mp4")
+
+
+@api_router.get("/system/email-settings")
+async def get_email_settings(current_user: dict = Depends(verify_super_admin)):
+    """جلب إعدادات البريد (بدون كشف كلمة المرور)."""
+    doc = await db.email_config.find_one({"id": "global"}) or {}
+    cfg = await _load_email_config()
+    return {
+        "smtp_host": doc.get("smtp_host", SMTP_HOST or "mail.privateemail.com"),
+        "smtp_port": doc.get("smtp_port", SMTP_PORT or 465),
+        "smtp_user": doc.get("smtp_user", SMTP_USER or ""),
+        "from_name": doc.get("from_name", SMTP_FROM_NAME or "Maestro EGP"),
+        "sender_email": doc.get("sender_email", SENDER_EMAIL or ""),
+        "password_set": bool(cfg.get("smtp_password")),
+        "configured": bool((cfg.get("smtp_host") and cfg.get("smtp_user") and cfg.get("smtp_password")) or cfg.get("sendgrid_api_key")),
+    }
+
+
+@api_router.put("/system/email-settings")
+async def update_email_settings(payload: dict, current_user: dict = Depends(verify_super_admin)):
+    """حفظ إعدادات البريد في قاعدة البيانات (تبقى بعد النشر)."""
+    update = {
+        "id": "global",
+        "smtp_host": (payload.get("smtp_host") or "mail.privateemail.com").strip(),
+        "smtp_port": int(payload.get("smtp_port") or 465),
+        "smtp_user": (payload.get("smtp_user") or "").strip(),
+        "from_name": (payload.get("from_name") or "Maestro EGP").strip(),
+        "sender_email": (payload.get("sender_email") or payload.get("smtp_user") or "").strip(),
+        "updated_at": datetime.now(timezone.utc).isoformat(),
+        "updated_by": current_user.get("id"),
+    }
+    # كلمة المرور تُحدَّث فقط إذا أُرسلت (حتى لا تُمحى عند الحفظ بدون تغييرها)
+    pwd = payload.get("smtp_password")
+    if pwd:
+        update["smtp_password"] = pwd
+    await db.email_config.update_one({"id": "global"}, {"$set": update}, upsert=True)
+    cfg = await _load_email_config()
+    return {"success": True, "configured": bool(cfg.get("smtp_host") and cfg.get("smtp_user") and cfg.get("smtp_password"))}
+
+
+@api_router.get("/system/inbox")
+async def get_inbox(limit: int = 25, current_user: dict = Depends(verify_super_admin)):
+    """جلب آخر الرسائل الواردة من صندوق البريد عبر IMAP (Namecheap Private Email)."""
+    cfg = await _load_email_config()
+    host = cfg.get("smtp_host") or "mail.privateemail.com"
+    user = cfg.get("smtp_user")
+    password = cfg.get("smtp_password")
+    if not (user and password):
+        raise HTTPException(status_code=400, detail="لم يتم إعداد البريد بعد (أدخل البريد وكلمة المرور)")
+
+    def _fetch():
+        import imaplib, email
+        from email.header import decode_header
+        from email.utils import parseaddr
+
+        def _dec(val):
+            if not val:
+                return ""
+            parts = decode_header(val)
+            out = ""
+            for txt, enc in parts:
+                if isinstance(txt, bytes):
+                    try:
+                        out += txt.decode(enc or "utf-8", errors="replace")
+                    except Exception:
+                        out += txt.decode("utf-8", errors="replace")
+                else:
+                    out += txt
+            return out
+
+        messages = []
+        imap = imaplib.IMAP4_SSL(host, 993, timeout=25)
+        try:
+            imap.login(user, password)
+            imap.select("INBOX")
+            typ, data = imap.search(None, "ALL")
+            ids = data[0].split()
+            ids = ids[-max(1, min(int(limit), 50)):]
+            for mid in reversed(ids):
+                typ, msg_data = imap.fetch(mid, "(RFC822)")
+                if typ != "OK" or not msg_data or not msg_data[0]:
+                    continue
+                msg = email.message_from_bytes(msg_data[0][1])
+                from_raw = _dec(msg.get("From"))
+                from_name, from_addr = parseaddr(from_raw)
+                subject = _dec(msg.get("Subject"))
+                date = msg.get("Date", "")
+                body_text, body_html = "", ""
+                if msg.is_multipart():
+                    for part in msg.walk():
+                        ctype = part.get_content_type()
+                        disp = str(part.get("Content-Disposition") or "")
+                        if "attachment" in disp:
+                            continue
+                        try:
+                            payload = part.get_payload(decode=True)
+                            if not payload:
+                                continue
+                            charset = part.get_content_charset() or "utf-8"
+                            decoded = payload.decode(charset, errors="replace")
+                        except Exception:
+                            continue
+                        if ctype == "text/plain" and not body_text:
+                            body_text = decoded
+                        elif ctype == "text/html" and not body_html:
+                            body_html = decoded
+                else:
+                    try:
+                        payload = msg.get_payload(decode=True)
+                        charset = msg.get_content_charset() or "utf-8"
+                        decoded = payload.decode(charset, errors="replace") if payload else ""
+                    except Exception:
+                        decoded = ""
+                    if msg.get_content_type() == "text/html":
+                        body_html = decoded
+                    else:
+                        body_text = decoded
+                snippet = (body_text or "").strip().replace("\n", " ")[:140]
+                messages.append({
+                    "from": from_addr or from_raw,
+                    "from_name": from_name or from_addr or from_raw,
+                    "subject": subject,
+                    "date": date,
+                    "snippet": snippet,
+                    "body_text": body_text[:20000],
+                    "body_html": body_html[:50000],
+                })
+            return messages
+        finally:
+            try:
+                imap.logout()
+            except Exception:
+                pass
+
+    try:
+        messages = await asyncio.to_thread(_fetch)
+        return {"messages": messages, "count": len(messages)}
+    except Exception as e:
+        logger.error(f"IMAP inbox fetch failed: {e}")
+        raise HTTPException(status_code=502, detail="فشل الاتصال بصندوق البريد — تحقق من البريد وكلمة المرور")
+
+
+@api_router.post("/system/test-email")
+async def send_test_email(payload: dict, current_user: dict = Depends(verify_super_admin)):
+    """إرسال بريد اختباري للتحقق من إعدادات SMTP/SendGrid."""
+    to = (payload or {}).get("email")
+    if not to:
+        raise HTTPException(status_code=400, detail="يرجى إدخال البريد الإلكتروني")
+    cfg = await _load_email_config()
+    transport = "SMTP" if (cfg.get("smtp_host") and cfg.get("smtp_user") and cfg.get("smtp_password")) else ("SendGrid" if cfg.get("sendgrid_api_key") else None)
+    if not transport:
+        raise HTTPException(status_code=400, detail="لم يتم إعداد أي خدمة بريد (SMTP/SendGrid)")
+    html = f"""
+    <html dir="rtl" style="font-family: Arial, sans-serif;">
+    <body style="background:#1a1a2e;padding:30px;">
+      <div style="max-width:520px;margin:0 auto;background:#16213e;border-radius:16px;padding:30px;border:1px solid rgba(212,175,55,.25);">
+        <h1 style="color:#D4AF37;text-align:center;margin:0;">👑 Maestro EGP</h1>
+        <p style="color:#10B981;text-align:center;font-size:18px;margin-top:20px;">✅ تم إعداد البريد بنجاح!</p>
+        <p style="color:#d1d5db;text-align:center;line-height:1.8;">
+          هذه رسالة اختبارية للتأكد من أن نظامك يستطيع إرسال الإيميلات تلقائياً.
+          عند إنشاء أي عميل جديد، ستُرسَل بيانات الدخول إليه تلقائياً.
+        </p>
+        <p style="color:#6b7280;text-align:center;font-size:12px;margin-top:25px;">عبر {transport} — {datetime.now().strftime('%Y-%m-%d %H:%M')}</p>
+      </div>
+    </body></html>
+    """
+    ok = await send_system_email([to], "✅ اختبار بريد Maestro EGP", html)
+    if not ok:
+        raise HTTPException(status_code=502, detail="فشل إرسال البريد — تحقق من كلمة المرور وإعدادات الخادم")
+    return {"success": ok, "transport": transport, "to": to}
+
 
 @api_router.get("/super-admin/tenants/{tenant_id}")
 async def get_tenant_details(tenant_id: str, current_user: dict = Depends(verify_super_admin)):
@@ -21036,7 +21346,7 @@ async def get_menu_link(request: Request, current_user: dict = Depends(get_curre
         base_url = f"{parsed.scheme}://{parsed.netloc}"
     else:
         # fallback للـ environment variable
-        base_url = os.environ.get('REACT_APP_BACKEND_URL', 'https://pos-ocr-invoice.preview.emergentagent.com')
+        base_url = os.environ.get('REACT_APP_BACKEND_URL', 'https://maestro-retail-hub.preview.emergentagent.com')
     
     menu_url = f"{base_url}/menu/{tenant.get('menu_slug', tenant_id)}"
     

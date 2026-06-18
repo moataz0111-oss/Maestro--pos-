@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html dir="ltr" lang="en">
+<head>
+<meta charset="utf-8">
+<title>Maestro EGP Circle Logo</title>
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  html,body { width:1024px; height:1024px; overflow:hidden; }
+  body {
+    display:flex; align-items:center; justify-content:center;
+    background: radial-gradient(circle at 50% 44%, #1c3361 0%, #0e1d40 55%, #081026 100%);
+    font-family: 'Cairo', Arial, sans-serif; position:relative;
+  }
+  .wm { position:absolute; left:50%; top:50%; transform:translate(-50%,-48%); width:760px; height:760px; opacity:0.055; }
+  .stage { display:flex; flex-direction:column; align-items:center; }
+  .emblem { filter: drop-shadow(0 10px 40px rgba(255,200,80,0.45)); }
+  .title { margin-top:34px; font-size:96px; font-weight:900; letter-spacing:0.01em; text-shadow:0 6px 30px rgba(0,0,0,0.5), 0 0 50px rgba(255,200,80,0.25); }
+  .m1 { background:linear-gradient(90deg,#ffffff,#fff7d6 40%,#ffd166 60%,#ffffff); -webkit-background-clip:text; background-clip:text; -webkit-text-fill-color:transparent; }
+  .egp { background:linear-gradient(180deg,#ffd166,#f59e0b); -webkit-background-clip:text; background-clip:text; -webkit-text-fill-color:transparent; }
+  .underline { width:330px; height:5px; margin-top:22px; border-radius:999px; background:linear-gradient(90deg,transparent,#ffd166 30%,#f59e0b 50%,#ffd166 70%,transparent); box-shadow:0 0 14px rgba(255,209,102,0.6); }
+</style>
+</head>
+<body>
+  <svg class="wm" viewBox="0 0 200 200" aria-hidden="true">
+    <polygon points="100,30 158,62 158,138 100,170 42,138 42,62" fill="none" stroke="#ffd166" stroke-width="3"/>
+    <path d="M55 142 V70 L100 120 L145 70 V142" fill="none" stroke="#ffd166" stroke-width="8"/>
+  </svg>
+  <div class="stage">
+    <svg class="emblem" viewBox="0 0 200 200" width="380" height="380" aria-hidden="true">
+      <defs>
+        <linearGradient id="g" x1="0%" y1="0%" x2="100%" y2="100%">
+          <stop offset="0%" stop-color="#ffe7a0"/><stop offset="50%" stop-color="#ffd166"/><stop offset="100%" stop-color="#f59e0b"/>
+        </linearGradient>
+        <radialGradient id="d" cx="50%" cy="50%" r="50%">
+          <stop offset="0%" stop-color="#1a1a2e" stop-opacity="0.95"/><stop offset="70%" stop-color="#0f0f1e" stop-opacity="0.9"/><stop offset="100%" stop-color="#000" stop-opacity="0.85"/>
+        </radialGradient>
+        <filter id="glow" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="2.5" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+      </defs>
+      <circle cx="100" cy="100" r="86" fill="url(#d)"/>
+      <circle cx="100" cy="100" r="86" stroke="url(#g)" stroke-width="2" fill="none" opacity="0.7"/>
+      <circle cx="100" cy="100" r="94" stroke="url(#g)" stroke-width="3" fill="none" stroke-dasharray="40 200" stroke-linecap="round"/>
+      <polygon points="100,30 158,62 158,138 100,170 42,138 42,62" fill="none" stroke="url(#g)" stroke-width="3.5" filter="url(#glow)"/>
+      <path d="M55 142 V70 L100 120 L145 70 V142" fill="none" stroke="url(#g)" stroke-width="9" stroke-linecap="round" stroke-linejoin="round" filter="url(#glow)"/>
+      <circle cx="100" cy="100" r="4" fill="url(#g)"/>
+    </svg>
+    <div class="title"><span class="m1">Maestro</span> <span class="egp">EGP</span></div>
+    <div class="underline"></div>
+  </div>
+</body>
+</html>

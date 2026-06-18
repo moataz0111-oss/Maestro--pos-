@@ -1,5 +1,19 @@
 # Maestro EGP - Multi-Tenant POS System PRD
 
+
+## FEATURE (18 يونيو 2026) — بريد النظام (إرسال + استقبال) من لوحة تحكم المالك + روابط الشعار/الفيديو ✅
+**طلب المستخدم:** عند إنشاء أي عميل تُرسَل بياناته تلقائياً لبريده؛ وربط البريد في الاتجاهين (إرسال واستقبال) داخل النظام؛ وإدخال إعدادات البريد من لوحة التحكم (لا من .env). بريد النظام: owner@maestroegp.com على Namecheap Private Email.
+**ما تم (Backend `server.py`):**
+- موحّد `send_system_email()` يفضّل SMTP (Namecheap) ثم SendGrid كاحتياط. يقرأ الإعدادات من DB (`email_config` id='global') أولاً ثم من env. دوال الترحيب/تقرير الإغلاق تمر عبره.
+- `_smtp_send_sync` عبر smtplib (SSL 465 / STARTTLS 587). `_load_email_config()` يدمج DB+env. `email_transport_configured()`.
+- Endpoints (super_admin): `GET/PUT /api/system/email-settings` (كلمة المرور لا تُكشف، تُحدَّث فقط إن أُرسلت)، `POST /api/system/test-email`، `GET /api/system/inbox?limit=` (IMAP عبر imaplib SSL 993 — يجلب آخر الرسائل: من/الموضوع/التاريخ/مقتطف/النص/HTML).
+- إرسال الترحيب التلقائي عند إنشاء المستأجر موجود مسبقاً (`send_welcome_email`) ويعمل الآن فعلياً عبر SMTP.
+**Frontend (`SuperAdmin.js`):** تبويب خامس "البريد الإلكتروني" في "إعدادات النظام الرئيسي": حقول (البريد/كلمة المرور/اسم المرسل/الخادم/المنفذ) + حالة الاتصال + حفظ + اختبار إرسال + صندوق وارد (تحديث + قائمة + نافذة عرض الرسالة). testids: email-settings-tab, email-user-input, email-password-input, save-email-settings-btn, test-email-input, send-test-email-btn, refresh-inbox-btn, inbox-list, message-detail-dialog.
+**التحقق:** curl حيّ — GET/PUT email-settings يعملان، test-email/inbox يرجعان خطأ عربياً لطيفاً عند غياب كلمة المرور (400). الإعداد الافتراضي mail.privateemail.com:465. **ينقص فقط: إدخال المالك كلمة مرور البريد في اللوحة على الإنتاج.**
+**أصول للمستخدم:** الشعار الموحّد `/icons/admin-icon-512.png` (سداسي ذهبي)، فيديو شاشة التحميل `/maestro-splash.mp4` و`/maestro-splash.webm` (مسجّل عبر Playwright، في public).
+**ملاحظة 502:** "Frontend Preview Only / Wake up servers" سلوك معاينة طبيعي (سكون تلقائي) — لا يظهر على الإنتاج maestroegp.com. الباك إند سليم 200. الرابط الصحيح للمعاينة: REACT_APP_BACKEND_URL (smart-commerce-pwa).
+**كاش:** sw-offline v19، sw-customer v8، sw-driver v6.
+
 ## FIXES (11 يونيو 2026) — 3 طلبات من المستخدم: مكالمة الطلب الواردة + خصوصية الجرد لكل فرع + أجور توصيل بنطاقات الكم ✅
 **(P0) إشعار الطلب الوارد للكاشير لم يكن يصل (يظهر في "المعلّق" فقط):**
 - السبب الجذري: تطبيق الزبائن ينشئ الطلب عبر `server.py /customer/order/{tenant_id}` (سطر ~21006) الذي **لم يكن يُنشئ وثيقة `order_notifications`** إطلاقاً (كود الإشعار كان في مسار `customer_menu.py` غير مستخدم). فلا تظهر مكالمة `IncomingOrderCall`.

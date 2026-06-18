@@ -107,8 +107,11 @@ try {
       <App />
     </React.StrictMode>
   );
-  hideLoader();
-  
+  // ⭐ لا نُخفي شاشة الشعار إلا بعد أن يرسم React المحتوى فعلياً (منع الوميض الأبيض عند إعادة التحميل)
+  requestAnimationFrame(() => requestAnimationFrame(() => hideLoader()));
+  // أمان إضافي: إخفاء بعد ثانيتين كحد أقصى مهما حدث
+  setTimeout(hideLoader, 2000);
+
   // تسجيل Service Worker بعد تحميل التطبيق
   registerServiceWorker();
 } catch (error) {
