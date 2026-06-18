@@ -500,6 +500,31 @@ async def startup_event():
     logger.info("✅ Application started successfully (heavy migrations deferred to background)")
 
 
+async def update_contact_page_texts_v1():
+    """يحدّث نصوص صفحة التواصل في إعدادات الفاتورة على الإنتاج بشكل آمن (idempotent).
+    يُحدّث السطر التعريفي (promo_text) فقط إذا كان لا يزال أحد القيم القديمة المعروفة،
+    ونص تعريف النظام (system_intro) فقط إذا كان فارغاً — حتى لا نطمس أي تخصيص للمالك."""
+    NEW_PROMO = "نظام محاسبي وإداري متكامل للمؤسسات والمطاعم والمشاريع التجارية الكبرى"
+    NEW_INTRO = "منصة شاملة ذكية ومتطورة تدير العمليات، والمخزون، والتصنيع، والمشتريات، والتوصيل، والموارد البشرية والمالية في نظام واحد دقيق يعمل حتى بدون إنترنت."
+    OLD_PROMOS = {
+        "نظام إدارة متكامل للمطاعم والكافيهات",
+        "نظام محاسبي وإداري متكامل للمطاعم والمشاريع",
+    }
+    doc = await db.settings.find_one({"type": "system_invoice_settings"})
+    if not doc:
+        return
+    value = doc.get("value") or {}
+    updates = {}
+    if value.get("promo_text") in OLD_PROMOS or not value.get("promo_text"):
+        updates["value.promo_text"] = NEW_PROMO
+    if not value.get("system_intro"):
+        updates["value.system_intro"] = NEW_INTRO
+    if updates:
+        await db.settings.update_one({"type": "system_invoice_settings"}, {"$set": updates})
+        logger.info(f"✅ update_contact_page_texts_v1 applied: {list(updates.keys())}")
+
+
+
 async def _run_deferred_startup_tasks():
     """ينفّذ كل الترحيلات/التهيئات الثقيلة في الخلفية تسلسلياً بعد إقلاع الخادم وفتح المنفذ.
     كل مهمة محمية بـ try/except حتى لا يُفشل فشلُ مهمة واحدة بقيّةَ المهام، ونتيح المجال
@@ -525,6 +550,7 @@ async def _run_deferred_startup_tasks():
         ("backfill_tenant_id_on_products_v1", backfill_tenant_id_on_products_v1),
         ("renumber_offline_orders_chronologically_v1", renumber_offline_orders_chronologically_v1),
         ("renumber_offline_orders_chronologically_v2", renumber_offline_orders_chronologically_v2),
+        ("update_contact_page_texts_v1", update_contact_page_texts_v1),
     ]
     for name, fn in _deferred:
         try:
