@@ -13052,18 +13052,24 @@ async def reset_branch_sales(
     # سجلات المكالمات (call center) لهذا الفرع
     deleted["call_logs"] = (await db.call_logs.delete_many(base_q)).deleted_count
     
+    # === حذف مخزون الفرع نهائياً (ليعود الفرع جديداً بلا مواد) ===
+    # يرجع الفرع إلى حالة جديدة تماماً: لا منتجات ولا مخزون، ليبدأ بجرد صحيح من الصفر
+    inv_deleted = await db.branch_inventory.delete_many({"branch_id": branch_id})
+    branch_inventory_deleted = inv_deleted.deleted_count
+    
     # تصفير حالة الطاولات (مهيأة للاستخدام)
     await db.tables.update_many(base_q, {"$set": {
         "status": "available",
         "current_order_id": None
     }})
     
-    total_deleted = sum(deleted.values())
+    total_deleted = sum(deleted.values()) + branch_inventory_deleted
     
     return {
         "message": f"تم تصفير فرع '{branch.get('name','')}' بنجاح",
         "branch_name": branch.get("name", ""),
         "total_deleted": total_deleted,
+        "branch_inventory_deleted": branch_inventory_deleted,
         "details": deleted
     }
 
