@@ -13009,14 +13009,20 @@ async def reset_branch_sales(
         raise HTTPException(status_code=404, detail="الفرع غير موجود لهذا العميل")
     
     base_q = {"tenant_id": tenant_id, "branch_id": branch_id}
+    # طلبات الفروع تُخزَّن بحقول to_branch_id/from_branch_id وليس branch_id — لذا نطابق كل الصيغ
+    branch_match = {"$or": [
+        {"branch_id": branch_id},
+        {"to_branch_id": branch_id},
+        {"from_branch_id": branch_id},
+    ]}
     
     # === حذف كل البيانات المعاملاتية للفرع ===
     deleted = {}
     
     # طلبات + إلغاءات + توصيل (كلها بنفس collection)
     deleted["orders"] = (await db.orders.delete_many(base_q)).deleted_count
-    deleted["branch_orders"] = (await db.branch_orders.delete_many(base_q)).deleted_count
-    deleted["branch_orders_new"] = (await db.branch_orders_new.delete_many(base_q)).deleted_count
+    deleted["branch_orders"] = (await db.branch_orders.delete_many(branch_match)).deleted_count
+    deleted["branch_orders_new"] = (await db.branch_orders_new.delete_many(branch_match)).deleted_count
     
     # ورديات + إغلاقات الصندوق
     deleted["shifts"] = (await db.shifts.delete_many(base_q)).deleted_count
