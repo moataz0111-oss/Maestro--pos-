@@ -12,7 +12,7 @@ from datetime import datetime, timezone
 import requests
 from pymongo import MongoClient
 
-API = os.environ.get("TEST_API_URL", "https://pwa-driver-track.preview.emergentagent.com") + "/api"
+API = os.environ.get("TEST_API_URL", "https://pos-security-audit-1.preview.emergentagent.com") + "/api"
 ADMIN = {"email": "admin@maestroegp.com", "password": "admin123"}
 MONGO_URL = os.environ.get("MONGO_URL", "mongodb://localhost:27017")
 DB_NAME = os.environ.get("DB_NAME", "maestro_pos")

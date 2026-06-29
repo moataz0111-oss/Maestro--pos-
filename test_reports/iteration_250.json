@@ -1,0 +1,39 @@
+{
+  "summary": "iter250 — verified NEW DRIVER TOKEN system (IDOR remediation) + staff/driver split on shared routers + full iter247/248/249 regression. 49/49 pytest cases PASS. Driver opaque tokens via driver_tokens collection working; ?driver_id IDOR closed (param removed; driver derived from token); order-notifications & drivers routers accept staff JWT OR driver token, but management endpoints stay staff-only.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_security_hardening_iter250.py",
+    "/app/test_reports/pytest/iter250_results.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "routes/shared.py L124-137: get_current_driver — opaque token lookup against driver_tokens collection (good: not a JWT, no signature replay surface). Consider adding token expiry (expires_at field + index) and revocation on logout; currently any issued token appears to live forever.",
+    "routes/shared.py L139-159: get_staff_or_driver — tries JWT first then opaque, returns 401 with generic 'غير مصرح' message. Good. Suggest adding 'tenant_id' echo on the returned driver dict for consistent build_tenant_query usage downstream.",
+    "server.py /api/driver/login (~L21755): issues token and stores it in driver_tokens. Confirm a unique index on token field (db.driver_tokens.create_index('token', unique=True)) and on driver_id+token to avoid duplicates.",
+    "Driver login still uses 4-digit PIN — brute-force risk. Default PIN 1234 was the original attack vector; recommend per-driver lockout (5 fails => 15 min) and force PIN reset on first login.",
+    "routes/order_notifications.py: router-level get_staff_or_driver + per-route get_current_user on management endpoints — correct two-layer pattern. POST /api/order-notifications is now STAFF-only; main agent should re-verify any internal order-creation flow that previously called this without a JWT.",
+    "routes/drivers_routes.py L18: dependencies=[Depends(get_staff_or_driver)] — but per-endpoint POST/PUT/DELETE still use Depends(get_current_user), so drivers are blocked from management ops. Confirmed by tests.",
+    "server.py remains ~24k lines — recommend continued extraction of driver/* and order-* routes into routers/, as already done for order_notifications and drivers."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_security_hardening_iter250.py (new)"
+  ],
+  "success_rate": {
+    "backend": "100% (49/49)",
+    "frontend": "n/a (backend-only scope per request)"
+  },
+  "test_credentials": "admin@maestroegp.com/admin123 ; owner@maestroegp.com/owner123 secret_key=271018 ; driver phone=07801111111 pin=1234 (id demo-drv-1) ; PRINT_AGENT_KEY=maestro-print-9f3a2c7e1b ; CALLCENTER_WEBHOOK_SECRET=maestro-cc-7d1e4b8a2f",
+  "seed_data_creation": "Created 1 TEST_cashier_* user via /api/auth/register and 1 driver_tokens row per driver login (module-scoped fixture). Cleaned up: db.users.delete_many({email:/^TEST_/}) => 2 deleted. driver_tokens rows left in place (no harm; consumed by future logins).",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Run `pytest backend/tests/test_security_hardening_iter250.py -v` to re-verify. Covers: (1) driver login token issuance, (2) /api/driver/orders|update-location|orders/{id}/status auth + IDOR fix (driver_id query ignored), (3) shared GET on /api/order-notifications for staff+driver, staff-only on /escalations|POST|read-all|printed|cleanup, (4) /api/drivers/{id}/stats|orders shared, staff-only POST/PUT/DELETE, (5) full iter247/248/249 regression (register, login w/ secret, anon-blocked endpoints, print-queue key, invoice-settings auth, security headers, callcenter webhook). All 49 tests pass against http://localhost:8001.",
+  "rca of the issue": "Pre-iter250 RCA: driver endpoints accepted driver_id as a query parameter with no authentication — anyone could call GET /api/driver/orders?driver_id=<any> and observe another driver's assigned orders (IDOR). Default PIN 1234 on the legacy /api/driver/login made enumeration trivial. Mitigation (verified): (a) /api/driver/login now issues an opaque random token stored in driver_tokens; (b) driver endpoints (orders, update-location, status) declare Depends(get_current_driver), which resolves driver from token — driver_id query param removed/ignored; (c) shared endpoints use get_staff_or_driver which accepts either JWT or opaque token; (d) management endpoints retain Depends(get_current_user) so driver tokens cannot escalate. Residual hardening recommendations: enforce token expiry, add brute-force lockout on PIN, require PIN rotation."
+}

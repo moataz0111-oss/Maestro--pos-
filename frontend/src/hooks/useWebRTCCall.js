@@ -225,7 +225,11 @@ export function useWebRTCCall({ API, role, driverId, orderId, callerName = '' })
       if (callStateRef.current !== 'idle') return;
       try {
         const params = role === 'driver' ? { driver_id: driverId } : { order_id: orderId };
-        const r = await axios.get(`${API}/calls/incoming`, { params });
+        const cfg = { params };
+        if (role === 'driver') {
+          cfg.headers = { Authorization: `Bearer ${localStorage.getItem('driver_token') || ''}` };
+        }
+        const r = await axios.get(`${API}/calls/incoming`, cfg);
         if (r.data.call && callStateRef.current === 'idle') {
           setIncomingCall(r.data.call);
           setPeerName(r.data.call.caller === 'customer' ? (r.data.call.customer_name || 'الزبون') : (r.data.call.driver_name || r.data.call.caller_name || 'السائق'));

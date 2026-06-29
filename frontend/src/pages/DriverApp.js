@@ -298,6 +298,9 @@ export default function DriverApp() {
       
       if (res.data.driver) {
         const driverData = res.data.driver;
+        if (res.data.token) {
+          localStorage.setItem('driver_token', res.data.token);
+        }
         setDriver(driverData);
         setIsLoggedIn(true);
         localStorage.setItem('driver_app_session', JSON.stringify(driverData));
@@ -316,11 +319,11 @@ export default function DriverApp() {
   };
 
   // جلب الطلبات المسندة للسائق
+  const dAuth = () => ({ headers: { Authorization: `Bearer ${localStorage.getItem('driver_token') || ''}` } });
+
   const fetchOrders = async (driverId) => {
     try {
-      const res = await axios.get(`${API}/driver/orders`, {
-        params: { driver_id: driverId || driver?.id }
-      });
+      const res = await axios.get(`${API}/driver/orders`, dAuth());
       const newOrders = res.data || [];
       setOrders(newOrders);
       checkForNewOrders(newOrders);
@@ -348,10 +351,10 @@ export default function DriverApp() {
 
     if (driver) {
       try {
-        await axios.post(`${API}/driver/update-location?driver_id=${driver.id}`, {
+        await axios.post(`${API}/driver/update-location`, {
           latitude,
           longitude
-        });
+        }, dAuth());
       } catch (error) {
         console.log('Error updating location:', error);
       }
@@ -399,7 +402,7 @@ export default function DriverApp() {
   const deliverOrder = async (orderId) => {
     try {
       await axios.put(`${API}/driver/orders/${orderId}/status`, null, {
-        params: { status: 'delivered', driver_id: driver.id }
+        params: { status: 'delivered' }, ...dAuth()
       });
       playNotificationSound();
       toast.success(t('تم تسليم الطلب بنجاح!'));
@@ -415,7 +418,7 @@ export default function DriverApp() {
   const startDelivery = async (orderId) => {
     try {
       await axios.put(`${API}/driver/orders/${orderId}/status`, null, {
-        params: { status: 'out_for_delivery', driver_id: driver.id }
+        params: { status: 'out_for_delivery' }, ...dAuth()
       });
       toast.success(t('تم تحديث الحالة - أنت الآن في الطريق'));
       fetchOrders();
@@ -499,6 +502,7 @@ export default function DriverApp() {
     setOrders([]);
     localStorage.removeItem('driver_app_session');
     localStorage.removeItem('driver_phone');
+    localStorage.removeItem('driver_token');
     toast.info(t('تم تسجيل الخروج'));
   };
 
@@ -555,7 +559,7 @@ export default function DriverApp() {
     const poll = async () => {
       try {
         const res = await axios.get(`${API}/order-notifications`, {
-          params: { driver_id: driver.id, unread_only: true, limit: 20 },
+          params: { driver_id: driver.id, unread_only: true, limit: 20 }, ...dAuth()
         });
         const list = res.data?.notifications || [];
         if (!active) return;
@@ -568,7 +572,7 @@ export default function DriverApp() {
           } else if (n.type === 'new_order_driver') {
             toast.info(`${t('طلب جديد على اسمك قيد التحضير')} 🍳 #${n.order_number}`, { duration: 8000 });
           }
-          try { await axios.put(`${API}/order-notifications/${n.id}/read`); } catch (e) { /* noop */ }
+          try { await axios.put(`${API}/order-notifications/${n.id}/read`, null, dAuth()); } catch (e) { /* noop */ }
         }
         fetchOrders();
       } catch (e) { /* noop */ }

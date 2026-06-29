@@ -11,11 +11,11 @@ import math
 
 from .shared import (
     get_database, get_current_user, get_user_tenant_id,
-    build_tenant_query, UserRole, OrderStatus
+    build_tenant_query, UserRole, OrderStatus, get_staff_or_driver
 )
 
 logger = logging.getLogger(__name__)
-router = APIRouter(prefix="/drivers", tags=["Drivers"])
+router = APIRouter(prefix="/drivers", tags=["Drivers"], dependencies=[Depends(get_staff_or_driver)])
 
 # ==================== MODELS ====================
 class DriverCreate(BaseModel):

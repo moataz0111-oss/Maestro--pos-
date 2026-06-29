@@ -3346,25 +3346,38 @@ export default function SuperAdmin() {
                     ) : (
                       <div className="space-y-1.5 max-h-[420px] overflow-y-auto">
                         {securityLog.events.map((ev, idx) => {
-                          const type = ev.event_type;
+                          const type = ev.event_type || ev.event;
+                          const isSecurity = typeof type === 'string' && type.startsWith('security.');
+                          const isRate = type === 'security.rate_limited';
                           const icon = type === 'login' ? <LogIn className="h-4 w-4 text-green-400" />
                             : type === 'logout' ? <LogOut className="h-4 w-4 text-gray-400" />
                             : type === 'impersonation' ? <ShieldAlert className="h-4 w-4 text-amber-400" />
+                            : isSecurity ? <ShieldAlert className="h-4 w-4 text-red-500" />
                             : <Activity className="h-4 w-4 text-blue-400" />;
                           const label = type === 'login' ? t('تسجيل دخول')
                             : type === 'logout' ? t('تسجيل خروج')
                             : type === 'impersonation' ? t('انتحال هوية')
-                            : type;
+                            : isRate ? t('محاولة حقن/إساءة مرفوضة (تجاوز المعدّل 429)')
+                            : type === 'security.forbidden' ? t('محاولة وصول/كتابة ممنوعة (403)')
+                            : (type || '—');
+                          const ip = ev.ip || ev.ip_address;
+                          const reqPath = ev.path || ev.details?.path;
+                          const reqMethod = ev.method || ev.details?.method;
                           return (
-                            <div key={ev.id || idx} className="flex items-center justify-between gap-2 bg-[#070E22]/40 border border-[#2A3A66]/50 rounded px-3 py-2" data-testid={`security-event-${idx}`}>
+                            <div key={ev.id || idx} className={`flex items-center justify-between gap-2 ${isSecurity ? 'bg-red-950/30 border-red-800/50' : 'bg-[#070E22]/40 border-[#2A3A66]/50'} border rounded px-3 py-2`} data-testid={`security-event-${idx}`}>
                               <div className="flex items-center gap-2 min-w-0">
                                 {icon}
                                 <div className="min-w-0">
-                                  <p className="text-sm text-white truncate">
-                                    <span className="font-bold">{label}</span> — {ev.user_name || ev.user_email || '—'}
-                                    {ev.user_role ? <span className="text-gray-400"> ({ev.user_role})</span> : null}
+                                  <p className={`text-sm truncate ${isSecurity ? 'text-red-200' : 'text-white'}`}>
+                                    <span className="font-bold">{label}</span>
+                                    {(ev.user_name || ev.user_email) ? <> — {ev.user_name || ev.user_email}</> : null}
+                                    {(ev.user_role || ev.role) ? <span className="text-gray-400"> ({ev.user_role || ev.role})</span> : null}
                                   </p>
-                                  <p className="text-[11px] text-gray-500 truncate">{t('العميل')}: {ev.tenant_name}</p>
+                                  <p className="text-[11px] text-gray-500 truncate">
+                                    {ip ? <span className="text-amber-400 font-mono" data-testid={`security-event-ip-${idx}`}>IP {ip}</span> : null}
+                                    {reqMethod && reqPath ? <span className="ml-2 font-mono">{reqMethod} {reqPath}</span> : null}
+                                    {!ip && !reqPath ? <>{t('العميل')}: {ev.tenant_name}</> : null}
+                                  </p>
                                 </div>
                               </div>
                               <span className="text-[11px] text-gray-500 shrink-0 flex items-center gap-1">

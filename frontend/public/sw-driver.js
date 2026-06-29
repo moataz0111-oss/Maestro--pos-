@@ -1,5 +1,5 @@
 // Service Worker لتطبيق السائق — يجعل التطبيق قابلاً للتثبيت (installable) ويعمل بأساسيات عند ضعف الشبكة
-const DRIVER_CACHE = 'driver-app-v13';
+const DRIVER_CACHE = 'driver-app-v14';
 const PRECACHE = ['/driver-app', '/manifest-driver.json', '/icons/icon-192.png', '/icons/icon-512.png'];
 
 self.addEventListener('install', (event) => {

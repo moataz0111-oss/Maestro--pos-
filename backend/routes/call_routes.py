@@ -3,13 +3,14 @@
 الإشارات (signaling) عبر HTTP polling مع تجميع ICE كامل (non-trickle) لتقليل التعقيد.
 كل النقاط عامة (بدون JWT) لأن تطبيقي الزبون والسائق بلا مصادقة JWT.
 """
-from fastapi import APIRouter, HTTPException, Body
+from fastapi import APIRouter, HTTPException, Body, Request
 from typing import Optional
 from datetime import datetime, timezone, timedelta
 import uuid
 import logging
 
 from routes.shared import get_database
+from routes.rate_limit import enforce_rate_limit, sanitize_text
 
 router = APIRouter(prefix="/calls", tags=["calls"])
 logger = logging.getLogger(__name__)
@@ -34,16 +35,20 @@ def _serialize(call: dict) -> dict:
 
 
 @router.post("/initiate")
-async def initiate_call(payload: dict = Body(...)):
+async def initiate_call(request: Request, payload: dict = Body(...)):
     """بدء مكالمة. caller: 'customer' أو 'driver'. offer = SDP عرض WebRTC كامل (مع ICE)."""
+    enforce_rate_limit(request, "call_initiate", max_calls=10, window_seconds=60)
     db = get_database()
     order_id = payload.get("order_id")
     caller = payload.get("caller")  # customer | driver
-    caller_name = payload.get("caller_name") or ""
+    caller_name = sanitize_text(payload.get("caller_name") or "", 120)
     offer = payload.get("offer")
 
     if not order_id or caller not in ("customer", "driver") or not offer:
         raise HTTPException(status_code=400, detail="بيانات المكالمة ناقصة")
+    # منع حقن offer ضخم/غير صالح
+    if not isinstance(offer, dict) or len(str(offer)) > 60000:
+        raise HTTPException(status_code=400, detail="عرض المكالمة غير صالح")
 
     order = await db.orders.find_one({"id": order_id}, {"_id": 0})
     if not order:
@@ -112,11 +117,17 @@ async def initiate_call(payload: dict = Body(...)):
 
 
 @router.get("/incoming")
-async def get_incoming_call(driver_id: Optional[str] = None, order_id: Optional[str] = None, phone: Optional[str] = None):
+async def get_incoming_call(request: Request, driver_id: Optional[str] = None, order_id: Optional[str] = None, phone: Optional[str] = None):
     """استطلاع مكالمة واردة قيد الرنين للمستلِم (سائق عبر driver_id، أو زبون عبر order_id/phone)."""
     db = get_database()
     query = {"status": "ringing", "expires_at": {"$gt": _iso(_now())}}
     if driver_id:
+        # حماية ضد IDOR: استطلاع مكالمات سائق يتطلب توكن السائق المطابق
+        auth = request.headers.get("Authorization", "")
+        token = auth[7:] if auth.startswith("Bearer ") else None
+        rec = await db.driver_tokens.find_one({"token": token}) if token else None
+        if not rec or rec.get("driver_id") != driver_id:
+            raise HTTPException(status_code=403, detail="غير مصرح")
         query["callee"] = "driver"
         query["driver_id"] = driver_id
     elif order_id:
@@ -147,12 +158,15 @@ async def get_call(call_id: str):
 
 
 @router.post("/{call_id}/answer")
-async def answer_call(call_id: str, payload: dict = Body(...)):
+async def answer_call(call_id: str, request: Request, payload: dict = Body(...)):
     """قبول المكالمة وإرسال SDP الإجابة الكاملة."""
+    enforce_rate_limit(request, "call_answer", max_calls=30, window_seconds=60)
     db = get_database()
     answer = payload.get("answer")
     if not answer:
         raise HTTPException(status_code=400, detail="إجابة المكالمة ناقصة")
+    if not isinstance(answer, dict) or len(str(answer)) > 60000:
+        raise HTTPException(status_code=400, detail="إجابة المكالمة غير صالحة")
     call = await db.call_sessions.find_one({"id": call_id})
     if not call:
         raise HTTPException(status_code=404, detail="المكالمة غير موجودة")
@@ -166,7 +180,8 @@ async def answer_call(call_id: str, payload: dict = Body(...)):
 
 
 @router.post("/{call_id}/reject")
-async def reject_call(call_id: str):
+async def reject_call(call_id: str, request: Request):
+    enforce_rate_limit(request, "call_reject", max_calls=30, window_seconds=60)
     db = get_database()
     await db.call_sessions.update_one(
         {"id": call_id}, {"$set": {"status": "rejected", "ended_at": _iso(_now())}}
@@ -175,7 +190,8 @@ async def reject_call(call_id: str):
 
 
 @router.post("/{call_id}/end")
-async def end_call(call_id: str):
+async def end_call(call_id: str, request: Request):
+    enforce_rate_limit(request, "call_end", max_calls=30, window_seconds=60)
     db = get_database()
     await db.call_sessions.update_one(
         {"id": call_id}, {"$set": {"status": "ended", "ended_at": _iso(_now())}}

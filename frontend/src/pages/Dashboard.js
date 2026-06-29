@@ -2057,19 +2057,7 @@ export default function Dashboard() {
             </Button>
             )}
 
-            {/* Super Admin Button - للمالك فقط */}
-            {(user?.role === 'super_admin' || (user?.role === 'admin' && !user?.tenant_id)) && (
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => navigate('/super-admin')}
-                className="gap-2 border-purple-500 text-purple-500 hover:bg-purple-500/10"
-                data-testid="super-admin-btn"
-              >
-                <Crown className="h-4 w-4" />
-                {t('لوحة تحكم المالك')}
-              </Button>
-            )}
+            {/* Super Admin Button مُزال لأسباب أمنية — الوصول عبر تسجيل الدخول فقط على /super-admin */}
 
             {/* Active Shift Indicator - للمالك - قابل للنقر لإعادة الاختيار */}
             {['admin', 'manager', 'super_admin', 'branch_manager'].includes(user?.role) && (

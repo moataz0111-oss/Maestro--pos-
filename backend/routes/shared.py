@@ -120,6 +120,44 @@ async def verify_super_admin(credentials: HTTPAuthorizationCredentials = Depends
         raise HTTPException(status_code=403, detail="هذه الوظيفة متاحة فقط لمالك النظام")
     return user
 
+# توكن منفصل للسائقين (opaque) مخزّن في driver_tokens
+async def get_current_driver(credentials: HTTPAuthorizationCredentials = Depends(security)):
+    """التحقق من جلسة السائق عبر توكن opaque مخزّن في driver_tokens"""
+    db = get_database()
+    token = credentials.credentials
+    rec = await db.driver_tokens.find_one({"token": token})
+    if not rec:
+        raise HTTPException(status_code=401, detail="جلسة السائق غير صالحة - يرجى تسجيل الدخول")
+    driver = await db.drivers.find_one({"id": rec.get("driver_id")}, {"_id": 0})
+    if not driver:
+        raise HTTPException(status_code=401, detail="السائق غير موجود")
+    if not driver.get("is_active", True):
+        raise HTTPException(status_code=403, detail="حساب السائق غير مفعل")
+    driver["_auth_type"] = "driver"
+    return driver
+
+async def get_staff_or_driver(credentials: HTTPAuthorizationCredentials = Depends(security)):
+    """يقبل توكن موظف (JWT) أو توكن سائق (opaque). يُستخدم للمسارات المشتركة."""
+    db = get_database()
+    token = credentials.credentials
+    # محاولة توكن الموظف (JWT)
+    try:
+        payload = jwt.decode(token, JWT_SECRET, algorithms=[JWT_ALGORITHM])
+        user = await db.users.find_one({"id": payload.get("user_id")}, {"_id": 0})
+        if user:
+            user["_auth_type"] = "staff"
+            return user
+    except Exception:
+        pass
+    # محاولة توكن السائق (opaque)
+    rec = await db.driver_tokens.find_one({"token": token})
+    if rec:
+        driver = await db.drivers.find_one({"id": rec.get("driver_id")}, {"_id": 0})
+        if driver:
+            driver["_auth_type"] = "driver"
+            return driver
+    raise HTTPException(status_code=401, detail="غير مصرح")
+
 # ==================== TENANT HELPERS ====================
 def get_user_tenant_id(user: dict) -> Optional[str]:
     """الحصول على tenant_id للمستخدم - Super Admin يستخدم tenant النظام"""

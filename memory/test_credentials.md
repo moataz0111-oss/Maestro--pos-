@@ -119,3 +119,16 @@
 - Fixed GET /api/purchases-new 500: PurchaseResponse fields made Optional with defaults (old seed docs lacked payment_method/created_by).
 - ManagementOrderAlerts: capped to 3 visible + pointer-events-none container so banners don't block clicks.
 - SW cache bumped: sw-offline v12, sw-customer v6, sw-driver v4.
+
+## Security Hardening Keys (iter249)
+- SUPER_ADMIN_SECRET (owner login secret_key) = 271018
+- PRINT_AGENT_KEY (print agent endpoints) = maestro-print-9f3a2c7e1b  (send as ?key= or X-Print-Key header)
+- CALLCENTER_WEBHOOK_SECRET (webhook) = maestro-cc-7d1e4b8a2f  (send as ?secret= or X-Webhook-Secret header)
+- BIOMETRIC_AGENT_KEY (biometric device/agent endpoints) = maestro-bio-3c9f1a6d4e (send as ?key= or X-Agent-Key header)
+
+## fork — Injection Hardening + SuperAdmin button removal (29 يونيو 2026)
+- أُزيل زر "لوحة تحكم المالك" (super-admin-btn) من Dashboard.js — الدخول للوحة المالك عبر /super-admin + تسجيل الدخول فقط.
+- حماية ضد الحقن على النقاط العامة (routes/rate_limit.py): enforce_rate_limit (sliding window في الذاكرة per-IP) + sanitize_text.
+- نقاط صارت تتطلب مصادقة: POST /api/push/test (admin/manager/owner)، GET /api/notifications/{phone} (موظف).
+- نقاط عامة محمية الآن بتحديد معدّل + تنظيف + تحقق المستأجر/الطلب: /api/customer/order/{tenant_id}، /api/customer-reviews، /api/customer/rate-order، /api/track/{order_id}/rating، /api/order-chat/* ، /api/customer/favorites/add، /api/customer/auth/register|login، /api/push/subscribe، /api/calls/* (call_routes.py).
+- ملاحظة اختبار: شاشة البداية StartupSplash تستمر ~10 ثوانٍ عند فتح التطبيق (بالتصميم). انتظر >11s قبل التفاعل مع نموذج الدخول في أدوات الـ screenshot.

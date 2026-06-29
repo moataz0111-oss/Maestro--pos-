@@ -1,0 +1,38 @@
+{
+  "summary": "iter248 — verified NEW router-level auth on routes/order_notifications.py + re-verified iter247 P0 hardening. 25/25 pytest cases PASS in /app/backend/tests/test_security_hardening_iter248.py. (1) Order-notifications router: all 7 endpoints — GET /api/order-notifications, GET /api/order-notifications/escalations, POST /api/order-notifications, PUT /api/order-notifications/{id}/read, PUT /api/order-notifications/read-all, PUT /api/order-notifications/{id}/printed, DELETE /api/order-notifications/cleanup — return 403 anon and 200 with admin token (GET escalations returns {escalations,count}; GET notifications returns {notifications,count,unread_count}). (2) iter247 regression spot-checks all pass: anon register => 403, admin->super_admin register => 403, admin->cashier => 200; owner login w/o secret_key => 403, with secret_key=271018 => 200; admin normal login => 200; /api/purchases-new + /api/inventory-stats + /api/manufactured-products anon => 403; /api/callcenter/webhook no secret => 403; /api/init-db no key => 403; /api/customer/menu/default leaks no sensitive fields; admin GET /products /categories /orders => 200.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_security_hardening_iter248.py",
+    "/app/test_reports/pytest/iter248_results.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "routes/order_notifications.py L16: APIRouter(tags=['Order Notifications'], dependencies=[Depends(get_current_user)]) — correctly applies auth to all 7 endpoints in the file. Pen-test data leak via /escalations is closed.",
+    "routes/order_notifications.py imports get_current_user from .shared — verified import resolves and dependency executes (anon 403, admin 200).",
+    "Authorization is currently coarse — any authenticated user (e.g., cashier, driver) can call /escalations which is an 'admin/management' endpoint. Consider also gating /escalations with a role check (owner/manager/admin/super_admin) inside the route, since router-level dep only authenticates, not authorizes.",
+    "POST /api/order-notifications is normally invoked internally when an order is saved; now that it requires a JWT, ensure the server-side order-creation code that calls this passes the user token (or refactor to call the inner function directly instead of HTTP) to avoid breaking the order flow. Worth a quick code-trace by main agent.",
+    "Mongo _id is already projected away ({_id: 0}) in all reads — good. No ObjectId serialization risk.",
+    "server.py still 23,994 lines — long-standing comment from iter247, not in scope here but increases blast radius of future pen-test issues. Splitting auth/users/orders into dedicated routers (as already done for order_notifications and inventory_system) is the right direction."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_security_hardening_iter248.py"
+  ],
+  "success_rate": {
+    "backend": "100% (25/25)",
+    "frontend": "n/a (backend-only scope per request)"
+  },
+  "test_credentials": "admin@maestroegp.com/admin123 (admin, default tenant) and owner@maestroegp.com/owner123 + secret_key=271018 (super_admin) — both work as documented in /app/memory/test_credentials.md.",
+  "seed_data_creation": "Created 1 TEST_cashier_<uniq> user via /api/auth/register during the test_admin_create_cashier_ok test. Deleted post-run via Motor (db.users.delete_many({email:/^TEST_/}) — deleted 1). DB clean.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Run `pytest backend/tests/test_security_hardening_iter248.py -v` to re-verify. 7 anon-blocked + 3 admin-ok cases on the order_notifications router, plus 15 iter247 regression cases. Owner secret_key=271018. No auto-teardown fixture — run the small Motor cleanup script in iter248 summary if you want to wipe TEST_ users.",
+  "rca of the issue": "Original RCA (pre-iter248): routes/order_notifications.py was registered without any auth dependency, so GET /api/order-notifications/escalations (and the rest of the file's 7 endpoints) were callable anonymously — attacker observed the management 'escalations' payload in browser F12 Network tab and could see order-id, order-number, branch, customer name/phone, delivery address, total amount, items count for every escalated order across tenants. Mitigation (verified in this iter): router declared with dependencies=[Depends(get_current_user)] and shared import added — anon now 403 on every endpoint, admin still 200 with valid JWT. Note for main agent: consider adding role-level gate inside /escalations so a low-privilege authenticated user (e.g., cashier) cannot also see management alerts — current fix authenticates but does not authorize per-role."
+}

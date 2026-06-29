@@ -1,0 +1,42 @@
+{
+  "summary": "iter252 — verified public-write endpoint hardening + Dashboard super-admin button removal. Backend 18/18 PASS; Frontend PASS (no super-admin-btn, no 'لوحة تحكم المالك' text on dashboard after splashes).",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {
+        "endpoint": "/api/order-chat/{id}, /api/calls/initiate (test harness only)",
+        "issue": "Rate-limit windows persist across pytest sessions (in-process bucket, 60s window). Re-running the file within 60s causes test-ordering 429 false-negatives on the non-burst sub-tests. Tests pass cleanly when the bucket has expired. NOT a product bug. Recommend either (a) waiting 65s between re-runs, or (b) adding a small admin-only /api/_test/reset-rate-limit hook used by pytest fixtures for deterministic CI."
+      }
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_security_hardening_iter252.py",
+    "/app/test_reports/pytest/iter252_results.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "Rate-limit implementation is in-process (per-pod). Multi-pod / horizontal scaling will leak quota — each pod has its own bucket so a 20-req/min cap effectively becomes 20 * N_pods. For production with the kubernetes ingress, move buckets to MongoDB (TTL collection) or Redis. Adequate for current single-pod preview env.",
+    "Order-chat ChatMessage requires `text` (not `message`). Customer/driver callers calling with the wrong key field receive 422 BEFORE the order-existence check runs. This is fine for security (no leak) but worth documenting in the customer-app contract.",
+    "POST /api/customer/order/{tenant_id} returns 422 for a non-existent tenant (Pydantic body validation runs before tenant lookup with the test's lean body). Tenant-active check appears further down; consider running the tenant existence/active check FIRST so the response is always 404 (clearer for callers and harder to enumerate valid tenant ids via timing).",
+    "Backend has TWO routes file styles co-existing (routes/call_routes.py uses Request + enforce_rate_limit explicitly; server.py wraps via decorator). Standardize on the routes/ pattern to keep server.py shrinking.",
+    "Test-side: rate-limit windows persist between pytest runs because the bucket lives in-process on the running uvicorn. Recommend exposing a debug/admin endpoint to clear buckets (gated by admin JWT) so CI can run deterministically without sleeps."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_security_hardening_iter252.py (new)"
+  ],
+  "success_rate": {
+    "backend": "100% (18/18)",
+    "frontend": "100% (1/1 — super-admin-btn removed verified)"
+  },
+  "test_credentials": "admin@maestroegp.com/admin123 ; owner@maestroegp.com/owner123 secret_key=271018",
+  "seed_data_creation": "None. No persistent data created. test_active_tenant_does_not_404 sends a fake product_id under the real active tenant f107d422-3195-434c-93e6-5a4739097237 — backend rejected with 400/422 (no insert).",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Run `pytest backend/tests/test_security_hardening_iter252.py -v`. If run twice within 60s, the order-chat and calls rate-limit windows from the first run will cause the non-burst tests to fail with 429 — wait 65s between runs. All 18 cases verified: (1) /api/push/test anon=403 admin=passes; (2) /api/notifications/{phone} anon=403 admin=passes; (3) /api/order-chat/{fake}=404, burst-25 -> 429; (4) /api/customer/order/{fake_tenant}=422 (rejected), active tenant != 404; (5) /api/customer-reviews fake order_id rejected (400/404/422); (6) /api/calls/initiate empty=422, burst-15 -> 429; (7) anon writes blocked on /api/purchases-new /api/inventory /api/suppliers /api/expenses /api/products (403); (8) admin GET /api/products /api/orders = 200. Frontend: StartupSplash + PostLoginSplash detect+detach properly; dashboard has NO [data-testid='super-admin-btn'] and no 'لوحة تحكم المالك' text. /super-admin login route remains the only way to reach the owner panel (confirmed indirectly — separate route not exercised here).",
+  "rca of the issue": "N/A — no failures. The two transient pytest failures observed mid-run were caused by reusing the same source IP within the 60s rate-limit window after the burst tests had already depleted the bucket. After a 65s wait the full file ran 18/18 PASS, confirming the rate-limit behavior is correct (the limit IS being enforced — that's the feature) and the validation order (404 on missing order/tenant, 422 on bad body, 429 on burst) is correctly wired. Recommendation in critical_code_review_comments to expose an admin reset hook for deterministic CI."
+}

@@ -1022,3 +1022,50 @@ The owner explicitly rejected having salary advances appear as "expenses on the 
 - (P1) تطبيق السائق: استمرار إرسال الموقع بالخلفية، إخفاء حقل "إرسال موقعك" بعد البدء، وفصل الطلب المرفوض عن السائق تلقائياً.
 - (P1) تقرير زيادة أسعار الشراء (PriceIncreaseReport.js): تدقيق عرض البيانات وتنسيق العنوان/الخط (يحتاج بيانات حية).
 - ملاحظة: WeasyPrint + cairosvg + خطوط Amiri أُعيد تثبيتها (تسقط من البيئة دورياً).
+
+## Security Hardening (Pen-test remediation) — 2026-06
+Fixed P0 breach vectors (verified testing iter247=44/44, iter248=25/25):
+- POST /auth/register: now requires authed admin/super_admin; blocks creating super_admin/admin (privilege escalation root cause).
+- POST /users & PUT /users/{id}: block role escalation to super_admin/admin.
+- POST /auth/login: super_admin role requires server-side secret_key == SUPER_ADMIN_SECRET.
+- inventory_system router: router-level Depends(get_current_user) — all 32 endpoints now require auth.
+- order_notifications router: router-level auth (escalations leak fixed).
+- /callcenter/webhook: requires X-Webhook-Secret == env CALLCENTER_WEBHOOK_SECRET (else 403).
+- /init-db: requires ?key==SUPER_ADMIN_SECRET; /seed: requires super_admin.
+- /customer/menu: products projection strips cost/operating_cost/recipe/ingredients/profit/margin/supplier/wholesale_price/purchase_price.
+- CORS: no wildcard-with-credentials; restricted to CORS_ORIGINS env or *.maestroegp.com regex.
+Customer tokens are opaque (secrets.token_urlsafe) stored in customer_tokens — cannot access staff JWT endpoints.
+REMAINING (need user decision — risk breaking features): print_queue agent-poll endpoints (no agent key), call_routes /calls WebRTC signaling (customer/driver facing), drivers_routes portal/{driver_id} IDOR.
+PROD NOTE: maestroegp.com runs Docker images from ghcr.io built off GitHub — fixes reach prod only after rebuild+redeploy.
+
+## Security Hardening — Phase 2 (Driver auth + IDOR) — 2026-06 (verified iter250 49/49)
+- Driver token system: driver_tokens collection; /driver/login issues opaque token; get_current_driver + get_staff_or_driver in routes/shared.py and server.py.
+- Driver endpoints (/driver/orders, /driver/update-location, /driver/orders/{id}/status) derive driver from token — IDOR via ?driver_id removed.
+- order_notifications router: get_staff_or_driver; management endpoints (escalations/create/read-all/printed/cleanup) staff-only.
+- drivers_routes router: router-level get_staff_or_driver; staff CRUD keep own get_current_user.
+- Security headers middleware (HSTS, X-Frame-Options=SAMEORIGIN, nosniff, Referrer-Policy, Permissions-Policy).
+- Frontend DriverApp.js: stores driver_token, sends Bearer on all driver calls. SW bumped: sw-driver v14, sw-offline v31.
+RESIDUAL (documented, not fixed): /calls/* WebRTC signaling left public (low sensitivity, customer/driver facing — securing risks breaking in-app calls); JWT->HttpOnly cookie migration (large frontend refactor); /api/health minor info; manifest*.json must stay public for PWA.
+PROD: change SUPER_ADMIN_SECRET from 271018; set PRINT_AGENT_KEY + configure print agent; set CALLCENTER_WEBHOOK_SECRET in webhook provider; rebuild Docker + redeploy to Contabo for fixes to take effect.
+
+## Security Hardening — Phase 3 (final) — 2026-06 (verified iter251 39/40; order-status duplicate cleaned)
+- PUT /orders/{order_id}/status: removed dead duplicate; active route is staff-JWT + tenant-isolated (drivers use /driver/orders/{id}/status). Verified anon=403, staff=404.
+- Biometric device/agent endpoints (/biometric-queue/pending, /biometric-queue/{id}/result, /biometric/push) gated by BIOMETRIC_AGENT_KEY (?key= or X-Agent-Key).
+- /calls/incoming driver-side IDOR closed (requires matching driver token); customer order_id path stays open by design (guest customers).
+- verify_device_agent + get_staff_or_driver added in server.py.
+INTENTIONALLY PUBLIC (guest customer/PWA flows — cannot lock without forcing customer login): /customer/* menu+order(view by UUID), /calls/* customer path (WebRTC signaling), /driver/login & /customer/auth/login, /track, manifests, geocode, payment webhooks, /notifications/{phone}, /drivers/{id}/location (customer tracking), /print/render-receipt. These expose no business cost/profit data.
+NOT MOUNTED (dead code, ignore): routes/auth_routes.py, routes/customer_menu.py.
+
+## [29 يونيو 2026] تحصين ضد الحقن + إزالة زر لوحة المالك
+- أُزيل زر "لوحة تحكم المالك" (super-admin-btn) من Dashboard.js — الوصول عبر /super-admin + تسجيل الدخول فقط. (sw-offline cache → v32)
+- وحدة جديدة routes/rate_limit.py: enforce_rate_limit (sliding window per-IP في الذاكرة) + sanitize_text (إزالة HTML/أحرف تحكم + قص الطول).
+- نقاط صارت تتطلب مصادقة: POST /api/push/test (admin/manager/owner)، GET /api/notifications/{phone} (موظف).
+- نقاط عامة مُحصّنة (rate-limit + sanitize + تحقق المستأجر/الطلب): customer/order، customer-reviews، customer/rate-order، track/{id}/rating، order-chat/* ، customer/favorites/add، customer/auth/register|login، push/subscribe، calls/* (initiate/answer/reject/end).
+- منتجات customer/order تُفلتر بـ tenant_id (منع حقن منتجات عبر مستأجرين).
+- تأكيد: نقاط الموردين/المخازن/المشتريات/المصاريف/المنتجات محمية مسبقاً (403 بدون توكن).
+- تم التحقق: testing_agent iter252 → backend 18/18 PASS، frontend PASS.
+
+### ملاحظات للإنتاج (backlog)
+- (P2) تحديد المعدّل حالياً per-pod في الذاكرة؛ للتوسّع الأفقي على عدة pods انقله إلى MongoDB (TTL) أو Redis.
+- (P1) نقل التوكن من localStorage إلى HttpOnly cookies.
+- (P3) تفكيك server.py (~24k سطر) و SuperAdmin.js.

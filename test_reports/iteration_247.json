@@ -1,0 +1,39 @@
+{
+  "summary": "Verified all P0 pen-test hardening fixes. 44/44 pytest cases PASS in /app/backend/tests/test_security_hardening_iter247.py covering: (1) /api/auth/register requires admin/super_admin token — anonymous => 401/403; admin can create cashier (200) but NOT super_admin or admin (403). (2) /api/auth/login — owner@maestroegp.com w/o secret_key => 403, with secret_key=271018 => 200; admin@maestroegp.com logs in normally (200, no secret_key). (3) POST /api/users blocks role=super_admin & role=admin from admin creator (403), allows cashier (200); PUT /api/users/{id} role escalation to super_admin => 403. (4) inventory_system router endpoints (/purchases-new, /purchases-new/{id}, /inventory-stats, /manufactured-products, /manufacturing-inventory, /manufacturing-requests, /warehouse-transfers, /suppliers/{id}, /branch-inventory/{id}, /inventory-settings, /warehouse-notifications, /purchase-requests, /warehouse-transactions, /branch-orders-new) — all anon => 401/403, admin token => non-401/403 (mostly 200). (5) /api/callcenter/webhook without/with wrong X-Webhook-Secret => 403. (6) /api/init-db without ?key => 403; /api/seed anon => 401/403; /api/seed admin (non-super) => 401/403. (7) /api/customer/menu/default (public) leaks NONE of cost/operating_cost/recipe/ingredients/profit/profit_margin/cost_breakdown/supplier_id/supplier/wholesale_price/purchase_price/margin/raw_materials/bom — name & price still present. (8) Regression: GET /api/products, /api/categories, /api/orders all 200 with valid admin token.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_security_hardening_iter247.py",
+    "/app/test_reports/pytest/iter247_security_results.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "server.py register (L2546-2589): correctly requires Depends(get_current_user), enforces creator_role in {SUPER_ADMIN, ADMIN, MANAGER}, blocks requested_role==SUPER_ADMIN unconditionally, and blocks non-super_admin from creating ADMIN. Good. Suggest also blocking role==MANAGER for non-super_admin to be consistent (currently a tenant admin can create another MANAGER which may not be desired in some tenants).",
+    "server.py login (L2591-2609): secret_key check runs AFTER is_active and AFTER password verify. Acceptable, but moving the secret_key check ahead of is_active is more defense-in-depth (avoid revealing 'account disabled' to an attacker who guessed the password but not the secret).",
+    "routes/inventory_system.py L27: router-level dependencies=[Depends(get_current_user)] is the right architectural fix — every route in this module is now authenticated by default. Excellent.",
+    "callcenter webhook L16395-16400: env CALLCENTER_WEBHOOK_SECRET is unset in this preview, so all webhook calls 403. Good fail-closed behaviour. Document this env var in deployment runbook so production doesn't accidentally leave it unset and break legitimate provider callbacks.",
+    "customer/menu projection (L20739-20745): now excludes cost, operating_cost, recipe, ingredients, raw_materials, bom, profit, profit_margin, cost_breakdown, supplier_id, supplier, wholesale_price, purchase_price, margin. Verified empirically — no leak. Good.",
+    "init-db (L1121-1127) and /seed (L16587) both gated correctly. seed_admin rejects non-super_admin tokens. Good.",
+    "server.py is 23,994 lines — long-standing comment, not in scope. Strongly recommend splitting auth/users/orders/inventory into dedicated routers (this pen-test event would have been less risky with a smaller blast radius)."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_security_hardening_iter247.py"
+  ],
+  "success_rate": {
+    "backend": "100% (44/44)",
+    "frontend": "n/a (backend-only scope per request)"
+  },
+  "test_credentials": "admin@maestroegp.com/admin123 (admin, default tenant) and owner@maestroegp.com/owner123 + secret_key=271018 (super_admin, system tenant) — both work as documented in /app/memory/test_credentials.md.",
+  "seed_data_creation": "Created 1 TEST_cashier_<uniq> user + 1 TEST_u_c_<uniq> user via API during testing. Both deleted post-run via pymongo (db.users.delete_many({email:/^TEST_/}) — deleted 2). DB clean after run.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Run `pytest backend/tests/test_security_hardening_iter247.py -v` to re-verify P0 pen-test hardening. The test file is parametrized over 11 inventory_system GET endpoints + 3 path-param endpoints (suppliers/{id}, branch-inventory/{id}, purchases-new/{id}). Owner secret_key is 271018. Test creates 2 TEST_ users via API and the cleanup step at the end of this iter already deleted them — re-running will recreate then leave them (no auto-teardown fixture). Run pymongo cleanup as in iter247 to keep DB tidy.",
+  "rca of the issue": "Original breach RCA (pre-fix): (1) /api/auth/register had no auth dep and accepted role from body — attacker registered super_admin directly. (2) Many inventory GET endpoints (purchases-new, suppliers/{id}, branch-inventory/{id}, manufacturing-*, warehouse-*, branch-orders-new) had no auth — visible in F12 Network tab and data scraped anonymously. (3) /api/callcenter/webhook had no signature check — attacker injected fake calls. Mitigation verified in this iter: register now requires admin+, login enforces secret_key for super_admin, inventory_system uses router-level Depends(get_current_user), webhook fails closed without X-Webhook-Secret, customer/menu projection strips all cost/profit/recipe/supplier fields. All 44 verification cases PASS."
+}

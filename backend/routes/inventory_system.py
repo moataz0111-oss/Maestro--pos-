@@ -24,7 +24,7 @@ from services.cost_layer_service import (
     PRICE_DIFF_THRESHOLD_PERCENT,
 )
 
-router = APIRouter(prefix="/api", tags=["Inventory System"])
+router = APIRouter(prefix="/api", tags=["Inventory System"], dependencies=[Depends(get_current_user)])
 
 # ==================== HELPERS ====================
 
@@ -732,7 +732,7 @@ async def get_suppliers():
     return suppliers
 
 @router.get("/suppliers/{supplier_id}", response_model=SupplierResponse)
-async def get_supplier(supplier_id: str):
+async def get_supplier(supplier_id: str, current_user: dict = Depends(get_current_user)):
     """جلب مورد محدد"""
     db = get_db()
     supplier = await db.suppliers.find_one({"id": supplier_id}, {"_id": 0})
@@ -1042,7 +1042,7 @@ async def send_purchase_to_warehouse(purchase_id: str):
     return {"message": "تم إرسال المشتريات للمخزن بنجاح"}
 
 @router.get("/purchases-new", response_model=List[PurchaseResponse])
-async def get_purchases(status: Optional[str] = None):
+async def get_purchases(status: Optional[str] = None, current_user: dict = Depends(get_current_user)):
     """جلب جميع المشتريات"""
     db = get_db()
     
@@ -1054,7 +1054,7 @@ async def get_purchases(status: Optional[str] = None):
     return purchases
 
 @router.get("/purchases-new/{purchase_id}")
-async def get_purchase(purchase_id: str):
+async def get_purchase(purchase_id: str, current_user: dict = Depends(get_current_user)):
     """جلب فاتورة شراء محددة"""
     db = get_db()
     purchase = await db.purchases_new.find_one({"id": purchase_id}, {"_id": 0})
@@ -3080,7 +3080,7 @@ async def transfer_to_manufacturing(transfer: WarehouseToManufacturingCreate):
     return transfer_doc
 
 @router.get("/warehouse-transfers")
-async def get_warehouse_transfers(transfer_type: Optional[str] = None):
+async def get_warehouse_transfers(transfer_type: Optional[str] = None, current_user: dict = Depends(get_current_user)):
     """جلب تحويلات المخزن"""
     db = get_db()
     
@@ -3979,7 +3979,7 @@ async def ack_manufacturing_notification(
 
 
 @router.get("/manufacturing-requests")
-async def get_manufacturing_requests(status: Optional[str] = None):
+async def get_manufacturing_requests(status: Optional[str] = None, current_user: dict = Depends(get_current_user)):
     """جلب طلبات التصنيع من المخزن — مع تحديث available_quantity وقت العرض"""
     db = get_db()
     
@@ -4541,7 +4541,7 @@ async def delete_manufacturing_inventory_item(
 
 
 @router.get("/manufacturing-inventory")
-async def get_manufacturing_inventory():
+async def get_manufacturing_inventory(current_user: dict = Depends(get_current_user)):
     """جلب مخزون قسم التصنيع (المواد الخام المستلمة).
 
     🔧 يُثري كل سجل بالاسم/الوحدة من `raw_materials` إن كانت مفقودة محلياً،
@@ -4837,7 +4837,7 @@ async def _enrich_unit_cost_fields(db, product: dict) -> dict:
 
 
 @router.get("/manufactured-products")
-async def get_manufactured_products():
+async def get_manufactured_products(current_user: dict = Depends(get_current_user)):
     """جلب جميع المنتجات المصنعة"""
     db = get_db()
     products = await db.manufactured_products.find({}, {"_id": 0}).to_list(1000)
@@ -6318,7 +6318,7 @@ async def update_inventory_settings(settings: InventorySettingsUpdate):
 # ==================== STATISTICS ====================
 
 @router.get("/inventory-stats")
-async def get_inventory_statistics():
+async def get_inventory_statistics(current_user: dict = Depends(get_current_user)):
     """إحصائيات المخزون"""
     db = get_db()
     

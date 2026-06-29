@@ -3,7 +3,7 @@ Print Queue - نظام طابور الطباعة
 المتصفح يرسل أوامر الطباعة للسيرفر
 الوسيط يسحب الأوامر من السيرفر ويطبعها
 """
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Query, Request, HTTPException
 from datetime import datetime, timezone
 import uuid
 import hashlib
@@ -15,6 +15,20 @@ import sys
 import os
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from routes.shared import get_database, get_current_user, get_user_tenant_id
+
+
+async def verify_print_agent(request: Request):
+    """حماية نقاط وكيل الطباعة بمفتاح سري (إن كان مضبوطاً في البيئة).
+    الوكيل يجب أن يرسل المفتاح في رأس X-Print-Key أو باراميتر ?key=.
+    عند ضبط PRINT_AGENT_KEY يُرفض أي طلب بلا مفتاح صحيح."""
+    agent_key = os.environ.get("PRINT_AGENT_KEY")
+    if not agent_key:
+        return True  # غير مفعّل (متوافق مع الوضع الحالي) — يُنصح بتفعيله في الإنتاج
+    provided = request.headers.get("X-Print-Key") or request.query_params.get("key")
+    if provided != agent_key:
+        raise HTTPException(status_code=403, detail="Unauthorized print agent")
+    return True
+
 
 
 @router.post("/print-queue")
@@ -91,7 +105,8 @@ async def get_pending_jobs(
     branch_id: str = Query(default=""),
     agent_version: str = Query(default=""),
     limit: int = Query(default=20),
-    wait: int = Query(default=0, description="Long-polling: max seconds to wait for new jobs (0 = no wait)")
+    wait: int = Query(default=0, description="Long-polling: max seconds to wait for new jobs (0 = no wait)"),
+    _auth: bool = Depends(verify_print_agent)
 ):
     """الوسيط يسحب أوامر الطباعة المعلقة + يسجل heartbeat.
     
@@ -183,7 +198,7 @@ async def get_pending_jobs(
 
 
 @router.get("/print-queue/agent-status")
-async def get_agent_status(branch_id: str = Query(default="")):
+async def get_agent_status(branch_id: str = Query(default=""), _auth: bool = Depends(verify_print_agent)):
     """فحص حالة الوسيط الحقيقية من آخر heartbeat — مفلتر حسب الفرع إن مُرِّر"""
     db = get_database()
     
@@ -215,7 +230,7 @@ async def get_agent_status(branch_id: str = Query(default="")):
 
 
 @router.put("/print-queue/{job_id}/complete")
-async def complete_print_job(job_id: str, result: dict = None):
+async def complete_print_job(job_id: str, result: dict = None, _auth: bool = Depends(verify_print_agent)):
     """الوسيط يبلّغ إن الطباعة خلصت"""
     db = get_database()
     
@@ -234,7 +249,7 @@ async def complete_print_job(job_id: str, result: dict = None):
 
 
 @router.put("/print-queue/{job_id}/failed")
-async def fail_print_job(job_id: str, result: dict = None):
+async def fail_print_job(job_id: str, result: dict = None, _auth: bool = Depends(verify_print_agent)):
     """الوسيط يبلّغ إن الطباعة فشلت"""
     db = get_database()
     

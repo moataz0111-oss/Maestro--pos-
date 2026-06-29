@@ -1,0 +1,39 @@
+{
+  "summary": "iter251 — final pen-test remediation round verified. 39/40 PASS. NEW biometric key gate (queue/pending, queue/{id}/result, biometric/push via ?key= or X-Agent-Key) PASS. NEW /api/calls/incoming driver IDOR fix PASS. Full regression iter247-250 PASS. ONE CRITICAL FAILURE: PUT /api/orders/{order_id}/status accepts admin (404 on nonexistent) and blocks anon (401), but REJECTS driver tokens with 401 because there is a DUPLICATE route registration — the older L7721 definition (Depends(get_current_user), staff-JWT-only) shadows the new L21840 definition (Depends(get_staff_or_driver)). FastAPI matches the first registered handler, so the driver-friendly version is dead code.",
+  "backend_issues": {
+    "critical": [
+      {
+        "endpoint": "PUT /api/orders/{order_id}/status",
+        "issue": "Duplicate route registration. server.py L7721 (older, Depends(get_current_user)) is registered BEFORE the new L21840 (Depends(get_staff_or_driver)). FastAPI dispatches the first match, so driver opaque tokens are rejected with 401 ّ\"رمز غير صالح\" by get_current_user. The L21840 staff_or_driver version is shadowed/dead code. Iter251 remediation for this endpoint is INCOMPLETE.",
+        "priority": "CRITICAL"
+      }
+    ],
+    "minor": []
+  },
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": [
+    "/app/backend/tests/test_security_hardening_iter251.py",
+    "/app/test_reports/pytest/iter251_results.xml"
+  ],
+  "action_items": [
+    "Remove the duplicate PUT /orders/{order_id}/status handler at /app/backend/server.py L7721 (or change its dependency from Depends(get_current_user) to Depends(get_staff_or_driver) and merge the cancellation-permission check into the L21840 handler). Verify only one route remains registered for this path. Re-run pytest backend/tests/test_security_hardening_iter251.py::TestOrderStatusAuth -v after fix; expect 3/3 PASS.",
+    "Add a unique-path lint/guard in server.py CI to prevent two @api_router.<verb>(<path>) decorators on the same (verb,path) tuple — this kind of shadowing is a stealth regression vector."
+  ],
+  "critical_code_review_comments": [
+    "server.py contains TWO @api_router.put('/orders/{order_id}/status') declarations (L7721 and L21840). FastAPI's APIRouter does NOT raise on duplicate registration; it silently keeps the first as the matching route. The newer Depends(get_staff_or_driver) handler is unreachable. This is the root cause of the iter251 failure.",
+    "verify_device_agent (L2334) correctly accepts EITHER ?key= query OR X-Agent-Key header; validated by 8 tests. Behavior is consistent across /biometric-queue/pending, /biometric-queue/{id}/result, /biometric/push.",
+    "routes/call_routes.py L114 get_incoming_call: driver_id branch correctly demands a matching driver opaque token (via db.driver_tokens lookup); admin JWT cannot satisfy this check (verified). Customer guest path (?order_id=) intentionally open — confirmed 200.",
+    "Multiple route duplication risk in 24k-line server.py — recommend grep audit: `grep -nE '^@api_router\\.(get|post|put|patch|delete)' /app/backend/server.py | sort -k2 -t '\"' | uniq -d -f1` to surface any other shadow handlers.",
+    "Driver opaque tokens (driver_tokens collection) still have no expires_at/revocation — iter250 review comment stands. Long-lived tokens compound the impact of any future leak; recommend adding expires_at + TTL index and a /api/driver/logout to delete the token row."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_security_hardening_iter251.py (new)"
+  ],
+  "success_rate": {"backend": "97.5% (39/40)", "frontend": "n/a (backend-only scope)"},
+  "test_credentials": "admin@maestroegp.com/admin123 ; owner@maestroegp.com/owner123 secret_key=271018 ; driver phone=07801111111 pin=1234 (id demo-drv-1) ; BIOMETRIC_AGENT_KEY=maestro-bio-3c9f1a6d4e ; PRINT_AGENT_KEY=maestro-print-9f3a2c7e1b ; CALLCENTER_WEBHOOK_SECRET=maestro-cc-7d1e4b8a2f",
+  "seed_data_creation": "None (no users/orders/devices created). Module-scoped driver login produces one driver_tokens row (re-used by future logins).",
+  "retest_needed": true,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "After main agent removes the duplicate L7721 PUT /orders/{id}/status handler (or switches its dep to get_staff_or_driver), re-run: `pytest backend/tests/test_security_hardening_iter251.py -v`. Expect 40/40 PASS. All other surfaces verified: biometric key gate (queue/push, both query+header), calls/incoming driver IDOR (no token→403, matching driver→200, wrong driver→403, admin JWT→403, ?order_id customer guest→200), and full iter247/248/249/250 regression (register anon→403, admin→super_admin→403, owner secret_key gate, print-queue key, security headers, escalations driver-blocked, order-notifications staff+driver shared).",
+  "rca of the issue": "Endpoint shadowing in server.py: PUT /api/orders/{order_id}/status is declared TWICE on the same APIRouter — L7721 with Depends(get_current_user) (staff JWT only) and L21840 with Depends(get_staff_or_driver). FastAPI's APIRouter inserts decorated routes into a list and matches them in declaration order; the first match wins. Therefore every request to PUT /api/orders/{id}/status is dispatched to the L7721 handler, and the L21840 handler is dead code. Driver opaque tokens are not JWTs, so get_current_user rejects them with 401 'رمز غير صالح'. Reproduction: `curl -X PUT 'http://localhost:8001/api/orders/x/status?status=delivered' -H 'Authorization: Bearer <driver_opaque_token>'` returns 401. Mitigation (main agent): DELETE the L7721 block (lines 7721-7749 approximately) so the L21840 staff_or_driver handler becomes the canonical route, OR change L7722's Depends(get_current_user) to Depends(get_staff_or_driver) and remove L21840. After fix, restart backend (hot reload should suffice for code edits) and re-run the test file."
+}

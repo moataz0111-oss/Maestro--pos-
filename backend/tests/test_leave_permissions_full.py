@@ -35,7 +35,7 @@ if not _MONGO_URL:
         pass
 _db = MongoClient(_MONGO_URL)[_DB_NAME] if _MONGO_URL and _DB_NAME else None
 
-BASE_URL = os.environ.get("REACT_APP_BACKEND_URL", "https://pwa-driver-track.preview.emergentagent.com").rstrip("/")
+BASE_URL = os.environ.get("REACT_APP_BACKEND_URL", "https://pos-security-audit-1.preview.emergentagent.com").rstrip("/")
 API = f"{BASE_URL}/api"
 ADMIN = {"email": "admin@maestroegp.com", "password": "admin123"}
 CASHIER = {"email": "cashier1@maestroegp.com", "password": "cash123"}

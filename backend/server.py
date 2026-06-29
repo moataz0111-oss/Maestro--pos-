@@ -51,6 +51,8 @@ def iraq_date_from_utc(utc_iso_str: Optional[str] = None) -> str:
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
 
+from routes.rate_limit import enforce_rate_limit, sanitize_text
+
 # MongoDB connection
 mongo_url = os.environ['MONGO_URL']
 client = AsyncIOMotorClient(mongo_url)
@@ -246,6 +248,26 @@ security = HTTPBearer()
 # إضافة GZip compression لتسريع نقل البيانات
 app.add_middleware(GZipMiddleware, minimum_size=1000)
 
+# ==================== سجل أمني: تسجيل محاولات الحقن/الإساءة المرفوضة (429/403) ====================
+@app.middleware("http")
+async def security_audit_middleware(request: Request, call_next):
+    response = await call_next(request)
+    try:
+        sc = response.status_code
+        path = request.url.path
+        # نسجّل: كل تجاوز لتحديد المعدّل (429)، وكل محاولة كتابة ممنوعة (403 على POST/PUT/PATCH/DELETE)
+        if path.startswith("/api") and (
+            sc == 429 or (sc == 403 and request.method in ("POST", "PUT", "PATCH", "DELETE"))
+        ):
+            event = "security.rate_limited" if sc == 429 else "security.forbidden"
+            await record_audit(
+                event, request=request, status=sc,
+                details={"path": path, "method": request.method},
+            )
+    except Exception:
+        pass
+    return response
+
 # Mount static files directory
 app.mount("/uploads", StaticFiles(directory=str(UPLOAD_DIR)), name="uploads")
 app.mount("/api/uploads", StaticFiles(directory=str(UPLOAD_DIR)), name="api_uploads")
@@ -266,6 +288,13 @@ async def create_indexes():
         await db.users.create_index("email", unique=True)
         await db.users.create_index("tenant_id")
         await db.users.create_index("role")
+
+        # Audit log indexes + TTL (حذف تلقائي بعد 60 يوماً)
+        await db.audit_logs.create_index("ts", expireAfterSeconds=5184000)
+        await db.audit_logs.create_index("tenant_id")
+        await db.audit_logs.create_index("event")
+        await db.driver_tokens.create_index("token", unique=True)
+        await db.driver_tokens.create_index("driver_id")
         
         # Orders indexes - الأكثر أهمية للأداء
         await db.orders.create_index("id", unique=True)
@@ -1119,11 +1148,12 @@ def api_health_check():
 # ==================== DATABASE INITIALIZATION ENDPOINT ====================
 
 @api_router.get("/init-db")
-async def initialize_database_endpoint():
+async def initialize_database_endpoint(key: str = ""):
     """
-    Endpoint لتهيئة قاعدة البيانات يدوياً
-    يمكن استدعاؤه عبر: GET /api/init-db
+    Endpoint لتهيئة قاعدة البيانات يدوياً - محمي بالمفتاح السري للمالك
     """
+    if not key or key != SUPER_ADMIN_SECRET:
+        raise HTTPException(status_code=403, detail="غير مصرح")
     try:
         # التحقق من وجود Super Admin
         super_admin = await db.users.find_one({"role": "super_admin"})
@@ -1509,6 +1539,7 @@ class UserCreate(BaseModel):
 class UserLogin(BaseModel):
     email: str
     password: str
+    secret_key: Optional[str] = None
 
 class UserResponse(BaseModel):
     model_config = ConfigDict(extra="ignore")
@@ -2297,6 +2328,118 @@ async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(s
     except jwt.InvalidTokenError:
         raise HTTPException(status_code=401, detail="رمز غير صالح")
 
+async def get_current_driver(credentials: HTTPAuthorizationCredentials = Depends(security)):
+    """التحقق من جلسة السائق عبر توكن opaque مخزّن في driver_tokens"""
+    token = credentials.credentials
+    rec = await db.driver_tokens.find_one({"token": token})
+    if not rec:
+        raise HTTPException(status_code=401, detail="جلسة السائق غير صالحة - يرجى تسجيل الدخول")
+    driver = await db.drivers.find_one({"id": rec.get("driver_id")}, {"_id": 0})
+    if not driver:
+        raise HTTPException(status_code=401, detail="السائق غير موجود")
+    if not driver.get("is_active", True):
+        raise HTTPException(status_code=403, detail="حساب السائق غير مفعل")
+    return driver
+
+async def get_staff_or_driver(credentials: HTTPAuthorizationCredentials = Depends(security)):
+    """يقبل توكن موظف (JWT) أو توكن سائق (opaque)."""
+    token = credentials.credentials
+    try:
+        payload = jwt.decode(token, JWT_SECRET, algorithms=[JWT_ALGORITHM])
+        user = await db.users.find_one({"id": payload.get("user_id")}, {"_id": 0})
+        if user:
+            user["_auth_type"] = "staff"
+            return user
+    except Exception:
+        pass
+    rec = await db.driver_tokens.find_one({"token": token})
+    if rec:
+        driver = await db.drivers.find_one({"id": rec.get("driver_id")}, {"_id": 0})
+        if driver:
+            driver["_auth_type"] = "driver"
+            return driver
+    raise HTTPException(status_code=401, detail="غير مصرح")
+
+async def verify_device_agent(request: Request):
+    """حماية نقاط أجهزة البصمة/الوكلاء بمفتاح سري (إن ضُبط BIOMETRIC_AGENT_KEY)."""
+    agent_key = os.environ.get("BIOMETRIC_AGENT_KEY")
+    if not agent_key:
+        return True
+    provided = request.headers.get("X-Agent-Key") or request.query_params.get("key")
+    if provided != agent_key:
+        raise HTTPException(status_code=403, detail="Unauthorized device agent")
+    return True
+
+# ======== سجل التدقيق الأمني (Security Audit Log) ========
+def _client_ip(request) -> str:
+    """استخراج IP الحقيقي للزائر خلف nginx/docker."""
+    if not request:
+        return "unknown"
+    xff = request.headers.get("x-forwarded-for") or request.headers.get("X-Forwarded-For")
+    if xff:
+        return xff.split(",")[0].strip()
+    xri = request.headers.get("x-real-ip")
+    if xri:
+        return xri.strip()
+    return request.client.host if getattr(request, "client", None) else "unknown"
+
+async def record_audit(event: str, request=None, user=None, details=None, status=None, tenant_id=None):
+    """تسجيل حدث أمني في مجموعة audit_logs (لا يرمي أخطاء أبداً)."""
+    try:
+        u = user if isinstance(user, dict) else {}
+        doc = {
+            "id": str(uuid.uuid4()),
+            "event": event,
+            "ip": _client_ip(request),
+            "path": str(request.url.path) if request else None,
+            "method": request.method if request else None,
+            "user_agent": (request.headers.get("user-agent") if request else None),
+            "user_id": u.get("id"),
+            "user_name": u.get("full_name") or u.get("username") or u.get("email"),
+            "role": u.get("role"),
+            "tenant_id": tenant_id or u.get("tenant_id"),
+            "status": status,
+            "details": details,
+            "created_at": datetime.now(timezone.utc).isoformat(),
+            "ts": datetime.now(timezone.utc),
+        }
+        await db.audit_logs.insert_one(doc)
+    except Exception:
+        pass
+
+# ======== الحماية ضد محاولات تخمين/اختراق الدخول (Brute-force) ========
+MAX_LOGIN_FAILS = 5
+LOGIN_LOCK_MINUTES = 15
+
+async def check_login_lock(key: str):
+    """يرفع 429 إذا كان المفتاح (IP+بريد) مقفولاً مؤقتاً."""
+    rec = await db.login_attempts.find_one({"key": key})
+    if rec and rec.get("locked_until"):
+        try:
+            lu = datetime.fromisoformat(rec["locked_until"])
+            if lu > datetime.now(timezone.utc):
+                mins = max(1, int((lu - datetime.now(timezone.utc)).total_seconds() // 60) + 1)
+                raise HTTPException(status_code=429, detail=f"تم القفل المؤقت بسبب محاولات دخول فاشلة. حاول بعد {mins} دقيقة")
+        except HTTPException:
+            raise
+        except Exception:
+            pass
+
+async def record_login_fail(key: str):
+    rec = await db.login_attempts.find_one({"key": key})
+    count = (rec.get("count", 0) if rec else 0) + 1
+    update = {"key": key, "count": count, "last": datetime.now(timezone.utc).isoformat()}
+    if count >= MAX_LOGIN_FAILS:
+        update["locked_until"] = (datetime.now(timezone.utc) + timedelta(minutes=LOGIN_LOCK_MINUTES)).isoformat()
+        update["count"] = 0
+    await db.login_attempts.update_one({"key": key}, {"$set": update}, upsert=True)
+
+async def clear_login_attempts(key: str):
+    try:
+        await db.login_attempts.delete_one({"key": key})
+    except Exception:
+        pass
+
 # دالة مساعدة للحصول على tenant_id للمستخدم
 def get_user_tenant_id(user: dict) -> Optional[str]:
     """
@@ -2542,11 +2685,30 @@ async def calculate_order_cost(items: List[Dict]) -> float:
 # ==================== AUTH ROUTES ====================
 
 @api_router.post("/auth/register")
-async def register(user: UserCreate):
+async def register(user: UserCreate, current_user: dict = Depends(get_current_user)):
+    # الحماية: إنشاء المستخدمين متاح فقط للمالك (admin/super_admin) — لا المدير ولا الكاشير
+    creator_role = current_user.get("role")
+    allowed_creators = [UserRole.SUPER_ADMIN, UserRole.ADMIN]
+    if creator_role not in allowed_creators:
+        raise HTTPException(status_code=403, detail="إنشاء الحسابات متاح للمالك فقط")
+
+    # لا يُسمح بإنشاء حساب super_admin إطلاقاً عبر هذا المسار (يُنشأ فقط من لوحة المالك الرئيسية)
+    requested_role = user.role
+    if requested_role == UserRole.SUPER_ADMIN:
+        raise HTTPException(status_code=403, detail="غير مصرح بإنشاء حساب مالك النظام")
+
+    # المدير العادي لا يستطيع إنشاء حساب admin/مالك متجر
+    if creator_role != UserRole.SUPER_ADMIN and requested_role == UserRole.ADMIN:
+        raise HTTPException(status_code=403, detail="غير مصرح بإنشاء حساب بهذه الصلاحية")
+
     existing = await db.users.find_one({"$or": [{"email": user.email}, {"username": user.username}]})
     if existing:
         raise HTTPException(status_code=400, detail="المستخدم موجود بالفعل")
-    
+
+    # فرض عزل المستأجر: المستخدم الجديد يتبع نفس tenant المنشئ (إلا إذا كان super_admin ينشئ لمستأجر محدد)
+    creator_tenant = current_user.get("tenant_id")
+    new_tenant_id = user.tenant_id if creator_role == UserRole.SUPER_ADMIN else creator_tenant
+
     user_doc = {
         "id": str(uuid.uuid4()),
         "username": user.username,
@@ -2554,32 +2716,49 @@ async def register(user: UserCreate):
         "password": hash_password(user.password),
         "full_name": user.full_name,
         "full_name_en": user.full_name_en,  # الاسم بالإنجليزية
-        "role": user.role,
+        "role": requested_role,
         "branch_id": user.branch_id,
         "permissions": user.permissions,
+        "tenant_id": new_tenant_id,
         "is_active": True,
         "created_at": datetime.now(timezone.utc).isoformat()
     }
     await db.users.insert_one(user_doc)
     del user_doc["password"]
     del user_doc["_id"]
-    token = create_token(user_doc["id"], user_doc["role"], user_doc.get("branch_id"), user_doc.get("tenant_id"))
-    return {"user": user_doc, "token": token}
+    # لا نُصدر توكن للمستخدم الجديد هنا (المنشئ يبقى بجلسته)؛ نعيد بيانات المستخدم فقط
+    return {"user": user_doc}
 
 @api_router.post("/auth/login")
-async def login(credentials: UserLogin):
+async def login(credentials: UserLogin, request: Request):
+    _lockkey = f"login:{_client_ip(request)}:{credentials.email}"
+    await check_login_lock(_lockkey)
     user = await db.users.find_one({"email": credentials.email}, {"_id": 0})
     
     if not user:
+        await record_login_fail(_lockkey)
+        await record_audit("auth.login.failed", request, details={"email": credentials.email, "reason": "user_not_found"}, status=401)
         raise HTTPException(status_code=401, detail="بيانات الدخول غير صحيحة")
     
     stored_hash = user.get("password_hash", user.get("password", ""))
     
     if not verify_password(credentials.password, stored_hash):
+        await record_login_fail(_lockkey)
+        await record_audit("auth.login.failed", request, user=user, details={"email": credentials.email, "reason": "wrong_password"}, status=401)
         raise HTTPException(status_code=401, detail="بيانات الدخول غير صحيحة")
     
     if not user.get("is_active", True):
+        await record_audit("auth.login.failed", request, user=user, details={"reason": "inactive"}, status=401)
         raise HTTPException(status_code=401, detail="الحساب معطل")
+
+    # الحماية: حساب مالك النظام (super_admin) يتطلب مفتاحاً سرياً يُتحقق منه على الخادم
+    if user.get("role") == UserRole.SUPER_ADMIN:
+        if not credentials.secret_key or credentials.secret_key != SUPER_ADMIN_SECRET:
+            await record_login_fail(_lockkey)
+            await record_audit("auth.login.failed", request, user=user, details={"reason": "bad_secret_key"}, status=403)
+            raise HTTPException(status_code=403, detail="المفتاح السري مطلوب لحساب المالك")
+
+    await clear_login_attempts(_lockkey)
     
     # ======== فحص ترخيص العميل (Tenant) ========
     tenant_id = user.get("tenant_id")
@@ -2616,16 +2795,7 @@ async def login(credentials: UserLogin):
     
     # تسجيل حدث الدخول في سجل المراقبة
     user_name = user.get("full_name") or user.get("username") or user.get("email")
-    await db.audit_logs.insert_one({
-        "id": str(uuid.uuid4()),
-        "event_type": "login",
-        "user_id": user.get("id"),
-        "user_name": user_name,
-        "user_email": user.get("email"),
-        "user_role": user.get("role"),
-        "tenant_id": user.get("tenant_id"),
-        "created_at": datetime.now(timezone.utc).isoformat()
-    })
+    await record_audit("auth.login.success", request, user=user, status=200)
     
     return {"user": user, "token": token}
 
@@ -2833,6 +3003,17 @@ async def update_user(user_id: str, update: UserUpdate, current_user: dict = Dep
         raise HTTPException(status_code=404, detail="المستخدم غير موجود")
     
     update_data = {k: v for k, v in update.model_dump().items() if v is not None}
+
+    # منع تصعيد الصلاحيات عبر التعديل
+    new_role = update_data.get("role")
+    if new_role:
+        if new_role == UserRole.SUPER_ADMIN:
+            raise HTTPException(status_code=403, detail="غير مصرح بترقية حساب إلى مالك النظام")
+        if current_user["role"] != UserRole.SUPER_ADMIN and new_role == UserRole.ADMIN:
+            raise HTTPException(status_code=403, detail="غير مصرح بمنح هذه الصلاحية")
+    # لا يجوز لغير super_admin تعديل حساب admin/super_admin
+    if current_user["role"] != UserRole.SUPER_ADMIN and user.get("role") in [UserRole.ADMIN, UserRole.SUPER_ADMIN]:
+        raise HTTPException(status_code=403, detail="غير مصرح بتعديل هذا الحساب")
     
     # التحقق من عدم تكرار البريد الإلكتروني أو اسم المستخدم
     if update_data.get("email"):
@@ -2942,8 +3123,15 @@ async def get_tenant_limits(current_user: dict = Depends(get_current_user)):
 @api_router.post("/users", response_model=UserResponse)
 async def create_user(user: UserCreate, current_user: dict = Depends(get_current_user)):
     """إنشاء مستخدم جديد مع tenant_id تلقائياً"""
-    if current_user["role"] not in [UserRole.ADMIN, UserRole.MANAGER, UserRole.SUPER_ADMIN]:
-        raise HTTPException(status_code=403, detail="غير مصرح")
+    if current_user["role"] not in [UserRole.ADMIN, UserRole.SUPER_ADMIN]:
+        raise HTTPException(status_code=403, detail="إنشاء الحسابات متاح للمالك فقط")
+
+    # منع تصعيد الصلاحيات: لا يُسمح بإنشاء super_admin إطلاقاً عبر هذا المسار
+    if user.role == UserRole.SUPER_ADMIN:
+        raise HTTPException(status_code=403, detail="غير مصرح بإنشاء حساب مالك النظام")
+    # المدير العادي لا يستطيع إنشاء حساب admin (مالك متجر)
+    if current_user["role"] != UserRole.SUPER_ADMIN and user.role == UserRole.ADMIN:
+        raise HTTPException(status_code=403, detail="غير مصرح بإنشاء حساب بهذه الصلاحية")
     
     # التحقق من عدم وجود المستخدم
     existing = await db.users.find_one({"$or": [{"email": user.email}, {"username": user.username}]})
@@ -3748,7 +3936,7 @@ async def get_expenses(
 
 
 @api_router.get("/expenses/categories")
-async def get_expense_categories():
+async def get_expense_categories(current_user: dict = Depends(get_current_user)):
     """جلب التصنيفات الافتراضية"""
     return [
         {"id": "rent", "name": "إيجار"},
@@ -9862,8 +10050,8 @@ class TenantInvoiceSettings(BaseModel):
     default_delivery_fee: Optional[float] = 0  # مبلغ التوصيل الافتراضي (يُقترح تلقائياً)
 
 @api_router.get("/system/invoice-settings")
-async def get_system_invoice_settings():
-    """جلب إعدادات الفاتورة للنظام (عام - للطباعة)"""
+async def get_system_invoice_settings(current_user: dict = Depends(get_current_user)):
+    """جلب إعدادات الفاتورة للنظام (للطباعة من داخل النظام)"""
     settings = await db.settings.find_one({"type": "system_invoice_settings"}, {"_id": 0})
     
     default_settings = {
@@ -11309,22 +11497,32 @@ class SuperAdminLoginRequest(BaseModel):
     secret_key: str
 
 @api_router.post("/super-admin/login")
-async def super_admin_login(request: SuperAdminLoginRequest):
-    """تسجيل دخول Super Admin"""
+async def super_admin_login(request: SuperAdminLoginRequest, http_request: Request):
+    """تسجيل دخول Super Admin - محمي ضد التخمين"""
+    _lockkey = f"salogin:{_client_ip(http_request)}:{request.email}"
+    await check_login_lock(_lockkey)
     user = await db.users.find_one({"email": request.email, "role": UserRole.SUPER_ADMIN})
     if not user:
-        raise HTTPException(status_code=401, detail="المستخدم غير موجود")
+        await record_login_fail(_lockkey)
+        await record_audit("superadmin.login.failed", http_request, details={"email": request.email, "reason": "not_found"}, status=401)
+        raise HTTPException(status_code=401, detail="بيانات الدخول غير صحيحة")
     
     # التحقق من المفتاح السري (من قاعدة البيانات أو القيمة الافتراضية)
     stored_secret = user.get("secret_key") or user.get("super_admin_secret") or SUPER_ADMIN_SECRET
     if request.secret_key != stored_secret:
-        raise HTTPException(status_code=403, detail="المفتاح السري غير صحيح")
+        await record_login_fail(_lockkey)
+        await record_audit("superadmin.login.failed", http_request, user=user, details={"reason": "bad_secret"}, status=403)
+        raise HTTPException(status_code=403, detail="بيانات الدخول غير صحيحة")
     
     # التحقق من كلمة المرور (الحقل قد يكون password أو password_hash)
     password_field = user.get("password") or user.get("password_hash")
     if not password_field or not verify_password(request.password, password_field):
-        raise HTTPException(status_code=401, detail="كلمة المرور غير صحيحة")
+        await record_login_fail(_lockkey)
+        await record_audit("superadmin.login.failed", http_request, user=user, details={"reason": "wrong_password"}, status=401)
+        raise HTTPException(status_code=401, detail="بيانات الدخول غير صحيحة")
     
+    await clear_login_attempts(_lockkey)
+    await record_audit("superadmin.login.success", http_request, user=user, status=200)
     token = create_token(user["id"], user["role"], user.get("branch_id"), user.get("tenant_id"))
     
     return {
@@ -12124,11 +12322,17 @@ async def update_tenant(tenant_id: str, updates: dict, background_tasks: Backgro
 
 @api_router.delete("/super-admin/tenants/{tenant_id}")
 async def delete_tenant(tenant_id: str, permanent: bool = False, current_user: dict = Depends(verify_super_admin)):
-    """حذف مستأجر (نهائي أو تعطيل)"""
+    """حذف مستأجر (نهائي أو تعطيل) - متسامح: ينظّف أي حساب مرتبط بنفس المعرّف حتى لو لم يكن مستأجراً."""
     tenant = await db.tenants.find_one({"id": tenant_id})
+
+    # إذا لم يوجد كمستأجر، قد يكون المعرّف لحساب مستخدم مزيّف (مثل حسابات الاختراق) — ننظّفه ونرجع نجاحاً
     if not tenant:
-        raise HTTPException(status_code=404, detail="المستأجر غير موجود")
-    
+        deleted_user = await db.users.delete_one({"id": tenant_id})
+        await db.customers.delete_one({"id": tenant_id})
+        await db.drivers.delete_one({"id": tenant_id})
+        await record_audit("admin.delete_orphan", user=current_user, details={"target_id": tenant_id, "deleted_user": deleted_user.deleted_count})
+        return {"message": "تم حذف السجل المرتبط", "deleted": True}
+
     if permanent:
         # حذف نهائي - حذف جميع بيانات العميل
         await db.users.delete_many({"tenant_id": tenant_id})
@@ -12145,7 +12349,8 @@ async def delete_tenant(tenant_id: str, permanent: bool = False, current_user: d
         await db.recipes.delete_many({"tenant_id": tenant_id})
         await db.printers.delete_many({"tenant_id": tenant_id})
         await db.tenants.delete_one({"id": tenant_id})
-        
+        await record_audit("admin.delete_tenant", user=current_user, details={"tenant_id": tenant_id, "name": tenant.get("name")})
+
         return {"message": "تم حذف المستأجر نهائياً مع جميع بياناته"}
     else:
         # تعطيل بدلاً من الحذف
@@ -12153,6 +12358,42 @@ async def delete_tenant(tenant_id: str, permanent: bool = False, current_user: d
         await db.users.update_many({"tenant_id": tenant_id}, {"$set": {"is_active": False}})
         
         return {"message": "تم تعطيل المستأجر وجميع مستخدميه"}
+
+@api_router.get("/super-admin/system-users")
+async def list_system_users(current_user: dict = Depends(verify_super_admin)):
+    """قائمة كل حسابات النظام (super_admin/admin/manager) — لاكتشاف وحذف أي حساب مشبوه/مخترَق."""
+    users = await db.users.find(
+        {"role": {"$in": [UserRole.SUPER_ADMIN, UserRole.ADMIN, UserRole.MANAGER]}},
+        {"_id": 0, "password": 0, "password_hash": 0, "secret_key": 0, "super_admin_secret": 0}
+    ).sort("created_at", -1).to_list(1000)
+    # تمييز الحساب الحالي حتى لا يحذف نفسه
+    for u in users:
+        u["is_current"] = (u.get("id") == current_user.get("id"))
+    return users
+
+@api_router.delete("/super-admin/system-users/{user_id}")
+async def delete_system_user(user_id: str, current_user: dict = Depends(verify_super_admin)):
+    """حذف حساب نظام مشبوه/مخترَق (super_admin/admin/manager) — متسامح وغير قابل لحذف الذات."""
+    if user_id == current_user.get("id"):
+        raise HTTPException(status_code=400, detail="لا يمكنك حذف حسابك الحالي")
+    target = await db.users.find_one({"id": user_id}, {"_id": 0, "password": 0})
+    # حذف أي توكنات سائق مرتبطة + الحساب نفسه (idempotent)
+    result = await db.users.delete_one({"id": user_id})
+    await record_audit("admin.delete_system_user", user=current_user,
+                       details={"target_id": user_id, "target_name": (target or {}).get("full_name") or (target or {}).get("username"),
+                                "target_role": (target or {}).get("role"), "deleted": result.deleted_count})
+    if result.deleted_count == 0:
+        return {"message": "الحساب غير موجود (تم تنظيفه مسبقاً)", "deleted": False}
+    return {"message": "تم حذف الحساب بنجاح", "deleted": True}
+
+@api_router.get("/super-admin/audit-logs")
+async def get_audit_logs(event: Optional[str] = None, limit: int = 200, current_user: dict = Depends(verify_super_admin)):
+    """سجل التدقيق الأمني: عمليات الدخول/الفشل/تغيير الصلاحيات/محاولات الوصول المرفوضة مع IP."""
+    q = {}
+    if event:
+        q["event"] = event
+    logs = await db.audit_logs.find(q, {"_id": 0, "ts": 0}).sort("created_at", -1).to_list(min(limit, 500))
+    return logs
 
 @api_router.put("/super-admin/tenants/{tenant_id}/reactivate")
 async def reactivate_tenant(tenant_id: str, current_user: dict = Depends(verify_super_admin)):
@@ -16349,8 +16590,17 @@ async def test_callcenter_connection(config: CallCenterConfig, current_user: dic
 
 @api_router.post("/callcenter/webhook")
 async def callcenter_webhook(request: Request):
-    """Webhook لاستقبال المكالمات من نظام الكول سنتر"""
-    
+    """Webhook لاستقبال المكالمات من نظام الكول سنتر - محمي بمفتاح سري"""
+
+    # الحماية: يجب أن يطابق المفتاح السري المُهيّأ في البيئة لمنع حقن المكالمات
+    webhook_secret = os.environ.get("CALLCENTER_WEBHOOK_SECRET")
+    provided_secret = (
+        request.headers.get("X-Webhook-Secret")
+        or request.query_params.get("secret")
+    )
+    if not webhook_secret or provided_secret != webhook_secret:
+        raise HTTPException(status_code=403, detail="Unauthorized webhook")
+
     try:
         body = await request.json()
     except:
@@ -16531,7 +16781,7 @@ async def get_call_logs(
 # ==================== SEED DATA ====================
 
 @api_router.post("/seed")
-async def seed_data():
+async def seed_data(current_user: dict = Depends(verify_super_admin)):
     # Check if already seeded
     existing = await db.users.find_one({"email": "admin@maestroegp.com"})
     if existing:
@@ -17579,7 +17829,7 @@ async def create_biometric_job(payload: dict, current_user: dict = Depends(get_c
 
 
 @api_router.get("/biometric-queue/pending")
-async def list_pending_biometric_jobs(branch_id: Optional[str] = None, limit: int = 10):
+async def list_pending_biometric_jobs(branch_id: Optional[str] = None, limit: int = 10, _auth: bool = Depends(verify_device_agent)):
     """الوكيل يـ poll الجوبات المعلقة (atomic claim لمنع تكرار التنفيذ).
     يُستخدم بدون auth (الوكيل المحلي قد لا يحمل توكن)."""
     q = {"status": "pending"}
@@ -17599,7 +17849,7 @@ async def list_pending_biometric_jobs(branch_id: Optional[str] = None, limit: in
 
 
 @api_router.post("/biometric-queue/{job_id}/result")
-async def submit_biometric_job_result(job_id: str, payload: dict):
+async def submit_biometric_job_result(job_id: str, payload: dict, _auth: bool = Depends(verify_device_agent)):
     """الوكيل يرسل نتيجة تنفيذ الجوب. payload: {success: bool, result?, error?}"""
     success = bool(payload.get("success"))
     update = {
@@ -17661,8 +17911,9 @@ async def cleanup_stale_biometric_jobs():
 async def receive_biometric_push(request: Request):
     """
     استقبال بيانات الحضور من أجهزة ZKTeco (Push SDK)
-    يجب تكوين الجهاز لإرسال البيانات لهذا الـ endpoint
+    يجب تكوين الجهاز لإرسال البيانات لهذا الـ endpoint (مع المفتاح السري ?key= إن ضُبط)
     """
+    await verify_device_agent(request)
     try:
         data = await request.json()
         payload = ZKTecoPushData(**data)
@@ -18034,21 +18285,32 @@ async def get_customer_reviews(current_user: dict = Depends(get_current_user)):
     return reviews
 
 @api_router.post("/customer-reviews")
-async def create_customer_review(review: Dict[str, Any]):
-    """إضافة تقييم من العميل (بدون توثيق - للعملاء)"""
+async def create_customer_review(review: Dict[str, Any], request: Request):
+    """إضافة تقييم من العميل (بدون توثيق - محمي بتحديد معدّل وتحقق المستأجر)"""
+    enforce_rate_limit(request, "customer_review", max_calls=10, window_seconds=60)
+    # التحقق من وجود الطلب ومطابقة المستأجر (منع حقن تقييمات وهمية)
+    order_id = review.get("order_id")
+    order = await db.orders.find_one({"id": order_id}, {"_id": 0, "tenant_id": 1, "branch_id": 1, "order_number": 1}) if order_id else None
+    if not order:
+        raise HTTPException(status_code=404, detail="الطلب غير موجود")
+    try:
+        rating = int(review.get("rating", 5))
+    except Exception:
+        rating = 5
+    rating = max(1, min(5, rating))
     review_doc = {
         "id": str(uuid.uuid4()),
-        "order_id": review.get("order_id"),
-        "order_number": review.get("order_number"),
-        "customer_name": review.get("customer_name"),
-        "customer_phone": review.get("customer_phone"),
-        "rating": review.get("rating", 5),
-        "comment": review.get("comment", ""),
+        "order_id": order_id,
+        "order_number": order.get("order_number"),
+        "customer_name": sanitize_text(review.get("customer_name"), 120),
+        "customer_phone": sanitize_text(review.get("customer_phone"), 30),
+        "rating": rating,
+        "comment": sanitize_text(review.get("comment", ""), 1000),
         "food_rating": review.get("food_rating"),
         "service_rating": review.get("service_rating"),
         "speed_rating": review.get("speed_rating"),
-        "tenant_id": review.get("tenant_id"),
-        "branch_id": review.get("branch_id"),
+        "tenant_id": order.get("tenant_id"),
+        "branch_id": order.get("branch_id"),
         "created_at": datetime.now(timezone.utc).isoformat()
     }
     
@@ -18094,7 +18356,7 @@ MATERIAL_CATEGORIES = [
 ]
 
 @api_router.get("/recipes/categories")
-async def get_material_categories():
+async def get_material_categories(current_user: dict = Depends(get_current_user)):
     """تصنيفات المواد الخام"""
     return MATERIAL_CATEGORIES
 
@@ -20679,10 +20941,16 @@ async def get_customer_menu(tenant_id: str):
         {"_id": 0}
     ).sort("sort_order", 1).to_list(100)
     
-    # جلب المنتجات - فقط للعميل المحدد
+    # جلب المنتجات - فقط للعميل المحدد (مع إخفاء الحقول الحساسة: التكلفة/الربح/الوصفة)
     products = await db.products.find(
         {"tenant_id": tid, "is_available": {"$ne": False}},
-        {"_id": 0}
+        {
+            "_id": 0, "cost": 0, "operating_cost": 0, "recipe": 0,
+            "ingredients": 0, "raw_materials": 0, "bom": 0,
+            "profit": 0, "profit_margin": 0, "cost_breakdown": 0,
+            "supplier_id": 0, "supplier": 0, "wholesale_price": 0,
+            "purchase_price": 0, "margin": 0
+        }
     ).to_list(500)
     
     # جلب الفروع - فقط الفروع الحقيقية للزبون (استبعاد الأقسام الداخلية:
@@ -20729,8 +20997,14 @@ async def get_customer_menu(tenant_id: str):
     }
 
 @api_router.post("/customer/auth/register/{tenant_id}")
-async def register_customer(tenant_id: str, data: CustomerRegister):
-    """تسجيل عميل جديد"""
+async def register_customer(tenant_id: str, data: CustomerRegister, request: Request):
+    """تسجيل عميل جديد (محمي بتحديد معدّل وتحقق المستأجر)"""
+    enforce_rate_limit(request, "customer_register", max_calls=8, window_seconds=300)
+    # رفض التسجيل لمستأجر غير موجود (منع حقن حسابات)
+    _t = await db.tenants.find_one({"$or": [{"id": tenant_id}, {"menu_slug": tenant_id}]}, {"_id": 0, "id": 1})
+    if not _t:
+        raise HTTPException(status_code=404, detail="المطعم غير موجود")
+    tenant_id = _t["id"]
     # التحقق من عدم وجود العميل
     existing = await db.customers.find_one({
         "phone": data.phone,
@@ -20742,10 +21016,10 @@ async def register_customer(tenant_id: str, data: CustomerRegister):
     
     customer = {
         "id": str(uuid.uuid4()),
-        "name": data.name,
-        "phone": data.phone,
-        "email": data.email,
-        "address": data.address,
+        "name": sanitize_text(data.name, 120),
+        "phone": sanitize_text(data.phone, 30),
+        "email": sanitize_text(data.email, 120),
+        "address": sanitize_text(data.address, 300),
         "password": hash_customer_password(data.password) if data.password else None,
         "tenant_id": tenant_id,
         "total_orders": 0,
@@ -20770,8 +21044,9 @@ async def register_customer(tenant_id: str, data: CustomerRegister):
     return {"customer": customer, "token": token}
 
 @api_router.post("/customer/auth/login/{tenant_id}")
-async def login_customer(tenant_id: str, data: CustomerLogin):
-    """تسجيل دخول العميل"""
+async def login_customer(tenant_id: str, data: CustomerLogin, request: Request):
+    """تسجيل دخول العميل (محمي ضد التخمين بتحديد معدّل)"""
+    enforce_rate_limit(request, "customer_login", max_calls=10, window_seconds=300)
     customer = await db.customers.find_one({
         "phone": data.phone,
         "$or": [{"tenant_id": tenant_id}, {"tenant_id": {"$exists": False}}]
@@ -20817,16 +21092,25 @@ async def get_customer_from_token(token: str):
 async def create_customer_order(
     tenant_id: str,
     order: CustomerOrderCreate,
+    request: Request,
     customer_token: Optional[str] = None
 ):
-    """إنشاء طلب من تطبيق العميل"""
+    """إنشاء طلب من تطبيق العميل (محمي بتحديد معدّل وتحقق المستأجر)"""
+    enforce_rate_limit(request, "customer_order", max_calls=15, window_seconds=60)
     # Resolve menu_slug to actual tenant_id if needed
     tenant = await db.tenants.find_one(
         {"$or": [{"id": tenant_id}, {"menu_slug": tenant_id}]},
-        {"_id": 0, "id": 1}
+        {"_id": 0, "id": 1, "is_active": 1}
     )
-    if tenant:
-        tenant_id = tenant["id"]
+    # رفض الطلبات لمستأجر غير موجود/غير نشط (منع حقن طلبات وهمية)
+    if not tenant:
+        raise HTTPException(status_code=404, detail="المطعم غير موجود")
+    if tenant.get("is_active") is False:
+        raise HTTPException(status_code=403, detail="هذا الحساب غير نشط")
+    tenant_id = tenant["id"]
+    # حد أقصى لعدد الأصناف لمنع طلبات تخريبية ضخمة
+    if not order.items or len(order.items) > 100:
+        raise HTTPException(status_code=400, detail="عدد الأصناف غير صالح")
     
     # جلب العميل
     customer = None
@@ -20839,7 +21123,7 @@ async def create_customer_order(
     order_items = []
     
     for item in order.items:
-        product = await db.products.find_one({"id": item.product_id}, {"_id": 0})
+        product = await db.products.find_one({"id": item.product_id, "tenant_id": tenant_id}, {"_id": 0})
         if not product:
             raise HTTPException(status_code=400, detail=f"المنتج غير موجود: {item.product_id}")
         
@@ -21024,26 +21308,29 @@ class AddFavoriteRequest(BaseModel):
     items: List[FavoriteItem]
 
 @api_router.post("/customer/favorites/add")
-async def add_to_favorites(request: AddFavoriteRequest):
-    """إضافة طلب للمفضلة"""
-    if not request.phone or not request.items:
+async def add_to_favorites(request_body: AddFavoriteRequest, request: Request):
+    """إضافة طلب للمفضلة (محمي بتحديد معدّل)"""
+    enforce_rate_limit(request, "fav_add", max_calls=20, window_seconds=60)
+    if not request_body.phone or not request_body.items:
         raise HTTPException(status_code=400, detail="رقم الهاتف والمنتجات مطلوبة")
+    if len(request_body.items) > 100:
+        raise HTTPException(status_code=400, detail="عدد الأصناف غير صالح")
     
     # التحقق من وجود المستأجر
     tenant = None
-    if request.tenant_id:
-        tenant = await db.tenants.find_one({"menu_slug": request.tenant_id})
+    if request_body.tenant_id:
+        tenant = await db.tenants.find_one({"menu_slug": request_body.tenant_id})
         if not tenant:
-            tenant = await db.tenants.find_one({"id": request.tenant_id})
+            tenant = await db.tenants.find_one({"id": request_body.tenant_id})
     
-    actual_tenant_id = tenant.get("id") if tenant else request.tenant_id
+    actual_tenant_id = tenant.get("id") if tenant else request_body.tenant_id
     
     favorite = {
         "id": str(uuid.uuid4()),
         "tenant_id": actual_tenant_id,
-        "phone": request.phone,
-        "name": request.name or f"طلبي المفضل #{datetime.now().strftime('%d/%m')}",
-        "items": [item.dict() for item in request.items],
+        "phone": sanitize_text(request_body.phone, 30),
+        "name": sanitize_text(request_body.name, 120) or f"طلبي المفضل #{datetime.now().strftime('%d/%m')}",
+        "items": [item.dict() for item in request_body.items],
         "created_at": datetime.now(timezone.utc).isoformat()
     }
     
@@ -21110,8 +21397,9 @@ class OrderRating(BaseModel):
     service_quality: Optional[int] = None  # جودة الخدمة 1-5
 
 @api_router.post("/customer/rate-order")
-async def rate_order(rating: OrderRating):
-    """تقييم طلب من الزبون"""
+async def rate_order(rating: OrderRating, request: Request):
+    """تقييم طلب من الزبون (محمي بتحديد معدّل)"""
+    enforce_rate_limit(request, "rate_order", max_calls=10, window_seconds=60)
     if rating.rating < 1 or rating.rating > 5:
         raise HTTPException(status_code=400, detail="التقييم يجب أن يكون من 1 إلى 5")
     
@@ -21134,9 +21422,11 @@ async def rate_order(rating: OrderRating):
         raise HTTPException(status_code=400, detail="تم تقييم هذا الطلب مسبقاً")
     
     # حفظ التقييم
+    _rd = rating.model_dump()
+    _rd["comment"] = sanitize_text(_rd.get("comment"), 1000)
     rating_doc = {
         "id": str(uuid.uuid4()),
-        **rating.model_dump(),
+        **_rd,
         "created_at": datetime.now(timezone.utc).isoformat()
     }
     
@@ -21449,7 +21739,7 @@ async def get_menu_link(request: Request, current_user: dict = Depends(get_curre
         base_url = f"{parsed.scheme}://{parsed.netloc}"
     else:
         # fallback للـ environment variable
-        base_url = os.environ.get('REACT_APP_BACKEND_URL', 'https://pwa-driver-track.preview.emergentagent.com')
+        base_url = os.environ.get('REACT_APP_BACKEND_URL', 'https://pos-security-audit-1.preview.emergentagent.com')
     
     menu_url = f"{base_url}/menu/{tenant.get('menu_slug', tenant_id)}"
     
@@ -21694,16 +21984,23 @@ async def driver_login(phone: str, pin: str):
     
     # إزالة PIN من الاستجابة لأسباب أمنية
     driver_response = {k: v for k, v in driver.items() if k != "pin"}
-    
-    return {"driver": driver_response, "message": "تم تسجيل الدخول بنجاح"}
+
+    # إصدار توكن جلسة opaque للسائق (يُستخدم للمصادقة على مسارات السائق ومنع IDOR)
+    import secrets as _secrets
+    driver_token = _secrets.token_urlsafe(32)
+    await db.driver_tokens.insert_one({
+        "token": driver_token,
+        "driver_id": driver["id"],
+        "tenant_id": driver.get("tenant_id"),
+        "created_at": datetime.now(timezone.utc).isoformat()
+    })
+
+    return {"driver": driver_response, "token": driver_token, "message": "تم تسجيل الدخول بنجاح"}
 
 @api_router.get("/driver/orders")
-async def get_driver_orders(driver_id: str):
-    """جلب الطلبات المسندة للسائق.
-    يُرجع كل الطلبات المسندة للسائق التي لم تُسلَّم/تُلغَ بعد — بصرف النظر عن اسم الحالة الوسيطة.
-    (إصلاح: كان الفلتر يحصر الحالات بقائمة بيضاء؛ فعند تغيّر الحالة لـ"confirmed"/"completed" من الكاشير أو POS
-    كان الطلب يختفي من السائق قبل التسليم. الآن نستبعد فقط الحالات النهائية.)
-    """
+async def get_driver_orders(current_driver: dict = Depends(get_current_driver)):
+    """جلب الطلبات المسندة للسائق (مُستمدة من توكن السائق — لا يمكن طلب طلبات سائق آخر)."""
+    driver_id = current_driver["id"]
     orders = await db.orders.find(
         {
             "driver_id": driver_id,
@@ -21726,42 +22023,6 @@ async def get_driver_orders(driver_id: str):
         order['status_label'] = status_labels.get(order.get('status'), order.get('status'))
     
     return orders
-
-@api_router.put("/orders/{order_id}/status")
-async def update_order_status(order_id: str, status: str):
-    """تحديث حالة الطلب (للسائق)"""
-    valid_statuses = ['pending', 'preparing', 'ready', 'out_for_delivery', 'delivered', 'cancelled']
-    if status not in valid_statuses:
-        raise HTTPException(status_code=400, detail="حالة غير صحيحة")
-    
-    order = await db.orders.find_one({"id": order_id})
-    if not order:
-        raise HTTPException(status_code=404, detail="الطلب غير موجود")
-    
-    update_data = {
-        "status": status,
-        "updated_at": datetime.now(timezone.utc).isoformat()
-    }
-    
-    if status == 'out_for_delivery':
-        update_data["out_for_delivery_at"] = datetime.now(timezone.utc).isoformat()
-    
-    if status == 'delivered':
-        update_data["delivered_at"] = datetime.now(timezone.utc).isoformat()
-        # تحرير السائق
-        if order.get("driver_id"):
-            await db.drivers.update_one(
-                {"id": order["driver_id"]},
-                {"$set": {"is_available": True}}
-            )
-    
-    await db.orders.update_one({"id": order_id}, {"$set": update_data})
-    
-    # إرسال إشعار Push للعميل عند تغيير حالة الطلب
-    await notify_order_status_change(order_id, status)
-    
-    return {"message": "تم تحديث حالة الطلب", "status": status}
-
 
 @api_router.get("/customer/order-driver/{order_id}")
 async def get_order_driver_info(order_id: str, phone: str = None):
@@ -21819,8 +22080,9 @@ class DriverLocationUpdate(BaseModel):
     longitude: float
 
 @api_router.post("/driver/update-location")
-async def driver_update_location(driver_id: str, location: DriverLocationUpdate):
-    """تحديث موقع السائق - للاستخدام من تطبيق السائق (بدون JWT)"""
+async def driver_update_location(location: DriverLocationUpdate, current_driver: dict = Depends(get_current_driver)):
+    """تحديث موقع السائق - من تطبيق السائق (مصادقة بتوكن السائق)"""
+    driver_id = current_driver["id"]
     result = await db.drivers.update_one(
         {"id": driver_id},
         {"$set": {
@@ -21838,8 +22100,9 @@ async def driver_update_location(driver_id: str, location: DriverLocationUpdate)
     return {"message": "تم تحديث الموقع", "success": True}
 
 @api_router.put("/driver/orders/{order_id}/status")
-async def driver_update_order_status(order_id: str, status: str, driver_id: str):
-    """تحديث حالة الطلب من تطبيق السائق (بدون JWT)"""
+async def driver_update_order_status(order_id: str, status: str, current_driver: dict = Depends(get_current_driver)):
+    """تحديث حالة الطلب من تطبيق السائق (مصادقة بتوكن السائق)"""
+    driver_id = current_driver["id"]
     valid_statuses = ['out_for_delivery', 'delivered']
     if status not in valid_statuses:
         raise HTTPException(status_code=400, detail="حالة غير صحيحة للسائق")
@@ -21922,9 +22185,10 @@ class DeliveryRatingCreate(BaseModel):
 
 
 @api_router.post("/track/{order_id}/rating")
-async def submit_delivery_rating(order_id: str, rating: DeliveryRatingCreate):
+async def submit_delivery_rating(order_id: str, rating: DeliveryRatingCreate, request: Request):
     """تقييم الزبون بعد التسليم: الطعام + المطعم + السائق + ملاحظات. بدون مصادقة (يفتحه الزبون من رابط التتبّع).
     يُسجَّل في سجل التوصيل ليطّلع عليه المالك/المدير."""
+    enforce_rate_limit(request, "track_rating", max_calls=10, window_seconds=60)
     order = await db.orders.find_one({"id": order_id}, {"_id": 0})
     if not order:
         raise HTTPException(status_code=404, detail="الطلب غير موجود")
@@ -21953,7 +22217,7 @@ async def submit_delivery_rating(order_id: str, rating: DeliveryRatingCreate):
         "food_rating": _clamp(rating.food_rating),
         "restaurant_rating": _clamp(rating.restaurant_rating),
         "driver_rating": _clamp(rating.driver_rating),
-        "notes": (rating.notes or "").strip()[:500],
+        "notes": sanitize_text(rating.notes, 500),
         "created_at": now_iso,
     }
     await db.delivery_ratings.insert_one(doc)
@@ -22006,12 +22270,13 @@ async def get_order_chat(order_id: str, after: Optional[str] = None):
     return {"messages": msgs}
 
 @api_router.post("/order-chat/{order_id}")
-async def send_order_chat(order_id: str, msg: OrderChatMessage):
-    """إرسال رسالة في محادثة الطلب - بدون مصادقة"""
+async def send_order_chat(order_id: str, msg: OrderChatMessage, request: Request):
+    """إرسال رسالة في محادثة الطلب - بدون مصادقة (محمية بتحديد معدّل وتنظيف مدخلات)"""
+    enforce_rate_limit(request, "order_chat_send", max_calls=20, window_seconds=60)
     order = await db.orders.find_one({"id": order_id}, {"_id": 0, "id": 1, "driver_id": 1, "customer_name": 1})
     if not order:
         raise HTTPException(status_code=404, detail="الطلب غير موجود")
-    text = (msg.text or "").strip()
+    text = sanitize_text(msg.text or "", 1000)
     if not text:
         raise HTTPException(status_code=400, detail="الرسالة فارغة")
     sender = msg.sender if msg.sender in ("customer", "driver") else "customer"
@@ -22019,7 +22284,7 @@ async def send_order_chat(order_id: str, msg: OrderChatMessage):
         "id": str(uuid.uuid4()),
         "order_id": order_id,
         "sender": sender,
-        "sender_name": msg.sender_name or ("الزبون" if sender == "customer" else "السائق"),
+        "sender_name": sanitize_text(msg.sender_name, 120) or ("الزبون" if sender == "customer" else "السائق"),
         "text": text[:1000],
         "read": False,
         "listened": False,
@@ -22050,12 +22315,14 @@ async def send_order_chat(order_id: str, msg: OrderChatMessage):
 @api_router.post("/order-chat/{order_id}/voice")
 async def send_order_chat_voice(
     order_id: str,
+    request: Request,
     file: UploadFile = File(...),
     sender: str = Form("customer"),
     sender_name: Optional[str] = Form(None),
     duration: Optional[float] = Form(0),
 ):
-    """إرسال رسالة صوتية في محادثة الطلب - بدون مصادقة"""
+    """إرسال رسالة صوتية في محادثة الطلب - بدون مصادقة (محمية بتحديد معدّل)"""
+    enforce_rate_limit(request, "order_chat_voice", max_calls=15, window_seconds=60)
     order = await db.orders.find_one({"id": order_id}, {"_id": 0, "id": 1, "driver_id": 1, "customer_name": 1})
     if not order:
         raise HTTPException(status_code=404, detail="الطلب غير موجود")
@@ -22090,7 +22357,7 @@ async def send_order_chat_voice(
         "id": str(uuid.uuid4()),
         "order_id": order_id,
         "sender": sender,
-        "sender_name": sender_name or ("الزبون" if sender == "customer" else "السائق"),
+        "sender_name": sanitize_text(sender_name, 120) or ("الزبون" if sender == "customer" else "السائق"),
         "type": "voice",
         "audio_url": audio_url,
         "duration": dur,
@@ -22122,8 +22389,9 @@ async def send_order_chat_voice(
 
 
 @api_router.post("/order-chat/{order_id}/read")
-async def mark_order_chat_read(order_id: str, viewer: str = Query("customer")):
+async def mark_order_chat_read(order_id: str, request: Request, viewer: str = Query("customer")):
     """تعليم رسائل الطرف الآخر كمقروءة (تم الرؤية) — viewer هو الطرف الذي فتح المحادثة."""
+    enforce_rate_limit(request, "chat_read", max_calls=60, window_seconds=60)
     viewer = viewer if viewer in ("customer", "driver") else "customer"
     other = "driver" if viewer == "customer" else "customer"
     res = await db.order_chats.update_many(
@@ -22134,8 +22402,9 @@ async def mark_order_chat_read(order_id: str, viewer: str = Query("customer")):
 
 
 @api_router.post("/order-chat/{order_id}/listened/{message_id}")
-async def mark_order_chat_listened(order_id: str, message_id: str, viewer: str = Query("customer")):
+async def mark_order_chat_listened(order_id: str, message_id: str, request: Request, viewer: str = Query("customer")):
     """تعليم رسالة صوتية كمسموعة (تم الاستماع) — فقط إن كان viewer هو المستقبِل."""
+    enforce_rate_limit(request, "chat_listened", max_calls=60, window_seconds=60)
     viewer = viewer if viewer in ("customer", "driver") else "customer"
     other = "driver" if viewer == "customer" else "customer"
     res = await db.order_chats.update_one(
@@ -22148,14 +22417,17 @@ async def mark_order_chat_listened(order_id: str, message_id: str, viewer: str =
 # ==================== PUSH NOTIFICATIONS ROUTES ====================
 
 @api_router.post("/push/subscribe")
-async def subscribe_push(subscription: PushSubscription):
-    """تسجيل اشتراك في إشعارات Push"""
+async def subscribe_push(subscription: PushSubscription, request: Request):
+    """تسجيل اشتراك في إشعارات Push (محمي بتحديد معدّل)"""
+    enforce_rate_limit(request, "push_subscribe", max_calls=20, window_seconds=60)
+    if not subscription.endpoint or not str(subscription.endpoint).startswith("https://"):
+        raise HTTPException(status_code=400, detail="endpoint غير صالح")
     sub_doc = {
         "id": str(uuid.uuid4()),
         "endpoint": subscription.endpoint,
         "keys": subscription.keys,
-        "phone": subscription.phone,
-        "user_type": subscription.user_type,
+        "phone": sanitize_text(subscription.phone, 30),
+        "user_type": subscription.user_type if subscription.user_type in ("driver", "customer", "staff") else "customer",
         "created_at": datetime.now(timezone.utc).isoformat(),
         "is_active": True
     }
@@ -22252,23 +22524,25 @@ async def send_push_notification(phone: str, title: str, body: str, data: dict =
         return False
 
 @api_router.post("/push/test")
-async def test_push_notification(phone: str, message: str = "هذا إشعار تجريبي"):
-    """إرسال إشعار تجريبي"""
+async def test_push_notification(phone: str, message: str = "هذا إشعار تجريبي", current_user: dict = Depends(get_current_user)):
+    """إرسال إشعار تجريبي — للمالك/المدير فقط (منع إساءة الاستخدام)"""
+    if current_user.get("role") not in ("super_admin", "admin", "manager"):
+        raise HTTPException(status_code=403, detail="غير مصرح")
     await send_push_notification(
-        phone=phone,
+        phone=sanitize_text(phone, 30),
         title="Maestro EGP",
-        body=message,
+        body=sanitize_text(message, 200),
         data={"type": "test"}
     )
     return {"message": "تم إرسال الإشعار"}
 
 @api_router.get("/notifications/{phone}")
-async def get_notifications(phone: str, limit: int = 20):
-    """جلب سجل الإشعارات للمستخدم"""
+async def get_notifications(phone: str, limit: int = 20, current_user: dict = Depends(get_current_user)):
+    """جلب سجل الإشعارات لرقم — للموظفين فقط (منع تسريب بيانات الآخرين)"""
     notifications = await db.notification_logs.find(
         {"phone": phone},
         {"_id": 0}
-    ).sort("sent_at", -1).limit(limit).to_list(limit)
+    ).sort("sent_at", -1).limit(min(limit, 100)).to_list(min(limit, 100))
     
     return notifications
 
@@ -23801,19 +24075,45 @@ app.include_router(call_router, prefix="/api")
 @app.middleware("http")
 async def add_no_cache_headers(request, call_next):
     response = await call_next(request)
+    # رؤوس أمان عامة لكل الاستجابات
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["X-Frame-Options"] = "SAMEORIGIN"
+    response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+    response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
+    response.headers["Permissions-Policy"] = "geolocation=(self), microphone=(self), camera=()"
     if request.url.path.startswith("/api"):
         response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
         response.headers["Pragma"] = "no-cache"
         response.headers["Expires"] = "0"
+        # تسجيل محاولات الوصول المرفوضة (محاولات اختراق): فقط عند وجود توكن أو عمليات كتابة لتقليل الضجيج
+        try:
+            if response.status_code in (401, 403):
+                has_auth = "authorization" in {k.lower() for k in request.headers.keys()}
+                if has_auth or request.method in ("POST", "PUT", "DELETE", "PATCH"):
+                    await record_audit("access.denied", request, status=response.status_code)
+        except Exception:
+            pass
     return response
 
-app.add_middleware(
-    CORSMiddleware,
-    allow_credentials=True,
-    allow_origins=os.environ.get('CORS_ORIGINS', '*').split(','),
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+_cors_origins_env = os.environ.get('CORS_ORIGINS', '').strip()
+if _cors_origins_env and _cors_origins_env != '*':
+    _allowed_origins = [o.strip() for o in _cors_origins_env.split(',') if o.strip()]
+    app.add_middleware(
+        CORSMiddleware,
+        allow_credentials=True,
+        allow_origins=_allowed_origins,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
+else:
+    # عند عدم ضبط CORS_ORIGINS: لا نعكس أصلاً عشوائياً مع credentials. نسمح فقط بنطاقات الإنتاج المعروفة.
+    app.add_middleware(
+        CORSMiddleware,
+        allow_credentials=True,
+        allow_origin_regex=r"https://([a-z0-9-]+\.)?maestroegp\.com",
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
 
 # WebSocket Integration for Real-time Notifications
 try:

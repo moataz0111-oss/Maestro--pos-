@@ -11,7 +11,9 @@ from datetime import datetime, timezone, timedelta
 from motor.motor_asyncio import AsyncIOMotorClient
 import os
 
-router = APIRouter(tags=["Order Notifications"])
+from .shared import get_current_user, get_staff_or_driver
+
+router = APIRouter(tags=["Order Notifications"], dependencies=[Depends(get_staff_or_driver)])
 
 # Database connection
 mongo_url = os.environ['MONGO_URL']
@@ -53,7 +55,7 @@ class OrderNotificationResponse(BaseModel):
 
 
 @router.post("/order-notifications")
-async def create_order_notification(notification: OrderNotificationCreate):
+async def create_order_notification(notification: OrderNotificationCreate, _staff: dict = Depends(get_current_user)):
     """
     إنشاء إشعار طلب جديد للكاشير والسائق
     يتم استدعاؤها تلقائياً عند حفظ طلب جديد
@@ -190,7 +192,7 @@ async def get_order_notifications(
 
 
 @router.get("/order-notifications/escalations")
-async def get_order_escalations(branch_id: Optional[str] = None, limit: int = 20):
+async def get_order_escalations(branch_id: Optional[str] = None, limit: int = 20, _staff: dict = Depends(get_current_user)):
     """إشعارات للإدارة (مالك/مدير/مدير عام):
     - طلبات لم يوافق عليها الكاشير خلال 5 دقائق (تأخير) → يُنشأ تنبيه تلقائياً.
     - طلبات رفضها الكاشير → تنبيه أُنشئ عند الرفض.
@@ -265,7 +267,7 @@ async def mark_notification_read(notification_id: str):
 
 
 @router.put("/order-notifications/{notification_id}/printed")
-async def mark_notification_printed(notification_id: str):
+async def mark_notification_printed(notification_id: str, _staff: dict = Depends(get_current_user)):
     """تحديد إشعار كمطبوع"""
     result = await db.order_notifications.update_one(
         {"id": notification_id},
@@ -281,7 +283,8 @@ async def mark_notification_printed(notification_id: str):
 @router.put("/order-notifications/read-all")
 async def mark_all_notifications_read(
     branch_id: Optional[str] = None,
-    driver_id: Optional[str] = None
+    driver_id: Optional[str] = None,
+    _staff: dict = Depends(get_current_user)
 ):
     """تحديد جميع الإشعارات كمقروءة"""
     query = {"is_read": False}
@@ -304,7 +307,7 @@ async def mark_all_notifications_read(
 
 
 @router.delete("/order-notifications/cleanup")
-async def cleanup_old_notifications(hours: int = 24):
+async def cleanup_old_notifications(hours: int = 24, _staff: dict = Depends(get_current_user)):
     """حذف الإشعارات القديمة (أكثر من عدد ساعات معين)"""
     cutoff_time = (datetime.now(timezone.utc) - timedelta(hours=hours)).isoformat()
     
