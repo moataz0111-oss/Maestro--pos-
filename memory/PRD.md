@@ -1069,3 +1069,26 @@ NOT MOUNTED (dead code, ignore): routes/auth_routes.py, routes/customer_menu.py.
 - (P2) تحديد المعدّل حالياً per-pod في الذاكرة؛ للتوسّع الأفقي على عدة pods انقله إلى MongoDB (TTL) أو Redis.
 - (P1) نقل التوكن من localStorage إلى HttpOnly cookies.
 - (P3) تفكيك server.py (~24k سطر) و SuperAdmin.js.
+
+## [29 يونيو 2026] (تكملة) السجل الأمني لمحاولات الحقن
+- middleware جديد (security_audit_middleware في server.py) يسجّل تلقائياً في audit_logs كل: 429 (تجاوز تحديد المعدّل) و403 على عمليات الكتابة (POST/PUT/PATCH/DELETE) مع IP والمسار والوقت.
+- أحداث جديدة: security.rate_limited / security.forbidden.
+- واجهة SuperAdmin.js (تبويب السجل الأمني) عُزّزت لعرض هذه المحاولات بإطار أحمر + IP + المسار. (sw-offline → v33)
+- تم التحقق: ظهرت 4 أحداث (3×429 + 1×403) مع IP صحيح عبر /api/super-admin/security-log.
+- جاهزية النشر: deployment check = PASS (لا أسرار مكتوبة، CORS سليم، الترجمة ناجحة).
+- ملاحظة: تحديد المعدّل in-memory per-worker — مناسب لخادم Contabo بعامل uvicorn واحد؛ يُعاد ضبطه عند إعادة تشغيل الخلفية.
+
+## معلّق بانتظار قرار المستخدم
+- P1: نقل التوكن إلى HttpOnly cookies (يتعارض مع offline-first — بانتظار اختيار a/b/c).
+- P2: تغيير PIN السائقين الافتراضي (1234) + سياسة كلمات مرور قوية.
+
+## [29 يونيو 2026] (تكملة) تحصينات إنتاج maestroegp.com — مؤكَّدة حيّاً
+- ترويسات أمان (server.py middleware + deploy/nginx-site.conf): HSTS, X-Frame-Options=SAMEORIGIN, X-Content-Type-Options=nosniff, Referrer-Policy, Permissions-Policy.
+- SSL: شهادة Let's Encrypt جُدّدت + خطاف deploy/restart-nginx.sh + certbot.timer مفعّل (تجديد تلقائي).
+- سرّ JWT: كان ضعيفاً على الإنتاج (maestro-egp-secret-key-2024 عبر docker run -e في .github/workflows/deploy.yml). دُوّر إلى سرّ عشوائي 96-hex قوي. حُدّثت: الحاوية العاملة + /var/www/maestro/.github/workflows/deploy.yml + /var/www/maestro/backend/.env + نسخ /root/maestro.
+- متبقٍ على المستخدم: تحديث نفس السرّ في ملف deploy.yml داخل مستودع GitHub (moataz0111-oss) — وإلا يعود الضعيف عند النشر القادم. (يُفضّل GitHub Secret).
+- تحقق إنتاجي مباشر (curl على maestroegp.com): API=200؛ توكنات مزوّرة بكل الأسرار القديمة الثلاثة → 401 (مرفوضة)؛ ترويسات الأمان حاضرة.
+- قرار المستخدم: رفض P2 (لا تغيير كلمات مرور للعملاء/المالك/الموظفين ولا PIN السائقين) — لا إجراء.
+
+### حالة الأمان النهائية (مغلق ومراقَب)
+تسجيل مفتوح/تصعيد صلاحيات/IDOR، حقن البيانات، brute-force، clickjacking/XSS/MIME، SSL، سرّ JWT — كلها مُغلقة. سجل أمني حيّ يلتقط 403/429 مع IP.

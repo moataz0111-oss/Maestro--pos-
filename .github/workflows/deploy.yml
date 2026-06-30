@@ -155,7 +155,7 @@ jobs:
               -v /var/www/maestro/uploads:/app/uploads \
               -e MONGO_URL="mongodb://maestro-mongodb:27017" \
               -e DB_NAME="maestro_db" \
-              -e JWT_SECRET="maestro-egp-secret-key-2024" \
+              -e JWT_SECRET="0e7055b078e82bc7a767d735ca59238c89c24edfa8c6b1ecc861673f9f1b94d44b334e977a579f2b50da9cdc7027550f" \
               "$BK_TAG"
             sleep 10
           else

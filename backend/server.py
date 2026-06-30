@@ -248,6 +248,20 @@ security = HTTPBearer()
 # إضافة GZip compression لتسريع نقل البيانات
 app.add_middleware(GZipMiddleware, minimum_size=1000)
 
+# ==================== ترويسات أمان لكل استجابات الـ API (حماية ضد clickjacking/XSS/MIME-sniffing) ====================
+@app.middleware("http")
+async def security_headers_middleware(request: Request, call_next):
+    response = await call_next(request)
+    try:
+        response.headers["X-Content-Type-Options"] = "nosniff"
+        response.headers["X-Frame-Options"] = "SAMEORIGIN"
+        response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+        response.headers["Permissions-Policy"] = "geolocation=(self), microphone=(self), camera=(self)"
+        response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
+    except Exception:
+        pass
+    return response
+
 # ==================== سجل أمني: تسجيل محاولات الحقن/الإساءة المرفوضة (429/403) ====================
 @app.middleware("http")
 async def security_audit_middleware(request: Request, call_next):
