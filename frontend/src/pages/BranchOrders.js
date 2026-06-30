@@ -185,8 +185,8 @@ export default function BranchOrders() {
     } catch (e) { /* */ }
     // من حدث مباشر عندما نكون بالفعل في الشاشة
     const handler = (e) => openCount(e.detail?.branch_id);
-    window.addEventListener('emergent:open-stock-count', handler);
-    return () => window.removeEventListener('emergent:open-stock-count', handler);
+    window.addEventListener('maestro:open-stock-count', handler);
+    return () => window.removeEventListener('maestro:open-stock-count', handler);
   }, []);
   const fetchData = async (silent = false) => {
     if (!silent) setLoading(true);

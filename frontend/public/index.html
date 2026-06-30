@@ -53,7 +53,6 @@
         </script>
         
         <title>Maestro EGP</title>
-        <script src="https://assets.emergent.sh/scripts/emergent-main.js"></script>
         
         <script>
             // ⭐ توجيه التطبيقات المثبّتة (PWA) إلى وجهتها الصحيحة عند فتحها من الشاشة الرئيسية
@@ -110,17 +109,6 @@
                     document.title = 'تطبيق السائق - التوصيل';
                 }
             })();
-            
-            // Only load visual edit scripts when inside an iframe
-            if (window.self !== window.top) {
-                var cssLink = document.createElement('link');
-                cssLink.rel = 'stylesheet';
-                cssLink.href = 'https://assets.emergent.sh/visual-edits/styles.css';
-                document.head.appendChild(cssLink);
-                var jsScript = document.createElement('script');
-                jsScript.src = 'https://assets.emergent.sh/visual-edits/script.js';
-                document.head.appendChild(jsScript);
-            }
             
             // تسجيل Service Worker للعمل بدون إنترنت
             // ملاحظة: التسجيل الفعلي يتم في src/index.js لتجنب التسجيل المزدوج

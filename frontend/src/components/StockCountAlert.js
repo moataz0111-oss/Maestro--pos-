@@ -103,7 +103,7 @@ export const StockCountAlert = ({ onOpenCount }) => {
     try { sessionStorage.setItem('open_stock_count_branch', first.branch_id); } catch (e) { /* */ }
     const onBranchOrders = window.location.pathname.replace(/\/$/, '').endsWith('branch-orders');
     if (onBranchOrders) {
-      window.dispatchEvent(new CustomEvent('emergent:open-stock-count', { detail: first }));
+      window.dispatchEvent(new CustomEvent('maestro:open-stock-count', { detail: first }));
     } else {
       window.location.assign('/branch-orders');
     }
