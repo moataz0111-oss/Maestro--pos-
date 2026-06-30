@@ -125,10 +125,19 @@ jobs:
             sleep 10
           fi
 
-          # ضمان شهادات SSL جاهزة (قبل nginx)
+          # ضمان شهادات SSL جاهزة (أحدث شهادة صالحة) قبل nginx
           mkdir -p /var/www/maestro/ssl
-          cp /var/www/maestro/certbot/conf/archive/maestroegp.com/fullchain1.pem /var/www/maestro/ssl/fullchain.pem 2>/dev/null || true
-          cp /var/www/maestro/certbot/conf/archive/maestroegp.com/privkey1.pem /var/www/maestro/ssl/privkey.pem 2>/dev/null || true
+          SSL_SRC=""
+          for d in /etc/letsencrypt/live/maestroegp.com /var/www/maestro/certbot/conf/live/maestroegp.com; do
+            if [ -f "$d/fullchain.pem" ]; then
+              if [ -z "$SSL_SRC" ] || [ "$d/fullchain.pem" -nt "$SSL_SRC/fullchain.pem" ]; then SSL_SRC="$d"; fi
+            fi
+          done
+          if [ -n "$SSL_SRC" ]; then
+            echo "🔐 استخدام الشهادة من: $SSL_SRC"
+            cp -L "$SSL_SRC/fullchain.pem" /var/www/maestro/ssl/fullchain.pem 2>/dev/null || true
+            cp -L "$SSL_SRC/privkey.pem" /var/www/maestro/ssl/privkey.pem 2>/dev/null || true
+          fi
 
           # 🔴 الأهم: إعادة الموقع فوراً إن كانت nginx متوقفة (قبل أي تحديث محفوف بالمخاطر)
           ensure_nginx
