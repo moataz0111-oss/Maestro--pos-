@@ -64,6 +64,7 @@ import {
   ExternalLink,
   Shield,
   ShieldAlert,
+  Ban,
   LogIn,
   UserCheck,
   Layers,
@@ -338,6 +339,7 @@ export default function SuperAdmin() {
 
   // السجل الأمني (لمالك النظام الأعلى)
   const [securityLog, setSecurityLog] = useState(null);
+  const [blockedIps, setBlockedIps] = useState([]);
   const [loadingSecurityLog, setLoadingSecurityLog] = useState(false);
   
   // أسعار الاشتراكات
@@ -797,10 +799,40 @@ export default function SuperAdmin() {
       const headers = { Authorization: `Bearer ${token}` };
       const res = await axios.get(`${API}/super-admin/security-log?limit=100`, { headers });
       setSecurityLog(res.data);
+      try {
+        const b = await axios.get(`${API}/super-admin/blocked-ips`, { headers });
+        setBlockedIps(b.data.blocked || []);
+      } catch (e) { /* ignore */ }
     } catch (error) {
       console.error('Error fetching security log:', error);
     } finally {
       setLoadingSecurityLog(false);
+    }
+  };
+
+  const handleBlockIp = async (ip) => {
+    if (!ip) return;
+    if (!window.confirm(t('هل تريد حظر هذا العنوان نهائياً؟') + `\n${ip}`)) return;
+    try {
+      const token = localStorage.getItem('super_admin_token');
+      const headers = { Authorization: `Bearer ${token}` };
+      await axios.post(`${API}/super-admin/block-ip`, { ip, reason: t('حظر يدوي من السجل الأمني') }, { headers });
+      toast.success(t('تم حظر العنوان') + ` ${ip}`);
+      fetchSecurityLog();
+    } catch (error) {
+      toast.error(getErrorMessage(error) || t('فشل حظر العنوان'));
+    }
+  };
+
+  const handleUnblockIp = async (ip) => {
+    try {
+      const token = localStorage.getItem('super_admin_token');
+      const headers = { Authorization: `Bearer ${token}` };
+      await axios.post(`${API}/super-admin/unblock-ip`, { ip }, { headers });
+      toast.success(t('تم إلغاء الحظر') + ` ${ip}`);
+      fetchSecurityLog();
+    } catch (error) {
+      toast.error(getErrorMessage(error) || t('فشل إلغاء الحظر'));
     }
   };
 
@@ -3345,6 +3377,33 @@ export default function SuperAdmin() {
                       <p className="text-center text-gray-500 py-6 text-sm">{t('لا توجد أحداث أمان')}</p>
                     ) : (
                       <div className="space-y-1.5 max-h-[420px] overflow-y-auto">
+                        {blockedIps.length > 0 && (
+                          <div className="mb-3 p-3 rounded-lg bg-red-950/40 border border-red-800/60" data-testid="blocked-ips-section">
+                            <p className="text-xs font-bold text-red-300 mb-2 flex items-center gap-1">
+                              <Ban className="h-4 w-4" /> {t('العناوين المحظورة')} ({blockedIps.length})
+                            </p>
+                            <div className="space-y-1">
+                              {blockedIps.map((b, i) => (
+                                <div key={b.ip || i} className="flex items-center justify-between gap-2 text-[11px]" data-testid={`blocked-ip-row-${i}`}>
+                                  <div className="min-w-0">
+                                    <span className="font-mono text-amber-400">IP {b.ip}</span>
+                                    {b.auto ? <span className="ml-2 text-[9px] bg-red-600/30 text-red-300 px-1.5 py-0.5 rounded">{t('تلقائي')}</span> : null}
+                                    {b.reason ? <p className="text-[10px] text-gray-400 truncate">{b.reason}</p> : null}
+                                  </div>
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    onClick={() => handleUnblockIp(b.ip)}
+                                    className="h-6 px-2 text-[10px] border-gray-500 text-gray-300 hover:bg-gray-600/20 shrink-0"
+                                    data-testid={`unblock-ip-btn-${i}`}
+                                  >
+                                    {t('إلغاء الحظر')}
+                                  </Button>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
                         {securityLog.events.map((ev, idx) => {
                           const type = ev.event_type || ev.event;
                           const isSecurity = typeof type === 'string' && type.startsWith('security.');
@@ -3380,10 +3439,29 @@ export default function SuperAdmin() {
                                   </p>
                                 </div>
                               </div>
-                              <span className="text-[11px] text-gray-500 shrink-0 flex items-center gap-1">
-                                <Clock className="h-3 w-3" />
-                                {ev.created_at ? String(ev.created_at).slice(0, 16).replace('T', ' ') : ''}
-                              </span>
+                              <div className="shrink-0 flex flex-col items-end gap-1">
+                                <span className="text-[11px] text-gray-500 flex items-center gap-1">
+                                  <Clock className="h-3 w-3" />
+                                  {ev.created_at ? String(ev.created_at).slice(0, 16).replace('T', ' ') : ''}
+                                </span>
+                                {ip ? (
+                                  blockedIps.some(b => b.ip === ip) ? (
+                                    <span className="text-[10px] text-red-400 font-bold flex items-center gap-1" data-testid={`security-event-blocked-${idx}`}>
+                                      <Ban className="h-3 w-3" /> {t('محظور')}
+                                    </span>
+                                  ) : (
+                                    <Button
+                                      size="sm"
+                                      variant="outline"
+                                      onClick={() => handleBlockIp(ip)}
+                                      className="h-6 px-2 text-[10px] gap-1 border-red-600 text-red-400 hover:bg-red-600/20"
+                                      data-testid={`block-ip-btn-${idx}`}
+                                    >
+                                      <Ban className="h-3 w-3" /> {t('حظر هذا الـ IP')}
+                                    </Button>
+                                  )
+                                ) : null}
+                              </div>
                             </div>
                           );
                         })}

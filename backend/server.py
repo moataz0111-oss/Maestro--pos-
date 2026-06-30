@@ -248,9 +248,116 @@ security = HTTPBearer()
 # إضافة GZip compression لتسريع نقل البيانات
 app.add_middleware(GZipMiddleware, minimum_size=1000)
 
+# ==================== حظر عناوين IP (Block List) ====================
+_BLOCKED_IPS = set()
+_BLOCKED_IPS_TS = 0.0
+_BLOCKED_TTL = 20  # ثانية
+
+async def _refresh_blocked_ips(force=False):
+    global _BLOCKED_IPS, _BLOCKED_IPS_TS
+    import time as _t
+    now = _t.time()
+    if not force and (now - _BLOCKED_IPS_TS) < _BLOCKED_TTL:
+        return
+    try:
+        docs = await db.blocked_ips.find({}, {"_id": 0, "ip": 1}).to_list(10000)
+        _BLOCKED_IPS = {d.get("ip") for d in docs if d.get("ip")}
+        _BLOCKED_IPS_TS = now
+    except Exception:
+        pass
+
+async def _is_ip_blocked(ip):
+    await _refresh_blocked_ips()
+    return ip in _BLOCKED_IPS
+
+# ==================== الحظر التلقائي للمخترقين (Auto-Ban) ====================
+from collections import deque as _deque, defaultdict as _ddict
+_AUTO_OFFENSES = _ddict(_deque)        # ip -> طوابع زمنية للمحاولات المشبوهة
+_AUTO_BAN_THRESHOLD = 20               # عدد المحاولات المشبوهة
+_AUTO_BAN_WINDOW = 300                 # خلال 5 دقائق
+_AUTO_BAN_ENABLED = True
+
+async def _register_offense(ip, request, path, method, sc):
+    """يسجّل محاولة مشبوهة ويحظر العنوان تلقائياً عند تجاوز الحد."""
+    if not _AUTO_BAN_ENABLED or not ip or ip == "unknown":
+        return
+    import time as _t
+    now = _t.time()
+    dq = _AUTO_OFFENSES[ip]
+    cutoff = now - _AUTO_BAN_WINDOW
+    while dq and dq[0] < cutoff:
+        dq.popleft()
+    dq.append(now)
+    if len(dq) < _AUTO_BAN_THRESHOLD:
+        return
+    # حماية: لا تحظر عنواناً سجّل دخولاً ناجحاً مؤخراً (موظف/مالك) — خلال آخر 24 ساعة فقط
+    try:
+        _since = datetime.now(timezone.utc) - timedelta(hours=24)
+        trusted = await db.audit_logs.find_one({
+            "ip": ip,
+            "event": {"$regex": "login\\.success$"},
+            "ts": {"$gte": _since},
+        })
+        if trusted:
+            dq.clear()
+            return
+    except Exception:
+        pass
+    # حظر تلقائي
+    try:
+        existing = await db.blocked_ips.find_one({"ip": ip})
+        if not existing:
+            await db.blocked_ips.update_one({"ip": ip}, {"$set": {
+                "ip": ip,
+                "reason": f"حظر تلقائي: {len(dq)} محاولة مشبوهة خلال 5 دقائق (آخرها {method} {path})",
+                "blocked_by": "النظام (تلقائي)",
+                "auto": True,
+                "last_path": path,
+                "last_method": method,
+                "last_status": sc,
+                "offenses": len(dq),
+                "blocked_at": datetime.now(timezone.utc).isoformat(),
+            }}, upsert=True)
+            await _refresh_blocked_ips(force=True)
+            try:
+                await record_audit("security.auto_blocked", request=request, status=403,
+                                   details={"ip": ip, "offenses": len(dq), "path": path, "method": method})
+            except Exception:
+                pass
+        dq.clear()
+    except Exception:
+        pass
+
+def _block_response(request):
+    """استجابة الحظر: صفحة HTML للمتصفّح، JSON لطلبات الـ API."""
+    from fastapi.responses import JSONResponse, HTMLResponse
+    accept = (request.headers.get("accept") or "")
+    if "text/html" in accept:
+        html = """<!doctype html><html dir="rtl" lang="ar"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1"><title>تم حظر الوصول</title></head>
+<body style="margin:0;background:#0a0e1a;color:#fff;font-family:system-ui,Segoe UI,Tahoma,sans-serif;display:flex;align-items:center;justify-content:center;min-height:100vh;text-align:center">
+<div style="max-width:520px;padding:40px"><div style="font-size:64px">🚫</div>
+<h1 style="color:#ef4444;margin:16px 0">تم حظر الوصول</h1>
+<p style="color:#94a3b8;line-height:1.8">تم حظر عنوانك بسبب نشاط مشبوه أو محاولة وصول غير مصرّح بها.<br>إذا كنت تعتقد أن هذا خطأ، تواصل مع إدارة النظام.</p>
+<p style="color:#475569;font-size:12px;margin-top:24px">Maestro EGP — نظام محمي</p></div></body></html>"""
+        return HTMLResponse(content=html, status_code=403, headers={"X-Blocked": "1"})
+    return JSONResponse(status_code=403, content={"detail": "تم حظر عنوانك من قبل الإدارة", "blocked": True}, headers={"X-Blocked": "1"})
+
 # ==================== ترويسات أمان لكل استجابات الـ API (حماية ضد clickjacking/XSS/MIME-sniffing) ====================
 @app.middleware("http")
 async def security_headers_middleware(request: Request, call_next):
+    # حظر عناوين IP المحظورة قبل أي معالجة
+    try:
+        ip = _client_ip(request)
+        if await _is_ip_blocked(ip):
+            try:
+                await record_audit("security.blocked_ip_hit", request=request, status=403,
+                                   details={"path": request.url.path, "method": request.method})
+            except Exception:
+                pass
+            return _block_response(request)
+    except Exception:
+        pass
     response = await call_next(request)
     try:
         response.headers["X-Content-Type-Options"] = "nosniff"
@@ -278,6 +385,11 @@ async def security_audit_middleware(request: Request, call_next):
                 event, request=request, status=sc,
                 details={"path": path, "method": request.method},
             )
+            # تسجيل المحاولة للحظر التلقائي
+            try:
+                await _register_offense(_client_ip(request), request, path, request.method, sc)
+            except Exception:
+                pass
     except Exception:
         pass
     return response
@@ -12808,6 +12920,64 @@ async def get_security_log(current_user: dict = Depends(verify_super_admin), lim
         "expired": expired,
     }
 
+
+
+# ==================== حظر عناوين IP من السجل الأمني ====================
+
+@api_router.get("/super-admin/blocked-ips")
+async def list_blocked_ips(current_user: dict = Depends(verify_super_admin)):
+    """قائمة عناوين IP المحظورة"""
+    docs = await db.blocked_ips.find({}, {"_id": 0}).sort("blocked_at", -1).to_list(1000)
+    return {"blocked": docs}
+
+
+@api_router.post("/super-admin/block-ip")
+async def block_ip(payload: dict = Body(...), request: Request = None, current_user: dict = Depends(verify_super_admin)):
+    """حظر عنوان IP — يُمنع من الوصول للنظام نهائياً"""
+    ip = sanitize_text(payload.get("ip"), 64)
+    if not ip:
+        raise HTTPException(status_code=400, detail="عنوان IP مطلوب")
+    # التحقق من صحة صيغة عنوان IP (منع إدخال قيم غير صالحة)
+    import ipaddress as _ipaddr
+    try:
+        _ipaddr.ip_address(ip)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="عنوان IP غير صالح")
+    # منع حظر عنوان المالك الحالي (تجنّب قفل النفس خارج النظام)
+    own_ip = _client_ip(request) if request else None
+    if ip == own_ip:
+        raise HTTPException(status_code=400, detail="لا يمكنك حظر عنوانك الحالي")
+    await db.blocked_ips.update_one(
+        {"ip": ip},
+        {"$set": {
+            "ip": ip,
+            "reason": sanitize_text(payload.get("reason"), 200),
+            "blocked_by": current_user.get("name") or current_user.get("email"),
+            "blocked_at": datetime.now(timezone.utc).isoformat(),
+        }},
+        upsert=True,
+    )
+    await _refresh_blocked_ips(force=True)
+    try:
+        await record_audit("security.ip_blocked", request=request, user=current_user, details={"ip": ip})
+    except Exception:
+        pass
+    return {"success": True, "ip": ip}
+
+
+@api_router.post("/super-admin/unblock-ip")
+async def unblock_ip(payload: dict = Body(...), request: Request = None, current_user: dict = Depends(verify_super_admin)):
+    """إلغاء حظر عنوان IP"""
+    ip = sanitize_text(payload.get("ip"), 64)
+    if not ip:
+        raise HTTPException(status_code=400, detail="عنوان IP مطلوب")
+    await db.blocked_ips.delete_one({"ip": ip})
+    await _refresh_blocked_ips(force=True)
+    try:
+        await record_audit("security.ip_unblocked", request=request, user=current_user, details={"ip": ip})
+    except Exception:
+        pass
+    return {"success": True, "ip": ip}
 
 
 # ==================== لوحة معلومات الاشتراكات ====================

@@ -1092,3 +1092,19 @@ NOT MOUNTED (dead code, ignore): routes/auth_routes.py, routes/customer_menu.py.
 
 ### حالة الأمان النهائية (مغلق ومراقَب)
 تسجيل مفتوح/تصعيد صلاحيات/IDOR، حقن البيانات، brute-force، clickjacking/XSS/MIME، SSL، سرّ JWT — كلها مُغلقة. سجل أمني حيّ يلتقط 403/429 مع IP.
+
+## [29 يونيو 2026] ميزة "حظر IP" من السجل الأمني + إصلاح تكرار SSL عند النشر
+- ميزة حظر IP: زر "حظر هذا الـ IP" بجانب كل حدث في السجل الأمني بلوحة المالك + قسم "العناوين المحظورة" مع إلغاء الحظر.
+  - Backend: blocked_ips collection + كاش in-memory (TTL 20s) + فحص في security_headers_middleware (403 للمحظورين). Endpoints: /super-admin/block-ip، /unblock-ip، /blocked-ips (verify_super_admin). أمان: رفض حظر IP المالك الحالي (400) + تحقق صيغة IP عبر ipaddress (400).
+  - Frontend: SuperAdmin.js — block-ip-btn-{idx}، blocked-ips-section، unblock-ip-btn-{i}. (sw-offline → v34)
+  - تم التحقق: testing_agent iter253 → backend 7/7، frontend 100% (الزر يظهر، الحظر/إلغاء الحظر يعملان، حماية حظر النفس).
+- إصلاح SSL المتكرر عند النشر: deploy.yml كان ينسخ شهادة fullchain1.pem القديمة المنتهية في كل نشر؛ عُدّل ليأخذ أحدث شهادة صالحة (من /etc/letsencrypt/live أو certbot/conf/live). خطاف renewal-hooks يَنسخ الشهادة + يعيد nginx. (يتطلب Save to GitHub لتثبيته في المستودع).
+
+## [29 يونيو 2026] الحظر التلقائي للمخترقين (Auto-Ban) — مكتمل ومُختبَر
+- النظام يحظر تلقائياً أي IP يتجاوز 20 محاولة مشبوهة (429/403-كتابة) خلال 5 دقائق → يُضاف لـ blocked_ips (auto=true, reason يوضّح آخر مسار حاوله) → كل طلباته تُرفض 403.
+- صفحة حظر: HTML للمتصفّح / JSON {blocked:true} + ترويسة X-Blocked:1 للـ API.
+- واجهة: axios response interceptor (AuthContext.js) يعرض صفحة حظر كاملة فقط عند اجتماع إشارتين (header X-Blocked=1 + data.blocked) لمنع الإيقاف الخاطئ.
+- حماية من قفل الموظفين/المالك: لا يُحظر IP سجّل دخولاً ناجحاً خلال آخر 24 ساعة.
+- لوحة المالك: قسم العناوين المحظورة يعرض شارة "تلقائي" + سبب الحظر + إلغاء الحظر؛ والزر اليدوي يبقى متاحاً.
+- تم التحقق: testing_agent iter253 (حظر يدوي) + iter254 (حظر تلقائي) → backend 7/7 + frontend 100%، بلا انحدار. (sw-offline → v36)
+- ملاحظات تحصين مستقبلية (review): نقل عدّاد المخالفات + كاش المحظورين إلى Redis/Mongo عند التوسّع متعدد الـ workers؛ التحقق من عدد قفزات البروكسي في X-Forwarded-For في الإنتاج.

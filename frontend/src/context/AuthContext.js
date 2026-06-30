@@ -21,6 +21,27 @@ if (!__authInterceptorRegistered) {
     }
     return config;
   });
+  // ⭐ Interceptor للاستجابة: إذا حظر الخادم عنوان IP (403 blocked) نعرض صفحة حظر كاملة.
+  axios.interceptors.response.use(
+    (res) => res,
+    (error) => {
+      try {
+        const d = error?.response?.data;
+        const blockedHeader = error?.response?.headers?.['x-blocked'];
+        if (error?.response?.status === 403 && blockedHeader === '1' && d && d.blocked === true && !window.__ipBlockedShown) {
+          window.__ipBlockedShown = true;
+          document.documentElement.setAttribute('dir', 'rtl');
+          document.body.innerHTML =
+            '<div style="position:fixed;inset:0;z-index:2147483647;background:#0a0e1a;color:#fff;font-family:system-ui,Segoe UI,Tahoma,sans-serif;display:flex;align-items:center;justify-content:center;text-align:center">'
+            + '<div style="max-width:520px;padding:40px"><div style="font-size:64px">🚫</div>'
+            + '<h1 style="color:#ef4444;margin:16px 0">تم حظر الوصول</h1>'
+            + '<p style="color:#94a3b8;line-height:1.8">تم حظر عنوانك بسبب نشاط مشبوه أو محاولة وصول غير مصرّح بها.<br>إذا كنت تعتقد أن هذا خطأ، تواصل مع إدارة النظام.</p>'
+            + '<p style="color:#475569;font-size:12px;margin-top:24px">Maestro EGP — نظام محمي</p></div></div>';
+        }
+      } catch (e) { /* ignore */ }
+      return Promise.reject(error);
+    }
+  );
   __authInterceptorRegistered = true;
 }
 
