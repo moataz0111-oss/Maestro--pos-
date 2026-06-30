@@ -1364,6 +1364,175 @@ async def delete_purchase_payment(purchase_id: str, payment_id: str, current_use
     return {"message": "تم إلغاء الدفعة وإعادة المبلغ للخزينة", "paid_amount": new_paid, "payment_status": new_status}
 
 
+# ==================== تصحيح كمية/سعر صنف في فاتورة مُستلمة ====================
+class CorrectPurchaseItem(BaseModel):
+    item_index: int
+    new_quantity: float
+    new_cost_per_unit: Optional[float] = None
+    reason: Optional[str] = None
+
+
+@router.patch("/purchases-new/{purchase_id}/correct-item")
+async def correct_purchase_item(purchase_id: str, payload: CorrectPurchaseItem, current_user: dict = Depends(get_current_user)):
+    """تصحيح كمية/سعر صنف في فاتورة شراء (حتى لو مُستلمة/مدفوعة) — للمالك/المدير فقط.
+    يعكس الأثر بالكامل: إجمالي الفاتورة + مخزون المادة الخام (الكمية + متوسط التكلفة) +
+    رصيد المورد + استرجاع أي مبلغ مدفوع زائد إلى خزينة المالك، مع تسجيل في سجل التدقيق."""
+    db = get_db()
+    if current_user["role"] not in [UserRole.ADMIN, UserRole.SUPER_ADMIN, UserRole.MANAGER]:
+        raise HTTPException(status_code=403, detail="غير مصرح — التصحيح للمالك/المدير فقط")
+    tenant_id = get_user_tenant_id(current_user)
+    now = datetime.now(timezone.utc).isoformat()
+
+    p = await db.purchases_new.find_one({"id": purchase_id}, {"_id": 0})
+    if not p:
+        raise HTTPException(status_code=404, detail="الفاتورة غير موجودة")
+
+    items = list(p.get("items") or [])
+    idx = payload.item_index
+    if idx < 0 or idx >= len(items):
+        raise HTTPException(status_code=400, detail="رقم الصنف غير صحيح")
+
+    new_qty = round(float(payload.new_quantity or 0), 3)
+    if new_qty <= 0:
+        raise HTTPException(status_code=400, detail="الكمية يجب أن تكون أكبر من صفر")
+
+    old_item = dict(items[idx])
+    old_qty = float(old_item.get("quantity") or 0)
+    old_cost = float(old_item.get("cost_per_unit") or 0)
+    old_item_total = float(old_item.get("total_cost") if old_item.get("total_cost") is not None else old_qty * old_cost)
+    new_cost = round(float(payload.new_cost_per_unit), 2) if payload.new_cost_per_unit is not None else old_cost
+    new_item_total = round(new_qty * new_cost, 2)
+
+    delta_qty = round(new_qty - old_qty, 3)
+    delta_total = round(new_item_total - old_item_total, 2)
+    if abs(delta_qty) < 1e-9 and abs(delta_total) < 1e-9:
+        raise HTTPException(status_code=400, detail="لا يوجد تغيير في القيم")
+
+    # 1) تحديث الصنف وإعادة حساب إجمالي الفاتورة
+    items[idx] = {**old_item, "quantity": new_qty, "cost_per_unit": new_cost, "total_cost": new_item_total}
+    new_total_amount = round(sum(float(x.get("total_cost") or 0) for x in items), 2)
+
+    # 2) عكس أثر المخزون (إن كانت الفاتورة قد أُرسلت للمخزن)
+    stock_adjusted = None
+    if p.get("status") == "sent_to_warehouse":
+        name = old_item.get("name")
+        rm = await db.raw_materials.find_one({"name": name})
+        if rm:
+            cur_qty = float(rm.get("quantity") or 0)
+            cur_cost = float(rm.get("cost_per_unit") or 0)
+            cur_value = cur_qty * cur_cost
+            new_rm_qty = round(cur_qty + delta_qty, 3)
+            new_rm_value = round(cur_value + delta_total, 2)
+            if new_rm_qty <= 0:
+                new_rm_qty = max(new_rm_qty, 0)
+                new_rm_cost = new_cost
+            else:
+                new_rm_cost = round(new_rm_value / new_rm_qty, 4) if new_rm_value > 0 else new_cost
+            await db.raw_materials.update_one(
+                {"id": rm["id"]},
+                {"$set": {"quantity": new_rm_qty, "cost_per_unit": new_rm_cost, "last_updated": now}},
+            )
+            stock_adjusted = {"material": name, "old_qty": cur_qty, "new_qty": new_rm_qty,
+                              "old_cost": round(cur_cost, 4), "new_cost": new_rm_cost}
+        # تحديث لقطة حركة الوارد للمخزن لتبقى متسقة
+        await db.warehouse_transactions.update_many(
+            {"source_id": purchase_id, "source": "purchases"},
+            {"$set": {"items": items, "total_amount": new_total_amount}},
+        )
+
+    # 3) تعديل إجمالي مشتريات المورد بالفرق
+    if p.get("supplier_id") and abs(delta_total) > 1e-9:
+        await db.suppliers.update_one({"id": p["supplier_id"]}, {"$inc": {"total_purchases": delta_total}})
+
+    # 4) استرجاع أي مبلغ مدفوع زائد إلى الخزينة (إن انخفض الإجمالي تحت المسدد)
+    summ = _purchase_payment_summary(p)
+    paid_before = summ["paid_amount"]
+    payments = list(p.get("payments") or [])
+    refund_total = 0.0
+    if payments and paid_before > new_total_amount + 0.01:
+        overpaid = round(paid_before - new_total_amount, 2)
+        remaining_to_claw = overpaid
+        processed = {}
+        for pay in sorted(payments, key=lambda x: x.get("created_at") or "", reverse=True):
+            amt = float(pay.get("amount") or 0)
+            if remaining_to_claw <= 0.009:
+                continue
+            reduce_by = round(min(amt, remaining_to_claw), 2)
+            new_amt = round(amt - reduce_by, 2)
+            remaining_to_claw = round(remaining_to_claw - reduce_by, 2)
+            refund_total = round(refund_total + reduce_by, 2)
+            wid = pay.get("withdrawal_id")
+            if wid:
+                if new_amt <= 0.009:
+                    await db.owner_withdrawals.delete_one({"id": wid})
+                else:
+                    await db.owner_withdrawals.update_one({"id": wid}, {"$set": {"amount": new_amt}})
+            processed[pay.get("id")] = new_amt
+        rebuilt = []
+        for pay in payments:
+            na = processed.get(pay.get("id"), float(pay.get("amount") or 0))
+            if na > 0.009:
+                rebuilt.append({**pay, "amount": na})
+        payments = rebuilt
+
+    if payments:
+        new_paid = round(sum(float(x.get("amount") or 0) for x in payments), 2)
+    elif paid_before > 0 and not (p.get("payments") or []):
+        # توافق: فاتورة مُعلّمة مدفوعة بلا سجلات دفع — تُعتبر مدفوعة بالقيمة المصحّحة (لا سحب لاسترجاعه)
+        new_paid = new_total_amount
+    else:
+        new_paid = 0.0
+
+    if new_paid <= 0:
+        new_status = "unpaid"
+    elif new_paid >= new_total_amount - 0.01:
+        new_status = "paid"
+    else:
+        new_status = "partial"
+
+    await db.purchases_new.update_one(
+        {"id": purchase_id},
+        {"$set": {
+            "items": items,
+            "total_amount": new_total_amount,
+            "payments": payments,
+            "paid_amount": new_paid,
+            "payment_status": new_status,
+        }},
+    )
+
+    # 5) سجل التدقيق
+    await db.audit_logs.insert_one({
+        "id": str(uuid.uuid4()),
+        "action": "correct_purchase_item",
+        "tenant_id": tenant_id,
+        "purchase_id": purchase_id,
+        "purchase_number": p.get("purchase_number"),
+        "item_name": old_item.get("name"),
+        "old_quantity": old_qty, "new_quantity": new_qty,
+        "old_cost_per_unit": old_cost, "new_cost_per_unit": new_cost,
+        "old_total_amount": float(p.get("total_amount") or 0), "new_total_amount": new_total_amount,
+        "stock_adjusted": stock_adjusted,
+        "treasury_refund": refund_total,
+        "reason": payload.reason,
+        "corrected_by": current_user.get("full_name") or current_user.get("username"),
+        "corrected_at": now,
+    })
+
+    return {
+        "message": f"تم تصحيح الصنف «{old_item.get('name')}» بنجاح",
+        "item_name": old_item.get("name"),
+        "old_quantity": old_qty, "new_quantity": new_qty,
+        "new_item_total": new_item_total,
+        "new_total_amount": new_total_amount,
+        "stock_adjusted": stock_adjusted,
+        "treasury_refund": refund_total,
+        "paid_amount": new_paid,
+        "payment_status": new_status,
+    }
+
+
+
 # ==================== مدفوعات الموردين على مستوى الحساب ====================
 class SupplierPayment(BaseModel):
     amount: float

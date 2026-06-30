@@ -1,0 +1,41 @@
+{
+  "summary": "Verified frontend fixes on /purchases-new (إدارة المشتريات): invoice image rendering for both old (/uploads/) and new (/api/uploads/) formats, and the new per-item correction feature. All 4 review scenarios passed end-to-end. Re-seeded test data via /app/backend/seed_invoice_image_test.py before testing.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_results": {
+    "IMG-OLD_image_render": {
+      "status": "PASS",
+      "details": "view-purchase-seed-img-old clicked; details dialog opened. detail-invoice-image present (count=1), detail-invoice-image-error absent (count=0). Network: GET /api/uploads/invoices/test_broken_old.png -> 200 image/png. src normalized from legacy /uploads/ to /api/uploads/ by imgUrl() helper. (naturalWidth=1 because seed PNG is a 1x1 test pixel - expected, not a bug.)"
+    },
+    "IMG-NEW_image_render": {
+      "status": "PASS",
+      "details": "view-purchase-seed-img-new -> details dialog. detail-invoice-image present, no error fallback. Network 200 image/png on /api/uploads/invoices/test_new.png."
+    },
+    "CORR-UI_item_correction": {
+      "status": "PASS",
+      "details": "Opened invoice CORR-UI (#9603). Before: total 72,015,000 IQD, item 0 'اورغانو اختبار UI' = 7999 كغم. Clicked detail-item-correct-0 -> correct-item-dialog opened. Entered 7.999 in correct-quantity-input; correct-new-line-total live-updated to '71,991 IQD'. Submitted (correct-submit-btn) -> success toasts: 'تم تصحيح الصنف «اورغانو اختبار UI» بنجاح' AND 'تم استرجاع للخزينة: 71,919,009 IQD'. Details dialog refreshed: item 0 now 7.999 كغم / 71,991 IQD, invoice total recomputed to 95,991 IQD (71,991 + 24,000). 72,015,000 no longer present."
+    },
+    "regression_list_and_normal_details": {
+      "status": "PASS",
+      "details": "/purchases-new loads normally with multiple invoices listed (9601, 9602, 9603, 108, 107, 106...). الفواتير tab clickable. Normal invoice details (IMG-OLD, IMG-NEW) open without JS errors."
+    }
+  },
+  "test_report_links": [],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "imgUrl() normalizer correctly handles both legacy /uploads/ and new /api/uploads/ prefixes - verified by network logs (both returned 200 image/png).",
+    "Correction flow correctly invokes PATCH /api/purchases-new/{id}/correct-item; backend treasury claw-back amount surfaced in toast (71,919,009 IQD) matching backend curl verification."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "skipped", "frontend": "100% (4/4 scenarios)"},
+  "test_credentials": "admin@maestroegp.com / admin123 (tenant default)",
+  "seed_data_creation": "Re-ran /app/backend/seed_invoice_image_test.py to (re)create invoices IMG-OLD (seed-img-old, legacy /uploads/ path), IMG-NEW (seed-img-new), CORR-UI (seed-corr-ui, اورغانو 7999 كغم). NOTE: CORR-UI was MODIFIED by the test (item 0 corrected from 7999 to 7.999, invoice total now 95,991). Re-run the seed script to restore the broken-quantity state for future tests.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Bug fix + feature both working in UI. If CORR-UI must be re-tested with original wrong qty (7999), first run: cd /app/backend && python3 seed_invoice_image_test.py. Splash takes ~13s after every page.goto. Use REACT_APP_BACKEND_URL from /app/frontend/.env.",
+  "rca_of_the_issue": "Original bug: legacy invoice records stored image paths as /uploads/invoices/X.png. Kubernetes ingress only routes /api/* to FastAPI, so /uploads/* fell through to the React SPA and returned text/html (index.html), causing <img> to render the broken-image icon. Fix verified: PurchasesPage.js now uses imgUrl() helper (rewrites /uploads/ -> /api/uploads/) and an InvoiceImage component with error fallback. Both legacy and new paths now render with HTTP 200 + image/png content-type."
+}

@@ -132,3 +132,9 @@
 - نقاط صارت تتطلب مصادقة: POST /api/push/test (admin/manager/owner)، GET /api/notifications/{phone} (موظف).
 - نقاط عامة محمية الآن بتحديد معدّل + تنظيف + تحقق المستأجر/الطلب: /api/customer/order/{tenant_id}، /api/customer-reviews، /api/customer/rate-order، /api/track/{order_id}/rating، /api/order-chat/* ، /api/customer/favorites/add، /api/customer/auth/register|login، /api/push/subscribe، /api/calls/* (call_routes.py).
 - ملاحظة اختبار: شاشة البداية StartupSplash تستمر ~10 ثوانٍ عند فتح التطبيق (بالتصميم). انتظر >11s قبل التفاعل مع نموذج الدخول في أدوات الـ screenshot.
+
+## fork — تصحيح صنف فاتورة مُستلمة + حارس كمية (30 يونيو 2026)
+- Backend: PATCH /api/purchases-new/{id}/correct-item (admin/super_admin/manager) body {item_index,new_quantity,new_cost_per_unit?,reason?}. يعكس: إجمالي الفاتورة + raw_materials(qty+avg cost) + supplier.total_purchases + استرجاع owner_withdrawals الزائد للخزينة + audit_log(action=correct_purchase_item).
+- Frontend PurchasesPage.js: زر التفاصيل view-purchase-{id} → نافذة التفاصيل بها detail-item-correct-{idx} لكل صنف (canCorrect=owner/manager/admin) → نافذة correct-item-dialog: correct-quantity-input / correct-cost-input / correct-reason-input / correct-new-line-total / correct-submit-btn / correct-cancel-btn.
+- حارس إدخال: تأكيد window.confirm عند كمية > 1000 لوحدات [كغم,كجم,غرام,جرام,لتر,مل] (منع خطأ الفاصلة العشرية مثل 7999 بدل 7.999) + حارس موجود مسبقاً عند إجمالي > 10,000,000.
+- اختبار e2e: seed فاتورة مُستلمة+مدفوعة بـ اورغانو 7999 كغم@9000 → correct-item new_quantity=7.999 → total 95,991, stock 7.999, supplier 95,991, treasury_refund 71,919,009.

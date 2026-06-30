@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useTranslation } from '../hooks/useTranslation';
-import { API_URL } from '../utils/api';
+import { API_URL, BACKEND_URL } from '../utils/api';
 import { useNavigate, useLocation } from 'react-router-dom';
 import axios from 'axios';
 import { useAuth } from '../context/AuthContext';
@@ -60,6 +60,44 @@ import { showApiError } from '../utils/apiError';
 import { Wallet, DollarSign, RotateCcw, TrendingUp, CreditCard, CalendarDays } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, Tooltip as RTooltip, ResponsiveContainer, CartesianGrid, Legend } from 'recharts';
 const API = API_URL;
+
+// توحيد رابط صورة الفاتورة: الصور القديمة محفوظة بمسار /uploads/ بلا بادئة /api فلا تمر عبر الـ ingress وتظهر مكسورة
+const imgUrl = (u) => {
+  if (!u) return null;
+  if (u.startsWith('http')) return u;
+  const path = u.startsWith('/api/') ? u : (u.startsWith('/uploads/') ? `/api${u}` : u);
+  return `${BACKEND_URL}${path}`;
+};
+
+// عرض صورة الفاتورة مع تطبيع الرابط ومعالجة الصور غير المتاحة (بدل أيقونة الصورة المكسورة)
+const InvoiceImage = ({ url, label }) => {
+  const [err, setErr] = useState(false);
+  const src = imgUrl(url);
+  if (!src) return null;
+  return (
+    <div className="border rounded-lg overflow-hidden">
+      <div className="bg-muted/50 px-3 py-2 font-medium text-sm flex items-center gap-2">
+        <ImageIcon className="h-4 w-4" />
+        {label}
+      </div>
+      {err ? (
+        <div className="px-3 py-4 text-xs text-muted-foreground text-center" data-testid="detail-invoice-image-error">
+          {label} غير متاحة — <a href={src} target="_blank" rel="noreferrer" className="text-primary underline">فتح الرابط</a>
+        </div>
+      ) : (
+        <a href={src} target="_blank" rel="noreferrer" className="block">
+          <img
+            src={src}
+            alt={label}
+            className="w-full max-h-64 object-contain bg-white"
+            data-testid="detail-invoice-image"
+            onError={() => setErr(true)}
+          />
+        </a>
+      )}
+    </div>
+  );
+};
 export default function PurchasesPage() {
   const navigate = useNavigate();
   const { user, hasRole } = useAuth();
@@ -91,6 +129,9 @@ export default function PurchasesPage() {
   const [showPurchaseDialog, setShowPurchaseDialog] = useState(false);
   const [showSupplierDialog, setShowSupplierDialog] = useState(false);
   const [showDetailsDialog, setShowDetailsDialog] = useState(null);
+  const [correctDialog, setCorrectDialog] = useState(null); // {purchase, index, item}
+  const [correctForm, setCorrectForm] = useState({ new_quantity: '', new_cost_per_unit: '', reason: '' });
+  const [correcting, setCorrecting] = useState(false);
   const [showUploadDialog, setShowUploadDialog] = useState(null);
   const [showCameraDialog, setShowCameraDialog] = useState(false);
 
@@ -183,6 +224,51 @@ export default function PurchasesPage() {
   // ===== مدفوعات الموردين =====
   const canPay = user?.role === 'super_admin' || user?.role === 'admin' || user?.role === 'manager';
   const canSettle = user?.role === 'super_admin' || user?.role === 'admin';
+  const canCorrect = canPay; // المالك/المدير فقط
+
+  // فتح نافذة تصحيح صنف
+  const openCorrectDialog = (purchase, index) => {
+    const item = (purchase.items || [])[index] || {};
+    setCorrectForm({
+      new_quantity: String(item.quantity ?? ''),
+      new_cost_per_unit: String(item.cost_per_unit ?? ''),
+      reason: '',
+    });
+    setCorrectDialog({ purchase, index, item });
+  };
+
+  const submitCorrection = async () => {
+    if (!correctDialog) return;
+    const newQty = parseFloat(correctForm.new_quantity);
+    if (!newQty || newQty <= 0) { toast.error(t('أدخل كمية صحيحة أكبر من صفر')); return; }
+    const newCost = correctForm.new_cost_per_unit === '' ? null : parseFloat(correctForm.new_cost_per_unit);
+    setCorrecting(true);
+    try {
+      const res = await axios.patch(
+        `${API}/purchases-new/${correctDialog.purchase.id}/correct-item`,
+        {
+          item_index: correctDialog.index,
+          new_quantity: newQty,
+          new_cost_per_unit: (newCost === null || isNaN(newCost)) ? null : newCost,
+          reason: correctForm.reason || null,
+        },
+        { headers }
+      );
+      toast.success(res.data?.message || t('تم التصحيح بنجاح'));
+      if (res.data?.treasury_refund > 0) {
+        toast.info(`${t('تم استرجاع للخزينة:')} ${formatPrice(res.data.treasury_refund)}`);
+      }
+      setCorrectDialog(null);
+      // تحديث نافذة التفاصيل بالبيانات الجديدة
+      const refreshed = await axios.get(`${API}/purchases-new/${correctDialog.purchase.id}`, { headers });
+      setShowDetailsDialog(refreshed.data);
+      fetchData();
+    } catch (err) {
+      showApiError(err, t('فشل التصحيح'));
+    } finally {
+      setCorrecting(false);
+    }
+  };
 
   const openPayModal = (supplier, mode) => {
     const acc = supplierAccounts[supplier.id] || {};
@@ -717,6 +803,22 @@ export default function PurchasesPage() {
       setReasonsDialog({ open: true, items: flagged, reasons: {} });
       return;
     }
+    // ⭐ تحذير عند كمية ضخمة غير منطقية لصنف (مثل 7999 كغم بدل 7.999) — منع خطأ الفاصلة العشرية
+    const WEIGHT_VOL_UNITS = ['كغم', 'كجم', 'غرام', 'جرام', 'لتر', 'مل'];
+    const suspiciousQty = (purchaseForm.items || []).filter(it => {
+      const q = parseFloat(it.quantity) || 0;
+      return WEIGHT_VOL_UNITS.includes(it.unit) && q > 1000;
+    });
+    if (suspiciousQty.length > 0) {
+      const lines = suspiciousQty.map(it => `• ${it.name}: ${new Intl.NumberFormat('en-US').format(parseFloat(it.quantity) || 0)} ${it.unit}`).join('\n');
+      const confirmQty = window.confirm(
+        `${t('⚠️ تحذير: كمية كبيرة جداً لصنف/أكثر')}\n\n` +
+        `${lines}\n\n` +
+        `${t('هل الكمية بالكيلوغرام صحيحة؟ تأكد من الفاصلة العشرية (مثال: 7.999 كغم وليس 7999).')}\n\n` +
+        `${t('اضغط موافق للمتابعة، أو إلغاء للمراجعة.')}`
+      );
+      if (!confirmQty) return;
+    }
     // ⭐ تحذير عند إجمالي مرتفع جداً (لمنع الأخطاء الإدخالية مثل 73 مليون لفاتورة توابل)
     const totalToSave = Number(purchaseForm.total_amount || 0);
     if (totalToSave > 10_000_000) {
@@ -960,6 +1062,7 @@ export default function PurchasesPage() {
                               variant="ghost"
                               size="sm"
                               onClick={() => setShowDetailsDialog(purchase)}
+                              data-testid={`view-purchase-${purchase.id}`}
                             >
                               <Eye className="h-4 w-4" />
                             </Button>
@@ -2044,14 +2147,28 @@ export default function PurchasesPage() {
                 </div>
                 <div className="divide-y">
                   {showDetailsDialog.items?.map((item, idx) => (
-                    <div key={idx} className="px-3 py-2 flex justify-between items-center text-sm">
+                    <div key={idx} className="px-3 py-2 flex justify-between items-center text-sm" data-testid={`detail-item-row-${idx}`}>
                       <div>
                         <span className="font-medium">{item.name}</span>
                         <span className="text-muted-foreground mr-2">
                           ({item.quantity} {item.unit})
                         </span>
                       </div>
-                      <span className="text-primary">{formatPrice(item.total_cost)}</span>
+                      <div className="flex items-center gap-2">
+                        <span className="text-primary">{formatPrice(item.total_cost)}</span>
+                        {canCorrect && (
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-7 w-7 text-amber-600 hover:text-amber-700"
+                            title={t('تصحيح الكمية/السعر')}
+                            onClick={() => openCorrectDialog(showDetailsDialog, idx)}
+                            data-testid={`detail-item-correct-${idx}`}
+                          >
+                            <Edit className="h-4 w-4" />
+                          </Button>
+                        )}
+                      </div>
                     </div>
                   ))}
                 </div>
@@ -2063,17 +2180,7 @@ export default function PurchasesPage() {
               </div>
               
               {showDetailsDialog.invoice_image_url && (
-                <div className="border rounded-lg overflow-hidden">
-                  <div className="bg-muted/50 px-3 py-2 font-medium text-sm flex items-center gap-2">
-                    <ImageIcon className="h-4 w-4" />
-                    صورة الفاتورة
-                  </div>
-                  <img 
-                    src={`${API.replace('/api', '')}${showDetailsDialog.invoice_image_url}`}
-                    alt="صورة الفاتورة"
-                    className="w-full max-h-64 object-contain"
-                  />
-                </div>
+                <InvoiceImage url={showDetailsDialog.invoice_image_url} label={t('صورة الفاتورة')} />
               )}
               
               {showDetailsDialog.notes && (
@@ -2084,6 +2191,78 @@ export default function PurchasesPage() {
               )}
             </div>
           )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Dialog: تصحيح كمية/سعر صنف في فاتورة مُستلمة */}
+      <Dialog open={!!correctDialog} onOpenChange={(o) => !o && setCorrectDialog(null)}>
+        <DialogContent className="max-w-md" data-testid="correct-item-dialog">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Edit className="h-5 w-5 text-amber-600" />
+              {t('تصحيح صنف')}
+            </DialogTitle>
+          </DialogHeader>
+          {correctDialog && (
+            <div className="space-y-3">
+              <div className="bg-muted/50 p-3 rounded-lg text-sm space-y-1">
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">{t('الصنف')}</span>
+                  <span className="font-bold" data-testid="correct-item-name">{correctDialog.item.name}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">{t('الكمية الحالية')}</span>
+                  <span>{correctDialog.item.quantity} {correctDialog.item.unit}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">{t('السعر الحالي/وحدة')}</span>
+                  <span>{formatPrice(correctDialog.item.cost_per_unit)}</span>
+                </div>
+              </div>
+              <div>
+                <Label className="mb-1 block">{t('الكمية الصحيحة')} ({correctDialog.item.unit})</Label>
+                <Input
+                  type="number" step="0.001" min="0"
+                  value={correctForm.new_quantity}
+                  onChange={(e) => setCorrectForm(f => ({ ...f, new_quantity: e.target.value }))}
+                  data-testid="correct-quantity-input"
+                />
+              </div>
+              <div>
+                <Label className="mb-1 block">{t('السعر/وحدة (اختياري — اتركه كما هو)')}</Label>
+                <Input
+                  type="number" step="0.01" min="0"
+                  value={correctForm.new_cost_per_unit}
+                  onChange={(e) => setCorrectForm(f => ({ ...f, new_cost_per_unit: e.target.value }))}
+                  data-testid="correct-cost-input"
+                />
+              </div>
+              <div>
+                <Label className="mb-1 block">{t('سبب التصحيح (اختياري)')}</Label>
+                <Input
+                  value={correctForm.reason}
+                  onChange={(e) => setCorrectForm(f => ({ ...f, reason: e.target.value }))}
+                  placeholder={t('مثال: خطأ في الفاصلة العشرية')}
+                  data-testid="correct-reason-input"
+                />
+              </div>
+              <div className="bg-amber-500/10 border border-amber-500/30 rounded-lg p-2 text-xs text-amber-700">
+                {t('سيُعاد حساب إجمالي الفاتورة ويُعكَس فرق المخزون ورصيد المورد، ويُسترجع أي مبلغ مدفوع زائد للخزينة تلقائياً.')}
+              </div>
+              <div className="bg-primary/10 p-2 rounded-lg flex justify-between items-center text-sm">
+                <span className="font-medium">{t('الإجمالي الجديد للصنف:')}</span>
+                <span className="font-bold text-primary" data-testid="correct-new-line-total">
+                  {formatPrice((parseFloat(correctForm.new_quantity) || 0) * (correctForm.new_cost_per_unit === '' ? (parseFloat(correctDialog.item.cost_per_unit) || 0) : (parseFloat(correctForm.new_cost_per_unit) || 0)))}
+                </span>
+              </div>
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setCorrectDialog(null)} data-testid="correct-cancel-btn">{t('إلغاء')}</Button>
+            <Button onClick={submitCorrection} disabled={correcting} className="bg-amber-600 hover:bg-amber-700" data-testid="correct-submit-btn">
+              {correcting ? t('جارٍ الحفظ...') : t('حفظ التصحيح')}
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
 
