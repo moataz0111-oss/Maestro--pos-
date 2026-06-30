@@ -883,6 +883,8 @@ async def _run_deferred_startup_tasks():
         ("renumber_offline_orders_chronologically_v1", renumber_offline_orders_chronologically_v1),
         ("renumber_offline_orders_chronologically_v2", renumber_offline_orders_chronologically_v2),
         ("update_contact_page_texts_v1", update_contact_page_texts_v1),
+        ("backfill_shift_cash_deposit_branch_v1", backfill_shift_cash_deposit_branch_v1),
+        ("backfill_shift_cash_deposit_branch_v2", backfill_shift_cash_deposit_branch_v2),
     ]
     for name, fn in _deferred:
         try:
@@ -19882,6 +19884,127 @@ async def fix_pending_orders_extras_calc():
         logger.error(f"❌ fix_pending_orders_extras migration failed: {e}")
 
 
+async def backfill_shift_cash_deposit_branch_v1():
+    """يربط إيداعات نقد الشفت القديمة بفرعها الصحيح ويضيف اسم الفرع للعرض في خزينة المالك.
+    آمن: لا يلمس المبالغ، فقط يضيف branch_id/branch_name الناقصين. يعمل مرة واحدة فقط."""
+    try:
+        MIG_KEY = "backfill_shift_cash_deposit_branch_v1"
+        done = await db.system_migrations.find_one({"key": MIG_KEY})
+        if done:
+            logger.info(f"🟢 Migration {MIG_KEY} already applied, skipping")
+            return
+        logger.info(f"🔧 Running migration: {MIG_KEY}")
+        from datetime import datetime as _dt, timezone as _tz
+        branches = await db.branches.find({}, {"_id": 0, "id": 1, "name": 1}).to_list(2000)
+        bmap = {b.get("id"): b.get("name") for b in branches}
+        deps = await db.owner_deposits.find({"source": "shift_cash"}, {"_id": 0}).to_list(50000)
+        fixed = 0
+        for d in deps:
+            bid = d.get("branch_id")
+            bname = d.get("branch_name")
+            if bid and bname:
+                continue
+            if not bid:
+                ref = d.get("ref_closing_id")
+                src = None
+                if ref:
+                    src = await db.shifts.find_one({"id": ref}, {"_id": 0, "branch_id": 1, "branch_name": 1})
+                    if not src:
+                        src = await db.cash_register_closings.find_one(
+                            {"$or": [{"id": ref}, {"shift_id": ref}]}, {"_id": 0, "branch_id": 1, "branch_name": 1})
+                if src:
+                    bid = src.get("branch_id")
+                    bname = bname or src.get("branch_name")
+            if bid and not bname:
+                bname = bmap.get(bid)
+            update = {}
+            if bid and not d.get("branch_id"):
+                update["branch_id"] = bid
+            if bname and not d.get("branch_name"):
+                update["branch_name"] = bname
+            if update:
+                await db.owner_deposits.update_one({"id": d["id"]}, {"$set": update})
+                fixed += 1
+        await db.system_migrations.insert_one({
+            "key": MIG_KEY, "executed_at": _dt.now(_tz.utc).isoformat(),
+            "fixed_count": fixed, "scanned": len(deps),
+        })
+        logger.info(f"✅ {MIG_KEY} complete: فحص {len(deps)} إيداع، تصحيح {fixed}")
+    except Exception as e:
+        logger.error(f"❌ backfill_shift_cash_deposit_branch migration failed: {e}")
+
+
+async def backfill_shift_cash_deposit_branch_v2():
+    """إصلاح شامل: يربط كل إيداعات نقد الشفت القديمة بفرعها الصحيح عبر سجل الشفت أو فرع الكاشير،
+    لإخراجها من تصنيف "غير محدد". آمن: لا يلمس المبالغ. يعمل مرة واحدة."""
+    try:
+        MIG_KEY = "backfill_shift_cash_deposit_branch_v2"
+        done = await db.system_migrations.find_one({"key": MIG_KEY})
+        if done:
+            logger.info(f"🟢 Migration {MIG_KEY} already applied, skipping")
+            return
+        logger.info(f"🔧 Running migration: {MIG_KEY}")
+        from datetime import datetime as _dt, timezone as _tz
+        branches = await db.branches.find({}, {"_id": 0, "id": 1, "name": 1}).to_list(2000)
+        bmap = {b.get("id"): b.get("name") for b in branches}
+        deps = await db.owner_deposits.find({"source": "shift_cash"}, {"_id": 0}).to_list(100000)
+        bname_to_id = {b.get("name"): b.get("id") for b in branches if b.get("name")}
+        fixed = 0
+        for d in deps:
+            bid = d.get("branch_id")
+            bname = d.get("branch_name")
+            if bid and bname:
+                continue
+            ref = d.get("ref_closing_id")
+            src = None
+            if ref:
+                src = await db.shifts.find_one({"id": ref}, {"_id": 0, "branch_id": 1, "branch_name": 1, "cashier_id": 1, "cashier_name": 1, "tenant_id": 1})
+                if not src:
+                    src = await db.cash_register_closings.find_one(
+                        {"$or": [{"id": ref}, {"shift_id": ref}]},
+                        {"_id": 0, "branch_id": 1, "branch_name": 1, "cashier_id": 1, "cashier_name": 1, "tenant_id": 1})
+            tnt = (src or {}).get("tenant_id") or d.get("tenant_id")
+            tq = {"tenant_id": tnt} if tnt else {}
+            if src:
+                bid = bid or src.get("branch_id")
+                bname = bname or src.get("branch_name")
+            if not bid and bname and bname_to_id.get(bname):
+                bid = bname_to_id.get(bname)
+            cid = (src or {}).get("cashier_id")
+            if not bid and cid:
+                cu = await db.users.find_one({"id": cid}, {"_id": 0, "branch_id": 1})
+                bid = (cu or {}).get("branch_id")
+                if not bid:
+                    ce = await db.employees.find_one({"id": cid}, {"_id": 0, "branch_id": 1})
+                    bid = (ce or {}).get("branch_id")
+            cnm = (src or {}).get("cashier_name")
+            if not bid and cnm:
+                cu = await db.users.find_one({"full_name": cnm, **tq}, {"_id": 0, "branch_id": 1})
+                bid = (cu or {}).get("branch_id")
+                if not bid:
+                    ce = await db.employees.find_one({"name": cnm, **tq}, {"_id": 0, "branch_id": 1})
+                    bid = (ce or {}).get("branch_id")
+            if bid and not bname:
+                bname = bmap.get(bid)
+            update = {}
+            if bid and not d.get("branch_id"):
+                update["branch_id"] = bid
+            if bname and not d.get("branch_name"):
+                update["branch_name"] = bname
+            if update:
+                await db.owner_deposits.update_one({"id": d["id"]}, {"$set": update})
+                fixed += 1
+        await db.system_migrations.insert_one({
+            "key": MIG_KEY, "executed_at": _dt.now(_tz.utc).isoformat(),
+            "fixed_count": fixed, "scanned": len(deps),
+        })
+        logger.info(f"✅ {MIG_KEY} complete: فحص {len(deps)} إيداع، تصحيح {fixed}")
+    except Exception as e:
+        logger.error(f"❌ backfill_shift_cash_deposit_branch_v2 migration failed: {e}")
+
+
+
+
 async def cleanup_mistaken_expense_moataz36():
     """حذف مصروف أُدخل بالخطأ "ا-معتز#36" (غداء إدارة) — مرة واحدة فقط، بطلب المالك.
     آمن: يحفظ نسخة كاملة من كل مستند محذوف في system_migrations (قابلة للاسترجاع)،
@@ -22006,7 +22129,7 @@ async def get_menu_link(request: Request, current_user: dict = Depends(get_curre
         base_url = f"{parsed.scheme}://{parsed.netloc}"
     else:
         # fallback للـ environment variable
-        base_url = os.environ.get('REACT_APP_BACKEND_URL', 'https://secure-inventory-pos.preview.emergentagent.com')
+        base_url = os.environ.get('REACT_APP_BACKEND_URL', 'https://offline-pos-audit.preview.emergentagent.com')
     
     menu_url = f"{base_url}/menu/{tenant.get('menu_slug', tenant_id)}"
     

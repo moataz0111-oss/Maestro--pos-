@@ -829,10 +829,18 @@ async def terminate_employee(employee_id: str, current_user: dict = Depends(get_
     return {"message": "تم إنهاء خدمات الموظف — يمكن صرف المستحقات أو الإرجاع خلال 24 ساعة", "settlement_preview": calc["remaining"], "details": calc}
 
 
+class SettlementPayout(BaseModel):
+    amount: Optional[float] = None
+    payment_method: str = "cash"
+    payment_date: Optional[str] = None
+    notes: Optional[str] = None
+
+
 @router.post("/employees/{employee_id}/terminate-payout")
-async def terminate_payout(employee_id: str, current_user: dict = Depends(get_current_user)):
+async def terminate_payout(employee_id: str, payload: Optional[SettlementPayout] = None, current_user: dict = Depends(get_current_user)):
     """صرف مستحقات إنهاء الخدمة من خزينة المالك حسب فرع الموظف."""
     db = get_database()
+    payload = payload or SettlementPayout()
     if current_user["role"] not in [UserRole.ADMIN, UserRole.SUPER_ADMIN]:
         raise HTTPException(status_code=403, detail="غير مصرح")
     emp = await db.employees.find_one({"id": employee_id}, {"_id": 0})
@@ -846,7 +854,13 @@ async def terminate_payout(employee_id: str, current_user: dict = Depends(get_cu
     tenant_id = get_user_tenant_id(current_user)
     month = emp.get("termination_month") or (emp.get("termination_date") or "")[:7]
     calc = await _compute_employee_net(db, emp, month)
-    amount = round(max(calc["remaining"], 0), 2)
+    computed = round(max(calc["remaining"], 0), 2)
+    # السماح بتعديل المبلغ من النموذج (لا يتجاوز المستحق المحسوب)
+    if payload.amount is not None and float(payload.amount) > 0:
+        amount = round(min(float(payload.amount), computed), 2)
+    else:
+        amount = computed
+    pay_date = (payload.payment_date or datetime.now(timezone.utc).date().isoformat())[:10]
     emp_branch_id = emp.get("branch_id")
     emp_branch_name = None
     if emp_branch_id:
@@ -867,17 +881,19 @@ async def terminate_payout(employee_id: str, current_user: dict = Depends(get_cu
         withdrawal_id = str(uuid.uuid4())
         await db.owner_withdrawals.insert_one({
             "id": withdrawal_id, "tenant_id": tenant_id, "amount": amount,
-            "date": emp.get("termination_date"), "actual_payment_date": datetime.now(timezone.utc).date().isoformat(),
+            "date": pay_date, "actual_payment_date": pay_date,
             "salary_month": month, "beneficiary": f"إنهاء خدمات: {emp.get('name')}",
             "description": f"صرف مستحقات إنهاء خدمة — {emp.get('name')}",
-            "category": "end_of_service", "branch_id": emp_branch_id, "branch_name": emp_branch_name,
-            "linked_employee_id": employee_id,
+            "category": "end_of_service", "payment_method": payload.payment_method,
+            "branch_id": emp_branch_id, "branch_name": emp_branch_name,
+            "linked_employee_id": employee_id, "notes": payload.notes,
             "created_by": current_user.get("full_name") or current_user.get("username"),
             "created_at": datetime.now(timezone.utc).isoformat(),
         })
     await db.employees.update_one({"id": employee_id}, {"$set": {
         "settlement_paid": True, "settlement_amount": amount,
         "settlement_withdrawal_id": withdrawal_id,
+        "settlement_payment_method": payload.payment_method,
         "settlement_paid_at": datetime.now(timezone.utc).isoformat(),
     }})
     return {

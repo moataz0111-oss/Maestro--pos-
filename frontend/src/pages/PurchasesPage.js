@@ -57,6 +57,8 @@ import {
   TabsTrigger,
 } from '../components/ui/tabs';
 import { showApiError } from '../utils/apiError';
+import { Wallet, DollarSign, RotateCcw, TrendingUp, CreditCard, CalendarDays } from 'lucide-react';
+import { BarChart, Bar, XAxis, YAxis, Tooltip as RTooltip, ResponsiveContainer, CartesianGrid, Legend } from 'recharts';
 const API = API_URL;
 export default function PurchasesPage() {
   const navigate = useNavigate();
@@ -73,6 +75,17 @@ export default function PurchasesPage() {
   const [purchaseRequests, setPurchaseRequests] = useState([]);
   const [rawMaterials, setRawMaterials] = useState([]);
   const [lastPrices, setLastPrices] = useState({ by_id: {}, by_name: {} });
+  // حسابات الموردين (المستحقات/المدفوع/المتبقي) من تقرير المشتريات
+  const [supplierAccounts, setSupplierAccounts] = useState({});
+  // نموذج تسديد المورد
+  const [payModal, setPayModal] = useState(null); // {supplier, mode:'partial'|'full'}
+  const [payForm, setPayForm] = useState({ amount: '', payment_method: 'cash', payment_date: new Date().toISOString().split('T')[0], notes: '' });
+  const [paySubmitting, setPaySubmitting] = useState(false);
+  // كشف حساب المورد
+  const [detailModal, setDetailModal] = useState(null); // supplier
+  const [detailData, setDetailData] = useState(null);
+  const [detailLoading, setDetailLoading] = useState(false);
+  const [detailRange, setDetailRange] = useState({ start: '', end: '' });
   
   // Dialog states
   const [showPurchaseDialog, setShowPurchaseDialog] = useState(false);
@@ -138,17 +151,24 @@ export default function PurchasesPage() {
   const fetchData = async () => {
     setLoading(true);
     try {
-      const [purchasesRes, suppliersRes, requestsRes, materialsRes] = await Promise.all([
+      const [purchasesRes, suppliersRes, requestsRes, materialsRes, reportRes] = await Promise.all([
         axios.get(`${API}/purchases-new`, { headers }),
         axios.get(`${API}/suppliers`, { headers }),
         axios.get(`${API}/warehouse-purchase-requests`, { headers }),
-        axios.get(`${API}/raw-materials`, { headers }).catch(() => ({ data: [] }))
+        axios.get(`${API}/raw-materials`, { headers }).catch(() => ({ data: [] })),
+        axios.get(`${API}/purchases-report`, { headers }).catch(() => ({ data: {} }))
       ]);
       
       setPurchases(purchasesRes.data || []);
       setSuppliers(suppliersRes.data || []);
       setPurchaseRequests(requestsRes.data || []);
       setRawMaterials(materialsRes.data || []);
+      // بناء خريطة حسابات الموردين
+      const accMap = {};
+      (reportRes.data?.suppliers || []).forEach(s => {
+        if (s.supplier_id) accMap[s.supplier_id] = s;
+      });
+      setSupplierAccounts(accMap);
     } catch (error) {
       console.error('Error fetching data:', error);
       // إذا كان خطأ 404، هذا يعني أن الـ API لم يتم تحميله بعد
@@ -159,6 +179,126 @@ export default function PurchasesPage() {
       setLoading(false);
     }
   };
+
+  // ===== مدفوعات الموردين =====
+  const canPay = user?.role === 'super_admin' || user?.role === 'admin' || user?.role === 'manager';
+  const canSettle = user?.role === 'super_admin' || user?.role === 'admin';
+
+  const openPayModal = (supplier, mode) => {
+    const acc = supplierAccounts[supplier.id] || {};
+    const remaining = acc.total_remaining || 0;
+    setPayForm({
+      amount: mode === 'full' ? String(remaining) : '',
+      payment_method: 'cash',
+      payment_date: new Date().toISOString().split('T')[0],
+      notes: ''
+    });
+    setPayModal({ supplier, mode });
+  };
+
+  const submitPayment = async () => {
+    if (!payModal) return;
+    const amount = parseFloat(payForm.amount);
+    if (!amount || amount <= 0) { toast.error(t('أدخل مبلغاً صحيحاً')); return; }
+    setPaySubmitting(true);
+    try {
+      const res = await axios.post(`${API}/suppliers/${payModal.supplier.id}/pay`, {
+        amount,
+        payment_method: payForm.payment_method,
+        payment_date: payForm.payment_date,
+        notes: payForm.notes
+      }, { headers });
+      toast.success(res.data?.message || t('تم التسديد'));
+      setPayModal(null);
+      fetchData();
+    } catch (err) {
+      showApiError(err, t('فشل في التسديد'));
+    } finally {
+      setPaySubmitting(false);
+    }
+  };
+
+  const handleSettleDues = async (supplier) => {
+    const acc = supplierAccounts[supplier.id] || {};
+    const msg = `${t('تصفير مستحقات المورد')} "${supplier.name}"؟\n\n` +
+      `${t('المتبقي:')} ${new Intl.NumberFormat('en-US').format(acc.total_remaining || 0)} IQD\n\n` +
+      `${t('سيتم تسوية المستحقات كمدفوعة بدون خصم من خزينة المالك (لأنها مسحوبة مسبقاً). لا يمكن التراجع.')}`;
+    if (!window.confirm(msg)) return;
+    try {
+      const res = await axios.post(`${API}/suppliers/${supplier.id}/settle-dues`, {}, { headers });
+      toast.success(res.data?.message || t('تم التصفير'));
+      fetchData();
+    } catch (err) {
+      showApiError(err, t('فشل في التصفير'));
+    }
+  };
+
+  const openSupplierDetail = async (supplier, range = {}) => {
+    setDetailModal(supplier);
+    setDetailLoading(true);
+    setDetailData(null);
+    try {
+      const params = new URLSearchParams();
+      if (range.start) params.append('start', range.start);
+      if (range.end) params.append('end', range.end);
+      const res = await axios.get(`${API}/suppliers/${supplier.id}/account?${params.toString()}`, { headers });
+      setDetailData(res.data);
+    } catch (err) {
+      showApiError(err, t('فشل في تحميل كشف الحساب'));
+    } finally {
+      setDetailLoading(false);
+    }
+  };
+
+  // فلاتر سريعة: شهر / سنة
+  const applyMonthFilter = (m) => {
+    if (!m || !detailModal) return;
+    const [y, mm] = m.split('-');
+    const last = new Date(parseInt(y, 10), parseInt(mm, 10), 0).getDate();
+    const range = { start: `${m}-01`, end: `${m}-${String(last).padStart(2, '0')}` };
+    setDetailRange(range);
+    openSupplierDetail(detailModal, range);
+  };
+  const applyYearFilter = (y) => {
+    if (!y || !detailModal) return;
+    const range = { start: `${y}-01-01`, end: `${y}-12-31` };
+    setDetailRange(range);
+    openSupplierDetail(detailModal, range);
+  };
+
+  // طباعة/تصدير كشف حساب المورد كمستند PDF رسمي
+  const printSupplierStatement = async () => {
+    if (!detailData) return;
+    let shopName = 'Maestro EGP', logoUrl = '';
+    try {
+      const s = await axios.get(`${API}/settings/general`, { headers });
+      shopName = s.data?.restaurant_name || s.data?.business_name || s.data?.name || shopName;
+      logoUrl = s.data?.logo_url || '';
+    } catch (e) { /* ignore */ }
+    const period = (detailRange.start || detailRange.end)
+      ? `${detailRange.start || '—'} ← ${detailRange.end || '—'}` : t('كل الفترات');
+    const fmt = (n) => new Intl.NumberFormat('en-US').format(Math.round(n || 0)) + ' IQD';
+    const rows = (detailData.ledger || []).map(e =>
+      `<tr><td>${e.date}</td><td>${e.description}</td><td>${e.type === 'debit' ? fmt(e.amount) : '—'}</td><td>${e.type === 'credit' ? fmt(e.amount) : '—'}</td></tr>`).join('');
+    const w = window.open('', '_blank', 'width=820,height=900');
+    if (!w) { toast.error(t('فعّل النوافذ المنبثقة للطباعة')); return; }
+    w.document.write(`<!doctype html><html dir="rtl" lang="ar"><head><meta charset="utf-8"><title>كشف حساب ${detailData.supplier?.name || ''}</title>
+      <style>body{font-family:Arial,sans-serif;margin:24px;color:#111}.head{display:flex;align-items:center;gap:14px;border-bottom:3px solid #2563eb;padding-bottom:12px;margin-bottom:14px}.logo{font-size:24px;font-weight:800;color:#2563eb}img.lg{height:54px;object-fit:contain}h2{margin:4px 0}.meta{font-size:13px;color:#555;margin-bottom:12px}table{width:100%;border-collapse:collapse;font-size:13px}th,td{border:1px solid #ddd;padding:7px;text-align:right}th{background:#f1f5f9}.sum{display:flex;gap:10px;margin:12px 0}.sum div{flex:1;border:1px solid #ddd;border-radius:8px;padding:10px;text-align:center}.foot{margin-top:34px;display:flex;justify-content:space-between;font-size:12px;color:#555}@media print{.sum div,th{-webkit-print-color-adjust:exact;print-color-adjust:exact}}</style></head>
+      <body>
+      <div class="head">${logoUrl ? `<img class="lg" src="${logoUrl}"/>` : ''}<div><div class="logo">${shopName}</div><div>كشف حساب مورد</div></div></div>
+      <h2>${detailData.supplier?.name || ''}</h2>
+      <div class="meta">${detailData.supplier?.phone ? ('هاتف: ' + detailData.supplier.phone + ' • ') : ''}الفترة: ${period} • تاريخ الطباعة: ${new Date().toLocaleDateString('en-GB')}</div>
+      <div class="sum">
+        <div><div>مدين (إجمالي الفواتير)</div><b>${fmt(detailData.summary?.total_debit)}</b></div>
+        <div><div>دائن (المدفوع)</div><b>${fmt(detailData.summary?.total_credit)}</b></div>
+        <div><div>المتبقي</div><b>${fmt(detailData.summary?.total_remaining)}</b></div>
+      </div>
+      <table><thead><tr><th>التاريخ</th><th>البيان</th><th>مدين</th><th>دائن</th></tr></thead><tbody>${rows || '<tr><td colspan=4 style="text-align:center">لا توجد حركات</td></tr>'}</tbody></table>
+      <div class="foot"><div>توقيع المورد: ____________</div><div>توقيع المسؤول: ____________</div></div>
+      <script>window.onload=function(){window.print();}</script></body></html>`);
+    w.document.close();
+  };
+
 
   // ابحث عن آخر سعر للمادة الخام (cost_per_unit) لملء الفاتورة تلقائياً
   const lookupLastCost = (item) => {
@@ -882,8 +1022,13 @@ export default function PurchasesPage() {
           {/* الموردين */}
           <TabsContent value="suppliers" className="space-y-4">
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {suppliers.filter(s => s.is_active !== false).map(supplier => (
-                <Card key={supplier.id} className="hover:shadow-md transition-shadow" data-testid={`supplier-${supplier.id}`}>
+              {suppliers.filter(s => s.is_active !== false).map(supplier => {
+                const acc = supplierAccounts[supplier.id] || {};
+                const dues = acc.total_amount || 0;
+                const paid = acc.total_paid || 0;
+                const remaining = acc.total_remaining || 0;
+                return (
+                <Card key={supplier.id} className="hover:shadow-lg transition-shadow cursor-pointer" data-testid={`supplier-${supplier.id}`} onClick={() => openSupplierDetail(supplier)}>
                   <CardContent className="p-4">
                     <div className="flex items-start justify-between">
                       <div>
@@ -895,22 +1040,55 @@ export default function PurchasesPage() {
                       <Building2 className="h-5 w-5 text-primary" />
                     </div>
                     
-                    <div className="mt-3 space-y-1 text-sm">
+                    <div className="mt-2 space-y-1 text-sm">
                       {supplier.phone && (
                         <p className="text-muted-foreground">📞 {supplier.phone}</p>
                       )}
-                      {supplier.address && (
-                        <p className="text-muted-foreground">📍 {supplier.address}</p>
-                      )}
                     </div>
                     
-                    <div className="mt-3 pt-3 border-t flex justify-between items-center">
-                      <span className="text-sm text-muted-foreground">{t('إجمالي المشتريات:')}</span>
-                      <span className="font-bold text-primary">{formatPrice(supplier.total_purchases || 0)}</span>
+                    {/* الحقول المالية الثلاثة */}
+                    <div className="mt-3 pt-3 border-t space-y-2">
+                      <div className="flex justify-between items-center" data-testid={`supplier-${supplier.id}-dues`}>
+                        <span className="text-sm text-muted-foreground flex items-center gap-1"><FileText className="h-3.5 w-3.5" /> {t('المستحقات:')}</span>
+                        <span className="font-bold">{formatPrice(dues)}</span>
+                      </div>
+                      {paid > 0 && (
+                        <div className="flex justify-between items-center" data-testid={`supplier-${supplier.id}-paid`}>
+                          <span className="text-sm text-muted-foreground flex items-center gap-1"><CheckCircle className="h-3.5 w-3.5 text-green-500" /> {t('المبلغ المدفوع:')}</span>
+                          <span className="font-bold text-green-600">{formatPrice(paid)}</span>
+                        </div>
+                      )}
+                      {remaining > 0 && (
+                        <div className="flex justify-between items-center" data-testid={`supplier-${supplier.id}-remaining`}>
+                          <span className="text-sm text-muted-foreground flex items-center gap-1"><AlertCircle className="h-3.5 w-3.5 text-red-500" /> {t('المبلغ المتبقي:')}</span>
+                          <span className="font-bold text-red-600">{formatPrice(remaining)}</span>
+                        </div>
+                      )}
                     </div>
+
+                    {/* أزرار الدفع */}
+                    {remaining > 0 && canPay && (
+                      <div className="mt-3 flex gap-2" onClick={(e) => e.stopPropagation()}>
+                        <Button size="sm" className="flex-1 bg-green-600 hover:bg-green-700 text-white" onClick={() => openPayModal(supplier, 'partial')} data-testid={`supplier-${supplier.id}-pay-partial`}>
+                          <DollarSign className="h-4 w-4 ml-1" /> {t('تسديد دفعة')}
+                        </Button>
+                        <Button size="sm" variant="outline" className="flex-1" onClick={() => openPayModal(supplier, 'full')} data-testid={`supplier-${supplier.id}-pay-full`}>
+                          <Wallet className="h-4 w-4 ml-1" /> {t('تسديد الكل')}
+                        </Button>
+                      </div>
+                    )}
+                    {remaining > 0 && canSettle && (
+                      <div className="mt-2" onClick={(e) => e.stopPropagation()}>
+                        <Button size="sm" variant="ghost" className="w-full text-amber-600 hover:bg-amber-500/10" onClick={() => handleSettleDues(supplier)} data-testid={`supplier-${supplier.id}-settle`}>
+                          <RotateCcw className="h-4 w-4 ml-1" /> {t('تصفير المستحقات (بدون خصم)')}
+                        </Button>
+                      </div>
+                    )}
+                    <p className="mt-2 text-[11px] text-center text-muted-foreground">{t('اضغط للتفاصيل والرسم البياني')}</p>
                   </CardContent>
                 </Card>
-              ))}
+                );
+              })}
               
               {suppliers.filter(s => s.is_active !== false).length === 0 && (
                 <Card className="col-span-full">
@@ -1089,6 +1267,179 @@ export default function PurchasesPage() {
             </Card>
           </TabsContent>
         </Tabs>
+
+        {/* ===== نموذج تسديد المورد ===== */}
+        <Dialog open={!!payModal} onOpenChange={(o) => { if (!o) setPayModal(null); }}>
+          <DialogContent className="max-w-md" data-testid="supplier-pay-dialog">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <Wallet className="h-5 w-5 text-green-600" />
+                {payModal?.mode === 'full' ? t('تسديد كامل المستحقات') : t('تسديد دفعة')} — {payModal?.supplier?.name}
+              </DialogTitle>
+            </DialogHeader>
+            {payModal && (
+              <div className="space-y-4">
+                <div className="bg-muted/50 rounded-lg p-3 text-sm flex justify-between">
+                  <span className="text-muted-foreground">{t('المتبقي على المورد:')}</span>
+                  <span className="font-bold text-red-600">{formatPrice((supplierAccounts[payModal.supplier.id] || {}).total_remaining || 0)}</span>
+                </div>
+                <div>
+                  <Label>{t('المبلغ')} *</Label>
+                  <Input type="number" value={payForm.amount} onChange={(e) => setPayForm({ ...payForm, amount: e.target.value })}
+                    placeholder="0" data-testid="pay-amount-input" />
+                </div>
+                <div>
+                  <Label>{t('تاريخ الدفع')} *</Label>
+                  <Input type="date" value={payForm.payment_date} onChange={(e) => setPayForm({ ...payForm, payment_date: e.target.value })}
+                    data-testid="pay-date-input" />
+                </div>
+                <div>
+                  <Label>{t('طريقة الدفع')} *</Label>
+                  <Select value={payForm.payment_method} onValueChange={(v) => setPayForm({ ...payForm, payment_method: v })}>
+                    <SelectTrigger data-testid="pay-method-select"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="cash">{t('نقدي')}</SelectItem>
+                      <SelectItem value="bank_withdrawal">{t('سحب بنكي')}</SelectItem>
+                      <SelectItem value="card">{t('بطاقة')}</SelectItem>
+                      <SelectItem value="zain_cash">{t('زين كاش')}</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <Label>{t('ملاحظات')}</Label>
+                  <Textarea value={payForm.notes} onChange={(e) => setPayForm({ ...payForm, notes: e.target.value })} rows={2} />
+                </div>
+                <p className="text-xs text-amber-600">⚠️ {t('سيُخصم المبلغ من إجمالي رصيد خزينة المالك.')}</p>
+              </div>
+            )}
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setPayModal(null)}>{t('إلغاء')}</Button>
+              <Button onClick={submitPayment} disabled={paySubmitting} className="bg-green-600 hover:bg-green-700 text-white" data-testid="pay-submit-btn">
+                {paySubmitting ? t('جارٍ التسديد...') : t('تأكيد التسديد')}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        {/* ===== كشف حساب المورد ===== */}
+        <Dialog open={!!detailModal} onOpenChange={(o) => { if (!o) { setDetailModal(null); setDetailData(null); setDetailRange({ start: '', end: '' }); } }}>
+          <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto" data-testid="supplier-detail-dialog">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <TrendingUp className="h-5 w-5 text-primary" />
+                {t('كشف حساب المورد')} — {detailModal?.name}
+              </DialogTitle>
+            </DialogHeader>
+            {/* فلتر الفترة: شهر / سنة / من-إلى */}
+            <div className="flex flex-wrap items-end gap-2 border-b pb-3">
+              <div>
+                <Label className="text-xs">{t('شهر')}</Label>
+                <Input type="month" className="h-9" onChange={(e) => applyMonthFilter(e.target.value)} data-testid="detail-month-filter" />
+              </div>
+              <div>
+                <Label className="text-xs">{t('سنة')}</Label>
+                <Select onValueChange={applyYearFilter}>
+                  <SelectTrigger className="h-9 w-24" data-testid="detail-year-filter"><SelectValue placeholder={t('سنة')} /></SelectTrigger>
+                  <SelectContent>
+                    {Array.from({ length: 5 }).map((_, i) => {
+                      const y = String(new Date().getFullYear() - i);
+                      return <SelectItem key={y} value={y}>{y}</SelectItem>;
+                    })}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="h-9 w-px bg-border self-center" />
+              <div>
+                <Label className="text-xs">{t('من تاريخ')}</Label>
+                <Input type="date" className="h-9" value={detailRange.start} onChange={(e) => setDetailRange({ ...detailRange, start: e.target.value })} data-testid="detail-start-date" />
+              </div>
+              <div>
+                <Label className="text-xs">{t('إلى تاريخ')}</Label>
+                <Input type="date" className="h-9" value={detailRange.end} onChange={(e) => setDetailRange({ ...detailRange, end: e.target.value })} data-testid="detail-end-date" />
+              </div>
+              <Button size="sm" variant="outline" onClick={() => openSupplierDetail(detailModal, detailRange)} data-testid="detail-apply-filter">
+                <Filter className="h-4 w-4 ml-1" /> {t('تطبيق')}
+              </Button>
+              <Button size="sm" variant="ghost" onClick={() => { setDetailRange({ start: '', end: '' }); openSupplierDetail(detailModal, {}); }}>
+                {t('الكل')}
+              </Button>
+              <Button size="sm" variant="outline" className="ml-auto border-blue-500 text-blue-600 hover:bg-blue-500/10" onClick={printSupplierStatement} data-testid="detail-print-btn">
+                <FileText className="h-4 w-4 ml-1" /> {t('طباعة / PDF')}
+              </Button>
+            </div>
+
+            {detailLoading ? (
+              <div className="py-12 text-center text-muted-foreground">{t('جارٍ التحميل...')}</div>
+            ) : detailData ? (
+              <div className="space-y-4">
+                {/* ملخص مدين/دائن/متبقي */}
+                <div className="grid grid-cols-3 gap-3">
+                  <div className="rounded-lg border p-3 text-center" data-testid="detail-debit">
+                    <p className="text-xs text-muted-foreground">{t('مدين (إجمالي الفواتير)')}</p>
+                    <p className="font-bold text-blue-600">{formatPrice(detailData.summary?.total_debit || 0)}</p>
+                  </div>
+                  <div className="rounded-lg border p-3 text-center" data-testid="detail-credit">
+                    <p className="text-xs text-muted-foreground">{t('دائن (المدفوع)')}</p>
+                    <p className="font-bold text-green-600">{formatPrice(detailData.summary?.total_credit || 0)}</p>
+                  </div>
+                  <div className="rounded-lg border p-3 text-center" data-testid="detail-remaining">
+                    <p className="text-xs text-muted-foreground">{t('المتبقي')}</p>
+                    <p className="font-bold text-red-600">{formatPrice(detailData.summary?.total_remaining || 0)}</p>
+                  </div>
+                </div>
+
+                {/* رسم بياني شهري */}
+                {(detailData.monthly || []).length > 0 && (
+                  <div className="rounded-lg border p-3">
+                    <p className="text-sm font-medium mb-2 flex items-center gap-1"><CalendarDays className="h-4 w-4" /> {t('الحركة الشهرية')}</p>
+                    <ResponsiveContainer width="100%" height={220}>
+                      <BarChart data={detailData.monthly}>
+                        <CartesianGrid strokeDasharray="3 3" opacity={0.2} />
+                        <XAxis dataKey="month" fontSize={11} />
+                        <YAxis fontSize={11} tickFormatter={(v) => new Intl.NumberFormat('en-US', { notation: 'compact' }).format(v)} />
+                        <RTooltip formatter={(v) => formatPrice(v)} />
+                        <Legend />
+                        <Bar dataKey="debit" name={t('فواتير')} fill="#3b82f6" radius={[4, 4, 0, 0]} />
+                        <Bar dataKey="credit" name={t('مدفوع')} fill="#22c55e" radius={[4, 4, 0, 0]} />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </div>
+                )}
+
+                {/* دفتر الأستاذ: مدين/دائن */}
+                <div className="rounded-lg border overflow-hidden">
+                  <div className="bg-muted/50 px-3 py-2 text-sm font-medium">{t('تفصيل الحركات (دائن/مدين)')}</div>
+                  <div className="max-h-60 overflow-y-auto">
+                    <table className="w-full text-sm">
+                      <thead className="bg-muted/30 text-xs">
+                        <tr>
+                          <th className="p-2 text-right">{t('التاريخ')}</th>
+                          <th className="p-2 text-right">{t('البيان')}</th>
+                          <th className="p-2 text-right">{t('مدين')}</th>
+                          <th className="p-2 text-right">{t('دائن')}</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {(detailData.ledger || []).map((e, i) => (
+                          <tr key={i} className="border-t" data-testid={`ledger-row-${i}`}>
+                            <td className="p-2 text-xs">{e.date}</td>
+                            <td className="p-2 text-xs">{e.description}</td>
+                            <td className="p-2 text-xs text-blue-600">{e.type === 'debit' ? formatPrice(e.amount) : '—'}</td>
+                            <td className="p-2 text-xs text-green-600">{e.type === 'credit' ? formatPrice(e.amount) : '—'}</td>
+                          </tr>
+                        ))}
+                        {(detailData.ledger || []).length === 0 && (
+                          <tr><td colSpan={4} className="p-4 text-center text-muted-foreground text-xs">{t('لا توجد حركات في هذه الفترة')}</td></tr>
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              </div>
+            ) : null}
+          </DialogContent>
+        </Dialog>
+
       </main>
       {/* Dialog: إضافة مورد */}
       <Dialog open={showSupplierDialog} onOpenChange={setShowSupplierDialog}>

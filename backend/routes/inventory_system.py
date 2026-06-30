@@ -1276,6 +1276,7 @@ async def supplier_payment_dues(current_user: dict = Depends(get_current_user)):
 class PurchasePayment(BaseModel):
     amount: float
     payment_method: str = "cash"  # cash | card | bank_withdrawal | zain_cash
+    payment_date: Optional[str] = None  # تاريخ الدفع (YYYY-MM-DD) — يدخله المستخدم في النموذج
     notes: Optional[str] = None
 
 
@@ -1305,11 +1306,12 @@ async def pay_purchase_invoice(purchase_id: str, payload: PurchasePayment, curre
         raise HTTPException(status_code=400, detail=f"رصيد الخزينة غير كافٍ. المتاح: {balance:,.0f} IQD، المطلوب: {amount:,.0f} IQD")
 
     now = datetime.now(timezone.utc).isoformat()
+    pay_date = (payload.payment_date or now[:10])[:10]
     by_name = current_user.get("full_name") or current_user.get("username") or "النظام"
     withdrawal_id = str(uuid.uuid4())
     await db.owner_withdrawals.insert_one({
         "id": withdrawal_id, "tenant_id": tenant_id, "amount": amount,
-        "date": now[:10], "actual_payment_date": now[:10],
+        "date": pay_date, "actual_payment_date": pay_date,
         "beneficiary": f"مورد: {p.get('supplier_name') or 'غير محدد'}",
         "description": f"تسديد فاتورة مشتريات #{p.get('purchase_number')} — {p.get('supplier_name') or ''}",
         "category": "purchase_payment", "payment_method": payload.payment_method,
@@ -1319,7 +1321,8 @@ async def pay_purchase_invoice(purchase_id: str, payload: PurchasePayment, curre
 
     payment_rec = {
         "id": str(uuid.uuid4()), "amount": amount, "payment_method": payload.payment_method,
-        "withdrawal_id": withdrawal_id, "notes": payload.notes, "paid_by": by_name, "date": now,
+        "withdrawal_id": withdrawal_id, "notes": payload.notes, "paid_by": by_name,
+        "date": pay_date, "created_at": now,
     }
     new_paid = round(summ["paid_amount"] + amount, 2)
     new_status = "paid" if new_paid >= float(p.get("total_amount") or 0) - 0.01 else "partial"
@@ -1359,6 +1362,224 @@ async def delete_purchase_payment(purchase_id: str, payment_id: str, current_use
         {"$set": {"payments": remaining_payments, "paid_amount": new_paid, "payment_status": new_status}},
     )
     return {"message": "تم إلغاء الدفعة وإعادة المبلغ للخزينة", "paid_amount": new_paid, "payment_status": new_status}
+
+
+# ==================== مدفوعات الموردين على مستوى الحساب ====================
+class SupplierPayment(BaseModel):
+    amount: float
+    payment_method: str = "cash"
+    payment_date: Optional[str] = None
+    notes: Optional[str] = None
+
+
+async def _supplier_open_invoices(db, supplier_id, tenant_id):
+    """فواتير المورد غير المسددة بالكامل، الأقدم أولاً."""
+    q = {"supplier_id": supplier_id}
+    if tenant_id:
+        q["tenant_id"] = tenant_id
+    invs = await db.purchases_new.find(q, {"_id": 0}).to_list(20000)
+    invs.sort(key=lambda x: (x.get("created_at") or x.get("invoice_date") or ""))
+    out = []
+    for p in invs:
+        summ = _purchase_payment_summary(p)
+        if summ["remaining_amount"] > 0.01:
+            out.append((p, summ["remaining_amount"], summ["paid_amount"]))
+    return out
+
+
+@router.post("/suppliers/{supplier_id}/pay")
+async def pay_supplier_account(supplier_id: str, payload: SupplierPayment, current_user: dict = Depends(get_current_user)):
+    """تسديد دفعة/مبلغ كامل لمورد — يُوزَّع على فواتيره الأقدم أولاً ويُخصم من إجمالي خزينة المالك."""
+    db = get_db()
+    if current_user["role"] not in [UserRole.ADMIN, UserRole.SUPER_ADMIN, UserRole.MANAGER]:
+        raise HTTPException(status_code=403, detail="غير مصرح — التسديد للمالك/المدير فقط")
+    tenant_id = get_user_tenant_id(current_user)
+    supplier = await db.suppliers.find_one({"id": supplier_id}, {"_id": 0})
+    if not supplier:
+        raise HTTPException(status_code=404, detail="المورد غير موجود")
+
+    amount = round(float(payload.amount or 0), 2)
+    if amount <= 0:
+        raise HTTPException(status_code=400, detail="المبلغ يجب أن يكون أكبر من صفر")
+
+    open_invs = await _supplier_open_invoices(db, supplier_id, tenant_id)
+    total_remaining = round(sum(r for _, r, _ in open_invs), 2)
+    if total_remaining <= 0:
+        raise HTTPException(status_code=400, detail="لا توجد مستحقات على هذا المورد")
+    if amount > total_remaining + 0.01:
+        raise HTTPException(status_code=400, detail=f"المبلغ يتجاوز مستحقات المورد ({total_remaining:,.0f} IQD)")
+
+    balance = await _total_treasury_balance(db, tenant_id)
+    if amount > balance + 0.01:
+        raise HTTPException(status_code=400, detail=f"رصيد الخزينة غير كافٍ. المتاح: {balance:,.0f} IQD، المطلوب: {amount:,.0f} IQD")
+
+    now = datetime.now(timezone.utc).isoformat()
+    pay_date = (payload.payment_date or now[:10])[:10]
+    by_name = current_user.get("full_name") or current_user.get("username") or "النظام"
+
+    # سحب واحد من إجمالي الخزينة (وليس من فرع)
+    withdrawal_id = str(uuid.uuid4())
+    await db.owner_withdrawals.insert_one({
+        "id": withdrawal_id, "tenant_id": tenant_id, "amount": amount,
+        "date": pay_date, "actual_payment_date": pay_date,
+        "beneficiary": f"مورد: {supplier.get('name') or 'غير محدد'}",
+        "description": f"تسديد مستحقات المورد {supplier.get('name') or ''}",
+        "category": "supplier_payment", "payment_method": payload.payment_method,
+        "supplier_id": supplier_id, "notes": payload.notes,
+        "created_by": by_name, "created_at": now,
+    })
+
+    # التوزيع على الفواتير الأقدم أولاً
+    left = amount
+    affected = []
+    for p, remaining, paid in open_invs:
+        if left <= 0.01:
+            break
+        alloc = round(min(left, remaining), 2)
+        new_paid = round(paid + alloc, 2)
+        new_status = "paid" if new_paid >= float(p.get("total_amount") or 0) - 0.01 else "partial"
+        payment_rec = {
+            "id": str(uuid.uuid4()), "amount": alloc, "payment_method": payload.payment_method,
+            "withdrawal_id": withdrawal_id, "notes": payload.notes, "paid_by": by_name,
+            "date": pay_date, "created_at": now,
+        }
+        await db.purchases_new.update_one(
+            {"id": p["id"]},
+            {"$push": {"payments": payment_rec}, "$set": {"paid_amount": new_paid, "payment_status": new_status}},
+        )
+        affected.append({"purchase_id": p["id"], "purchase_number": p.get("purchase_number"), "amount": alloc})
+        left = round(left - alloc, 2)
+
+    return {
+        "message": "تم تسديد المبلغ وخصمه من إجمالي خزينة المالك",
+        "amount_paid": amount,
+        "invoices_affected": len(affected),
+        "remaining_dues": round(total_remaining - amount, 2),
+        "treasury_balance": round(balance - amount, 2),
+    }
+
+
+@router.post("/suppliers/{supplier_id}/settle-dues")
+async def settle_supplier_dues(supplier_id: str, current_user: dict = Depends(get_current_user)):
+    """تصفير مستحقات المورد (تسوية بدون خصم من الخزينة) — للمبالغ المسحوبة يدوياً مسبقاً."""
+    db = get_db()
+    if current_user["role"] not in [UserRole.ADMIN, UserRole.SUPER_ADMIN]:
+        raise HTTPException(status_code=403, detail="غير مصرح — التصفير للمالك فقط")
+    tenant_id = get_user_tenant_id(current_user)
+    supplier = await db.suppliers.find_one({"id": supplier_id}, {"_id": 0})
+    if not supplier:
+        raise HTTPException(status_code=404, detail="المورد غير موجود")
+
+    open_invs = await _supplier_open_invoices(db, supplier_id, tenant_id)
+    if not open_invs:
+        raise HTTPException(status_code=400, detail="لا توجد مستحقات على هذا المورد")
+
+    now = datetime.now(timezone.utc).isoformat()
+    by_name = current_user.get("full_name") or current_user.get("username") or "النظام"
+    settled_total = 0.0
+    for p, remaining, paid in open_invs:
+        new_paid = round(float(p.get("total_amount") or 0), 2)
+        payment_rec = {
+            "id": str(uuid.uuid4()), "amount": round(remaining, 2),
+            "payment_method": "manual_settlement", "no_treasury": True,
+            "notes": "تسوية يدوية — تصفير مستحقات (مسحوبة مسبقاً)", "paid_by": by_name,
+            "date": now[:10], "created_at": now,
+        }
+        await db.purchases_new.update_one(
+            {"id": p["id"]},
+            {"$push": {"payments": payment_rec}, "$set": {"paid_amount": new_paid, "payment_status": "paid"}},
+        )
+        settled_total = round(settled_total + remaining, 2)
+
+    return {
+        "message": "تم تصفير مستحقات المورد بدون خصم من الخزينة",
+        "settled_amount": settled_total,
+        "invoices_settled": len(open_invs),
+    }
+
+
+@router.get("/suppliers/{supplier_id}/account")
+async def supplier_account(supplier_id: str, start: Optional[str] = None, end: Optional[str] = None,
+                           current_user: dict = Depends(get_current_user)):
+    """كشف حساب المورد: مدين/دائن، الفواتير، الدفعات، وتجميع شهري للرسم البياني."""
+    db = get_db()
+    tenant_id = get_user_tenant_id(current_user)
+    supplier = await db.suppliers.find_one({"id": supplier_id}, {"_id": 0})
+    if not supplier:
+        raise HTTPException(status_code=404, detail="المورد غير موجود")
+    q = {"supplier_id": supplier_id}
+    if tenant_id:
+        q["tenant_id"] = tenant_id
+    invs = await db.purchases_new.find(q, {"_id": 0}).to_list(20000)
+
+    def in_range(d):
+        if not d:
+            return True
+        ds = str(d)[:10]
+        if start and ds < start:
+            return False
+        if end and ds > end:
+            return False
+        return True
+
+    total_debit = 0.0  # إجمالي الفواتير (مستحق على المحل)
+    total_credit = 0.0  # إجمالي المدفوع
+    invoices_out = []
+    payments_out = []
+    monthly = {}
+    ledger = []
+    for p in invs:
+        inv_date = (p.get("invoice_date") or p.get("created_at") or "")[:10]
+        summ = _purchase_payment_summary(p)
+        amt = round(float(p.get("total_amount") or 0), 2)
+        if in_range(inv_date):
+            total_debit = round(total_debit + amt, 2)
+            invoices_out.append({
+                "id": p.get("id"), "purchase_number": p.get("purchase_number"),
+                "invoice_number": p.get("invoice_number"), "date": inv_date,
+                "total_amount": amt, "paid_amount": summ["paid_amount"],
+                "remaining_amount": summ["remaining_amount"], "payment_status": summ["pay_status"],
+            })
+            m = inv_date[:7] or "—"
+            monthly.setdefault(m, {"month": m, "debit": 0.0, "credit": 0.0})
+            monthly[m]["debit"] = round(monthly[m]["debit"] + amt, 2)
+            ledger.append({"date": inv_date, "type": "debit", "amount": amt,
+                           "description": f"فاتورة #{p.get('purchase_number')}"})
+        for pay in (p.get("payments") or []):
+            pd = str(pay.get("date") or pay.get("created_at") or "")[:10]
+            if in_range(pd):
+                pamt = round(float(pay.get("amount") or 0), 2)
+                total_credit = round(total_credit + pamt, 2)
+                payments_out.append({
+                    "id": pay.get("id"), "date": pd, "amount": pamt,
+                    "payment_method": pay.get("payment_method"), "no_treasury": pay.get("no_treasury", False),
+                    "purchase_number": p.get("purchase_number"), "paid_by": pay.get("paid_by"),
+                })
+                m = pd[:7] or "—"
+                monthly.setdefault(m, {"month": m, "debit": 0.0, "credit": 0.0})
+                monthly[m]["credit"] = round(monthly[m]["credit"] + pamt, 2)
+                ledger.append({"date": pd, "type": "credit", "amount": pamt,
+                               "description": f"دفعة — فاتورة #{p.get('purchase_number')}"})
+
+    ledger.sort(key=lambda x: x.get("date") or "")
+    payments_out.sort(key=lambda x: x.get("date") or "", reverse=True)
+    invoices_out.sort(key=lambda x: x.get("date") or "", reverse=True)
+    monthly_list = sorted(monthly.values(), key=lambda x: x["month"])
+
+    return {
+        "supplier": {"id": supplier.get("id"), "name": supplier.get("name"),
+                     "company_name": supplier.get("company_name"), "phone": supplier.get("phone")},
+        "summary": {
+            "total_debit": total_debit,
+            "total_credit": total_credit,
+            "total_remaining": round(max(total_debit - total_credit, 0), 2),
+            "invoices_count": len(invoices_out),
+        },
+        "invoices": invoices_out,
+        "payments": payments_out,
+        "monthly": monthly_list,
+        "ledger": ledger,
+    }
 
 
 

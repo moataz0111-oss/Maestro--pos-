@@ -178,6 +178,10 @@ export default function HR() {
   const [paymentDialog, setPaymentDialog] = useState(null); // {employee_id, employee_name, suggested_amount}
   const [paymentForm, setPaymentForm] = useState({ amount: '', notes: '', payment_method: 'cash' });
   const [paymentSubmitting, setPaymentSubmitting] = useState(false);
+  // 💰 نموذج صرف مستحقات إنهاء الخدمة
+  const [settlementDialog, setSettlementDialog] = useState(null);
+  const [settlementForm, setSettlementForm] = useState({ amount: '', payment_method: 'cash', payment_date: new Date().toISOString().split('T')[0], notes: '' });
+  const [settlementSubmitting, setSettlementSubmitting] = useState(false);
   // 📜 سجل دفعات الموظف
   const [historyDialog, setHistoryDialog] = useState(null); // {employee_id, employee_name}
   const [historyData, setHistoryData] = useState([]);
@@ -1052,19 +1056,40 @@ export default function HR() {
     w.document.close();
   };
 
-  // صرف مستحقات إنهاء الخدمة من خزينة المالك حسب فرع الموظف
-  const handleTerminatePayout = async (emp) => {
-    if (!window.confirm(t('صرف المستحقات وإنهاء خدمات') + ` "${emp.name}" ` + t('من خزينة المالك حسب فرعه؟'))) return;
+  // صرف مستحقات إنهاء الخدمة من خزينة المالك حسب فرع الموظف — يفتح نموذجاً لإدخال المبلغ/الطريقة/التاريخ
+  const handleTerminatePayout = (emp) => {
+    setSettlementForm({
+      amount: String(emp.settlement_preview || emp.settlement_amount || ''),
+      payment_method: 'cash',
+      payment_date: new Date().toISOString().split('T')[0],
+      notes: ''
+    });
+    setSettlementDialog(emp);
+  };
+
+  const submitSettlement = async () => {
+    if (!settlementDialog) return;
+    setSettlementSubmitting(true);
     try {
       const token = localStorage.getItem('token');
-      const res = await axios.post(`${API}/employees/${emp.id}/terminate-payout`, {}, { headers: { Authorization: `Bearer ${token}` } });
+      const body = {
+        amount: settlementForm.amount ? parseFloat(settlementForm.amount) : null,
+        payment_method: settlementForm.payment_method,
+        payment_date: settlementForm.payment_date,
+        notes: settlementForm.notes
+      };
+      const res = await axios.post(`${API}/employees/${settlementDialog.id}/terminate-payout`, body, { headers: { Authorization: `Bearer ${token}` } });
       toast.success(`${t('تم صرف المستحقات')}: ${formatPrice(res.data?.amount || 0)} — ${res.data?.branch_name || ''}`);
+      const emp = settlementDialog;
+      setSettlementDialog(null);
       if (window.confirm(t('هل تريد طباعة إيصال المخالصة النهائية؟'))) {
         printSettlementReceipt(emp, res.data);
       }
       fetchData();
     } catch (error) {
       toast.error(error?.response?.data?.detail || t('فشل صرف المستحقات'));
+    } finally {
+      setSettlementSubmitting(false);
     }
   };
 
@@ -5418,6 +5443,55 @@ export default function HR() {
         </Dialog>
 
         {/* 💰 Dialog: صرف دفعة من الراتب */}
+        {/* 💰 نموذج صرف مستحقات إنهاء الخدمة (بدل نافذة التأكيد) */}
+        <Dialog open={!!settlementDialog} onOpenChange={(o) => !o && setSettlementDialog(null)}>
+          <DialogContent className="max-w-md" data-testid="settlement-payout-dialog">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <DollarSign className="h-5 w-5 text-emerald-500" />
+                {t('صرف مستحقات إنهاء الخدمة')}
+              </DialogTitle>
+            </DialogHeader>
+            {settlementDialog && (
+              <div className="space-y-3 py-2">
+                <div className="rounded-lg p-3 bg-emerald-500/10 border border-emerald-500/30 text-sm">
+                  <p>{t('الموظف')}: <span className="font-bold">{settlementDialog.name}</span></p>
+                  {settlementDialog.branch_name && <p className="text-xs text-muted-foreground mt-1">🏪 {t('الفرع')}: {settlementDialog.branch_name}</p>}
+                  <p className="text-xs text-muted-foreground mt-1">{t('المستحق المقترح:')} {formatPrice(settlementDialog.settlement_preview || 0)}</p>
+                </div>
+                <div>
+                  <Label>{t('المبلغ')} *</Label>
+                  <Input type="number" value={settlementForm.amount} onChange={(e) => setSettlementForm({ ...settlementForm, amount: e.target.value })} data-testid="settlement-amount-input" />
+                </div>
+                <div>
+                  <Label>{t('تاريخ الصرف')} *</Label>
+                  <Input type="date" value={settlementForm.payment_date} onChange={(e) => setSettlementForm({ ...settlementForm, payment_date: e.target.value })} data-testid="settlement-date-input" />
+                </div>
+                <div>
+                  <Label>{t('طريقة الدفع')} *</Label>
+                  <Select value={settlementForm.payment_method} onValueChange={(v) => setSettlementForm({ ...settlementForm, payment_method: v })}>
+                    <SelectTrigger data-testid="settlement-method-select"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="cash">{t('نقدي')}</SelectItem>
+                      <SelectItem value="bank_withdrawal">{t('سحب بنكي')}</SelectItem>
+                      <SelectItem value="card">{t('بطاقة')}</SelectItem>
+                      <SelectItem value="zain_cash">{t('زين كاش')}</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <p className="text-xs text-amber-600">⚠️ {t('سيُخصم المبلغ من خزينة المالك حسب فرع الموظف، وتُنهى خدماته.')}</p>
+              </div>
+            )}
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setSettlementDialog(null)}>{t('إلغاء')}</Button>
+              <Button onClick={submitSettlement} disabled={settlementSubmitting} className="bg-emerald-600 hover:bg-emerald-700 text-white" data-testid="settlement-submit-btn">
+                {settlementSubmitting ? t('جارٍ الصرف...') : t('تأكيد الصرف')}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+
         <Dialog open={!!paymentDialog} onOpenChange={(o) => !o && setPaymentDialog(null)}>
           <DialogContent className="max-w-md" data-testid="salary-payment-dialog">
             <DialogHeader>

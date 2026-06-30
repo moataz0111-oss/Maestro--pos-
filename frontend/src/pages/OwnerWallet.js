@@ -93,6 +93,7 @@ export default function OwnerWallet() {
     recent_transactions: []
   });
   const [deposits, setDeposits] = useState([]);
+  const [shiftBranchReport, setShiftBranchReport] = useState(null);
   const [withdrawals, setWithdrawals] = useState([]);
   const [profitTransfers, setProfitTransfers] = useState([]);
   const [profitWithdrawals, setProfitWithdrawals] = useState([]);
@@ -306,6 +307,11 @@ export default function OwnerWallet() {
       setProfitWithdrawals(profitWithdrawalsRes.data);
       setMonthlyClosings(closingsRes.data);
       setPaymentMethods(Array.isArray(methodsRes.data) ? methodsRes.data : []);
+      // تقرير توزيع إيداعات الشفت على الفروع (للتحقق)
+      try {
+        const sr = await axios.get(`${API}/owner-wallet/shift-deposit-branch-status`);
+        setShiftBranchReport(sr.data);
+      } catch (e) { /* ليس حرجاً */ }
     } catch (error) {
       console.error('Failed to fetch wallet data:', error);
       toast.error(t('فشل في جلب البيانات'));
@@ -492,6 +498,11 @@ export default function OwnerWallet() {
     card_sales: t('مبيعات بطاقة'),
     other: t('أخرى')
   };
+
+  // حل اسم الفرع من القائمة كحل احتياطي للسجلات القديمة التي لا تخزّن branch_name
+  const branchMap = {};
+  (branches || []).forEach(b => { if (b && b.id) branchMap[b.id] = b.name; });
+  const resolveBranch = (tx) => (tx && (tx.branch_name || branchMap[tx.branch_id])) || '';
 
   const categoryLabels = {
     transfer: t('تحويل بنكي'),
@@ -1133,6 +1144,41 @@ export default function OwnerWallet() {
           </Dialog>
         </div>
 
+        {/* تقرير توزيع إيداعات نقد الشفت على الفروع (للتحقق من الإصلاح) */}
+        {shiftBranchReport && shiftBranchReport.total_count > 0 && (
+          <Card className="mb-4 border-blue-500/30" data-testid="shift-deposit-branch-report">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-base flex items-center gap-2">
+                🏪 {t('توزيع إيداعات نقد الشفت على الفروع')}
+                <span className="text-xs font-normal text-muted-foreground">
+                  ({shiftBranchReport.total_count} {t('إيداع')})
+                </span>
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
+                {(shiftBranchReport.branches || []).map((b) => (
+                  <div key={b.branch_id} className="rounded-lg border p-2 text-sm" data-testid={`shift-branch-${b.branch_id}`}>
+                    <p className="font-medium truncate">{b.branch_name}</p>
+                    <p className="text-xs text-muted-foreground">{b.count} {t('إيداع')} • {formatPrice(b.total)}</p>
+                  </div>
+                ))}
+              </div>
+              {shiftBranchReport.undetermined && shiftBranchReport.undetermined.count > 0 ? (
+                <div className="mt-2 rounded-lg border border-red-500/40 bg-red-500/10 p-2 text-sm text-red-600" data-testid="shift-undetermined-warning">
+                  ⚠️ {t('بقي بلا فرع (غير محدد):')} {shiftBranchReport.undetermined.count} {t('إيداع')} • {formatPrice(shiftBranchReport.undetermined.total)}
+                  <span className="block text-xs mt-1">{t('أبلغني لمعالجتها يدوياً.')}</span>
+                </div>
+              ) : (
+                <div className="mt-2 rounded-lg border border-green-500/40 bg-green-500/10 p-2 text-sm text-green-600" data-testid="shift-all-resolved">
+                  ✅ {t('كل إيداعات الشفت مُخصّصة لفروعها الصحيحة.')}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        )}
+
+
         {/* التبويبات */}
         <Tabs defaultValue="transactions">
           <TabsList className="grid grid-cols-3 w-full max-w-md">
@@ -1181,7 +1227,7 @@ export default function OwnerWallet() {
                                   <p className="font-medium text-emerald-700 dark:text-emerald-400">{formatPrice(deposit.amount)}</p>
                                   <p className="text-xs text-muted-foreground">{sourceLabels[deposit.source]} • {formatDate(deposit.date)}</p>
                                   {deposit.description && <p className="text-xs text-blue-600 dark:text-blue-400 mt-1">📝 {deposit.description}</p>}
-                                  {deposit.branch_name && <p className="text-xs text-purple-600 dark:text-purple-400">🏪 {t('الفرع')}: {deposit.branch_name}</p>}
+                                  {resolveBranch(deposit) && <p className="text-xs text-purple-600 dark:text-purple-400">🏪 {t('الفرع')}: {resolveBranch(deposit)}</p>}
                                   {deposit.external_source && <p className="text-xs text-orange-600 dark:text-orange-400">📦 {t('مصدر خارجي')}: {deposit.external_source}</p>}
                                 </div>
                               </div>
@@ -1247,7 +1293,7 @@ export default function OwnerWallet() {
                             <div>
                               <p className="font-medium text-rose-700 dark:text-rose-400">{formatPrice(withdrawal.amount)}</p>
                               <p className="text-xs text-muted-foreground">{withdrawal.beneficiary} • {categoryLabels[withdrawal.category]}</p>
-                              {withdrawal.branch_name && <p className="text-xs text-purple-600 dark:text-purple-400">🏪 {t('الفرع')}: {withdrawal.branch_name}</p>}
+                              {resolveBranch(withdrawal) && <p className="text-xs text-purple-600 dark:text-purple-400">🏪 {t('الفرع')}: {resolveBranch(withdrawal)}</p>}
                               {withdrawal.external_source && <p className="text-xs text-orange-600 dark:text-orange-400">📦 {t('مصدر خارجي')}: {withdrawal.external_source}</p>}
                               <p className="text-xs text-muted-foreground">{formatDate(withdrawal.date)}</p>
                               {withdrawal.description && <p className="text-xs text-blue-600 dark:text-blue-400 mt-1">📝 {withdrawal.description}</p>}
@@ -1430,7 +1476,7 @@ export default function OwnerWallet() {
                             <p className="font-medium">{formatPrice(transaction.amount)}</p>
                             <p className="text-xs text-muted-foreground">{transactionTypeLabels[transaction.type] || transaction.type}</p>
                             {transaction.description && <p className="text-xs text-blue-600 dark:text-blue-400 mt-1">📝 {transaction.description}</p>}
-                            {transaction.branch_name && <p className="text-xs text-purple-600 dark:text-purple-400">🏪 {t('الفرع')}: {transaction.branch_name}</p>}
+                            {resolveBranch(transaction) && <p className="text-xs text-purple-600 dark:text-purple-400">🏪 {t('الفرع')}: {resolveBranch(transaction)}</p>}
                             {transaction.source && <p className="text-xs text-green-600 dark:text-green-400">💰 {t('المصدر')}: {sourceLabels[transaction.source] || transaction.source}</p>}
                           </div>
                         </div>

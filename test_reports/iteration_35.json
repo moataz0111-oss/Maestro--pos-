@@ -108,7 +108,7 @@
   },
   
   "test_credentials": {
-    "api_url": "https://secure-inventory-pos.preview.emergentagent.com",
+    "api_url": "https://offline-pos-audit.preview.emergentagent.com",
     "owner": {
       "email": "owner@maestroegp.com",
       "password": "owner123",

@@ -196,6 +196,40 @@ async def get_wallet_summary(current_user: dict = Depends(get_current_user)):
     }
 
 
+@router.get("/shift-deposit-branch-status")
+async def shift_deposit_branch_status(current_user: dict = Depends(get_current_user)):
+    """تقرير توزيع إيداعات نقد الشفت على الفروع + كم بقي 'غير محدد' (للتحقق بعد الإصلاح)."""
+    if current_user.get("role") not in ["super_admin", "admin", "manager"]:
+        raise HTTPException(status_code=403, detail="غير مصرح")
+    db = get_database()
+    tenant_id = get_user_tenant_id(current_user)
+    query = {"source": "shift_cash"}
+    if tenant_id:
+        query["tenant_id"] = tenant_id
+    deps = await db.owner_deposits.find(query, {"_id": 0, "branch_id": 1, "branch_name": 1, "amount": 1}).to_list(100000)
+    branches: dict = {}
+    undetermined = {"count": 0, "total": 0.0}
+    for d in deps:
+        bid = d.get("branch_id")
+        amt = d.get("amount", 0) or 0
+        if not bid:
+            undetermined["count"] += 1
+            undetermined["total"] = round(undetermined["total"] + amt, 2)
+            continue
+        e = branches.setdefault(bid, {"branch_id": bid, "branch_name": d.get("branch_name") or "—", "count": 0, "total": 0.0})
+        if d.get("branch_name") and e["branch_name"] == "—":
+            e["branch_name"] = d.get("branch_name")
+        e["count"] += 1
+        e["total"] = round(e["total"] + amt, 2)
+    return {
+        "branches": sorted(branches.values(), key=lambda x: -x["total"]),
+        "undetermined": undetermined,
+        "total_count": len(deps),
+        "total_amount": round(sum((d.get("amount", 0) or 0) for d in deps), 2),
+    }
+
+
+
 @router.get("/payment-methods")
 async def get_payment_methods(current_user: dict = Depends(get_current_user)):
     """قائمة طرق الدفع غير النقدية المحفوظة (تظهر تلقائياً عند الإيداع/السحب)."""

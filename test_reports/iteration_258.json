@@ -1,0 +1,31 @@
+{
+  "summary": "iter258 — Verified BUG FIX (shift-cash branch attribution) and NEW FEATURE (supplier-statement print) end-to-end. Backend 7/7 PASS via /app/backend/tests/test_shift_cash_branch_iter258.py (junit at /app/test_reports/pytest/iter258.xml). Full lifecycle drives POST /api/shifts/open-for-cashier → POST /api/shifts/{id}/close → POST /api/reports/cash-register-closing/{id}/receive and ASSERTS the created owner_deposit (source=shift_cash) carries non-null branch_id AND branch_name matching the shift's branch (bug fix verified). RBAC: bogus id→404, cashier→403. Idempotency: 2nd receive on already-received shift→400. Supplier regression also verified: /account summary returns total_debit=800000 as expected, /pay reduces remaining correctly, cashier→403. Frontend Playwright run (extended splash wait) successfully reached the Suppliers tab; opened detail dialog for مورد اختبار and CONFIRMED data-testid=detail-print-btn, detail-month-filter, detail-year-filter all present. Clicking print produced NO console/page errors (window.open mocked in test to avoid popup). Ledger table renders 4 rows (2 invoices + 2 payments), monthly chart renders with May/June bars. supplier-pay-dialog opens with amount, date, method, notes inputs (cancel/confirm buttons visible). Event propagation issue raised in iter257 review (card body open vs pay-partial click) is NOT a bug in practice — pay-partial button now opens only the pay dialog, not the detail dialog underneath.",
+  "backend_issues": { "critical": [], "minor": [] },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_shift_cash_branch_iter258.py",
+    "/app/test_reports/pytest/iter258.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "shifts_routes.py POST /api/shifts (line 140 open_shift) does NOT set tenant_id on the created shift document, while POST /api/shifts/open and /api/shifts/open-for-cashier do. This creates a tenant-leak/orphaning risk for any frontend that still calls POST /api/shifts directly — receive_shift_cash filters by tenant_id and will 404 such shifts. Recommend adding `if tenant_id: shift_doc['tenant_id'] = tenant_id` to open_shift.",
+    "receive_shift_cash branch fallback chain (shift -> closing -> users.branch_id -> employees.branch_id) is correct and covers the original bug. Consider one more fallback: if still no branch_id, default to the FIRST branch for the tenant_id rather than null, to absolutely prevent future 'غير محدد' grouping.",
+    "iter257 flag re-checked: PurchasesPage.js pay-partial button correctly stops propagation (event does NOT bubble up to the supplier card click handler) — verified via Playwright. No action needed.",
+    "printSupplierStatement (PurchasesPage.js line 270) uses raw template-literal HTML injection of supplier name, period, ledger description. Low risk (RTL Arabic content from own DB), but consider escaping `detailData.supplier?.name` and ledger `description` fields before interpolation to be XSS-safe if descriptions ever come from untrusted source."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_shift_cash_branch_iter258.py",
+    "/app/test_reports/iteration_258.json"
+  ],
+  "success_rate": { "backend": "100% (7/7)", "frontend": "100% — all data-testids present, print click no error, pay dialog opens" },
+  "test_credentials": "admin@maestroegp.com/admin123 & cashier1@maestroegp.com/cash123 — both verified",
+  "seed_data_creation": "Created an open->closed->received shift for the first cashier in the first branch (tenant=default) plus one owner_deposit (source=shift_cash, 100000 IQD) tagged with that branch. Also paid 300000 IQD to supplier 9a383359-e6fe-4982-9df7-3eea34e181d2 as part of the supplier regression — remaining now 200000 IQD (was 500000 before this run). If a clean state is needed for the next iteration, main agent can reset via direct DB or by toggling iter257's reset script.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "iter258 fully validated both items. Test file test_shift_cash_branch_iter258.py is fully idempotent (safely re-runnable). NOTE: supplier 9a383359-e6fe-4982-9df7-3eea34e181d2 remaining is now 200,000 IQD (after this iteration's 300k payment). The full-lifecycle shift test creates a fresh shift+deposit each run — these accumulate in owner_deposits but do no harm. Splash overlay issue from iter257 was solved here by waiting >13 seconds between navigations; future agents should use the same pattern.",
+  "rca_of_the_issue": "Original bug (shift-cash deposits grouped under 'غير محدد' branch): receive_shift_cash inserted owner_deposit without resolving branch_id. Fix in /app/backend/routes/shifts_routes.py:758-770 now chains branch_id from shift -> closing -> cashier user.branch_id -> cashier employee.branch_id, and looks up branch_name if missing. Verified by full lifecycle test asserting the created owner_deposit has branch_id == shift.branch_id and branch_name is non-empty. Forward fix is sound; legacy 'غير محدد' deposits handled by backfill_shift_cash_deposit_branch_v2 (already verified manually by main agent per request)."
+}

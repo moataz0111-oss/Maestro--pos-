@@ -1,0 +1,26 @@
+{
+  "summary": "iter259 — Backend-only re-verification of the shift-cash branch attribution fix using the exact seeded scenario in the request (synthetic branch 'tb-jad'/Al-Jadriya, cashier user 'tu-c', shift 'ts-1' WITH NO branch_id AND NO branch_name). Test creates the docs via pymongo, calls POST /api/reports/cash-register-closing/ts-1/receive as admin with {received_amount:100000}, asserts response branch_name=='Al-Jadriya', then verifies the persisted owner_deposit (source=shift_cash, ref_closing_id=ts-1) has branch_id=='tb-jad' and branch_name=='Al-Jadriya'. ALL 7 tests PASS. Teardown fully removes the seeded branch/user/shift/closing/deposit.",
+  "backend_issues": { "critical": [], "minor": [] },
+  "frontend_issues": { "ui_bugs": [], "integration_issues": [], "design_issues": [] },
+  "test_report_links": [
+    "/app/backend/tests/test_shift_cash_branch_iter259.py",
+    "/app/test_reports/pytest/iter259.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "shifts_routes.py receive_shift_cash branch fallback chain (shift -> closing -> stored branch_name -> users.branch_id by cashier_id -> employees.branch_id by cashier_id -> users.full_name -> employees.name) is exercised end-to-end here and works correctly. The cashier_id->users.branch_id path resolves Al-Jadriya for shift docs with NULL branch_id/branch_name.",
+    "Repeat carryover from iter258: receive_shift_cash filters source shift by {id, tenant_id}; the seeded shift uses tenant_id='default' which matches the admin's tenant — confirmed by 200 response. If a tenant ever stores its admin under a non-'default' tenant_id, the seeded scenario would 404. Not a regression — just a configuration nuance.",
+    "Minor (carried over from iter258, NOT introduced now): consider final fallback to FIRST branch for the tenant when all chain hops fail, to absolutely prevent NULL branch_id even in pathological cases (orphan cashier_id, no full_name match)."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_shift_cash_branch_iter259.py",
+    "/app/test_reports/iteration_259.json"
+  ],
+  "success_rate": { "backend": "100% (7/7)", "frontend": "not tested (backend-only request)" },
+  "test_credentials": "admin@maestroegp.com/admin123 and cashier1@maestroegp.com/cash123 — both verified working",
+  "seed_data_creation": "Seeded {branches:tb-jad/Al-Jadriya, users:tu-c (كاشير اختبار, role=cashier, branch_id=tb-jad), shifts:ts-1 (branch_id=NULL, branch_name=NULL, cashier_id=tu-c, closing_cash=100000)} via pymongo at module scope. Verified ALL seeded docs (and the created owner_deposit ref_closing_id=ts-1) are removed by teardown — confirmed via mongosh countDocuments=0 after run.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "iter259 fully validated the cashier_id branch-fallback path of receive_shift_cash. Test is fully self-contained, idempotent, and cleans up after itself. RBAC (cashier 403, bogus 404), employees-list RBAC (iter255 still active), and supplier regression are all green. No outstanding action items.",
+  "rca_of_the_issue": "Original bug: owner_deposit from receive_shift_cash carried branch_name='غير محدد'/NULL when the shift document lacked branch_id. Fix in /app/backend/routes/shifts_routes.py:758-780 chains shift.branch_id -> closing.branch_id -> branch lookup by stored branch_name -> users.branch_id by cashier_id -> employees.branch_id by cashier_id -> users.full_name by cashier_name -> employees.name by cashier_name. Iter259 reproduces the exact pathological seed (shift with NULL branch_id AND NULL branch_name) and asserts the cashier_id->users.branch_id hop correctly recovers Al-Jadriya. Forward fix confirmed. Legacy 'غير محدد' deposits handled by backfill_shift_cash_deposit_branch_v2 migration (already manually verified by main agent per request: 4 scanned / 2 fixed)."
+}

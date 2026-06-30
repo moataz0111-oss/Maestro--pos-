@@ -1118,3 +1118,18 @@ NOT MOUNTED (dead code, ignore): routes/auth_routes.py, routes/customer_menu.py.
 **التحقق:** testing_agent iter255 (58/59) + iter256 (8/8 = 100%، الثغرة الأخيرة مُغلقة). كل ثغرات "بلا توكن" الحرجة في تقرير الاختراق (28 يونيو) كانت أصلاً مُغلقة ومنشورة على الإنتاج (تحقق حيّ 403).
 **⚠️ يتطلب "Save to GitHub" + إعادة نشر لوصول RBAC للإنتاج maestroegp.com.**
 **متبقٍّ (بانتظار المستخدم على Namecheap):** تفعيل 2FA (مُطفأ حالياً)، DNSSEC، سجلات CAA، Registrar Lock.
+
+## SUPPLIER PAYMENTS + TREASURY (30 يونيو 2026) ✅ مُختبر
+**طلب المستخدم:** نظام مدفوعات موردين كامل + إصلاح تخصيص الفرع لإيداعات الشفت + نموذج صرف الرواتب.
+**Backend (inventory_system.py):**
+- `POST /api/suppliers/{id}/pay` {amount,payment_method,payment_date,notes}: يوزّع على فواتير المورد الأقدم أولاً، يُخصم من **إجمالي** خزينة المالك (سحب واحد category=supplier_payment). أدوار: admin/super_admin/manager.
+- `POST /api/suppliers/{id}/settle-dues`: تصفير المستحقات كمدفوعة **بدون** خصم من الخزينة (no_treasury=true). owner/admin فقط.
+- `GET /api/suppliers/{id}/account?start&end`: كشف حساب (مدين/دائن/متبقي + invoices + payments + monthly + ledger).
+- `pay_purchase_invoice` + `terminate_payout` (payroll): أصبحا يقبلان payment_date/payment_method body.
+**Backend (shifts_routes.py + server.py):** `receive_shift_cash` يجلب اسم الفرع من branch_id؛ migration `backfill_shift_cash_deposit_branch_v1` يصلح إيداعات الشفت القديمة على الإنتاج.
+**Frontend:**
+- `PurchasesPage.js` تبويب الموردين: بطاقة بـ3 حقول (المستحقات دائماً / المدفوع إن وُجد / المتبقي إن وُجد) + أزرار تسديد دفعة/الكل (نموذج: مبلغ+تاريخ+طريقة) + تصفير (للمالك). البطاقة قابلة للضغط → كشف حساب: ملخص مدين/دائن، رسم بياني شهري (recharts)، جدول دائن/مدين، فلاتر شهر/سنة/من-إلى.
+- `HR.js`: صرف مستحقات إنهاء الخدمة صار نموذجاً (مبلغ/تاريخ/طريقة) بدل confirm.
+- `OwnerWallet.js`: resolveBranch() لعرض اسم الفرع للسجلات القديمة.
+**التحقق:** testing_agent iter257 (backend 7/7 pass) + لقطات يدوية تؤكد البطاقة وكشف الحساب والرسم البياني والفلاتر.
+**⚠️ يتطلب Save to GitHub + نشر لوصول الميزة للإنتاج (الـmigration ستُصلح إيداعات الشفت تلقائياً عند الإقلاع).**

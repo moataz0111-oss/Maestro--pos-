@@ -755,8 +755,38 @@ async def receive_shift_cash(closing_id: str, data: ReceiveShiftCash, current_us
 
     now = datetime.now(timezone.utc)
     deposit_date = source.get("business_date") or (source.get("closed_at") or source.get("ended_at") or now.isoformat())[:10]
-    branch_id = source.get("branch_id")
+    # تحديد الفرع بقوة (لمنع "غير محدد"): الشفت ← الإغلاق ← اسم الفرع المخزّن ← فرع الكاشير (id ثم الاسم)
+    branch_id = (shift or {}).get("branch_id") or (closing or {}).get("branch_id")
     branch_name = source.get("branch_name") or ""
+    cashier_id = source.get("cashier_id")
+    cashier_name = source.get("cashier_name")
+    if not branch_id and branch_name:
+        _bn = await db.branches.find_one({"name": branch_name, **tq}, {"_id": 0, "id": 1})
+        branch_id = (_bn or {}).get("id")
+    if not branch_id and cashier_id:
+        _u = await db.users.find_one({"id": cashier_id}, {"_id": 0, "branch_id": 1})
+        branch_id = (_u or {}).get("branch_id")
+        if not branch_id:
+            _e = await db.employees.find_one({"id": cashier_id}, {"_id": 0, "branch_id": 1})
+            branch_id = (_e or {}).get("branch_id")
+    if not branch_id and cashier_name:
+        _u = await db.users.find_one({"full_name": cashier_name, **tq}, {"_id": 0, "branch_id": 1})
+        branch_id = (_u or {}).get("branch_id")
+        if not branch_id:
+            _e = await db.employees.find_one({"name": cashier_name, **tq}, {"_id": 0, "branch_id": 1})
+            branch_id = (_e or {}).get("branch_id")
+    if branch_id and not branch_name:
+        _br = await db.branches.find_one({"id": branch_id}, {"_id": 0, "name": 1})
+        branch_name = (_br or {}).get("name") or ""
+
+    # 🚫 حارس صارم: لا يُسمح بأي إيداع نقدي لشفت بدون فرع محدد (id + اسم)
+    # يمنع تجميع الإيداعات تحت "غير محدد" ويحافظ على دقة محاسبة خزينة المالك.
+    if not branch_id or not branch_name:
+        raise HTTPException(
+            status_code=400,
+            detail="تعذّر تحديد الفرع الخاص بهذا الشفت، لذا لا يمكن استلام النقد أو إيداعه. الرجاء ربط الكاشير/الشفت بفرع صحيح أولاً ثم إعادة المحاولة."
+        )
+
     receiver = data.received_by or current_user.get("full_name") or current_user.get("username")
 
     deposit_id = None

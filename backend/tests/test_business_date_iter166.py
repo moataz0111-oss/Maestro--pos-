@@ -12,7 +12,7 @@ from datetime import datetime, timezone
 import pytest
 import requests
 
-BASE_URL = os.environ.get("REACT_APP_BACKEND_URL", "https://secure-inventory-pos.preview.emergentagent.com").rstrip("/")
+BASE_URL = os.environ.get("REACT_APP_BACKEND_URL", "https://offline-pos-audit.preview.emergentagent.com").rstrip("/")
 ADMIN_EMAIL = "hanialdujaili@gmail.com"
 ADMIN_PASSWORD = "Hani@2024"
 

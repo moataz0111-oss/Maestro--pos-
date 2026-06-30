@@ -4511,3 +4511,22 @@ for ing in recipe:
 - تحويل شامل: 140 توكن رمادي/سليت داكن عبر 21 ملف (pages+components عدا ui) → كحلي موحّد، مع الحفاظ على الذهبي. 
 - SW cache: sw-offline v27, sw-customer v15, sw-driver v13.
 - ملاحظة: أُعيد ضبط tenant=default (أزيلت enabled_features التجريبية) كي يرى حساب الإدارة كل الميزات.
+
+## 2026-06-30 — إصلاح تخصيص فرع إيداعات نقد الشفت (عميل: غير محدد → Al-Jadriya) ✅
+- **المشكلة:** بعد استلام نقد الشفت، اسم فرع الإيداع يتحول إلى "غير محدد" بدل الفرع الصحيح.
+- **الإصلاح (shifts_routes.py receive_shift_cash):** سلسلة تحديد الفرع: shift.branch_id ← closing.branch_id ← branch_name المخزّن (بحث بالاسم) ← فرع الكاشير (cashier_id ثم cashier_name عبر users + employees).
+- **migration (server.py backfill_shift_cash_deposit_branch_v2):** يُصلح كل الإيداعات القديمة على الإنتاج تلقائياً عند الإقلاع بنفس السلسلة.
+- **التحقق:** testing_agent iter259 (backend 7/7 = 100%) + اختبار يدوي للـmigration (استعاد Al-Jadriya عبر اسم الكاشير وعبر اسم الفرع).
+- **⚠️ يتطلب Save to GitHub + نشر** ليُشغَّل الـmigration على maestroegp.com ويُصلح بيانات العميل.
+
+## 2026-06-30 — تقرير توزيع إيداعات الشفت على الفروع ✅
+- Backend: GET /api/owner-wallet/shift-deposit-branch-status (admin/manager فقط، cashier→403) يرجع توزيع إيداعات shift_cash لكل فرع + عدّاد "غير محدد".
+- Frontend: بطاقة في خزينة المالك تعرض التوزيع + تحذير أحمر إن بقي إيداع بلا فرع، أو تأكيد أخضر "كل الإيداعات مخصّصة".
+- التحقق: curl (200/403) + لقطة شاشة تؤكد العرض.
+
+## 2026-06-30 — حارس صارم: منع إيداع نقد الشفت بلا فرع (P0) ✅
+- **المتطلب:** "لا أريد أي إيداع شفت بلا فرع، ولا أريد أي خطأ يجمع تحت غير محدد".
+- **الإصلاح (shifts_routes.py receive_shift_cash):** بعد كل محاولات استنتاج الفرع، إذا بقي branch_id أو branch_name فارغاً → raise HTTPException(400) برسالة عربية واضحة، قبل أي كتابة في قاعدة البيانات. الشفت المرفوض يبقى received_at=None (قابل لإعادة المحاولة بعد ربطه بفرع).
+- **Frontend (Reports.js handleReceiveShift):** يعرض الخطأ عبر toast.error(detail) — لا تغيير مطلوب.
+- **التحقق:** curl حالتين — (أ) شفت بلا فرع → 400، 0 إيداعات، الشفت غير معلّم مُستلم؛ (ب) شفت بفرع صحيح → 200 + إيداع في "الفرع الرئيسي". تم تنظيف بيانات الاختبار.
+- **⚠️ يتطلب Save to GitHub + نشر** لتفعيله على maestroegp.com.
