@@ -241,7 +241,7 @@ PRODUCTS_DIR.mkdir(exist_ok=True)
 CATEGORIES_DIR = IMAGES_DIR / "categories"
 CATEGORIES_DIR.mkdir(exist_ok=True)
 
-app = FastAPI(title="Maestro EGP API", version="2.0.0")
+app = FastAPI(title="Maestro EGP API", version="2.0.0", docs_url=None, redoc_url=None, openapi_url=None)
 api_router = APIRouter(prefix="/api")
 security = HTTPBearer()
 
@@ -273,7 +273,7 @@ async def _is_ip_blocked(ip):
 # ==================== الحظر التلقائي للمخترقين (Auto-Ban) ====================
 from collections import deque as _deque, defaultdict as _ddict
 _AUTO_OFFENSES = _ddict(_deque)        # ip -> طوابع زمنية للمحاولات المشبوهة
-_AUTO_BAN_THRESHOLD = 20               # عدد المحاولات المشبوهة
+_AUTO_BAN_THRESHOLD = 5                 # عدد المحاولات المشبوهة
 _AUTO_BAN_WINDOW = 300                 # خلال 5 دقائق
 _AUTO_BAN_ENABLED = True
 
