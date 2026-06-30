@@ -394,6 +394,65 @@ async def security_audit_middleware(request: Request, call_next):
         pass
     return response
 
+# ==================== RBAC مركزي: منع الأدوار الأدنى من البيانات الحساسة ====================
+# طبقة صلاحيات موحّدة تُطبَّق على كل النقاط الحساسة (مالية/موارد بشرية/تكاليف/تقارير/موردين)
+# تمنع الكاشير/الكابتن/الكول-سنتر/السائق من قراءة بيانات لا تخصّهم، مع إبقاء الأدوار التشغيلية تعمل.
+import re as _re_rbac
+
+_MGMT_ROLES = {"super_admin", "admin", "manager"}
+_INV_ROLES = _MGMT_ROLES | {"warehouse_keeper", "manufacturer"}
+_PURCH_ROLES = _MGMT_ROLES | {"purchasing", "warehouse_keeper"}
+
+# (نمط المسار, الأدوار المسموح لها). أول تطابق يُحسم.
+_RBAC_RULES = [
+    (_re_rbac.compile(r"^/api/employees(/|$)"), _MGMT_ROLES),
+    (_re_rbac.compile(r"^/api/payroll"), _MGMT_ROLES),
+    (_re_rbac.compile(r"^/api/advances"), _MGMT_ROLES),
+    (_re_rbac.compile(r"^/api/deductions"), _MGMT_ROLES),
+    (_re_rbac.compile(r"^/api/reports/"), _MGMT_ROLES | {"supervisor"}),
+    (_re_rbac.compile(r"^/api/smart-reports/"), _MGMT_ROLES | {"supervisor"}),
+    (_re_rbac.compile(r"^/api/dashboard/stats"), _MGMT_ROLES | {"supervisor"}),
+    (_re_rbac.compile(r"^/api/break-even"), _MGMT_ROLES),
+    (_re_rbac.compile(r"^/api/inventory-stats"), _INV_ROLES),
+    (_re_rbac.compile(r"^/api/inventory-settings"), _INV_ROLES),
+    (_re_rbac.compile(r"^/api/suppliers"), _PURCH_ROLES),
+    (_re_rbac.compile(r"^/api/purchases-new"), _PURCH_ROLES),
+    (_re_rbac.compile(r"^/api/purchase-requests"), _PURCH_ROLES),
+    (_re_rbac.compile(r"^/api/manufactured-products"), _INV_ROLES),
+    (_re_rbac.compile(r"^/api/manufacturing"), _INV_ROLES),
+    (_re_rbac.compile(r"^/api/warehouse-"), _INV_ROLES | {"purchasing"}),
+    (_re_rbac.compile(r"^/api/raw-materials"), _INV_ROLES | {"purchasing"}),
+]
+
+@app.middleware("http")
+async def rbac_middleware(request: Request, call_next):
+    from fastapi.responses import JSONResponse as _JR
+    try:
+        path = request.url.path
+        if request.method != "OPTIONS" and path.startswith("/api/"):
+            allowed = None
+            for rx, roles in _RBAC_RULES:
+                if rx.match(path):
+                    allowed = roles
+                    break
+            if allowed is not None:
+                role = None
+                auth = request.headers.get("Authorization", "")
+                if auth.startswith("Bearer "):
+                    try:
+                        payload = jwt.decode(auth[7:], JWT_SECRET, algorithms=[JWT_ALGORITHM])
+                        role = payload.get("role")
+                    except Exception:
+                        role = None
+                if role is None:
+                    return _JR(status_code=401, content={"detail": "غير مصرح - يلزم تسجيل دخول صالح"})
+                if role not in allowed:
+                    return _JR(status_code=403, content={"detail": "ليس لديك صلاحية للوصول لهذه البيانات"})
+    except Exception:
+        pass
+    return await call_next(request)
+
+
 # Mount static files directory
 app.mount("/uploads", StaticFiles(directory=str(UPLOAD_DIR)), name="uploads")
 app.mount("/api/uploads", StaticFiles(directory=str(UPLOAD_DIR)), name="api_uploads")
@@ -3352,7 +3411,7 @@ async def create_branch(branch: BranchCreate, current_user: dict = Depends(get_c
     del branch_doc["_id"]
     return branch_doc
 
-@api_router.get("/branches", response_model=List[BranchResponse])
+@api_router.get("/branches")
 async def get_branches(
     current_user: dict = Depends(get_current_user),
     include_inactive: bool = False,
@@ -3400,7 +3459,20 @@ async def get_branches(
         ]
     
     branches = await db.branches.find(query, {"_id": 0}).to_list(100)
-    return branches
+    # تطبيع المخرجات عبر BranchResponse (نفس سلوك الإدارة السابق) + إخفاء الحقول المالية عن غير الإدارة
+    _SENSITIVE_BRANCH_FIELDS = (
+        "rent_cost", "water_cost", "electricity_cost", "generator_cost",
+        "is_sold_branch", "buyer_name", "buyer_phone", "owner_percentage", "monthly_fee",
+    )
+    is_mgmt = user_role in [UserRole.SUPER_ADMIN, UserRole.ADMIN, UserRole.MANAGER]
+    out = []
+    for _b in branches:
+        bd = BranchResponse(**_b).model_dump()
+        if not is_mgmt:
+            for _f in _SENSITIVE_BRANCH_FIELDS:
+                bd.pop(_f, None)
+        out.append(bd)
+    return out
 
 @api_router.get("/branches/{branch_id}", response_model=BranchResponse)
 async def get_branch(branch_id: str, current_user: dict = Depends(get_current_user)):
@@ -21130,14 +21202,25 @@ async def get_customer_menu(tenant_id: str):
         {"tenant_id": tid, "is_available": {"$ne": False}},
         {
             "_id": 0, "cost": 0, "operating_cost": 0, "recipe": 0,
-            "ingredients": 0, "raw_materials": 0, "bom": 0,
+            "recipe_quantities": 0, "ingredients": 0, "raw_materials": 0, "bom": 0,
+            "raw_material_cost": 0, "raw_material_cost_after_waste": 0,
+            "production_cost": 0, "cost_before_waste": 0, "cost_after_waste": 0,
+            "unit_cost": 0, "mfg_links": 0, "manufactured_product_links": 0,
             "profit": 0, "profit_margin": 0, "cost_breakdown": 0,
             "supplier_id": 0, "supplier": 0, "wholesale_price": 0,
             "purchase_price": 0, "margin": 0
         }
     ).to_list(500)
-    
-    # جلب الفروع - فقط الفروع الحقيقية للزبون (استبعاد الأقسام الداخلية:
+
+    # تنظيف شامل دفاعي: حذف أي حقل حسّاس قد يكشف الكلفة/الربح/الوصفة/المورّد للزبون العام
+    _SENSITIVE_SUBSTR = ("cost", "profit", "recipe", "raw_material", "ingredient",
+                         "margin", "supplier", "wholesale", "purchase_price", "bom")
+    for _p in products:
+        for _k in list(_p.keys()):
+            kl = _k.lower()
+            if any(s in kl for s in _SENSITIVE_SUBSTR):
+                _p.pop(_k, None)
+
     # المطبخ المركزي/المخزن/قسم المشتريات — هذه ليست فروعاً يطلب منها الزبون)
     branches = await db.branches.find(
         {
@@ -21923,7 +22006,7 @@ async def get_menu_link(request: Request, current_user: dict = Depends(get_curre
         base_url = f"{parsed.scheme}://{parsed.netloc}"
     else:
         # fallback للـ environment variable
-        base_url = os.environ.get('REACT_APP_BACKEND_URL', 'https://pos-security-audit-1.preview.emergentagent.com')
+        base_url = os.environ.get('REACT_APP_BACKEND_URL', 'https://secure-inventory-pos.preview.emergentagent.com')
     
     menu_url = f"{base_url}/menu/{tenant.get('menu_slug', tenant_id)}"
     

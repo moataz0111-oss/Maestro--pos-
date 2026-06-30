@@ -1,0 +1,34 @@
+{
+  "summary": "Focused retest of iter255 remaining minor issue: public customer menu sensitive-substring leak (packaging_cost) + RBAC regression sanity. All 8 tests passed (8/8 = 100%). The defensive post-fetch sanitization loop at /app/backend/server.py ~line 21215-21222 successfully strips ANY product field whose key contains cost/profit/recipe/raw_material/ingredient/margin/supplier/wholesale/purchase_price/bom. RBAC unchanged and still correct.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iter256_retest.py",
+    "/app/test_reports/pytest/iter256.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "server.py is ~24.5k lines — splitting into focused modules (rbac, customer_menu, products, employees, manufactured_products, auth, settings) is strongly recommended for maintainability, but out-of-scope for this retest.",
+    "The sensitive-substring scrubber at line 21215 is a good defense-in-depth pattern; consider extracting it into a reusable helper (e.g. strip_sensitive_keys(doc)) and applying it to any other public-facing endpoint that returns product dicts."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iter256_retest.py"
+  ],
+  "success_rate": {
+    "backend": "100%",
+    "frontend": "not tested (per request: backend only)"
+  },
+  "test_credentials": "admin@maestroegp.com/admin123, cashier1@maestroegp.com/cash123 — both verified working",
+  "seed_data_creation": "none",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "iter255 had 58/59 pass; the single failure was a 'cost' substring leak in the public customer menu via field name 'packaging_cost'. iter256 confirms the fix: GET /api/customer/menu/default no longer exposes any key containing cost/profit/recipe/raw_material/margin/supplier/wholesale (verified by both recursive key scan AND raw JSON token scan). Products retain name+price. RBAC regression sanity: cashier 403 on mfg/employees, admin 200 on mfg/employees, cashier 200 on products — all PASS.",
+  "rca_of_the_issue": "RCA (resolved): Original .find() projection in get_customer_menu listed an explicit set of fields to exclude, but a product document persisted a field named 'packaging_cost' that was not in the exclusion list. Because the substring 'cost' was inside that field name, the customer-menu JSON leaked it. Mitigation: added a defensive post-fetch loop iterating each product dict and dropping any key whose lower-cased name contains one of the sensitive substrings (cost, profit, recipe, raw_material, ingredient, margin, supplier, wholesale, purchase_price, bom). Verified clean via 3 independent assertions (recursive key scan, structural shape check, raw JSON token scan)."
+}

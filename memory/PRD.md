@@ -1108,3 +1108,13 @@ NOT MOUNTED (dead code, ignore): routes/auth_routes.py, routes/customer_menu.py.
 - لوحة المالك: قسم العناوين المحظورة يعرض شارة "تلقائي" + سبب الحظر + إلغاء الحظر؛ والزر اليدوي يبقى متاحاً.
 - تم التحقق: testing_agent iter253 (حظر يدوي) + iter254 (حظر تلقائي) → backend 7/7 + frontend 100%، بلا انحدار. (sw-offline → v36)
 - ملاحظات تحصين مستقبلية (review): نقل عدّاد المخالفات + كاش المحظورين إلى Redis/Mongo عند التوسّع متعدد الـ workers؛ التحقق من عدد قفزات البروكسي في X-Forwarded-For في الإنتاج.
+
+## SECURITY (30 يونيو 2026) — طبقة صلاحيات مركزية RBAC + إغلاق ثغرات تقرير الاختراق ✅
+**طلب المستخدم:** نظام حسابي حساس — حماية قصوى، 0 ثغرات، منع تسرّب المواد/التصنيع/المخزن/الموارد البشرية/الماليات لأي دور أدنى.
+**ما تم (backend/server.py):**
+- **RBAC middleware مركزي** (~سطر 396): `_RBAC_RULES` يطابق بادئات المسارات الحساسة ويفحص دور JWT. الكاشير/الكابتن/الكول-سنتر/السائق → 403 على: employees, payroll, advances, deductions, reports/*, smart-reports/*, dashboard/stats, break-even, inventory-stats, inventory-settings, suppliers, purchases-new, purchase-requests, manufactured-products, manufacturing*, warehouse-*, raw-materials. الأدوار التشغيلية تعمل: أمين المخزن/المصنّع (مخزن+تصنيع)، المشتريات (موردين+مشتريات). الإدارة (super_admin/admin/manager) تصل لكل شيء.
+- **قائمة الزبون العامة** (get_customer_menu ~21215): حلقة تنظيف دفاعية تحذف أي حقل منتج يحوي cost/profit/recipe/raw_material/ingredient/margin/supplier/wholesale/purchase_price/bom (إضافة لإسقاط recipe_quantities في الـ projection). لم تعد تكشف الكلفة/الوصفة/المورّد.
+- **حقول الفرع المالية** (get_branches ~3414): أُزيل response_model، تُطبَّع المخرجات عبر BranchResponse ثم تُحذف rent/water/electricity/generator_cost + is_sold_branch/buyer_name/buyer_phone/owner_percentage/monthly_fee عن غير الإدارة. الإدارة ترى كل شيء.
+**التحقق:** testing_agent iter255 (58/59) + iter256 (8/8 = 100%، الثغرة الأخيرة مُغلقة). كل ثغرات "بلا توكن" الحرجة في تقرير الاختراق (28 يونيو) كانت أصلاً مُغلقة ومنشورة على الإنتاج (تحقق حيّ 403).
+**⚠️ يتطلب "Save to GitHub" + إعادة نشر لوصول RBAC للإنتاج maestroegp.com.**
+**متبقٍّ (بانتظار المستخدم على Namecheap):** تفعيل 2FA (مُطفأ حالياً)، DNSSEC، سجلات CAA، Registrar Lock.

@@ -1,0 +1,45 @@
+{
+  "summary": "iter255 — RBAC hardening verified end-to-end. Backend: 58/59 tests PASS (98.3%). All cashier BLOCK (19/19), cashier OPERATIONAL (6/6), admin sensitive access (19/19), warehouse_keeper (5/5), buyer (3/3), unauth (4/4), branch field masking for cashier (1/1) and admin visibility (1/1) — ALL PASS. Frontend smoke: cashier login → dashboard renders without crash even with /api/dashboard/stats now returning 403 (degrades gracefully, shows 0 totals). ONE failure: /api/customer/menu/default still leaks the substring 'cost' via product field 'packaging_cost' which is missing from the projection exclusion in get_customer_menu (~line 21204).",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {
+        "endpoint": "/api/customer/menu/default",
+        "issue": "Projection in get_customer_menu (server.py ~21204) excludes recipe/cost/profit/operating_cost/raw_material_cost/production_cost/unit_cost/wholesale_price/purchase_price/margin but FORGETS 'packaging_cost'. The product objects in the public menu still contain e.g. \"packaging_cost\":0.0, which leaks the substring 'cost' to anonymous customers and violates the requirement (response must not contain 'recipe', 'raw_material', 'cost', 'profit')."
+      }
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_rbac_hardening_iter255.py",
+    "/app/test_reports/pytest/iter255_results.xml"
+  ],
+  "action_items": [
+    "Add 'packaging_cost': 0 (and audit any other *_cost / *_profit fields like sale_packaging_cost, delivery_packaging_cost, packaging_extra_cost if present in products schema) to the projection inside get_customer_menu(...) in /app/backend/server.py around line 21204 so the public menu does not leak the substring 'cost'."
+  ],
+  "critical_code_review_comments": [
+    "RBAC middleware in server.py (~line 427) iterates _RBAC_RULES on every /api/* request via regex .match — fine for ~17 rules but consider precompiling a single alternation regex if rules grow, to keep per-request overhead constant.",
+    "rbac_middleware silently swallows ALL exceptions with bare try/except and returns await call_next(request). If jwt.decode or rule matching ever raises an unexpected exception, the middleware will fall through and the underlying endpoint will run UNGUARDED. Recommend logging the exception (logger.exception) AND returning 500 instead of allowing fail-open.",
+    "_RBAC_RULES rule order is significant (first match wins). '/api/warehouse-' is broad — it matches /api/warehouse-transfers (correct), but if a future route like /api/warehouse-public/menu is added, it will be auto-locked to INV_ROLES+purchasing. Document this in a comment or use more specific regexes.",
+    "Public menu projection only filters product fields; it does NOT scrub `categories`, `branches`, `restaurant` sub-documents. If any of those collections grow a 'cost' field (e.g., branch.water_cost which the masking code already strips for non-management), the customer menu would leak it — currently `branches.find(... {\"_id\":0})` projects EVERYTHING including rent_cost/water_cost/etc. for the customer menu. RECOMMEND: explicitly project only the public-safe fields for branches in get_customer_menu (id, name, name_ar, address, phone, lat, lng, is_active).",
+    "BranchResponse masking for non-management strips rent_cost/water_cost/etc., but get_customer_menu (anon, no auth) calls db.branches.find directly and bypasses that masking — combined with the projection issue above, anon users may see branch financial fields. Verify in iter256.",
+    "Cashier auto-ban risk: a freshly-logged-in cashier whose UI calls (or service worker) blindly hits /api/dashboard/stats, /api/employees, /api/inventory-stats etc. on every dashboard mount will now generate 403s every page load. If iter254's auto-ban counts these against the same IP, a legit cashier could be auto-banned. CHECK that _register_offense only counts 401/422/etc on writes and that 403 on GET from an authenticated cashier is excluded."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_rbac_hardening_iter255.py (new — 59 parametrized tests covering BLOCK/ALLOW per role + unauth + branch masking + public-menu leak)"
+  ],
+  "success_rate": {
+    "backend": "98.3% (58/59 — only public-menu cost-leak fails)",
+    "frontend": "100% (cashier login → dashboard renders without crash, /api/dashboard/stats 403 degrades gracefully)"
+  },
+  "test_credentials": "admin@maestroegp.com/admin123, cashier1@maestroegp.com/cash123, wkeeper@maestroegp.com/wkeeper123, buyer@maestroegp.com/buyer123 — all working",
+  "seed_data_creation": "None. Tests are read-only GETs.",
+  "retest_needed": true,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Re-run pytest /app/backend/tests/test_rbac_hardening_iter255.py -v after main agent adds 'packaging_cost': 0 (and audit branch sub-doc projection) to get_customer_menu projection in /app/backend/server.py ~line 21204. The failing test is test_public_menu_no_cost_leak. Also verify that anon GET /api/customer/menu/default branches[] does NOT contain rent_cost/water_cost/electricity_cost/generator_cost (currently the test does not check inside branches sub-array — strengthen it next iteration). For RBAC regression run the full 59 cases — they cover all 4 roles + unauth + branch field masking.",
+  "rca of the issue": "get_customer_menu (server.py ~21174) uses MongoDB projection to strip cost/profit/recipe/raw_material fields from products. The list at line 21204-21212 enumerates ~20 field names but missed `packaging_cost` (defined in Product model at server.py:1830 and ProductBase at 1856 as `packaging_cost: float = 0.0`). Since the projection is allowlist-by-exclusion, the missed field is returned to anonymous customers as `\"packaging_cost\":0.0`. Fix: add `\"packaging_cost\": 0` to the projection dict. Additionally consider switching to an INCLUSION projection (only return known-public fields like id/name/price/image/category_id/description) which is fail-safe."
+}
