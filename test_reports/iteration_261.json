@@ -1,0 +1,40 @@
+{
+  "summary": "Tested shift-open duplicate same-name guard on all 3 open paths and close-shift totals. 3/4 backend tests PASS: open-for-cashier guard (block dup / own / different-name-allowed) works; quick-open (/shifts/open) returns blocked=true; close_shift totals correctly count ONLY that shift_id's orders (excluded an unrelated 9999 order). 1 backend test FAILS: POST /api/shifts (open_shift) does NOT return HTTP 400 for a same-name second cashier — the guard silently fails and creates the duplicate shift.",
+  "backend_issues": {
+    "critical": [
+      {
+        "endpoint": "POST /api/shifts (open_shift)",
+        "issue": "Duplicate same-name guard does NOT trigger. First cashier's shift is opened via this endpoint but the shift doc is inserted WITHOUT a tenant_id field (see shifts_routes.py lines 195-219). Then _open_shift_conflict queries with q['tenant_id']=tenant_id and cannot find the previously-opened shift, so `other` is None and a second shift is created for a same-name different-id cashier. Reproduced: create 2 cashiers with same full_name in same branch, POST /api/shifts for each -> both return 200 (expected: 2nd returns 400 with Arabic detail 'يوجد وردية مفتوحة بالفعل...'). Note: POST /shifts/open-for-cashier and POST /shifts/open both DO set tenant_id on the shift doc, which is why they work correctly. Fix: in open_shift() add `if tenant_id: shift_doc['tenant_id'] = tenant_id` before insert_one (mirroring quick_open_shift/open_shift_for_cashier).",
+        "priority": "HIGH"
+      }
+    ],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_shift_guard_and_close.py",
+    "/app/test_reports/pytest/pytest_results.xml"
+  ],
+  "action_items": [
+    "Fix POST /api/shifts (open_shift in backend/routes/shifts_routes.py ~line 195): add tenant_id to the inserted shift_doc so _open_shift_conflict can find previously-opened shifts across the same tenant. Without this, the endpoint still allows the exact production bug (duplicate same-name shifts) when opened via POST /api/shifts."
+  ],
+  "critical_code_review_comments": [
+    "shifts_routes.py open_shift (POST /shifts) does not persist tenant_id in the shift document, unlike quick_open_shift (POST /shifts/open) and open_shift_for_cashier (POST /shifts/open-for-cashier). This inconsistency breaks the guard on this endpoint and causes tenant-scoped queries elsewhere to miss those shifts.",
+    "_open_shift_conflict queries all shifts (limit 1000) then filters in Python. For a large multi-tenant deployment this could be slow; consider indexing (tenant_id, status) and moving the name filter into the query, or at least $in on branch_id where safe.",
+    "Frontend openShiftForCashier (Dashboard.js ~line 560) correctly shows toast.error when res.data.blocked — verified via code review; the branch is triggered by any {blocked, message} response."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_shift_guard_and_close.py"
+  ],
+  "success_rate": {"backend": "75%", "frontend": "not-executed-e2e"},
+  "test_credentials": "admin@maestroegp.com / admin123 (worked). Cashiers created dynamically with prefix 'qa-guard-'; auto-cleanup on module teardown.",
+  "seed_data_creation": "Test creates cashier users with prefix 'qa-guard-' and cleans them + their shifts + their orders on module teardown. No leftover data.",
+  "retest_needed": true,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Re-run pytest /app/backend/tests/test_shift_guard_and_close.py -v after main agent adds tenant_id to shift_doc in open_shift (POST /shifts). Expect all 4 tests green. Frontend behavior for blocked shifts was validated via code review only (Dashboard.js openShiftForCashier at line 560 correctly calls toast.error on res.data.blocked); a full E2E would need to seed 2 same-name cashiers and drive the Owner 'select cashier' UI flow.",
+  "rca_of_the_issue": "Root cause of the failing test: open_shift() inserts shift_doc without a tenant_id field. Subsequent _open_shift_conflict() calls filter open_shifts by tenant_id (default) which excludes tenant-less shifts inserted by this same endpoint — so `other` is never matched and the 400 block never fires. This is essentially the same class of bug that produced the original production double-count (guard missing a match). Fix is a one-liner in open_shift(): `if tenant_id: shift_doc['tenant_id'] = tenant_id` prior to db.shifts.insert_one(shift_doc)."
+}

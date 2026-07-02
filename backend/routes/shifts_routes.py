@@ -55,6 +55,41 @@ def _shift_open_block_reason(role: str):
         return "هذا الحساب رئيس قسم ولا يتعامل مع نقد المبيعات — لا تُفتح له وردية"
     return None
 
+def _norm_name(n: str) -> str:
+    """توحيد اسم الكاشير للمقارنة (إزالة الفراغات الزائدة + توحيد الحالة)."""
+    return " ".join((n or "").strip().split()).lower()
+
+def _conflict_msg(other: dict) -> str:
+    return (
+        f"يوجد وردية مفتوحة بالفعل في هذا الفرع باسم «{other.get('cashier_name') or ''}» — "
+        "يجب إغلاق صندوقها أولاً قبل فتح وردية جديدة."
+    )
+
+async def _open_shift_conflict(db, tenant_id, branch_id, cashier_id, cashier_name):
+    """يمنع ازدواج الورديات: لا تُفتح وردية جديدة إذا وُجدت وردية مفتوحة بنفس الاسم.
+    آمن على العمل الجاري: لا يمسّ أي شفت/طلب/مبيعة قائمة — يتحقق فقط لحظة فتح شفت جديد.
+    يُرجع (own, other):
+      - own: وردية مفتوحة لنفس الكاشير (نفس المعرّف) — ليست تعارضاً، تُعاد كـ was_existing.
+      - other: وردية مفتوحة بنفس الاسم لكن بمعرّف مختلف (السبب الجذري للازدواج) — تمنع الفتح.
+    ملاحظة: لا نحظر حسب الفرع وحده حتى لا نعطّل الفروع التي تشغّل أكثر من كاشير باسم مختلف.
+    """
+    q = {"status": "open"}
+    if tenant_id:
+        q["tenant_id"] = tenant_id
+    open_shifts = await db.shifts.find(
+        q, {"_id": 0, "id": 1, "cashier_id": 1, "cashier_name": 1, "branch_id": 1, "started_at": 1}
+    ).to_list(1000)
+    own = None
+    other = None
+    nn = _norm_name(cashier_name)
+    for s in open_shifts:
+        if cashier_id and s.get("cashier_id") == cashier_id:
+            own = own or s
+            continue
+        if nn and _norm_name(s.get("cashier_name")) == nn:
+            other = other or s
+    return own, other
+
 async def _get_pending_captain_cash(db, shift_id, tenant_id):
     """يُرجع تجميع نقد الكباتن غير المُسلَّم (held) لوردية معيّنة: قائمة لكل كابتن + الإجمالي."""
     q = {"shift_id": shift_id, "captain_id": {"$ne": None}, "captain_cash_status": "held"}
@@ -141,10 +176,7 @@ class ShiftResponse(BaseModel):
 async def open_shift(shift: ShiftCreate, current_user: dict = Depends(get_current_user)):
     """فتح وردية جديدة"""
     db = get_database()
-    existing = await db.shifts.find_one({"cashier_id": shift.cashier_id, "status": "open"})
-    if existing:
-        raise HTTPException(status_code=400, detail="يوجد شفت مفتوح بالفعل")
-    
+    tenant_id = get_user_tenant_id(current_user)
     cashier = await db.users.find_one({"id": shift.cashier_id}, {"_id": 0, "password": 0})
     if not cashier:
         raise HTTPException(status_code=404, detail="الكاشير غير موجود")
@@ -152,6 +184,13 @@ async def open_shift(shift: ShiftCreate, current_user: dict = Depends(get_curren
     _block = _shift_open_block_reason(cashier.get("role", ""))
     if _block:
         raise HTTPException(status_code=400, detail=_block)
+
+    # 🚫 منع ازدواج الورديات: وردية واحدة مفتوحة لكل فرع/كاشير (يمنع مضاعفة المبيعات في التقارير)
+    own, other = await _open_shift_conflict(db, tenant_id, shift.branch_id, shift.cashier_id, cashier.get("full_name"))
+    if own:
+        raise HTTPException(status_code=400, detail="يوجد شفت مفتوح بالفعل لهذا الكاشير")
+    if other:
+        raise HTTPException(status_code=400, detail=_conflict_msg(other))
     
     shift_doc = {
         "id": str(uuid.uuid4()),
@@ -177,6 +216,8 @@ async def open_shift(shift: ShiftCreate, current_user: dict = Depends(get_curren
         "status": "open",
         "business_date": iraq_date_from_utc()
     }
+    if tenant_id:
+        shift_doc["tenant_id"] = tenant_id
     await db.shifts.insert_one(shift_doc)
     del shift_doc["_id"]
     return shift_doc
@@ -281,13 +322,12 @@ async def quick_open_shift(data: QuickOpenShift, current_user: dict = Depends(ge
         branch = await db.branches.find_one(branch_query, {"_id": 0, "id": 1})
         branch_id = branch["id"] if branch else None
     
-    # تحقق من عدم وجود وردية مفتوحة
-    existing_query = {"cashier_id": user_id, "status": "open"}
-    if tenant_id:
-        existing_query["tenant_id"] = tenant_id
-    existing = await db.shifts.find_one(existing_query, {"_id": 0})
-    if existing:
-        return {"shift": existing, "was_existing": True, "message": "وردية مفتوحة بالفعل"}
+    # 🚫 منع ازدواج الورديات: لا تُفتح وردية بنفس اسم كاشير له وردية مفتوحة
+    own, other = await _open_shift_conflict(db, tenant_id, branch_id, user_id, current_user.get("full_name") or current_user.get("username", ""))
+    if own:
+        return {"shift": own, "was_existing": True, "message": "وردية مفتوحة بالفعل"}
+    if other:
+        return {"shift": None, "was_existing": False, "blocked": True, "message": _conflict_msg(other)}
     
     shift_doc = {
         "id": str(uuid.uuid4()),
@@ -334,14 +374,6 @@ async def open_shift_for_cashier(data: OpenShiftForCashier, current_user: dict =
     if user_role not in ["admin", "super_admin", "manager", "branch_manager"]:
         raise HTTPException(status_code=403, detail="غير مصرح - فقط المدير يمكنه فتح وردية لكاشير")
     
-    # تحقق من عدم وجود وردية مفتوحة لهذا الكاشير
-    existing_query = {"cashier_id": data.cashier_id, "status": "open"}
-    if tenant_id:
-        existing_query["tenant_id"] = tenant_id
-    existing = await db.shifts.find_one(existing_query, {"_id": 0})
-    if existing:
-        return {"shift": existing, "was_existing": True, "message": "يوجد وردية مفتوحة بالفعل لهذا الكاشير"}
-    
     cashier = await db.users.find_one({"id": data.cashier_id}, {"_id": 0, "password": 0})
     if not cashier:
         raise HTTPException(status_code=404, detail="الكاشير غير موجود")
@@ -350,12 +382,19 @@ async def open_shift_for_cashier(data: OpenShiftForCashier, current_user: dict =
     _block = _shift_open_block_reason(cashier.get("role", ""))
     if _block:
         raise HTTPException(status_code=400, detail=_block)
-    
+
     branch_id = data.branch_id or current_user.get("branch_id")
     if not branch_id:
         branch_query = {"tenant_id": tenant_id} if tenant_id else {}
         branch = await db.branches.find_one(branch_query, {"_id": 0, "id": 1})
         branch_id = branch["id"] if branch else None
+
+    # 🚫 منع ازدواج الورديات: لا تُفتح وردية بنفس اسم كاشير له وردية مفتوحة
+    own, other = await _open_shift_conflict(db, tenant_id, branch_id, data.cashier_id, cashier.get("full_name") or cashier.get("username", ""))
+    if own:
+        return {"shift": own, "was_existing": True, "message": "يوجد وردية مفتوحة بالفعل لهذا الكاشير"}
+    if other:
+        return {"shift": None, "was_existing": False, "blocked": True, "message": _conflict_msg(other)}
     
     shift_doc = {
         "id": str(uuid.uuid4()),
@@ -427,20 +466,18 @@ async def auto_open_shift(current_user: dict = Depends(get_current_user)):
     if _block:
         return {"shift": None, "was_existing": False, "blocked": True, "message": _block}
 
-    query = {"cashier_id": current_user["id"], "status": "open"}
-    if tenant_id:
-        query["tenant_id"] = tenant_id
-        
-    existing = await db.shifts.find_one(query, {"_id": 0})
-    
-    if existing:
-        return {"shift": existing, "was_existing": True, "message": "وردية مفتوحة بالفعل"}
-    
     branch_id = current_user.get("branch_id")
     if not branch_id:
         branch_query = {"tenant_id": tenant_id} if tenant_id else {}
         branch = await db.branches.find_one(branch_query, {"_id": 0, "id": 1})
         branch_id = branch["id"] if branch else None
+
+    # 🚫 منع ازدواج الورديات: لا تُفتح وردية بنفس اسم كاشير له وردية مفتوحة
+    own, other = await _open_shift_conflict(db, tenant_id, branch_id, current_user["id"], current_user.get("full_name") or current_user.get("username", ""))
+    if own:
+        return {"shift": own, "was_existing": True, "message": "وردية مفتوحة بالفعل"}
+    if other:
+        return {"shift": None, "was_existing": False, "blocked": True, "message": _conflict_msg(other)}
     
     if not branch_id:
         default_branch = {
@@ -854,18 +891,26 @@ async def close_shift(shift_id: str, close_data: ShiftClose, current_user: dict 
     shift_tenant = shift.get("tenant_id") or get_user_tenant_id(current_user)
     shift_end_time = datetime.now(timezone.utc).isoformat()  # حد علوي = الآن
     
-    # === جلب الطلبات بفلاتر دقيقة (tenant + branch + cashier + الفترة الزمنية) ===
+    # === جلب الطلبات: المصدر الموثوق هو shift_id (كل طلب يُحسب في وردية واحدة فقط) ===
+    # هذا يضمن أن إجمالي الإغلاق = المبيعات الحقيقية، ويمنع ازدواج الحساب عند تداخل الورديات.
+    # توافق خلفي: الطلبات القديمة بلا shift_id تُحسب بالفترة الزمنية + الكاشير كما السابق.
     orders_query = {
-        "cashier_id": shift_cashier,
-        "created_at": {"$gte": shift_start, "$lte": shift_end_time},
-        "status": {"$nin": [OrderStatus.CANCELLED, "canceled", "deleted"]}
+        "status": {"$nin": [OrderStatus.CANCELLED, "canceled", "deleted"]},
+        "$or": [
+            {"shift_id": shift_id},
+            {
+                "shift_id": {"$in": [None, ""]},
+                "cashier_id": shift_cashier,
+                "created_at": {"$gte": shift_start, "$lte": shift_end_time},
+            },
+        ],
     }
     if shift_tenant:
         orders_query["tenant_id"] = shift_tenant
     if shift_branch:
         orders_query["branch_id"] = shift_branch  # منع خلط فروع
     
-    all_orders_raw = await db.orders.find(orders_query).to_list(2000)
+    all_orders_raw = await db.orders.find(orders_query).to_list(5000)
     
     # فصل المرتجعات (لا تُحسب في المبيعات لكن نقدها يُخصم من expected_cash)
     orders = []

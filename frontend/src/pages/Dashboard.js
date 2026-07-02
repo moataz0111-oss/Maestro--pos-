@@ -557,6 +557,15 @@ export default function Dashboard() {
             return prev;
           });
         }, 60000);
+      } else if (res.data?.blocked || res.data?.message) {
+        // 🚫 مُنع فتح الوردية (يوجد وردية مفتوحة بنفس الاسم) — أظهر السبب بوضوح ولا تفشل بصمت
+        toast.error(res.data.message || t('يوجد وردية مفتوحة بالفعل بنفس الاسم — يجب إغلاق صندوقها أولاً'));
+        try {
+          const cashiersRes = await axios.get(`${API}/shifts/cashiers-list`, {
+            params: { branch_id: getBranchIdForApi() || '' }
+          });
+          setCashiersList(cashiersRes.data || []);
+        } catch (e) { /* تجاهل */ }
       }
     } catch (error) {
       showApiError(error, t('فشل في فتح الوردية'));
