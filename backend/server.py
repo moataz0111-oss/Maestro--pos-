@@ -7124,22 +7124,37 @@ async def create_order(order: OrderCreate, current_user: dict = Depends(get_curr
             # المالك: لا ننشئ وردية باسمه - نرجع خطأ
             raise HTTPException(status_code=400, detail="لا توجد وردية مفتوحة - يرجى فتح وردية لكاشير أولاً من نقاط البيع")
         else:
-            # كاشير: ننشئ وردية تلقائياً
-            new_shift = {
-                "id": str(uuid.uuid4()),
-                "tenant_id": tenant_id,
-                "branch_id": order.branch_id,
-                "cashier_id": current_user.get("id"),
-                "cashier_name": current_user.get("full_name", ""),
-                "opened_at": datetime.now(timezone.utc).isoformat(),
-                "started_at": datetime.now(timezone.utc).isoformat(),
-                "status": "open",
-                "opening_balance": 0,
-                "created_at": datetime.now(timezone.utc).isoformat(),
-                "business_date": iraq_date_from_utc()
-            }
-            await db.shifts.insert_one(new_shift)
-            current_shift = new_shift
+            # كاشير: امنع ازدواج الشفت — إن وُجدت وردية مفتوحة بنفس الاسم استخدمها بدل إنشاء مكررة
+            _cashier_name = current_user.get("full_name", "") or ""
+            _nn = " ".join(_cashier_name.strip().split()).lower()
+            dup_shift = None
+            if _nn:
+                _open_q = {"status": "open"}
+                if tenant_id:
+                    _open_q["tenant_id"] = tenant_id
+                async for _s in db.shifts.find(_open_q, {"_id": 0, "id": 1, "cashier_name": 1}):
+                    if " ".join((_s.get("cashier_name") or "").strip().split()).lower() == _nn:
+                        dup_shift = await db.shifts.find_one({"id": _s["id"]}, {"_id": 0})
+                        break
+            if dup_shift:
+                current_shift = dup_shift
+            else:
+                # لا توجد وردية بنفس الاسم: ننشئ وردية تلقائياً
+                new_shift = {
+                    "id": str(uuid.uuid4()),
+                    "tenant_id": tenant_id,
+                    "branch_id": order.branch_id,
+                    "cashier_id": current_user.get("id"),
+                    "cashier_name": current_user.get("full_name", ""),
+                    "opened_at": datetime.now(timezone.utc).isoformat(),
+                    "started_at": datetime.now(timezone.utc).isoformat(),
+                    "status": "open",
+                    "opening_balance": 0,
+                    "created_at": datetime.now(timezone.utc).isoformat(),
+                    "business_date": iraq_date_from_utc()
+                }
+                await db.shifts.insert_one(new_shift)
+                current_shift = new_shift
     
     shift_id = current_shift["id"] if current_shift else None
     

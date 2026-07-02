@@ -1181,22 +1181,27 @@ async def get_cash_register_summary(
         if is_manager:
             raise HTTPException(status_code=404, detail="لا توجد وردية مفتوحة - يرجى فتح وردية لكاشير من نقاط البيع")
         
-        # الكاشير: نُنشئ وردية تلقائياً
-        new_shift = {
-            "id": str(uuid.uuid4()),
-            "tenant_id": tenant_id,
-            "branch_id": target_branch_id,
-            "cashier_id": current_user.get("id"),
-            "cashier_name": current_user.get("full_name", ""),
-            "started_at": datetime.now(timezone.utc).isoformat(),
-            "opened_at": datetime.now(timezone.utc).isoformat(),
-            "status": "open",
-            "opening_balance": 0,
-            "created_at": datetime.now(timezone.utc).isoformat(),
-            "business_date": iraq_date_from_utc()
-        }
-        await db.shifts.insert_one(new_shift)
-        shift = new_shift
+        # الكاشير: نُنشئ وردية تلقائياً — لكن أولاً امنع الازدواج (وردية مفتوحة بنفس الاسم)
+        _own, _other = await _open_shift_conflict(db, tenant_id, target_branch_id, current_user.get("id"), current_user.get("full_name", ""))
+        if _own or _other:
+            _existing_id = (_own or _other)["id"]
+            shift = await db.shifts.find_one({"id": _existing_id}, {"_id": 0}) or (_own or _other)
+        else:
+            new_shift = {
+                "id": str(uuid.uuid4()),
+                "tenant_id": tenant_id,
+                "branch_id": target_branch_id,
+                "cashier_id": current_user.get("id"),
+                "cashier_name": current_user.get("full_name", ""),
+                "started_at": datetime.now(timezone.utc).isoformat(),
+                "opened_at": datetime.now(timezone.utc).isoformat(),
+                "status": "open",
+                "opening_balance": 0,
+                "created_at": datetime.now(timezone.utc).isoformat(),
+                "business_date": iraq_date_from_utc()
+            }
+            await db.shifts.insert_one(new_shift)
+            shift = new_shift
     
     branch = await db.branches.find_one({"id": shift.get("branch_id", "")}, {"_id": 0, "name": 1})
     

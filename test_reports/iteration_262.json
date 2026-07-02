@@ -1,0 +1,24 @@
+{
+  "summary": "Verified the shift auto-create dedup fix on the two implicit paths (GET /api/cash-register/summary and POST /api/orders). Added new pytest suite backend/tests/test_shift_autocreate_dedup.py (3 tests). All 3 new tests + 4 prior regression tests in test_shift_guard_and_close.py pass (7/7). No duplicate open shifts are created for a second same-name cashier; the existing same-name shift is reused. The lone-cashier happy path still creates exactly one shift. All test data (prefix qa-auto- / qa-guard-) cleaned up.",
+  "backend_issues": { "critical": [], "minor": [] },
+  "frontend_issues": { "ui_bugs": [], "integration_issues": [], "design_issues": [] },
+  "test_report_links": [
+    "/app/backend/tests/test_shift_autocreate_dedup.py",
+    "/app/backend/tests/test_shift_guard_and_close.py",
+    "/app/test_reports/pytest/pytest_results_iter262.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "server.py order-create dedup at ~line 7135 iterates ALL open shifts in tenant to find same-name; for tenants with many concurrent shifts this is O(N). Consider a normalized cashier_name_lc field + index for O(1) lookup.",
+    "GET /api/cash-register/summary at line 1176 filters shift_query by cashier_id for non-manager users, so an existing shift owned by a DIFFERENT user_id with the SAME name is only found via the _open_shift_conflict fallback. That is correct now; keep the name-based helper as the single source of truth to avoid regressions.",
+    "shifts_routes.py open_shift now persists tenant_id — good. Confirm any legacy shifts inserted before this fix have tenant_id backfilled if reports filter by tenant_id."
+  ],
+  "updated_files": ["/app/backend/tests/test_shift_autocreate_dedup.py"],
+  "success_rate": { "backend": "100% (7/7)", "frontend": "n/a (skipped per request)" },
+  "test_credentials": "admin@maestroegp.com / admin123 (tenant default). Test cashiers created dynamically with prefix qa-auto-, password cashpass123, email <id>@example.com.",
+  "seed_data_creation": "None persistent. All qa-auto-* users, shifts, orders inserted+cleaned via autouse module fixture.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "The full shift-dedup contract is now covered by two pytest files: test_shift_guard_and_close.py (explicit open guards + close totals, 4 tests) and test_shift_autocreate_dedup.py (implicit auto-create via summary and orders, 3 tests). Together they enforce: never >1 open shift for the same normalized cashier full_name in the tenant, whether the shift is created explicitly or implicitly. Order-create test uses items[].price (NOT unit_price/total_price) — OrderItemCreate schema is defined at server.py L2003.",
+  "rca of the issue": "N/A — fix already applied and verified. Prior duplicate came from two auto-create sites that did not consult _open_shift_conflict / name-based dup search before inserting a new shift. Both now short-circuit to reuse the existing same-name open shift; verified no dup created and correct existing shift_id returned to the client."
+}
