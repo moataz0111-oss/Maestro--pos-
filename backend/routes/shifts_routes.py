@@ -1086,15 +1086,14 @@ async def _dedupe_closed_cashier_shifts(db, shifts):
     def _norm(n):
         return (n or "").strip().lower()
 
-    CLOSED = {"closed", "auto_closed", "closed_auto"}
     STATUS_EXCLUDE = ["cancelled", "canceled", "refunded", "deleted", "void", "voided"]
-    closed = [s for s in shifts if (s.get("status") or "").strip().lower() in CLOSED]
-    others = [s for s in shifts if (s.get("status") or "").strip().lower() not in CLOSED]
-    if len(closed) < 2:
+    # نعالج كل الورديات (مفتوحة/مغلقة) كمرشحين للتكرار — الكاشير الواحد لا يملك ورديتين متزامنتين لنفس اليوم
+    candidates = list(shifts or [])
+    if len(candidates) < 2:
         return shifts
 
     groups = {}
-    for s in closed:
+    for s in candidates:
         key = (s.get("branch_id") or "", _norm(s.get("cashier_name")) or (s.get("cashier_id") or ""), _day(s))
         groups.setdefault(key, []).append(s)
 
@@ -1155,7 +1154,7 @@ async def _dedupe_closed_cashier_shifts(db, shifts):
         best = min(group, key=lambda s: abs(_num(s.get("total_sales")) - truth))
         kept_closed.append(best)
 
-    result = others + kept_closed
+    result = kept_closed
     result.sort(key=lambda s: str(s.get("started_at") or s.get("opened_at") or ""), reverse=True)
     return result
 
