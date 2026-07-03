@@ -1404,34 +1404,43 @@ const CashRegisterClosingTab = ({ t, formatPrice, selectedBranchId, branches, ge
     return kept;
   };
 
-  // truthMap: { "id:<cashier_id>|<day>": trueSales, "name:<name_lc>|<day>": trueSales }
-  const dedupeClosings = (list, truthMap = {}) => {
+  const _norm = (s) => (s || '').toString().trim().replace(/\s+/g, ' ').toLowerCase();
+
+  // ctx: { truthById:{id:sales}, truthByName:{name:sales}, branchTruth:{branch_id:sales} }
+  // مرتكز على مبيعات الطلبات الحقيقية من التقرير. التجميع حسب (الفرع + الكاشير) بلا يوم
+  // لتفادي اختلاف حساب اليوم بين الواجهة والخادم. يُستخدَم إجمالي الفرع كمرجع عند تعذّر مطابقة الكاشير.
+  const dedupeClosings = (list, ctx = {}) => {
+    const { truthById = {}, truthByName = {}, branchTruth = {} } = ctx;
     const items = Array.isArray(list) ? list.slice() : [];
     if (items.length < 2) return items;
     const groups = {};
     items.forEach((c) => {
-      const key = [
-        c.branch_id || '',
-        (c.cashier_name || '').trim().toLowerCase() || (c.cashier_id || ''),
-        _closingDay(c),
-      ].join('|');
+      const key = [c.branch_id || '', _norm(c.cashier_name) || (c.cashier_id || '')].join('|');
       (groups[key] = groups[key] || []).push(c);
+    });
+    // عدد الكاشيرين المتمايزين في كل فرع — للسماح بالمرجع الاحتياطي على مستوى الفرع
+    const cashiersPerBranch = {};
+    Object.values(groups).forEach((g) => {
+      const b = g[0].branch_id || '';
+      cashiersPerBranch[b] = (cashiersPerBranch[b] || 0) + 1;
     });
     const kept = [];
     Object.values(groups).forEach((group) => {
       if (group.length < 2) { kept.push(...group); return; }
-      const day = _closingDay(group[0]);
-      const cid = group[0].cashier_id;
-      const cname = (group[0].cashier_name || '').trim().toLowerCase();
+      const branch = group[0].branch_id || '';
+      const cid = group[0].cashier_id != null ? String(group[0].cashier_id) : '';
+      const cname = _norm(group[0].cashier_name);
       let truth = null;
-      if (cid != null && truthMap[`id:${cid}|${day}`] != null) truth = truthMap[`id:${cid}|${day}`];
-      else if (cname && truthMap[`name:${cname}|${day}`] != null) truth = truthMap[`name:${cname}|${day}`];
+      if (cid && truthById[cid] != null) truth = truthById[cid];
+      else if (cname && truthByName[cname] != null) truth = truthByName[cname];
+      // احتياطي: كاشير واحد فقط في هذا الفرع → استخدم إجمالي مبيعات الفرع كمرجع (لا يعتمد على اسم الكاشير)
+      if (truth == null && cashiersPerBranch[branch] === 1 && branchTruth[branch] != null) truth = branchTruth[branch];
 
       if (truth == null) { kept.push(..._conservativeDedupe(group)); return; }
 
       const sumSales = group.reduce((s, c) => s + _num(c.total_sales), 0);
-      const tol = Math.max(1, Math.abs(truth) * 0.005);
-      // مجموع الصفوف يساوي المبيعات الحقيقية → ورديات منفصلة مشروعة (صباح/مساء) نُبقيها كلها
+      const tol = Math.max(1, Math.abs(truth) * 0.01);
+      // مجموع الصفوف ≈ المبيعات الحقيقية → ورديات منفصلة مشروعة نُبقيها كلها
       if (Math.abs(sumSales - truth) <= tol) { kept.push(...group); return; }
       // خلاف ذلك = مكررات (أحدها يعدّ نفس الطلبات): نُبقي الصف الأقرب للمبيعات الحقيقية ونستبعد المضخّم
       let best = group[0], bestDiff = Math.abs(_num(best.total_sales) - truth);
@@ -1497,14 +1506,30 @@ const CashRegisterClosingTab = ({ t, formatPrice, selectedBranchId, branches, ge
         })
       );
       
-      // خريطة الحقيقة المرجعية (مبيعات كل كاشير/يوم من الطلبات الفعلية) لإزالة التكرار بدقة
-      const truthMap = reportRes.data?.true_by_cashier_day || {};
+      // بناء مرجع الحقيقة من التقرير: مبيعات كل كاشير + إجمالي كل فرع (من الطلبات الفعلية بلا تكرار)
+      const _rnorm = (s) => (s || '').toString().trim().replace(/\s+/g, ' ').toLowerCase();
+      const truthById = {}, truthByName = {}, branchTruth = {};
+      (reportRes.data?.by_cashier || []).forEach((c) => {
+        const v = parseFloat(c.total_sales); const val = isNaN(v) ? 0 : v;
+        if (c.cashier_id != null) truthById[String(c.cashier_id)] = val;
+        if (c.cashier_name) truthByName[_rnorm(c.cashier_name)] = val;
+      });
+      (reportRes.data?.by_branch || []).forEach((b) => {
+        const v = parseFloat(b.total_sales); const val = isNaN(v) ? 0 : v;
+        if (b.branch_id != null) branchTruth[String(b.branch_id)] = val;
+      });
+      // احتياطي إضافي: عند فلترة فرع واحد استخدم إجمالي التقرير كمرجع للفرع
+      if (branchId && branchId !== 'all' && branchTruth[String(branchId)] == null) {
+        const st = parseFloat(reportRes.data?.summary?.total_sales);
+        if (!isNaN(st)) branchTruth[String(branchId)] = st;
+      }
+      const dedupeCtx = { truthById, truthByName, branchTruth };
 
-      // دمج الشفتات المغلقة والنشطة — مع إزالة المكررات (شفتان لنفس الكاشير/اليوم بسبب باغ الفتح المزدوج)
+      // دمج الشفتات المغلقة والنشطة — مع إزالة المكررات (شفتان لنفس الكاشير بسبب باغ الفتح المزدوج)
       // نُضيف أيضاً سجلات الإغلاق «اليتيمة» الموجودة في cash_register_closings بلا شفت مطابق حتى لا تختفي
       const closedShiftIds = new Set(closedShifts.map(s => s.id).filter(Boolean));
       const orphanClosings = closingsFromHistory.filter(c => !c.shift_id || !closedShiftIds.has(c.shift_id));
-      const dedupedClosed = dedupeClosings([...closedShifts, ...orphanClosings], truthMap);
+      const dedupedClosed = dedupeClosings([...closedShifts, ...orphanClosings], dedupeCtx);
       const allShifts = [...dedupedClosed, ...activeShiftsWithDetails];
 
       // مصدر أساسي = القائمة المُنقّاة من التكرار (يطابق الإغلاق المبيعات الحقيقية)
@@ -1517,7 +1542,7 @@ const CashRegisterClosingTab = ({ t, formatPrice, selectedBranchId, branches, ge
           difference_type: ((s.closing_cash || 0) - (s.expected_cash || 0)) > 0 ? 'surplus' : ((s.closing_cash || 0) - (s.expected_cash || 0)) < 0 ? 'shortage' : 'exact'
         })));
       } else {
-        setClosingsHistory(dedupeClosings(closingsFromHistory, truthMap));
+        setClosingsHistory(dedupeClosings(closingsFromHistory, dedupeCtx));
       }
     } catch (error) {
       console.error('Error fetching cash register report:', error);

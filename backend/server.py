@@ -16164,6 +16164,21 @@ async def get_cash_register_closing_report(
         for _k in (f"id:{_cid}|{_bd}", f"name:{(_cname or '').strip().lower()}|{_bd}"):
             true_by_cashier_day[_k] = true_by_cashier_day.get(_k, 0) + _val
 
+    # مرجع احتياطي على مستوى الفرع/اليوم (يُستخدَم عندما يختلف اسم/معرّف كاشير الوردية عن منشئ الطلبات)
+    true_by_branch_day = {}
+    for o in orders:
+        _bid = o.get("branch_id") or "unknown"
+        _bd2 = o.get("business_date")
+        if _bd2:
+            _bd2 = str(_bd2)[:10]
+        else:
+            try:
+                _bd2 = iraq_date_from_utc(o.get("created_at"))
+            except Exception:
+                _bd2 = str(o.get("created_at") or "")[:10]
+        _bk = f"{_bid}|{_bd2}"
+        true_by_branch_day[_bk] = true_by_branch_day.get(_bk, 0) + _sn(o.get("total"))
+
 
     return {
         "period": {
@@ -16202,7 +16217,8 @@ async def get_cash_register_closing_report(
             "items": [{"description": e.get("description"), "amount": _sn(e.get("amount")), "category": e.get("category"), "created_by": e.get("created_by_name") or e.get("created_by"), "created_at": e.get("created_at")} for e in expenses]
         },
         "closings": closings,
-        "true_by_cashier_day": true_by_cashier_day
+        "true_by_cashier_day": true_by_cashier_day,
+        "true_by_branch_day": true_by_branch_day
     }
 
 @api_router.post("/reports/cash-register-closing")

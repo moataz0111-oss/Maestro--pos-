@@ -1,7 +1,7 @@
 // Service Worker for Offline Support - V5 (Auto-Update)
 // يدعم العمل بدون إنترنت لجميع الصفحات مع تحديث تلقائي
 
-const CACHE_VERSION = 'v37';
+const CACHE_VERSION = 'v38';
 const CACHE_NAME = `maestro-offline-${CACHE_VERSION}`;
 const STATIC_CACHE = `maestro-static-${CACHE_VERSION}`;
 const DATA_CACHE = `maestro-data-${CACHE_VERSION}`;
@@ -99,11 +99,11 @@ self.addEventListener('activate', (event) => {
   );
 });
 
-// السماح بالتحديث اليدوي من التطبيق
+// السماح بالتحديث اليدوي من التطبيق (بطلب صريح من المستخدم فقط — لا تحديث تلقائي)
 self.addEventListener('message', (event) => {
   if (event.data && event.data.type === 'SKIP_WAITING') {
-    // لا نستخدم skipWaiting لمنع إعادة التحميل المتكرر
-    // self.skipWaiting() - DISABLED
+    // يُفعَّل فقط عند ضغط المستخدم زر «تحديث الآن» — آمن ولا يسبب حلقة إعادة تحميل
+    self.skipWaiting();
   }
 });
 
@@ -343,8 +343,7 @@ function offlinePage() {
 // استقبال رسائل من التطبيق
 self.addEventListener('message', (event) => {
   if (event.data && event.data.type === 'SKIP_WAITING') {
-    // لا نستخدم skipWaiting لمنع إعادة التحميل المتكرر
-    // self.skipWaiting() - DISABLED
+    self.skipWaiting();
   }
   
   if (event.data && event.data.type === 'CLEAR_CACHE') {

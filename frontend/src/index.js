@@ -16,22 +16,56 @@ const registerServiceWorker = async () => {
     try {
       const registration = await navigator.serviceWorker.register('/sw-offline.js', {
         scope: '/',
-        updateViaCache: 'all'
+        updateViaCache: 'none'
       });
       console.log('Service Worker registered:', registration.scope);
-      
-      // منع إعادة التحميل التلقائية عند تفعيل SW جديد
-      // هذا كان السبب الرئيسي في إعادة تحميل الصفحة كل دقيقة على بعض المتصفحات
+
+      // إعادة التحميل تحدث فقط إذا وافق المستخدم صراحةً على التحديث (لا حلقات تلقائية)
+      let userAcceptedUpdate = false;
       let refreshing = false;
       navigator.serviceWorker.addEventListener('controllerchange', () => {
         if (refreshing) return;
-        refreshing = true;
-        console.log('[SW] Controller changed - reload blocked intentionally');
-        // لا نفعل reload - نترك المستخدم يواصل عمله
+        if (userAcceptedUpdate) {
+          refreshing = true;
+          window.location.reload();
+        } else {
+          console.log('[SW] Controller changed - reload blocked intentionally');
+        }
       });
-      
-      // تعطيل الفحص الدوري للتحديثات من المتصفح لتجنب حلقات التحديث
-      // المتصفح يفحص كل 24 ساعة تلقائياً وهذا كافٍ
+
+      // شريط «نسخة جديدة متوفرة» — تحديث بضغطة واحدة (آمن، بطلب المستخدم)
+      const showUpdateBanner = (worker) => {
+        if (!worker || document.getElementById('sw-update-banner')) return;
+        const bar = document.createElement('div');
+        bar.id = 'sw-update-banner';
+        bar.setAttribute('dir', 'rtl');
+        bar.style.cssText = 'position:fixed;bottom:18px;left:50%;transform:translateX(-50%);z-index:2147483647;background:#0f766e;color:#fff;padding:12px 16px;border-radius:14px;box-shadow:0 10px 30px rgba(0,0,0,.35);display:flex;gap:14px;align-items:center;font-family:inherit;font-size:14px;max-width:92vw;';
+        const txt = document.createElement('span');
+        txt.textContent = 'يتوفر تحديث جديد للنظام';
+        const btn = document.createElement('button');
+        btn.textContent = 'تحديث الآن';
+        btn.style.cssText = 'background:#fff;color:#0f766e;border:none;padding:8px 18px;border-radius:9px;font-weight:700;cursor:pointer;white-space:nowrap;';
+        btn.onclick = () => {
+          userAcceptedUpdate = true;
+          btn.textContent = 'جارٍ التحديث…';
+          btn.disabled = true;
+          worker.postMessage({ type: 'SKIP_WAITING' });
+        };
+        bar.appendChild(txt);
+        bar.appendChild(btn);
+        document.body.appendChild(bar);
+      };
+
+      if (registration.waiting) showUpdateBanner(registration.waiting);
+      registration.addEventListener('updatefound', () => {
+        const nw = registration.installing;
+        if (!nw) return;
+        nw.addEventListener('statechange', () => {
+          if (nw.state === 'installed' && navigator.serviceWorker.controller) {
+            showUpdateBanner(nw);
+          }
+        });
+      });
     } catch (error) {
       console.error('Service Worker registration failed:', error);
     }
