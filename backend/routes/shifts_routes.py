@@ -1067,6 +1067,100 @@ async def close_shift(shift_id: str, close_data: ShiftClose, current_user: dict 
     
     return updated_shift
 
+async def _dedupe_closed_cashier_shifts(db, shifts):
+    """يدمج الورديات المغلقة المكررة لنفس الكاشير/اليوم (باغ فتح شفتين متزامنين) مرتكزاً على مبيعات الطلبات الفعلية.
+    منطقة محاسبية حساسة: يُبقي الصف المطابق للمبيعات الحقيقية ويستبعد المضخّم، ولا يدمج الورديات المتتابعة المشروعة
+    (التي يساوي مجموعها المبيعات الحقيقية). لا يحذف من القاعدة — يصفّي الاستجابة فقط. النشطة تبقى كما هي.
+    مطبَّق على استجابة /api (غير مخزَّنة في الـ Service Worker) فيعمل فوراً حتى مع واجهة قديمة في الكاش."""
+    def _num(v):
+        try:
+            return float(v)
+        except Exception:
+            return 0.0
+    def _day(s):
+        bd = s.get("business_date")
+        if bd:
+            return str(bd)[:10]
+        st = s.get("started_at") or s.get("opened_at") or ""
+        return str(st)[:10]
+    def _norm(n):
+        return (n or "").strip().lower()
+
+    CLOSED = {"closed", "auto_closed", "closed_auto"}
+    STATUS_EXCLUDE = ["cancelled", "canceled", "refunded", "deleted", "void", "voided"]
+    closed = [s for s in shifts if (s.get("status") or "").strip().lower() in CLOSED]
+    others = [s for s in shifts if (s.get("status") or "").strip().lower() not in CLOSED]
+    if len(closed) < 2:
+        return shifts
+
+    groups = {}
+    for s in closed:
+        key = (s.get("branch_id") or "", _norm(s.get("cashier_name")) or (s.get("cashier_id") or ""), _day(s))
+        groups.setdefault(key, []).append(s)
+
+    dup_groups = {k: g for k, g in groups.items() if len(g) >= 2}
+    if not dup_groups:
+        return shifts
+
+    cashiers_per_bd = {}
+    for (branch, cashier, day) in groups.keys():
+        cashiers_per_bd[(branch, day)] = cashiers_per_bd.get((branch, day), 0) + 1
+
+    branch_day_truth = {}
+    cashier_day_truth = {}
+    bd_pairs = {(k[0], k[2]) for k in dup_groups.keys()}
+    for (branch, day) in bd_pairs:
+        oq = {
+            "branch_id": branch,
+            "status": {"$nin": STATUS_EXCLUDE},
+            "$or": [
+                {"business_date": day},
+                {"business_date": {"$in": [None, ""]}, "created_at": {"$regex": f"^{day}"}},
+                {"business_date": {"$exists": False}, "created_at": {"$regex": f"^{day}"}},
+            ],
+        }
+        total = 0.0
+        per_cashier = {}
+        async for o in db.orders.find(oq, {"_id": 0, "total": 1, "cashier_name": 1, "created_by_name": 1}):
+            t = _num(o.get("total"))
+            total += t
+            for nm in {_norm(o.get("cashier_name")), _norm(o.get("created_by_name"))}:
+                if nm:
+                    per_cashier[nm] = per_cashier.get(nm, 0.0) + t
+        branch_day_truth[(branch, day)] = total
+        for nm, v in per_cashier.items():
+            cashier_day_truth[(branch, nm, day)] = v
+
+    kept_closed = []
+    for key, group in groups.items():
+        if len(group) < 2:
+            kept_closed.extend(group)
+            continue
+        branch, cashier, day = key
+        truth = None
+        if cashiers_per_bd.get((branch, day), 0) == 1:
+            truth = branch_day_truth.get((branch, day))
+        if truth is None:
+            truth = cashier_day_truth.get((branch, cashier, day))
+        if truth is None:
+            truth = branch_day_truth.get((branch, day))
+        if not truth:  # لا مرجع موثوق (None أو 0) → أبقِ الكل (آمن، لا نخاطر بحذف مبيعات)
+            kept_closed.extend(group)
+            continue
+        sum_sales = sum(_num(s.get("total_sales")) for s in group)
+        tol = max(1.0, abs(truth) * 0.01)
+        if abs(sum_sales - truth) <= tol:
+            kept_closed.extend(group)  # ورديات منفصلة مشروعة (مجموعها = المبيعات الحقيقية)
+            continue
+        best = min(group, key=lambda s: abs(_num(s.get("total_sales")) - truth))
+        kept_closed.append(best)
+
+    result = others + kept_closed
+    result.sort(key=lambda s: str(s.get("started_at") or s.get("opened_at") or ""), reverse=True)
+    return result
+
+
+
 @router.get("/shifts", response_model=List[ShiftResponse])
 async def get_shifts(
     branch_id: Optional[str] = None,
@@ -1129,6 +1223,12 @@ async def get_shifts(
             return r in NON_CASHIER_SHIFT_ROLES
 
         shifts = [s for s in shifts if not _is_non_cashier(s)]
+
+        # ⭐ دمج الورديات المغلقة المكررة تلقائياً على الخادم (يظهر فوراً حتى مع كاش واجهة قديم)
+        try:
+            shifts = await _dedupe_closed_cashier_shifts(db, shifts)
+        except Exception as _e:
+            logger.warning(f"[shifts dedupe] skipped due to error: {_e}")
     
     # معالجة القيم الفارغة والحقول القديمة
     for shift in shifts:
