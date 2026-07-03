@@ -1367,7 +1367,7 @@ const CashRegisterClosingTab = ({ t, formatPrice, selectedBranchId, branches, ge
     }
   };
 
-  // ===== إزالة صفوف الإغلاق المكررة (نفس منطق الباك إند) — منطقة محاسبية حساسة، تلقائي بلا حذف =====
+  // ===== إزالة صفوف الإغلاق المكررة تلقائياً — مرتكزة على مبيعات الطلبات الحقيقية (منطقة حساسة، بلا حذف) =====
   const _closingDay = (c) => {
     if (c.business_date) return String(c.business_date).slice(0, 10);
     const ref = c.shift_start || c.started_at || c.closed_at || c.ended_at || '';
@@ -1375,7 +1375,37 @@ const CashRegisterClosingTab = ({ t, formatPrice, selectedBranchId, branches, ge
   };
   const _num = (v) => { const n = parseFloat(v); return isNaN(n) ? 0 : n; };
   const _parseT = (s) => { if (!s) return null; const t = Date.parse(s); return isNaN(t) ? null : t; };
-  const dedupeClosings = (list) => {
+
+  // احتياطي متحفّظ عند غياب الحقيقة المرجعية: يدمج فقط عند التداخل الزمني أو تطابق البصمة، ويُبقي الأصغر
+  const _conservativeDedupe = (group) => {
+    const kept = [];
+    const used = new Array(group.length).fill(false);
+    for (let i = 0; i < group.length; i++) {
+      if (used[i]) continue;
+      const si = _parseT(group[i].shift_start || group[i].started_at);
+      const ei = _parseT(group[i].shift_end || group[i].ended_at);
+      const sigI = [_num(group[i].total_sales), _num(group[i].orders_count ?? group[i].total_orders), _num(group[i].cash_sales)].join(',');
+      const cluster = [group[i]]; used[i] = true;
+      for (let j = i + 1; j < group.length; j++) {
+        if (used[j]) continue;
+        const sj = _parseT(group[j].shift_start || group[j].started_at);
+        const ej = _parseT(group[j].shift_end || group[j].ended_at);
+        const sigJ = [_num(group[j].total_sales), _num(group[j].orders_count ?? group[j].total_orders), _num(group[j].cash_sales)].join(',');
+        const overlap = si != null && ei != null && sj != null && ej != null && si < ej && sj < ei;
+        if (overlap || sigI === sigJ) { cluster.push(group[j]); used[j] = true; }
+      }
+      if (cluster.length === 1) { kept.push(cluster[0]); }
+      else {
+        cluster.sort((a, b) => _num(a.total_sales) - _num(b.total_sales)
+          || _num(a.orders_count ?? a.total_orders) - _num(b.orders_count ?? b.total_orders));
+        kept.push(cluster[0]);
+      }
+    }
+    return kept;
+  };
+
+  // truthMap: { "id:<cashier_id>|<day>": trueSales, "name:<name_lc>|<day>": trueSales }
+  const dedupeClosings = (list, truthMap = {}) => {
     const items = Array.isArray(list) ? list.slice() : [];
     if (items.length < 2) return items;
     const groups = {};
@@ -1390,29 +1420,26 @@ const CashRegisterClosingTab = ({ t, formatPrice, selectedBranchId, branches, ge
     const kept = [];
     Object.values(groups).forEach((group) => {
       if (group.length < 2) { kept.push(...group); return; }
-      const used = new Array(group.length).fill(false);
-      for (let i = 0; i < group.length; i++) {
-        if (used[i]) continue;
-        const si = _parseT(group[i].shift_start || group[i].started_at);
-        const ei = _parseT(group[i].shift_end || group[i].ended_at);
-        const sigI = [_num(group[i].total_sales), _num(group[i].orders_count ?? group[i].total_orders), _num(group[i].cash_sales)].join(',');
-        const cluster = [group[i]]; used[i] = true;
-        for (let j = i + 1; j < group.length; j++) {
-          if (used[j]) continue;
-          const sj = _parseT(group[j].shift_start || group[j].started_at);
-          const ej = _parseT(group[j].shift_end || group[j].ended_at);
-          const sigJ = [_num(group[j].total_sales), _num(group[j].orders_count ?? group[j].total_orders), _num(group[j].cash_sales)].join(',');
-          const overlap = si != null && ei != null && sj != null && ej != null && si < ej && sj < ei;
-          const identical = sigI === sigJ;
-          if (overlap || identical) { cluster.push(group[j]); used[j] = true; }
-        }
-        if (cluster.length === 1) { kept.push(cluster[0]); }
-        else {
-          cluster.sort((a, b) => _num(a.total_sales) - _num(b.total_sales)
-            || _num(a.orders_count ?? a.total_orders) - _num(b.orders_count ?? b.total_orders));
-          kept.push(cluster[0]);
-        }
-      }
+      const day = _closingDay(group[0]);
+      const cid = group[0].cashier_id;
+      const cname = (group[0].cashier_name || '').trim().toLowerCase();
+      let truth = null;
+      if (cid != null && truthMap[`id:${cid}|${day}`] != null) truth = truthMap[`id:${cid}|${day}`];
+      else if (cname && truthMap[`name:${cname}|${day}`] != null) truth = truthMap[`name:${cname}|${day}`];
+
+      if (truth == null) { kept.push(..._conservativeDedupe(group)); return; }
+
+      const sumSales = group.reduce((s, c) => s + _num(c.total_sales), 0);
+      const tol = Math.max(1, Math.abs(truth) * 0.005);
+      // مجموع الصفوف يساوي المبيعات الحقيقية → ورديات منفصلة مشروعة (صباح/مساء) نُبقيها كلها
+      if (Math.abs(sumSales - truth) <= tol) { kept.push(...group); return; }
+      // خلاف ذلك = مكررات (أحدها يعدّ نفس الطلبات): نُبقي الصف الأقرب للمبيعات الحقيقية ونستبعد المضخّم
+      let best = group[0], bestDiff = Math.abs(_num(best.total_sales) - truth);
+      group.forEach((c) => {
+        const d = Math.abs(_num(c.total_sales) - truth);
+        if (d < bestDiff) { best = c; bestDiff = d; }
+      });
+      kept.push(best);
     });
     kept.sort((a, b) => String(b.closed_at || b.ended_at || '').localeCompare(String(a.closed_at || a.ended_at || '')));
     return kept;
@@ -1470,11 +1497,14 @@ const CashRegisterClosingTab = ({ t, formatPrice, selectedBranchId, branches, ge
         })
       );
       
+      // خريطة الحقيقة المرجعية (مبيعات كل كاشير/يوم من الطلبات الفعلية) لإزالة التكرار بدقة
+      const truthMap = reportRes.data?.true_by_cashier_day || {};
+
       // دمج الشفتات المغلقة والنشطة — مع إزالة المكررات (شفتان لنفس الكاشير/اليوم بسبب باغ الفتح المزدوج)
       // نُضيف أيضاً سجلات الإغلاق «اليتيمة» الموجودة في cash_register_closings بلا شفت مطابق حتى لا تختفي
       const closedShiftIds = new Set(closedShifts.map(s => s.id).filter(Boolean));
       const orphanClosings = closingsFromHistory.filter(c => !c.shift_id || !closedShiftIds.has(c.shift_id));
-      const dedupedClosed = dedupeClosings([...closedShifts, ...orphanClosings]);
+      const dedupedClosed = dedupeClosings([...closedShifts, ...orphanClosings], truthMap);
       const allShifts = [...dedupedClosed, ...activeShiftsWithDetails];
 
       // مصدر أساسي = القائمة المُنقّاة من التكرار (يطابق الإغلاق المبيعات الحقيقية)
@@ -1487,7 +1517,7 @@ const CashRegisterClosingTab = ({ t, formatPrice, selectedBranchId, branches, ge
           difference_type: ((s.closing_cash || 0) - (s.expected_cash || 0)) > 0 ? 'surplus' : ((s.closing_cash || 0) - (s.expected_cash || 0)) < 0 ? 'shortage' : 'exact'
         })));
       } else {
-        setClosingsHistory(dedupeClosings(closingsFromHistory));
+        setClosingsHistory(dedupeClosings(closingsFromHistory, truthMap));
       }
     } catch (error) {
       console.error('Error fetching cash register report:', error);

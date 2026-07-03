@@ -1,0 +1,30 @@
+{
+  "summary": "Verified the orders-anchored dedupe fix for cash-register closing report (SENSITIVE ACCOUNTING). For محمد صبحي on 2026-07-02, closing tab now shows EXACTLY ONE row (2,266,500 IQD / 143 orders) matching Sales tab. The inflated duplicate (2,286,500 / 145) is automatically excluded without any DB deletion. Backend returns true_by_cashier_day map, and both shift docs still exist in DB (client-side dedupe uses truth map). All 6 regression pytest tests pass.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": [
+    "/app/backend/tests/test_closing_dedupe.py"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "server.py is very large (~24k lines) — long-term should be split into modules; not blocking for this bug fix.",
+    "Frontend dedupeClosings/_conservativeDedupe belong in the Reports.js file (~line 1370-1455) — consider extracting into a small utility module with its own unit tests to prevent regressions."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "100%", "frontend": "100%"},
+  "test_credentials": "admin@maestroegp.com / admin123 (tenant default, branch الفرع الرئيسي 76f56acc-6948-4a2f-bbf4-feccbddea88f, cashier محمد صبحي / msubhi-repro-0001)",
+  "seed_data_creation": "Not created by this agent — used pre-seeded 2 shift docs for محمد صبحي on 2026-07-02 (2,266,500/143 correct + 2,286,500/145 inflated duplicate). Both still exist in DB post-test.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Backend GET /api/reports/cash-register-closing returns 'true_by_cashier_day' with keys 'id:<cashier_id>|<YYYY-MM-DD>' and 'name:<name_lc>|<day>'. For msubhi on 2026-07-02 truth=2266500. by_cashier and closings arrays also correctly show 2,266,500 only. /api/shifts?status=closed&cashiers_only=true returns 7 total incl. BOTH msubhi shifts (2,266,500 & 2,286,500) — DB untouched, dedupe is view-layer only. UI: Reports → إغلاق الصندوق tab has its own from/to date inputs + تحديث button. Individual view (كل شفت بمفرده) shows msubhi ONCE at 2,266,500/143.",
+  "acceptance_verification": {
+    "single_correct_row_shown": true,
+    "correct_value_2_266_500_present": true,
+    "correct_orders_143_present": true,
+    "inflated_2_286_500_absent_in_closing_tab": true,
+    "inflated_145_orders_absent_in_msubhi_row": true,
+    "both_shifts_exist_in_db_via_shifts_api": true,
+    "backend_true_by_cashier_day_correct": true,
+    "regression_pytest_6_of_6_passed": true
+  }
+}

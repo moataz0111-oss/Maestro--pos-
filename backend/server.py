@@ -16144,6 +16144,27 @@ async def get_cash_register_closing_report(
     # الإجمالي
     total_orders = len(orders)
     
+    # الحقيقة المرجعية: مبيعات كل كاشير في كل يوم تشغيلي محسوبة من الطلبات الفعلية (بلا تكرار)
+    # تُستخدَم في الواجهة لإزالة صفوف الإغلاق المكررة تلقائياً (يُبقى الصف المطابق للمبيعات، ويُستبعَد المضخّم)
+    true_by_cashier_day = {}
+    for o in orders:
+        _cid = o.get("cashier_id") or o.get("created_by") or ""
+        _cname = o.get("cashier_name") or o.get("created_by_name") or ""
+        if (not _cname or _cname == "غير محدد") and _cid and _cid in users_lookup:
+            _cname = users_lookup[_cid]
+        _bd = o.get("business_date")
+        if _bd:
+            _bd = str(_bd)[:10]
+        else:
+            try:
+                _bd = iraq_date_from_utc(o.get("created_at"))
+            except Exception:
+                _bd = str(o.get("created_at") or "")[:10]
+        _val = _sn(o.get("total"))
+        for _k in (f"id:{_cid}|{_bd}", f"name:{(_cname or '').strip().lower()}|{_bd}"):
+            true_by_cashier_day[_k] = true_by_cashier_day.get(_k, 0) + _val
+
+
     return {
         "period": {
             "start_date": start_date,
@@ -16180,7 +16201,8 @@ async def get_cash_register_closing_report(
             "by_cashier": expenses_by_cashier,
             "items": [{"description": e.get("description"), "amount": _sn(e.get("amount")), "category": e.get("category"), "created_by": e.get("created_by_name") or e.get("created_by"), "created_at": e.get("created_at")} for e in expenses]
         },
-        "closings": closings
+        "closings": closings,
+        "true_by_cashier_day": true_by_cashier_day
     }
 
 @api_router.post("/reports/cash-register-closing")
