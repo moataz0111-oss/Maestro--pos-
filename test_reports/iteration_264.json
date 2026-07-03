@@ -1,0 +1,46 @@
+{
+  "summary": "Verified backend cash-register closings de-duplication (unit tests + live API): 6/6 pytest passed, /api/reports/cash-register-closings returns exactly 2 closings with stats.duplicates_removed=3 and total_sales=449.75, /api/reports/cash-register-closing returns same 2 closings, and raw DB still holds all 5 rows (nothing deleted). Frontend UI however STILL shows 5 duplicate rows and 'من 5 إغلاق' label because the reports page bypasses the deduped closings API by preferring a raw /api/shifts?status=closed feed.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {
+        "component": "CashRegisterClosingTab (Reports.js)",
+        "issue": "UI shows 5 rows / 'من 5 إغلاق' / delete-closing-* count = 5 instead of 2. The de-duplicated backend response is discarded whenever raw shifts are available.",
+        "selector": "[data-testid^='delete-closing-'], view-individual-shifts",
+        "priority": "CRITICAL"
+      }
+    ],
+    "integration_issues": [
+      {
+        "flow": "Cash-register closing report loading",
+        "issue": "In /app/frontend/src/pages/Reports.js lines 1382-1436, fetchReport() calls BOTH /api/reports/cash-register-closings (deduped, returns 2) AND /api/shifts?status=closed&cashiers_only=true (raw, returns 5). Then at line 1426 `if (allShifts.length > 0) setClosingsHistory(allShifts...)` — the raw shifts win, so backend de-dup is bypassed. UI displays all 5 duplicates for 'كاشير اختبار' on 2026-06-30 and completely omits the 'كاشير كلوز QA' closing (which has no matching /api/shifts entry).",
+        "affected_selectors": ["view-individual-shifts", "delete-closing-0..4"]
+      }
+    ],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_closing_dedupe.py"
+  ],
+  "action_items": [
+    "Fix /app/frontend/src/pages/Reports.js fetchReport() (~lines 1422-1436): use the deduped `closingsFromHistory` from /api/reports/cash-register-closings as the SOURCE OF TRUTH for the report view, or apply the same (cashier_id, business_date) dedupe to `allShifts` before setClosingsHistory. Do not silently prefer raw /api/shifts data because it is not de-duplicated.",
+    "Also: /api/shifts?status=closed&cashiers_only=true does not return the 'كاشير كلوز QA' closing at all (it only lives in cash_register_closings collection). Confirm whether shifts feed should include such orphan closings or the report should always merge both sources with dedupe applied afterwards.",
+    "After fix, re-verify: 'من 2 إغلاق' label, 2 rows (كاشير كلوز QA 449.75 + كاشير اختبار 0), totalCountedCash from deduped list only, 899.5 must never appear."
+  ],
+  "critical_code_review_comments": [
+    "Reports.js has 5362 lines — split CashRegisterClosingTab into its own module (>1400 lines just for this tab).",
+    "fetchReport uses Promise.all with 4 endpoints + N per-active-shift calls; consider a single server-side aggregate endpoint to avoid client-side merge/dedupe drift like the current bug.",
+    "Frontend duplicates de-dup logic that already exists on backend — DRY violation. Trust the backend-deduped response instead of merging with raw /api/shifts."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "100%", "frontend": "0% (report tab shows 5 duplicates instead of 2)"},
+  "test_credentials": "admin@maestroegp.com / admin123 (tenant default has the 5-closing dataset)",
+  "seed_data_creation": "None. Verified existing tenant='default' data: DB has 5 cash_register_closings + 5 shifts (all 'كاشير اختبار' on 2026-06-30) + 1 orphan closing for 'كاشير كلوز QA' with total_sales=449.75.",
+  "retest_needed": true,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Backend de-dup is FULLY working — /api/reports/cash-register-closings and /api/reports/cash-register-closing both return 2 deduped closings, stats.duplicates_removed=3, total_sales=449.75, DB unchanged (5 raw rows preserved). Playwright flow for the tab: (1) login admin@maestroegp.com/admin123, (2) go to /reports, (3) get_by_role('tab', name='إغلاق الصندوق').click(force=True) THEN focus + Space to actually activate Radix tab, (4) set the tab's OWN date inputs (visible only inside cash-register tab) using native setter + input+change events to '2026-06-01' and '2026-07-05', (5) click 'تحديث'. The frontend bug is at Reports.js lines 1422-1436 (prefer allShifts over closingsFromHistory).",
+  "rca of the issue": "ROOT CAUSE: /app/frontend/src/pages/Reports.js fetchReport() merges the DEDUPED closings list from /api/reports/cash-register-closings with the RAW closed-shifts list from /api/shifts?status=closed&cashiers_only=true. When any raw shifts exist for the range (line 1426 `if (allShifts.length > 0)`), the raw list wins and setClosingsHistory receives 5 duplicate rows for cashier 'كاشير اختبار' on 2026-06-30. The deduped response is only used as a fallback when no shifts are returned. Additionally, the QA closing (cashier 'كاشير كلوز QA', 449.75) has no corresponding /api/shifts row, so it is DROPPED from the UI entirely — a real financial data loss in the display. REPRO: login admin, Reports → إغلاق الصندوق tab, dates 2026-06-01 → 2026-07-05, تحديث → 5 rows shown, all cashier 'كاشير اختبار', no QA row, counted-cash card shows 300,000 IQD and 'من 5 إغلاق'. MITIGATION: in fetchReport, always trust closingsFromHistory (already de-duped by backend) as the primary source; if merging with shifts is needed for extra fields, do it via a map keyed by shift_id AND apply the same (cashier_id, business_date) dedupe on the client, and ensure orphan closings (no matching shift) are preserved."
+}

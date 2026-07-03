@@ -10,7 +10,7 @@ from dotenv import load_dotenv
 from motor.motor_asyncio import AsyncIOMotorClient
 
 load_dotenv("/app/backend/.env")
-API = os.environ.get("REACT_APP_BACKEND_URL", "https://offline-pos-audit.preview.emergentagent.com").rstrip("/") + "/api"
+API = os.environ.get("REACT_APP_BACKEND_URL", "https://inventory-accounting-10.preview.emergentagent.com").rstrip("/") + "/api"
 ADMIN = {"email": "admin@maestroegp.com", "password": "admin123"}
 
 

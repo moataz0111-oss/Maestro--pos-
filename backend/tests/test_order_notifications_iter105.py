@@ -10,7 +10,7 @@ import requests
 import os
 import time
 
-BASE_URL = os.environ.get('REACT_APP_BACKEND_URL', 'https://offline-pos-audit.preview.emergentagent.com')
+BASE_URL = os.environ.get('REACT_APP_BACKEND_URL', 'https://inventory-accounting-10.preview.emergentagent.com')
 
 class TestOrderNotificationsAPI:
     """Test Order Notifications API endpoints"""

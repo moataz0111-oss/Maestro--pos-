@@ -15765,6 +15765,91 @@ async def collect_credit_payment(
 
 # ==================== تقرير إغلاق الصندوق ====================
 
+
+def _cr_closing_business_day(c):
+    """اليوم التشغيلي لسجل الإغلاق: business_date إن وُجد، وإلا تاريخ العراق من بداية/إغلاق الوردية."""
+    bd = c.get("business_date")
+    if bd:
+        return str(bd)[:10]
+    ref = c.get("shift_start") or c.get("closed_at") or c.get("shift_end")
+    if ref:
+        try:
+            return iraq_date_from_utc(ref)
+        except Exception:
+            return str(ref)[:10]
+    return "unknown"
+
+
+def _cr_parse_iso(s):
+    if not s:
+        return None
+    try:
+        return datetime.fromisoformat(str(s).replace("Z", "+00:00"))
+    except Exception:
+        return None
+
+
+def dedupe_shift_closings(closings):
+    """إزالة صفوف إغلاق الوردية المكررة تلقائياً (منطقة محاسبية حساسة — لا تدخّل يدوي).
+
+    السبب الجذري: باغ فتح ورديتين متزامنتين لنفس الكاشير (مُنِع مستقبلاً) خلّف سجلّي إغلاق
+    لنفس الوردية الفعلية — أحدهما يضخّم المبيعات (يعدّ نفس الطلبات مرتين) فلا يطابق الإغلاق المبيعات.
+
+    القاعدة (آمنة، لا تدمج الورديات المتتابعة المشروعة صباح/مساء):
+    نعتبر سجلّين مكرَّرين فقط إذا كانا لنفس (الفرع + اسم الكاشير + اليوم التشغيلي) و:
+      • تتداخل فترتاهما الزمنيتان [shift_start, shift_end] (كاشير واحد لا يفتح ورديتين متزامنتين)، أو
+      • تطابقت بصمتهما تماماً (نفس المبيعات وعدد الطلبات والنقدي والبطاقة).
+    عند التكرار نُبقي السجل الأصح = الأقل مبيعات (غير المضخّم) ونستبعد الأكبر من العرض والإحصائيات.
+    لا يُحذف أي شيء من قاعدة البيانات — فقط يُستبعَد من التقرير (قابل للتدقيق دائماً)."""
+    items = list(closings or [])
+    if len(items) < 2:
+        return items, []
+
+    groups = {}
+    for c in items:
+        key = (
+            c.get("branch_id") or "",
+            (c.get("cashier_name") or "").strip().lower() or (c.get("cashier_id") or ""),
+            _cr_closing_business_day(c),
+        )
+        groups.setdefault(key, []).append(c)
+
+    kept, removed = [], []
+    for group in groups.values():
+        if len(group) < 2:
+            kept.extend(group)
+            continue
+        used = [False] * len(group)
+        for i in range(len(group)):
+            if used[i]:
+                continue
+            si, ei = _cr_parse_iso(group[i].get("shift_start")), _cr_parse_iso(group[i].get("shift_end"))
+            sig_i = (_sn(group[i].get("total_sales")), _sn(group[i].get("orders_count")),
+                     _sn(group[i].get("cash_sales")), _sn(group[i].get("card_sales")))
+            cluster = [group[i]]
+            used[i] = True
+            for j in range(i + 1, len(group)):
+                if used[j]:
+                    continue
+                sj, ej = _cr_parse_iso(group[j].get("shift_start")), _cr_parse_iso(group[j].get("shift_end"))
+                sig_j = (_sn(group[j].get("total_sales")), _sn(group[j].get("orders_count")),
+                         _sn(group[j].get("cash_sales")), _sn(group[j].get("card_sales")))
+                overlap = bool(si and ei and sj and ej and si < ej and sj < ei)
+                identical = (sig_i == sig_j)
+                if overlap or identical:
+                    cluster.append(group[j])
+                    used[j] = True
+            if len(cluster) == 1:
+                kept.append(cluster[0])
+            else:
+                cluster.sort(key=lambda r: (_sn(r.get("total_sales")), _sn(r.get("orders_count")), str(r.get("closed_at") or "")))
+                kept.append(cluster[0])
+                removed.extend(cluster[1:])
+
+    kept.sort(key=lambda r: str(r.get("closed_at") or ""), reverse=True)
+    return kept, removed
+
+
 @api_router.get("/reports/cash-register-closing")
 async def get_cash_register_closing_report(
     start_date: Optional[str] = None,
@@ -15862,6 +15947,8 @@ async def get_cash_register_closing_report(
         closings_query["closed_at"]["$lte"] = end_date
     
     closings = await db.cash_register_closings.find(closings_query, {"_id": 0}).sort("closed_at", -1).to_list(100)
+    # إزالة صفوف الإغلاق المكررة تلقائياً حتى يطابق تقرير الإغلاق المبيعات الحقيقية (منطقة حساسة — بلا حذف من القاعدة)
+    closings, _dup_removed = dedupe_shift_closings(closings)
     
     # ==================== حساب المبيعات ====================
     
@@ -16186,6 +16273,9 @@ async def get_cash_register_closings_history(
         query["closed_at"]["$lte"] = end_date
     
     closings = await db.cash_register_closings.find(query, {"_id": 0}).sort("closed_at", -1).to_list(limit)
+    # إزالة صفوف الإغلاق المكررة تلقائياً (نفس الوردية سُجّلت مرتين بسبب باغ فتح شفتين متزامنين)
+    # حتى يطابق النقد المعدود/المتوقع والمبيعات القيم الحقيقية. لا حذف من القاعدة — استبعاد من التقرير فقط.
+    closings, dup_removed = dedupe_shift_closings(closings)
     
     # حساب الإحصائيات
     total_sales = sum(c.get("total_sales", 0) for c in closings)
@@ -16202,10 +16292,72 @@ async def get_cash_register_closings_history(
             "total_difference": total_difference,
             "surplus_count": surplus_count,
             "shortage_count": shortage_count,
-            "exact_count": exact_count
+            "exact_count": exact_count,
+            "duplicates_removed": len(dup_removed)
         }
     }
 
+
+
+@api_router.delete("/reports/cash-register-closing/{record_id}")
+async def delete_cash_register_closing(record_id: str, current_user: dict = Depends(get_current_user)):
+    """حذف صف إغلاق/شفت مكرر من التقرير — للمالك/المدير فقط.
+    صفوف التقرير تأتي من مجموعة shifts (أو cash_register_closings كاحتياطي)، لذا نحذف من الاثنين حسب المعرّف،
+    ونعكس أي إيداع خزينة مرتبط. الطلبات نفسها تبقى (لا تتأثر مبيعات التقرير المحسوبة من الطلبات)."""
+    role = current_user.get("role")
+    if role not in ["admin", "super_admin", "manager", "owner"]:
+        raise HTTPException(status_code=403, detail="غير مصرح — حذف السجل للمالك/المدير فقط")
+
+    tq = build_tenant_query(current_user)
+    shift = await db.shifts.find_one({**tq, "id": record_id}, {"_id": 0})
+    closing = await db.cash_register_closings.find_one({**tq, "id": record_id}, {"_id": 0})
+    if not shift and not closing:
+        raise HTTPException(status_code=404, detail="السجل غير موجود")
+
+    src = shift or closing
+    # لا نسمح بحذف شفت مفتوح/نشط (يجب إغلاقه أولاً)
+    if shift and shift.get("status") == "open":
+        raise HTTPException(status_code=400, detail="لا يمكن حذف وردية مفتوحة — أغلقها أولاً ثم احذفها")
+
+    # عكس أي إيداع خزينة مرتبط بهذا السجل أو بشفته
+    reversed_deposits = 0
+    reversed_amount = 0.0
+    dep_or = [{"ref_closing_id": record_id}]
+    if src.get("received_deposit_id"):
+        dep_or.append({"id": src.get("received_deposit_id")})
+    async for dep in db.owner_deposits.find({"$or": dep_or}, {"_id": 0, "amount": 1}):
+        reversed_amount += float(dep.get("amount") or 0)
+        reversed_deposits += 1
+    if reversed_deposits:
+        await db.owner_deposits.delete_many({"$or": dep_or})
+
+    # حذف السجل من المجموعتين حسب المعرّف
+    await db.cash_register_closings.delete_many({"$or": [{"id": record_id}, {"shift_id": record_id}]})
+    if shift:
+        await db.shifts.delete_one({"id": record_id})
+
+    await db.audit_logs.insert_one({
+        "id": str(uuid.uuid4()),
+        "action": "delete_shift_closing_record",
+        "tenant_id": current_user.get("tenant_id"),
+        "record_id": record_id,
+        "source": "shift" if shift else "closing",
+        "cashier_name": src.get("cashier_name"),
+        "branch_name": src.get("branch_name"),
+        "total_sales": src.get("total_sales"),
+        "business_date": src.get("business_date"),
+        "reversed_deposits": reversed_deposits,
+        "reversed_amount": reversed_amount,
+        "deleted_by": current_user.get("full_name") or current_user.get("username"),
+        "deleted_at": datetime.now(timezone.utc).isoformat(),
+    })
+
+    return {
+        "message": "تم حذف السجل المكرر بنجاح",
+        "record_id": record_id,
+        "reversed_deposits": reversed_deposits,
+        "reversed_amount": reversed_amount,
+    }
 
 
 @api_router.get("/reports/delivery-credits")
@@ -22144,7 +22296,7 @@ async def get_menu_link(request: Request, current_user: dict = Depends(get_curre
         base_url = f"{parsed.scheme}://{parsed.netloc}"
     else:
         # fallback للـ environment variable
-        base_url = os.environ.get('REACT_APP_BACKEND_URL', 'https://offline-pos-audit.preview.emergentagent.com')
+        base_url = os.environ.get('REACT_APP_BACKEND_URL', 'https://inventory-accounting-10.preview.emergentagent.com')
     
     menu_url = f"{base_url}/menu/{tenant.get('menu_slug', tenant_id)}"
     
