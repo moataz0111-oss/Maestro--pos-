@@ -74,7 +74,8 @@ import {
   Phone,
   Trophy,
   Medal,
-  RefreshCcw
+  RefreshCcw,
+  Layers
 } from 'lucide-react';
 import { useTheme } from '../context/ThemeContext';
 import TargetCelebration from '../components/TargetCelebration';
@@ -3227,6 +3228,24 @@ export default function Dashboard() {
                     </div>
                   </div>
                 </div>
+
+                {/* شارة دمج الورديات المكررة تلقائياً — تطمين المحاسب */}
+                {(cashSummary.merged_shifts_count || 0) > 0 && (
+                  <div
+                    className="flex items-start gap-3 p-3 bg-amber-500/10 border border-amber-500/30 rounded-lg"
+                    data-testid="merged-shifts-badge"
+                  >
+                    <Layers className="h-5 w-5 text-amber-600 shrink-0 mt-0.5" />
+                    <div className="text-sm">
+                      <p className="font-bold text-amber-700">
+                        {t('تم دمج')} {cashSummary.merged_shifts_count} {t('وردية مكررة تلقائياً')}
+                      </p>
+                      <p className="text-xs text-muted-foreground mt-0.5">
+                        {t('اكتُشفت ورديات مفتوحة مكررة لنفس الكاشير اليوم — تم توحيد مبيعاتها في هذا الإغلاق دون أي فقدان للبيانات، ليطابق الرقم تقرير المبيعات.')}
+                      </p>
+                    </div>
+                  </div>
+                )}
 
                 {/* ملخص المبيعات */}
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-3">

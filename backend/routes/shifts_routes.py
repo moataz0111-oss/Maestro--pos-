@@ -1242,6 +1242,47 @@ async def get_shifts(
     return shifts
 
 # ==================== CASH REGISTER ====================
+async def _resolve_open_shift_for_close(db, shift_query, tenant_id):
+    """يحل مشكلة تعدّد الورديات المفتوحة (باغ الفتح المزدوج) عند الإغلاق/الملخص.
+
+    بدل اختيار وردية مفتوحة عشوائية (كان يُظهر مبيعات جزئية فقط)، نختار الوردية **الأقدم بدءاً**
+    كمرساة ونجمع كل الورديات المفتوحة لنفس (الفرع + الكاشير + اليوم التشغيلي) — فتُحسب المبيعات
+    من بداية أقدم وردية وتشمل طلبات كل تلك الورديات، فيطابق الإغلاق كامل مبيعات اليوم كما في التقرير.
+
+    يُعيد: (anchor_shift, consolidated_ids, earliest_start). للحالة العادية (وردية واحدة) لا يتغيّر السلوك."""
+    opens = await db.shifts.find(shift_query, {"_id": 0}).to_list(200)
+    if not opens:
+        return None, [], None
+
+    def _st(s):
+        return s.get("started_at") or s.get("opened_at") or ""
+
+    def _day(s):
+        bd = s.get("business_date")
+        return str(bd)[:10] if bd else str(_st(s))[:10]
+
+    def _norm(n):
+        return (n or "").strip().lower()
+
+    opens.sort(key=lambda s: str(_st(s)))
+    anchor = opens[0]
+    a_branch = anchor.get("branch_id")
+    a_cashier = _norm(anchor.get("cashier_name")) or (anchor.get("cashier_id") or "")
+    a_day = _day(anchor)
+
+    group = [
+        s for s in opens
+        if s.get("branch_id") == a_branch
+        and ((_norm(s.get("cashier_name")) or (s.get("cashier_id") or "")) == a_cashier)
+        and _day(s) == a_day
+    ]
+    consolidated_ids = [s["id"] for s in group if s.get("id")]
+    if anchor.get("id") and anchor["id"] not in consolidated_ids:
+        consolidated_ids.append(anchor["id"])
+    return anchor, consolidated_ids, _st(anchor)
+
+
+
 @router.get("/cash-register/summary")
 async def get_cash_register_summary(
     branch_id: Optional[str] = None,
@@ -1272,7 +1313,7 @@ async def get_cash_register_summary(
         if target_branch_id:
             shift_query["branch_id"] = target_branch_id
     
-    shift = await db.shifts.find_one(shift_query, {"_id": 0})
+    shift, consolidated_ids, earliest_start = await _resolve_open_shift_for_close(db, shift_query, tenant_id)
     
     # إذا لم توجد وردية مفتوحة
     if not shift:
@@ -1305,15 +1346,17 @@ async def get_cash_register_summary(
     branch = await db.branches.find_one({"id": shift.get("branch_id", "")}, {"_id": 0, "name": 1})
     
     shift_id = shift["id"]
-    shift_start = shift.get("started_at") or shift.get("opened_at") or datetime.now(timezone.utc).isoformat()
+    if not consolidated_ids:
+        consolidated_ids = [shift_id]
+    shift_start = earliest_start or shift.get("started_at") or shift.get("opened_at") or datetime.now(timezone.utc).isoformat()
     shift_cashier_id = shift.get("cashier_id") or current_user.get("id")
     
     # جلب جميع طلبات الوردية - بالـ shift_id + الطلبات بدون shift_id في نفس الفترة والفرع
     # هذا يضمن احتساب طلبات تطبيق الزبائن والطلبات غير المرتبطة بوردية
     base_status_filter = {"$nin": [OrderStatus.CANCELLED, "refunded"]}
     
-    # 1. طلبات مرتبطة بالـ shift_id مباشرة
-    shift_order_query = {"shift_id": shift_id, "status": base_status_filter}
+    # 1. طلبات مرتبطة بأي من ورديات الكاشير المفتوحة (دمج الفتح المزدوج)
+    shift_order_query = {"shift_id": {"$in": consolidated_ids}, "status": base_status_filter}
     if tenant_id:
         shift_order_query["tenant_id"] = tenant_id
     
@@ -1353,7 +1396,7 @@ async def get_cash_register_summary(
         orders = await db.orders.find(fallback_query).to_list(1000)
     
     # الطلبات الملغاة لهذه الوردية (نفس المنطق: shift_id + بدون shift_id)
-    cancelled_shift = {"shift_id": shift_id, "status": OrderStatus.CANCELLED}
+    cancelled_shift = {"shift_id": {"$in": consolidated_ids}, "status": OrderStatus.CANCELLED}
     if tenant_id:
         cancelled_shift["tenant_id"] = tenant_id
     cancelled_orders = await db.orders.find(cancelled_shift).to_list(1000)
@@ -1376,7 +1419,7 @@ async def get_cash_register_summary(
             seen_cancelled.add(o["id"])
     
     # جلب المرتجعات بشكل منفصل
-    refunded_shift_q = {"shift_id": shift_id, "status": "refunded"}
+    refunded_shift_q = {"shift_id": {"$in": consolidated_ids}, "status": "refunded"}
     if tenant_id:
         refunded_shift_q["tenant_id"] = tenant_id
     refunded_orders_list = await db.orders.find(refunded_shift_q).to_list(1000)
@@ -1479,7 +1522,8 @@ async def get_cash_register_summary(
         "net_profit": net_profit,
         "expected_cash": expected_cash,
         "total_refunds": total_refunds_amount,
-        "refund_count": refund_count_val
+        "refund_count": refund_count_val,
+        "merged_shifts_count": max(0, len(consolidated_ids) - 1)
     }
 
 @router.post("/cash-register/close")
@@ -1509,13 +1553,15 @@ async def close_cash_register(close_data: CashRegisterClose, current_user: dict 
         if target_branch_id:
             shift_query["branch_id"] = target_branch_id
     
-    shift = await db.shifts.find_one(shift_query, {"_id": 0})
+    shift, consolidated_ids, earliest_start = await _resolve_open_shift_for_close(db, shift_query, tenant_id)
     
     if not shift:
         raise HTTPException(status_code=404, detail="لا يوجد وردية مفتوحة")
     
     shift_id = shift["id"]
-    shift_start = shift.get("started_at") or shift.get("opened_at") or datetime.now(timezone.utc).isoformat()
+    if not consolidated_ids:
+        consolidated_ids = [shift_id]
+    shift_start = earliest_start or shift.get("started_at") or shift.get("opened_at") or datetime.now(timezone.utc).isoformat()
     shift_cashier_id = shift.get("cashier_id") or current_user.get("id")
     branch = await db.branches.find_one({"id": shift.get("branch_id", "")}, {"_id": 0, "name": 1})
 
@@ -1584,7 +1630,7 @@ async def close_cash_register(close_data: CashRegisterClose, current_user: dict 
     # جلب جميع طلبات الوردية - بالـ shift_id + الطلبات بدون shift_id في نفس الفترة والفرع
     base_status_filter = {"$nin": [OrderStatus.CANCELLED, "refunded"]}
     
-    shift_order_query = {"shift_id": shift_id, "status": base_status_filter}
+    shift_order_query = {"shift_id": {"$in": consolidated_ids}, "status": base_status_filter}
     if tenant_id:
         shift_order_query["tenant_id"] = tenant_id
     
@@ -1622,7 +1668,7 @@ async def close_cash_register(close_data: CashRegisterClose, current_user: dict 
             fallback_query["branch_id"] = shift["branch_id"]
         orders = await db.orders.find(fallback_query).to_list(1000)
     
-    cancelled_shift = {"shift_id": shift_id, "status": OrderStatus.CANCELLED}
+    cancelled_shift = {"shift_id": {"$in": consolidated_ids}, "status": OrderStatus.CANCELLED}
     if tenant_id:
         cancelled_shift["tenant_id"] = tenant_id
     cancelled_orders = await db.orders.find(cancelled_shift).to_list(1000)
@@ -1645,7 +1691,7 @@ async def close_cash_register(close_data: CashRegisterClose, current_user: dict 
             seen_cancelled.add(o["id"])
     
     # جلب المرتجعات بشكل منفصل
-    refunded_shift = {"shift_id": shift_id, "status": "refunded"}
+    refunded_shift = {"shift_id": {"$in": consolidated_ids}, "status": "refunded"}
     if tenant_id:
         refunded_shift["tenant_id"] = tenant_id
     refunded_orders = await db.orders.find(refunded_shift).to_list(1000)
@@ -1748,8 +1794,18 @@ async def close_cash_register(close_data: CashRegisterClose, current_user: dict 
     
     await db.shifts.update_one({"id": shift_id}, {"$set": update_data})
     
+    # دمج الورديات المفتوحة المكررة الأخرى لنفس الكاشير/اليوم (باغ الفتح المزدوج): تُغلق كـ"merged"
+    # حتى لا تبقى مفتوحة ولا تُضاعف المبيعات — طلباتها محتسبة بالفعل في هذه الوردية.
+    other_ids = [sid for sid in consolidated_ids if sid and sid != shift_id]
+    if other_ids:
+        await db.shifts.update_many(
+            {"id": {"$in": other_ids}, "status": "open"},
+            {"$set": {"status": "merged", "merged_into": shift_id, "ended_at": datetime.now(timezone.utc).isoformat()}}
+        )
+    
     updated_shift = await db.shifts.find_one({"id": shift_id}, {"_id": 0})
     updated_shift["branch_name"] = branch["name"] if branch else ""
+    updated_shift["merged_shifts_count"] = len(other_ids)
     
     return updated_shift
 

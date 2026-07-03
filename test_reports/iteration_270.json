@@ -1,0 +1,26 @@
+{
+  "summary": "Iter270 verified the open-shift consolidation fix end-to-end. Summary endpoint, POS close dialog, and close endpoint all now return the FULL day's total (2,266,500) instead of the arbitrary duplicate open shift (20,000). Close mutation is correct: earliest shift (09:00) is closed with total_sales=2,266,500 and the 15:41 duplicate is marked status='merged' with merged_into pointing to the anchor. Regression 6/6 passes on test_closing_dedupe.py. New file test_iter270_close_consolidation.py added — 4/4 pass (after minor test-query correction: anchor's notes field is cleared on close, so DB check uses seed ids instead of notes filter).",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": [
+    "/app/backend/tests/test_iter270_close_consolidation.py",
+    "/app/backend/tests/test_closing_dedupe.py"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "shifts_routes.py _resolve_open_shift_for_close helper is well-scoped (same branch + cashier_name + business_day) — regression tests confirm single-shift path unaffected.",
+    "close_cash_register correctly stamps merged shifts with status='merged' + merged_into=<anchor_id>, preserving audit trail (values not lost).",
+    "Anchor shift keeps started_at=earliest (09:00) so downstream reports/receipts show correct duration.",
+    "Minor: on close, the anchor's 'notes' field is overwritten (set to None) — if audit needed, consider preserving original notes or copying to a 'closing_notes' field."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iter270_close_consolidation.py"
+  ],
+  "success_rate": {"backend": "100%", "frontend": "100%"},
+  "test_credentials": "admin@maestroegp.com / admin123 (login body field is 'email', NOT 'username'). Login returns 'token'.",
+  "seed_data_creation": "No new seed created. Existing seed WAS MUTATED by the close test (as intended): shift 9c836d96 (09:00) is now status='closed' total_sales=2,266,500; shift 92b598b8 (15:41) is now status='merged' merged_into=9c836d96 total_sales=20,000. To re-run, main agent must reseed both open shifts.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Seed is CONSUMED (both shifts closed/merged). Any further validation of open-shift consolidation requires reseeding. GET /api/cash-register/summary?branch_id=76f56acc... will now return 404 or the closed shift depending on impl. Backend endpoint & FE dialog are both fixed as required by iter270.",
+  "rca of the issue": "Root cause (fixed by main agent): _resolve_open_shift_for_close now picks earliest open shift and unions all open shifts for same (branch, cashier_name, business_day) — get_cash_register_summary and close_cash_register both use shift_start=earliest_start and {'shift_id': {'$in': consolidated_ids}} plus unlinked-since-earliest_start, so the full day's 2,266,500 is returned regardless of which duplicate is 'first' in Mongo. On close, the extra open shifts are marked status='merged' with merged_into=<anchor.id>. Verified via direct API + Playwright dialog + DB inspection."
+}
