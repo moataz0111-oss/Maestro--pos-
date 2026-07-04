@@ -133,6 +133,7 @@ class CashRegisterClose(BaseModel):
     notes: Optional[str] = None
     branch_id: Optional[str] = None
     force_close_without_count: Optional[bool] = False  # تجاوز فحص الجرد (للمالك/المدير)
+    force_close_with_discrepancy: Optional[bool] = False  # موافقة المدير على فرق نقدي كبير (تقرير الأمان #9)
 
 class ShiftResponse(BaseModel):
     model_config = ConfigDict(extra="ignore")
@@ -1764,6 +1765,20 @@ async def close_cash_register(close_data: CashRegisterClose, current_user: dict 
     opening_cash = _safe_num(shift.get("opening_cash", shift.get("opening_balance", 0)))
     expected_cash = opening_cash + cash_sales - total_expenses
     cash_difference = closing_cash - expected_cash
+    
+    # 🔒 تقرير الأمان #9: موافقة إلزامية على فرق نقدي كبير (>5% من المبيعات).
+    # الكاشير يُمنَع من إتمام إغلاق بفرق كبير دون موافقة المدير؛ المدير/المالك يُتمّه.
+    _disc_threshold = total_sales * 0.05
+    if total_sales > 0 and abs(cash_difference) > _disc_threshold and not is_manager \
+            and not bool(getattr(close_data, "force_close_with_discrepancy", False)):
+        raise HTTPException(status_code=409, detail={
+            "code": "CASH_DISCREPANCY_APPROVAL_REQUIRED",
+            "message": f"الفرق النقدي ({abs(cash_difference):,.0f} د.ع) يتجاوز 5% من المبيعات — يلزم موافقة المدير لإتمام الإغلاق",
+            "difference": cash_difference,
+            "expected_cash": expected_cash,
+            "counted_cash": closing_cash,
+            "threshold": _disc_threshold,
+        })
     
     update_data = {
         "closing_cash": closing_cash,

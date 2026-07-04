@@ -1,5 +1,29 @@
 # Maestro EGP - Multi-Tenant POS System PRD
 
+## AUTO-CLEANUP + تحصين إضافي (4 يوليو 2026) ✅ (iter272 = 100% باك، 15/15)
+- **حذف تلقائي لسجلات فاحص الاختراق ("RW Probe"):** بدل زر يدوي، أُضيفت مهمة إقلاع خلفية idempotent `purge_pentest_probe_data_v1` (server.py قبل auto_migrate_business_dates، مسجّلة في `_run_deferred_startup_tasks`). عند كل تحديث/نشر (إقلاع الخادم) تكتشف وتحذف الورديات/الطلبات/الإغلاقات ذات أسماء الفحص (regex ضيّق: rw probe|read-write probe|pentest|sqlmap|burpsuite|nikto|<script) + تعكس الإيداعات المرتبطة + تسجّل في audit_logs (action=auto_purge_pentest_probe). لا تمسّ الأسماء العربية الحقيقية (تحقّق: "أحمد" ينجو).
+  - **السبب الجذري لـ "السجل غير موجود":** سجلات الـ probe أُنشئت بـ tenant_id=null فلم يجدها حذف التقرير المُقيّد بالمستأجر.
+- **نقطة نهاية إدارية اختيارية:** `POST /api/reports/purge-shift` (admin/owner فقط، dry_run للمعاينة) تحذف بالاسم/المعرّف مع مبيعاتها؛ tenant-clause متسامح مع tenant_id=null. cashier → 403؛ بلا اسم/معرّف → 400.
+- **تحصين إضافي لـ #2:** `POST /api/orders` يرفض الآن أيضاً أي صنف بـ product_id غير موجود بالقائمة وسعره ≤0 (يمنع طلبات وهمية بمعرّف مُلفّق). الأصناف المخصّصة بسعر موجب تبقى تعمل.
+- **#10/#11 (nginx):** أُنشئ ملف جاهز `/app/fix/nginx-security.conf` (CSP + HSTS + X-Frame + إعادة توجيه HTTP→HTTPS) للتطبيق على خادم الإنتاج.
+- أُزيل الزر اليدوي من Reports.js بناءً على طلب المستخدم (التنظيف تلقائي).
+
+
+
+## SECURITY HARDENING (3 يوليو 2026) — إغلاق ثغرات تقرير الاختراق SECURITY_REPORT_FINAL_2026-07-03 ✅ (iter271 = 100% باك، 23/23)
+تم إغلاق كل الثغرات المفتوحة في التقرير والتحقق منها عبر testing_agent (iteration_271.json):
+- **حرِج #1 تسريب بيانات الفروع عبر القائمة العامة:** `GET /api/customer/menu/{tenant}` كان يُرجع كل حقول الفرع (إيجار/كهرباء/ماء/مولّدة/نسبة الشراكة/اسم وهاتف المشتري). الآن يُسقِط projection على (id/name/address/phone/lat/lng/is_active/branch_type) فقط.
+- **حرِج #2 قبول أسعار سالبة/صفرية:** `POST /api/orders` كان يثق بسعر العميل. أُضيف حارس في **بداية** الدالة (قبل أي إنشاء وردية) يرفض 400: كمية ≤0، سعر <0، إضافة بسعر سالب/كمية 0، وبيع بأقل من سعر القائمة (يشمل الصفر — الخصم عبر حقل الخصم فقط). يمنع أيضاً إنشاء ورديات وهمية (مصدر "RW Probe").
+- **عالٍ #3 مفتاح سري للمدير:** `login` صار يفرض `secret_key` (constant-time compare via hmac) لأي حساب admin/manager/owner له مفتاح مُخزَّن؛ الحسابات بلا مفتاح لا تُقفَل. super_admin كما هو (271018).
+- **عالٍ #4 callcenter/simulate + #6 payment-settings + #8 supplier-payment-dues:** أُضيفت قواعد RBAC مركزية (_RBAC_RULES) تحصرها بالأدوار الإدارية (403 للكاشير).
+- **عالٍ #5 تسريب تكلفة/ربح المنتج:** `GET /api/products` و`/products/{id}` تُصفّر cost/operating_cost/profit/packaging_cost لغير الإداريين (السعر يبقى للبيع).
+- **عالٍ #7 تسريب اتصال المالك:** `GET /api/system/invoice-settings` تُرجع system_phone/phone2/email/website = null لغير الإداريين.
+- **متوسط #9 فرق نقدي كبير:** `POST /api/cash-register/close` يرفض 409 (code=CASH_DISCREPANCY_APPROVAL_REQUIRED) للكاشير عند فرق >5% من المبيعات ما لم يمرّر force_close_with_discrepancy؛ المدير/المالك يتجاوز.
+- **متوسط #10/#11 (بنية تحتية):** ترويسات الأمان (X-Frame-Options/X-Content-Type-Options/HSTS/Referrer/Permissions) موجودة أصلاً في middleware الخادم. CSP وإعادة توجيه HTTP→HTTPS تُضبط على nginx الإنتاج (fix/nginx-security.conf) — خارج الكود.
+**⚠️ يتطلب Save to GitHub + Deploy لسريان الإصلاحات على الإنتاج.** بعد النشر يمكن حذف سجل "RW Probe" التجريبي (لن تتكوّن سجلات جديدة).
+
+
+
 ## ENHANCEMENT (3 يوليو 2026) — شارة "تم دمج N وردية مكررة تلقائياً" في نافذة إغلاق الصندوق ✅
 **الهدف:** طمأنة المحاسب بأن توحيد الورديات المفتوحة المكررة تمّ آلياً وبأمان (لا فقدان بيانات) ليطابق الرقم تقرير المبيعات.
 **Backend (`routes/shifts_routes.py`):** أُضيف حقل `merged_shifts_count` لاستجابة `GET /api/cash-register/summary` (= `len(consolidated_ids)-1`) ولاستجابة `POST /api/cash-register/close` (= عدد الورديات المدموجة `other_ids`).

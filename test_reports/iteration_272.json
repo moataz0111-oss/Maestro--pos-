@@ -1,0 +1,24 @@
+{
+  "summary": "Iter272 backend-only tests (15/15 passing) verify the automatic RW Probe purge on startup, the admin /api/reports/purge-shift endpoint (dry-run, real delete, RBAC, 400 validation), and full iter271 security regression (public menu leak, owner secret_key, cashier product cost masking, forbidden endpoints, invoice settings masking, order price guards).",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": [
+    "/app/backend/tests/test_probe_purge_iter272.py",
+    "/app/test_reports/pytest/iter272_results.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "purge_pentest_probe_data_v1 regex is properly narrow (rw probe/pentest/sqlmap/burpsuite/nikto/<script) — verified an Arabic cashier name 'أحمد' survives a restart.",
+    "PurgeShiftRequest endpoint correctly requires admin/owner/manager/super_admin roles (cashier gets 403) and rejects requests lacking both cashier_name and shift_id with 400.",
+    "Iter271 order price guard evaluated: guard only rejects zero/negative price for products that exist in the catalog (line 7044 uses find_one and skips if _prod_price is None). Payload with product_id='nonexistent' price=0 qty=999 is currently allowed. Not a security regression because non-catalog product cannot influence sales totals meaningfully (creates 0-value order), but worth noting.",
+    "Auto-purge audit log written under audit_logs action='auto_purge_pentest_probe' — good forensic trail."
+  ],
+  "updated_files": ["/app/backend/tests/test_probe_purge_iter272.py"],
+  "success_rate": {"backend": "100%", "frontend": "N/A (skipped per request)"},
+  "test_credentials": "admin@maestroegp.com/admin123 (no secret), owner@maestroegp.com/owner123 secret_key=271018, cashier1@maestroegp.com/cash123 — all confirmed working.",
+  "seed_data_creation": "Test seeds an RW Probe shift + 2 orders directly in Mongo before restart, plus a legit Arabic shift 'أحمد' to verify negative match. All test data cleaned up post-run (TEST_ prefix + purge endpoint).",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Login response key is 'token' (not 'access_token'). Order creation requires branch_id and each item requires product_name. Price guard is skipped when product_id doesn't exist in catalog — use a real product id for the price-guard regression check.",
+  "rca of the issue": "Original bug: pentest tool created 'RW Probe' shift+orders under tenant_id=null; the delete-shift UI could not find it because tenant scoping filtered it out ('السجل غير موجود'). Fix (verified): (1) idempotent startup task purge_pentest_probe_data_v1 registered as deferred task — automatically detects & deletes probe artefacts via narrow regex + audit-logs the deletion; (2) admin POST /api/reports/purge-shift endpoint accepts probe-tolerant tenant clause ({tenant_id: current OR null OR missing}) so admins can also clean legacy residues manually with dry_run preview."
+}

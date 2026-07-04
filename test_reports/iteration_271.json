@@ -1,0 +1,38 @@
+{
+  "summary": "Independent verification of 9 pentest fixes (SECURITY_REPORT_FINAL_2026-07-03). All 23 automated backend security tests pass. Cash-discrepancy guard (#9) verified via static code inspection (E2E requires open shift with real sales - skipped per request).",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": [
+    "/app/backend/tests/test_security_hardening.py",
+    "/app/test_reports/pytest/security_hardening.xml"
+  ],
+  "verification_matrix": {
+    "CRITICAL_1_branch_leak": "PASS - customer/menu/default branches contain none of rent_cost/water_cost/electricity_cost/generator_cost/buyer_name/buyer_phone/owner_percentage/monthly_fee/is_sold_branch/email; products carry no cost/profit/operating_cost/packaging_cost.",
+    "CRITICAL_2_price_guard": "PASS - negative price, zero price (qty 999), below-catalog price, negative extra price, and zero extra quantity all rejected with HTTP 400. Valid price at catalog value passes the guard (order creates 200).",
+    "HIGH_3_secret_key": "PASS - owner without secret => 403; wrong secret => 403; correct 271018 => 200. admin@ (no stored secret_key) still logs in 200.",
+    "HIGH_4_callcenter_simulate": "PASS - cashier => 403, admin => not 403.",
+    "HIGH_5_product_cost_leak": "PASS - cashier /products and /products/{id} return cost=0, profit=0, operating_cost=0, packaging_cost=0 (price preserved). Admin sees real non-zero cost.",
+    "HIGH_6_payment_gateway": "PASS - cashier => 403, admin => 200 with no 'stripe_secret_key' key in JSON (only harmless 'stripe_secret_key_set' boolean flag).",
+    "HIGH_7_owner_contact_leak": "PASS - cashier /system/invoice-settings returns null for system_phone / system_phone2 / system_email / system_website.",
+    "MEDIUM_8_supplier_dues": "PASS - cashier => 403, admin => allowed.",
+    "MEDIUM_9_cash_discrepancy": "CODE-VERIFIED - shifts_routes.py:1767-1781 raises 409 with detail.code=='CASH_DISCREPANCY_APPROVAL_REQUIRED' when abs(cash_difference) > 5% of total_sales, is_manager is False, and force_close_with_discrepancy is False. Managers bypass. E2E not executed to avoid corrupting accounting collections.",
+    "REGRESSION": "PASS - admin login works, admin sees real product cost, admin /payment-settings returns 200, public customer menu still returns categories/products/branches."
+  },
+  "action_items": [],
+  "critical_code_review_comments": [
+    "Order idempotency/dedup returns a previously-created order (same order_number, id) when a new POST /api/orders has an identical (product_id, quantity, price) signature within the same shift. This is not a security bug but caused early test flakiness; the dedup key does not appear to include a client-provided offline_id when absent. Consider always requiring/generating a unique server-side idempotency key so retries with mutated payloads (price/extras) cannot silently be answered from a cached prior success.",
+    "In server.py:7148-7186 the shift-existence check for cashiers auto-creates a new open shift BEFORE the price-validation loop (lines 7220-7239). If a malicious client sends a bad-price order and no shift exists, a new shift is created even though the order is then rejected 400. Not a leak, but produces stray empty shifts. Move the price-guard loop above the auto-shift-creation block."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_security_hardening.py (new)"
+  ],
+  "success_rate": {"backend": "100% (23/23)", "frontend": "N/A - not requested"},
+  "test_credentials": "admin@maestroegp.com/admin123 (200 OK, no secret), owner@maestroegp.com/owner123 + secret_key=271018 (200 OK), cashier1@maestroegp.com/cash123 (200 OK). Auth response returns key 'token' (not 'access_token').",
+  "seed_data_creation": "Test creates 3-4 real orders under cashier1 shift (valid catalog price + varying qty to bypass server-side dedup) plus 1 auto-created cashier shift if none open. No modifications to closings/expenses/products/branches.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Reusable regression file at /app/backend/tests/test_security_hardening.py covers all 8 currently-fixed vulnerabilities. To retest MEDIUM #9 end-to-end, open a shift for cashier1, create ~100k IQD of orders, then POST /api/cash-register/close with closing_cash off by >5% -- expect 409 CASH_DISCREPANCY_APPROVAL_REQUIRED; retry with force_close_with_discrepancy=true or with an admin token -- expect 200. Note: /api/orders performs server-side dedup on identical item signatures within same shift; vary quantity or notes to force a fresh insert."
+}

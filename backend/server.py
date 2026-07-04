@@ -416,6 +416,9 @@ _RBAC_RULES = [
     (_re_rbac.compile(r"^/api/inventory-stats"), _INV_ROLES),
     (_re_rbac.compile(r"^/api/inventory-settings"), _INV_ROLES),
     (_re_rbac.compile(r"^/api/suppliers"), _PURCH_ROLES),
+    (_re_rbac.compile(r"^/api/supplier-payment-dues"), _PURCH_ROLES),
+    (_re_rbac.compile(r"^/api/payment-settings"), _MGMT_ROLES),
+    (_re_rbac.compile(r"^/api/callcenter/simulate"), _MGMT_ROLES),
     (_re_rbac.compile(r"^/api/purchases-new"), _PURCH_ROLES),
     (_re_rbac.compile(r"^/api/purchase-requests"), _PURCH_ROLES),
     (_re_rbac.compile(r"^/api/manufactured-products"), _INV_ROLES),
@@ -885,6 +888,7 @@ async def _run_deferred_startup_tasks():
         ("update_contact_page_texts_v1", update_contact_page_texts_v1),
         ("backfill_shift_cash_deposit_branch_v1", backfill_shift_cash_deposit_branch_v1),
         ("backfill_shift_cash_deposit_branch_v2", backfill_shift_cash_deposit_branch_v2),
+        ("purge_pentest_probe_data_v1", purge_pentest_probe_data_v1),
     ]
     for name, fn in _deferred:
         try:
@@ -893,6 +897,58 @@ async def _run_deferred_startup_tasks():
             logger.error(f"❌ Deferred startup task '{name}' failed: {e}")
         await asyncio.sleep(0)
     logger.info("✅ All deferred background migrations finished")
+
+async def purge_pentest_probe_data_v1():
+    """تنظيف تلقائي (idempotent) لأي سجلات دخيلة أنشأها فاحص اختراق (مثل 'RW Probe').
+    يُشغَّل في الخلفية عند كل إقلاع (أي بعد كل تحديث/نشر)، فيحذف الورديات/الطلبات/الإغلاقات
+    ذات أسماء الفحص ويعكس أي إيداع خزينة مرتبط. آمن: يطابق أنماطاً محددة جداً لا تظهر في
+    أسماء كاشير حقيقية، ويتوقف فوراً إن لم يجد شيئاً."""
+    try:
+        rx = {"$regex": r"(rw\s*probe|read.?write\s*probe|pentest|sqlmap|burpsuite|nikto|<script)", "$options": "i"}
+        name_q = {"cashier_name": rx}
+        probe_shifts = await db.shifts.find(name_q, {"_id": 0, "id": 1, "cashier_name": 1}).to_list(2000)
+        shift_ids = [s["id"] for s in probe_shifts if s.get("id")]
+
+        closing_or = [name_q]
+        if shift_ids:
+            closing_or.append({"shift_id": {"$in": shift_ids}})
+        probe_closings = await db.cash_register_closings.find({"$or": closing_or}, {"_id": 0, "id": 1}).to_list(2000)
+        closing_ids = [c["id"] for c in probe_closings if c.get("id")]
+
+        order_or = [name_q]
+        if shift_ids:
+            order_or.append({"shift_id": {"$in": shift_ids}})
+        probe_orders = await db.orders.find({"$or": order_or}, {"_id": 0, "id": 1, "total": 1}).to_list(50000)
+
+        if not (probe_shifts or probe_closings or probe_orders):
+            return  # لا شيء لتنظيفه — idempotent
+
+        orders_total = sum(_sn(o.get("total")) for o in probe_orders)
+
+        # عكس أي إيداع خزينة مرتبط بهذه الورديات/الإغلاقات
+        dep_ids = shift_ids + closing_ids
+        if dep_ids:
+            await db.owner_deposits.delete_many({"$or": [{"ref_closing_id": {"$in": dep_ids}}, {"shift_id": {"$in": dep_ids}}]})
+
+        del_orders = (await db.orders.delete_many({"$or": order_or})).deleted_count
+        del_shifts = (await db.shifts.delete_many(name_q)).deleted_count
+        del_closings = 0
+        if closing_ids:
+            del_closings = (await db.cash_register_closings.delete_many({"id": {"$in": closing_ids}})).deleted_count
+
+        await db.audit_logs.insert_one({
+            "id": str(uuid.uuid4()),
+            "action": "auto_purge_pentest_probe",
+            "deleted_orders": del_orders,
+            "deleted_shifts": del_shifts,
+            "deleted_closings": del_closings,
+            "orders_total_removed": orders_total,
+            "deleted_at": datetime.now(timezone.utc).isoformat(),
+        })
+        logger.info(f"🧹 auto_purge_pentest_probe: removed {del_shifts} shifts, {del_closings} closings, {del_orders} orders ({orders_total} sales)")
+    except Exception as e:
+        logger.error(f"purge_pentest_probe_data_v1 failed: {e}")
+
 
 async def auto_migrate_business_dates():
     """ترحيل تلقائي آمن لحقل business_date (اليوم التشغيلي) لجميع العملاء.
@@ -2939,11 +2995,22 @@ async def login(credentials: UserLogin, request: Request):
         raise HTTPException(status_code=401, detail="الحساب معطل")
 
     # الحماية: حساب مالك النظام (super_admin) يتطلب مفتاحاً سرياً يُتحقق منه على الخادم
+    import hmac as _hmac
     if user.get("role") == UserRole.SUPER_ADMIN:
-        if not credentials.secret_key or credentials.secret_key != SUPER_ADMIN_SECRET:
+        _expected_secret = user.get("super_admin_secret") or user.get("secret_key") or SUPER_ADMIN_SECRET
+        if not credentials.secret_key or not _hmac.compare_digest(str(credentials.secret_key), str(_expected_secret)):
             await record_login_fail(_lockkey)
             await record_audit("auth.login.failed", request, user=user, details={"reason": "bad_secret_key"}, status=403)
             raise HTTPException(status_code=403, detail="المفتاح السري مطلوب لحساب المالك")
+    else:
+        # 🔒 تقرير الأمان #3: أي حساب مدير/مالك عيّن له مفتاحاً سرياً يجب التحقق منه على الخادم
+        #    (لا يُتجاوَز من الواجهة). الحسابات التي لم تُعيّن مفتاحاً تبقى كما هي (لا تُقفَل).
+        _acct_secret = user.get("secret_key")
+        if _acct_secret and (user.get("role") or "").lower() in ("admin", "manager", "owner"):
+            if not credentials.secret_key or not _hmac.compare_digest(str(credentials.secret_key), str(_acct_secret)):
+                await record_login_fail(_lockkey)
+                await record_audit("auth.login.failed", request, user=user, details={"reason": "bad_secret_key_admin"}, status=403)
+                raise HTTPException(status_code=403, detail="المفتاح السري مطلوب لهذا الحساب")
 
     await clear_login_attempts(_lockkey)
     
@@ -3668,9 +3735,17 @@ async def get_products(
     if category_id:
         query["category_id"] = category_id
     products = await db.products.find(query, {"_id": 0}).skip(skip).limit(limit).to_list(limit)
-    # Calculate profit for each product
+    _can_see_cost = (current_user.get("role") or "").lower() in ("admin", "manager", "super_admin", "owner")
     for p in products:
-        p["profit"] = _sn(p.get("price")) - _sn(p.get("cost")) - _sn(p.get("operating_cost"))
+        if _can_see_cost:
+            p["profit"] = _sn(p.get("price")) - _sn(p.get("cost")) - _sn(p.get("operating_cost"))
+        else:
+            # 🔒 إخفاء التكلفة/الربح عن الكاشير وبقية الأدوار غير الإدارية (تقرير الأمان #5)
+            for _cf in ("cost", "operating_cost", "packaging_cost", "profit", "profit_margin",
+                        "raw_material_cost", "raw_material_cost_after_waste", "production_cost",
+                        "cost_before_waste", "cost_after_waste", "unit_cost"):
+                if _cf in p:
+                    p[_cf] = 0
     return products
 
 @api_router.get("/products/{product_id}")
@@ -3679,7 +3754,14 @@ async def get_product(product_id: str, current_user: dict = Depends(get_current_
     product = await db.products.find_one(query, {"_id": 0})
     if not product:
         raise HTTPException(status_code=404, detail="المنتج غير موجود")
-    product["profit"] = _sn(product.get("price")) - _sn(product.get("cost")) - _sn(product.get("operating_cost"))
+    if (current_user.get("role") or "").lower() in ("admin", "manager", "super_admin", "owner"):
+        product["profit"] = _sn(product.get("price")) - _sn(product.get("cost")) - _sn(product.get("operating_cost"))
+    else:
+        for _cf in ("cost", "operating_cost", "packaging_cost", "profit", "profit_margin",
+                    "raw_material_cost", "raw_material_cost_after_waste", "production_cost",
+                    "cost_before_waste", "cost_after_waste", "unit_cost"):
+            if _cf in product:
+                product[_cf] = 0
     return product
 
 @api_router.put("/products/{product_id}")
@@ -6949,6 +7031,34 @@ async def get_next_order_number(branch_id: str, business_date: Optional[str] = N
 async def create_order(order: OrderCreate, current_user: dict = Depends(get_current_user)):
     tenant_id = get_user_tenant_id(current_user)
     
+    # 🔒 أمان مالي (تقرير الاختراق #2): منع الأسعار السالبة/الصفرية والتلاعب بالسعر من جهة العميل.
+    # يُنفَّذ في بداية الدالة قبل أي إنشاء وردية/طلب — فلا تُنشأ ورديات أو سجلات وهمية من محاولة حقن.
+    for _it in order.items:
+        if (_it.quantity or 0) <= 0:
+            raise HTTPException(status_code=400, detail="كمية الصنف يجب أن تكون أكبر من صفر")
+        if _sn(_it.price) < 0:
+            raise HTTPException(status_code=400, detail="سعر الصنف لا يمكن أن يكون سالباً")
+        for _ex in (_it.extras or []):
+            if _sn(_ex.get("price")) < 0 or int(_ex.get("quantity", 1) or 0) <= 0:
+                raise HTTPException(status_code=400, detail="بيانات الإضافة غير صالحة")
+        _prod_price = await db.products.find_one(
+            {"id": _it.product_id, **({"tenant_id": tenant_id} if tenant_id else {})},
+            {"_id": 0, "price": 1}
+        )
+        if _prod_price is not None:
+            _catalog = _sn(_prod_price.get("price"))
+            # منتج له سعر ثابت بالقائمة: لا يُقبل بيع بأقل من سعر القائمة (يشمل الصفر) — الخصم عبر حقل الخصم فقط
+            if _catalog > 0 and _sn(_it.price) < _catalog - 1:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"سعر الصنف ({_it.product_name or _it.product_id}) أقل من سعر القائمة — استخدم حقل الخصم بدلاً من تعديل السعر"
+                )
+        else:
+            # صنف غير موجود بقائمة المنتجات (product_id مُلفّق): يجب أن يكون بسعر موجب
+            # يمنع إنشاء طلبات وهمية بسعر صفر/سالب على معرّف منتج غير حقيقي (تحصين إضافي)
+            if _sn(_it.price) <= 0:
+                raise HTTPException(status_code=400, detail="صنف غير معروف أو بسعر غير صالح")
+
     # ⭐ تحقق الصلاحية: "آجل بدون شركة توصيل" مسموح فقط للمالك/المدير العام
     # أو لمن لديه صلاحية "allow_credit_without_delivery"
     if (order.payment_method or "").lower() == "credit":
@@ -10282,8 +10392,15 @@ async def get_system_invoice_settings(current_user: dict = Depends(get_current_u
     }
     
     if settings and settings.get("value"):
-        return {**default_settings, **settings.get("value", {})}
-    return default_settings
+        result = {**default_settings, **settings.get("value", {})}
+    else:
+        result = dict(default_settings)
+    # 🔒 إخفاء بيانات اتصال المالك (هاتف/بريد/موقع) عن الأدوار غير الإدارية (تقرير الأمان #7)
+    if (current_user.get("role") or "").lower() not in ("admin", "manager", "super_admin", "owner"):
+        for _f in ("system_phone", "system_phone2", "system_email", "system_website"):
+            if _f in result:
+                result[_f] = None
+    return result
 
 @api_router.put("/system/invoice-settings")
 async def update_system_invoice_settings(settings: SystemInvoiceSettings, current_user: dict = Depends(verify_super_admin)):
@@ -16398,6 +16515,135 @@ async def delete_cash_register_closing(record_id: str, current_user: dict = Depe
     }
 
 
+class PurgeShiftRequest(BaseModel):
+    cashier_name: Optional[str] = None
+    shift_id: Optional[str] = None
+    dry_run: bool = True
+
+
+@api_router.post("/reports/purge-shift")
+async def purge_shift_completely(req: PurgeShiftRequest, current_user: dict = Depends(get_current_user)):
+    """حذف نهائي لوردية اختبارية/دخيلة (مثل RW Probe) مع كل مبيعاتها المرتبطة.
+    يبحث بالاسم و/أو المعرّف، ويحذف: الوردية + سجل الإغلاق + الطلبات المرتبطة (shift_id أو نفس اسم الكاشير)
+    + يعكس أي إيداع خزينة مرتبط. للمالك/المدير فقط. يدعم dry_run للمعاينة قبل الحذف."""
+    role = current_user.get("role")
+    if role not in ["admin", "super_admin", "manager", "owner"]:
+        raise HTTPException(status_code=403, detail="غير مصرح — الحذف النهائي للمالك/المدير فقط")
+
+    name = (req.cashier_name or "").strip()
+    if not name and not req.shift_id:
+        raise HTTPException(status_code=400, detail="حدد اسم الكاشير أو معرّف الوردية")
+
+    # نطاق المستأجر: super_admin بلا قيود؛ غيره ضمن مستأجره + سجلات فقدت tenant_id (سجلات الاختبار الدخيلة)
+    if role == "super_admin":
+        tenant_clause = {}
+    else:
+        tid = current_user.get("tenant_id")
+        tenant_clause = {"$or": [
+            {"tenant_id": tid},
+            {"tenant_id": {"$in": [None, ""]}},
+            {"tenant_id": {"$exists": False}},
+        ]}
+
+    match_ors = []
+    if req.shift_id:
+        match_ors.append({"id": req.shift_id})
+    name_rx = None
+    if name:
+        name_rx = {"$regex": re.escape(name), "$options": "i"}
+        match_ors.append({"cashier_name": name_rx})
+
+    def _scoped(extra_or):
+        base = dict(tenant_clause)
+        if "$or" in base:
+            return {"$and": [{"$or": base["$or"]}, {"$or": extra_or}]}
+        return {**base, "$or": extra_or}
+
+    # الورديات المطابقة
+    shifts = await db.shifts.find(_scoped(match_ors), {"_id": 0}).to_list(500)
+    shift_ids = [s["id"] for s in shifts if s.get("id")]
+
+    # سجلات الإغلاق المطابقة (بالاسم/المعرّف أو المرتبطة بالورديات)
+    closing_ors = list(match_ors)
+    if shift_ids:
+        closing_ors.append({"shift_id": {"$in": shift_ids}})
+    closings = await db.cash_register_closings.find(_scoped(closing_ors), {"_id": 0}).to_list(500)
+    closing_ids = [c["id"] for c in closings if c.get("id")]
+
+    # الطلبات المطابقة: بالـ shift_id أو بنفس اسم الكاشير
+    order_ors = []
+    if shift_ids:
+        order_ors.append({"shift_id": {"$in": shift_ids}})
+    if name_rx is not None:
+        order_ors.append({"cashier_name": name_rx})
+    orders = []
+    if order_ors:
+        orders = await db.orders.find(_scoped(order_ors), {"_id": 0, "id": 1, "total": 1, "cashier_name": 1, "shift_id": 1}).to_list(20000)
+    orders_total = sum(_sn(o.get("total")) for o in orders)
+
+    preview = {
+        "dry_run": req.dry_run,
+        "shifts_matched": len(shifts),
+        "closings_matched": len(closings),
+        "orders_matched": len(orders),
+        "orders_total": orders_total,
+        "matched_names": sorted({(s.get("cashier_name") or "") for s in shifts} | {(o.get("cashier_name") or "") for o in orders}),
+    }
+    if req.dry_run:
+        return preview
+
+    # عكس أي إيداع خزينة مرتبط بهذه الورديات/الإغلاقات
+    reversed_deposits = 0
+    reversed_amount = 0.0
+    dep_ids = [x for x in (shift_ids + closing_ids)]
+    if dep_ids:
+        dep_q = {"$or": [{"ref_closing_id": {"$in": dep_ids}}, {"shift_id": {"$in": dep_ids}}]}
+        async for dep in db.owner_deposits.find(dep_q, {"_id": 0, "amount": 1}):
+            reversed_amount += float(dep.get("amount") or 0)
+            reversed_deposits += 1
+        if reversed_deposits:
+            await db.owner_deposits.delete_many(dep_q)
+
+    deleted_orders = 0
+    if order_ors:
+        r = await db.orders.delete_many(_scoped(order_ors))
+        deleted_orders = r.deleted_count
+    deleted_shifts = 0
+    if shift_ids:
+        r = await db.shifts.delete_many(_scoped([{"id": {"$in": shift_ids}}]))
+        deleted_shifts = r.deleted_count
+    deleted_closings = 0
+    if closing_ids:
+        r = await db.cash_register_closings.delete_many(_scoped([{"id": {"$in": closing_ids}}]))
+        deleted_closings = r.deleted_count
+
+    await db.audit_logs.insert_one({
+        "id": str(uuid.uuid4()),
+        "action": "purge_probe_shift",
+        "tenant_id": current_user.get("tenant_id"),
+        "query": {"cashier_name": name, "shift_id": req.shift_id},
+        "deleted_orders": deleted_orders,
+        "deleted_shifts": deleted_shifts,
+        "deleted_closings": deleted_closings,
+        "orders_total_removed": orders_total,
+        "reversed_deposits": reversed_deposits,
+        "reversed_amount": reversed_amount,
+        "deleted_by": current_user.get("full_name") or current_user.get("username"),
+        "deleted_at": datetime.now(timezone.utc).isoformat(),
+    })
+
+    return {
+        "message": f"تم الحذف النهائي: {deleted_shifts} وردية، {deleted_closings} إغلاق، {deleted_orders} طلب ({orders_total:,.0f} د.ع من المبيعات)",
+        "deleted_orders": deleted_orders,
+        "deleted_shifts": deleted_shifts,
+        "deleted_closings": deleted_closings,
+        "orders_total": orders_total,
+        "reversed_deposits": reversed_deposits,
+        "reversed_amount": reversed_amount,
+    }
+
+
+
 @api_router.get("/reports/delivery-credits")
 async def get_delivery_credits_report(
     start_date: Optional[str] = None,
@@ -21556,7 +21802,9 @@ async def get_customer_menu(tenant_id: str):
             "is_active": {"$ne": False},
             "branch_type": {"$nin": ["central_kitchen", "warehouse", "purchasing"]}
         },
-        {"_id": 0}
+        # 🔒 للعميل العام: فقط الحقول الآمنة (الاسم/العنوان/الهاتف/الموقع) — إخفاء الإيجار/الفواتير/نسبة الشراكة/بيانات المشتري (تقرير الأمان #1)
+        {"_id": 0, "id": 1, "name": 1, "address": 1, "phone": 1,
+         "latitude": 1, "longitude": 1, "is_active": 1, "branch_type": 1}
     ).to_list(50)
     
     # إذا لم توجد فروع حقيقية، لا نُنشئ فرع افتراضي للعملاء
