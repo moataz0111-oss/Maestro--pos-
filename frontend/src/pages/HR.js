@@ -9,6 +9,7 @@ import offlineStorage from '../lib/offlineStorage';
 import db, { STORES } from '../lib/offlineDB';
 import { formatPrice } from '../utils/currency';
 import { showApiError } from '../utils/apiError';
+import PhoneCountryInput from '../components/PhoneCountryInput';
 
 // تحويل الأسماء العربية للإنجليزية (للبصمة)
 const arabicToEnglish = (name) => {
@@ -2865,7 +2866,7 @@ export default function HR() {
                           </div>
                           <div>
                             <Label>{t('رقم الهاتف')} *</Label>
-                            <Input value={employeeForm.phone} onChange={(e) => setEmployeeForm({...employeeForm, phone: e.target.value})} required />
+                            <PhoneCountryInput value={employeeForm.phone} onChange={(val) => setEmployeeForm({...employeeForm, phone: val})} testId="hr-employee-phone" />
                           </div>
                           <div>
                             <Label>{t('البريد الإلكتروني')}</Label>

@@ -1344,12 +1344,18 @@ const CashRegisterClosingTab = ({ t, formatPrice, selectedBranchId, branches, ge
       const res = await axios.get(`${API}/expenses?${params.toString()}`, {
         headers: { Authorization: `Bearer ${token}` }
       });
-      // فلترة إضافية: لو الكاشير أنشأها في هذا الشفت
+      // فلترة المصاريف لتخصّ هذه الوردية فقط (نفس قاعدة الخلفية المعتمدة — لا خلط بين الكاشيرين)
       let items = Array.isArray(res.data) ? res.data : (res.data?.expenses || []);
-      // فلترة بالـ created_by للكاشير (لو متوفر) وحقل shift_id
-      if (closing.shift_id) {
-        items = items.filter(e => !e.shift_id || e.shift_id === closing.shift_id);
-      }
+      const sid = String(closing.shift_id || closing.id || '');
+      const cid = closing.cashier_id != null ? String(closing.cashier_id) : '';
+      const cname = (closing.cashier_name || '').trim().toLowerCase();
+      items = items.filter((e) => {
+        if (e.shift_id) return String(e.shift_id) === sid;
+        // سجلات قديمة بلا shift_id: تُنسب لمنشئها (الكاشير)
+        if (cid && e.created_by) return String(e.created_by) === cid;
+        if (cname && e.created_by_name) return (e.created_by_name || '').trim().toLowerCase() === cname;
+        return false;
+      });
       setShiftExpensesDetails(prev => ({ ...prev, [shiftIdx]: items }));
     } catch (err) {
       setShiftExpensesDetails(prev => ({ ...prev, [shiftIdx]: [] }));
@@ -1844,7 +1850,8 @@ const CashRegisterClosingTab = ({ t, formatPrice, selectedBranchId, branches, ge
             const shiftCash = closing.cash_sales || 0;
             const shiftCard = closing.card_sales || 0;
             const shiftCredit = closing.credit_sales || 0;
-            const shiftExpenses = closing.total_expenses || 0;
+            const _loadedExpSum = shiftExpensesDetails[idx]?.reduce((s, e) => s + (e.amount || 0), 0);
+            const shiftExpenses = (_loadedExpSum != null) ? _loadedExpSum : (closing.total_expenses || 0);
             const shiftOrders = closing.total_orders || closing.orders_count || 0;
             
             return (

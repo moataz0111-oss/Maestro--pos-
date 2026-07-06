@@ -1,0 +1,29 @@
+{
+  "summary": "Verified public /api/system/invoice-settings + /contact UI + regression suite. All 13 backend tests pass; UI flow validated end-to-end after splash (4s).",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": [
+    "/app/backend/tests/test_public_contact_and_regression.py",
+    "/app/test_reports/pytest/iter100.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "Global SplashScreen (4s, z-index 2147483647) covers ALL routes including public /contact — sales visitors wait 4s of dead time before contact buttons become interactive. Consider skipping/shortening splash for public marketing routes to improve conversion.",
+    "SystemContact.js:56 axios.get has no error UI state — on network failure it silently logs and sets loading=false, leaving user with empty settings and only the intro button (the exact bug this iteration fixed). Add a lightweight retry/error toast to guard against regressions."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_public_contact_and_regression.py"
+  ],
+  "success_rate": {"backend": "100% (13/13)", "frontend": "100%"},
+  "test_credentials": "admin@maestroegp.com/admin123, owner@maestroegp.com/owner123 secret 271018, cashier1@maestroegp.com/cash123",
+  "seed_data_creation": "none — data already seeded (settings doc + admin/owner/cashier users present)",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Global SplashScreen shows on every page load for 4 seconds with z-index 2147483647 and blocks all clicks. Playwright tests on /contact (and any public route) must wait for [data-testid=splash-screen] to detach (~5s) before interacting. Backend login response uses field name 'token' (not 'access_token'). POST /api/orders requires branch_id and item.product_name fields — 400 validation for negative price and 0-price×qty999 verified working.",
+  "verified_features": {
+    "public_invoice_settings": "GET /api/system/invoice-settings with NO Authorization → 200 with system_name, system_phone=07701234567, system_phone2=07809876543, system_email, system_website, promo_text, cta_text all present and non-null",
+    "contact_ui_buttons": "All 6 testids present & clickable after splash: contact-call-btn (tel:), contact-whatsapp-btn (opens https://wa.me/9647701234567), contact-whatsapp2-btn (https://wa.me/9647809876543), contact-email-btn (mailto:), contact-website-btn (https://maestroegp.com), contact-intro-btn opens modal (contact-intro-modal) and closes via contact-intro-close-btn",
+    "cta_and_branding": "System name 'Maestro EGP', tagline (promo_text) and CTA 'للحصول على نسختك تواصل معنا' all render correctly",
+    "regression_security": "owner login no-secret=403, with 271018=200, admin no-secret=200; cashier products cost=0/profit=0, admin sees products list; cashier payment-settings/supplier-payment-dues/callcenter-simulate all return 403; public /api/customer/menu/default contains no rent_cost/buyer_name/owner_percentage; POST /api/orders negative price=400, zero-price qty999=400"
+  }
+}

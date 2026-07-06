@@ -53,6 +53,7 @@ import {
   SelectValue,
 } from '../components/ui/select';
 import { showApiError } from '../utils/apiError';
+import PhoneCountryInput from '../components/PhoneCountryInput';
 
 const API = API_URL;
 
@@ -977,9 +978,10 @@ export default function Orders() {
                 </div>
                 <div>
                   <Label>{t('هاتف العميل')}</Label>
-                  <Input
+                  <PhoneCountryInput
                     value={fixForm.customer_phone}
-                    onChange={(e) => setFixForm({ ...fixForm, customer_phone: e.target.value })}
+                    onChange={(val) => setFixForm({ ...fixForm, customer_phone: val })}
+                    testId="orders-customer-phone"
                   />
                 </div>
               </div>

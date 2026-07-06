@@ -73,6 +73,7 @@ import {
   SelectValue,
 } from '../components/ui/select';
 import DriverTrackingMap from '../components/DriverTrackingMap';
+import PhoneCountryInput from '../components/PhoneCountryInput';
 import { showApiError } from '../utils/apiError';
 
 const API = API_URL;
@@ -98,7 +99,7 @@ export default function Delivery() {
   const [selectedBranch, setSelectedBranch] = useState(null);
   const [loading, setLoading] = useState(true);
   const [dialogOpen, setDialogOpen] = useState(false);
-  const [formData, setFormData] = useState({ name: '', phone: '', pin: '1234' });
+  const [formData, setFormData] = useState({ name: '', phone: '', email: '', pin: '1234' });
   
   const { token } = useAuth();
   const headers = { Authorization: `Bearer ${token}` };
@@ -109,7 +110,7 @@ export default function Delivery() {
   
   // حالات تعديل السائق
   const [editDialogOpen, setEditDialogOpen] = useState(false);
-  const [editFormData, setEditFormData] = useState({ id: '', name: '', phone: '', pin: '', is_active: true, branch_id: '' });
+  const [editFormData, setEditFormData] = useState({ id: '', name: '', phone: '', email: '', pin: '', is_active: true, branch_id: '' });
   
   // حالات جديدة لمتابعة الطلبات
   const [driverOrders, setDriverOrders] = useState([]);
@@ -283,7 +284,7 @@ export default function Delivery() {
       });
       toast.success(t('تم إضافة السائق'));
       setDialogOpen(false);
-      setFormData({ name: '', phone: '', pin: '1234' });
+      setFormData({ name: '', phone: '', email: '', pin: '1234' });
       fetchData();
     } catch (error) {
       showApiError(error, t('فشل في إضافة السائق'));
@@ -296,6 +297,7 @@ export default function Delivery() {
       const updateData = {
         name: editFormData.name,
         phone: editFormData.phone,
+        email: editFormData.email || null,
         is_active: editFormData.is_active
       };
       // إضافة PIN فقط إذا تم تعديله
@@ -305,7 +307,7 @@ export default function Delivery() {
       await axios.put(`${API}/drivers/${editFormData.id}`, updateData);
       toast.success(t('تم تعديل السائق'));
       setEditDialogOpen(false);
-      setEditFormData({ id: '', name: '', phone: '', pin: '', is_active: true });
+      setEditFormData({ id: '', name: '', phone: '', email: '', pin: '', is_active: true });
       fetchData();
     } catch (error) {
       showApiError(error, t('فشل في تعديل السائق'));
@@ -370,6 +372,7 @@ export default function Delivery() {
       id: driver.id,
       name: driver.name,
       phone: driver.phone,
+      email: driver.email || '',
       pin: '',  // لا نعرض PIN الحالي
       is_active: driver.is_available !== false
     });
@@ -750,12 +753,24 @@ export default function Delivery() {
                       </div>
                       <div>
                         <Label className="text-foreground">{t('رقم الهاتف')} *</Label>
+                        <div className="mt-1">
+                          <PhoneCountryInput
+                            value={formData.phone}
+                            onChange={(val) => setFormData({ ...formData, phone: val })}
+                            testId="new-driver-phone"
+                          />
+                        </div>
+                      </div>
+                      <div>
+                        <Label className="text-foreground">{t('البريد الإلكتروني')}</Label>
                         <Input
-                          value={formData.phone}
-                          onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-                          required
+                          type="email"
+                          dir="ltr"
+                          value={formData.email}
+                          onChange={(e) => setFormData({ ...formData, email: e.target.value })}
                           className="mt-1"
-                          placeholder="07xxxxxxxxx"
+                          placeholder="driver@example.com"
+                          data-testid="new-driver-email"
                         />
                       </div>
                       <div>
@@ -2044,11 +2059,21 @@ export default function Delivery() {
             </div>
             <div>
               <Label className="text-foreground">{t('رقم الهاتف')}</Label>
-              <Input
+              <PhoneCountryInput
                 value={editFormData.phone}
-                onChange={(e) => setEditFormData({ ...editFormData, phone: e.target.value })}
-                placeholder="07xxxxxxxxx"
-                required
+                onChange={(val) => setEditFormData({ ...editFormData, phone: val })}
+                testId="edit-driver-phone"
+              />
+            </div>
+            <div>
+              <Label className="text-foreground">{t('البريد الإلكتروني')}</Label>
+              <Input
+                type="email"
+                dir="ltr"
+                value={editFormData.email}
+                onChange={(e) => setEditFormData({ ...editFormData, email: e.target.value })}
+                placeholder="driver@example.com"
+                data-testid="edit-driver-email"
               />
             </div>
             <div>

@@ -204,6 +204,13 @@ export default function CustomerMenu() {
   const [paymentMethod, setPaymentMethod] = useState('cash');
   const [selectedBranch, setSelectedBranch] = useState(null);
   const [submitting, setSubmitting] = useState(false);
+  // تحقق أول طلب للعميل (OTP واتساب)
+  const [otpDialogOpen, setOtpDialogOpen] = useState(false);
+  const [otpVerificationId, setOtpVerificationId] = useState('');
+  const [otpMasked, setOtpMasked] = useState('');
+  const [otpCode, setOtpCode] = useState('');
+  const [otpBusy, setOtpBusy] = useState(false);
+  const [otpPending, setOtpPending] = useState(false);
   const [showMap, setShowMap] = useState(false);
   
   // المفضلة
@@ -973,9 +980,55 @@ export default function CustomerMenu() {
         localStorage.removeItem(`cart_${tenantId}`);
       }
     } catch (error) {
-      showApiError(error, t('فشل في إرسال الطلب'));
+      const detail = error?.response?.data?.detail;
+      if (error?.response?.status === 403 && detail && typeof detail === 'object'
+          && detail.code === 'CUSTOMER_PHONE_VERIFICATION_REQUIRED') {
+        // أول طلب — يلزم توثيق رقم الهاتف عبر واتساب
+        await requestCustomerOtp();
+      } else {
+        showApiError(error, t('فشل في إرسال الطلب'));
+      }
     } finally {
       setSubmitting(false);
+    }
+  };
+
+  const requestCustomerOtp = async () => {
+    setOtpBusy(true);
+    setOtpCode('');
+    try {
+      const res = await axios.post(`${API}/customer/order/${tenantId}/request-otp`, {
+        phone: customerPhone,
+        name: customerName,
+      });
+      setOtpVerificationId(res.data.verification_id || '');
+      setOtpMasked(res.data.destination_masked || '');
+      setOtpPending(!!res.data.pending_delivery);
+      setOtpDialogOpen(true);
+    } catch (e) {
+      showApiError(e, t('تعذّر إرسال رمز التحقق'));
+    } finally {
+      setOtpBusy(false);
+    }
+  };
+
+  const verifyCustomerOtp = async () => {
+    if (!otpCode.trim()) { toast.error(t('أدخل رمز التحقق')); return; }
+    setOtpBusy(true);
+    try {
+      await axios.post(`${API}/customer/order/${tenantId}/verify-otp`, {
+        verification_id: otpVerificationId,
+        code: otpCode.trim(),
+      });
+      toast.success(t('تم توثيق رقمك بنجاح ✅'));
+      setOtpDialogOpen(false);
+      setOtpCode('');
+      // إعادة إرسال الطلب بعد التوثيق
+      await handleSubmitOrder();
+    } catch (e) {
+      showApiError(e, t('رمز التحقق غير صحيح'));
+    } finally {
+      setOtpBusy(false);
     }
   };
   const formatPrice = (price) => {
@@ -988,6 +1041,59 @@ export default function CustomerMenu() {
   // دالة لعرض الـ Dialogs العامة في كل الخطوات
   const renderGlobalDialogs = () => (
     <>
+      {/* نافذة تحقق أول طلب (OTP واتساب) */}
+      <Dialog open={otpDialogOpen} onOpenChange={(o) => { if (!o) { setOtpDialogOpen(false); setOtpCode(''); } }}>
+        <DialogContent className="max-w-sm" data-testid="customer-otp-dialog">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <i className="fa-brands fa-whatsapp text-green-500" />
+              {t('توثيق رقم هاتفك')}
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3 py-1">
+            <p className="text-sm text-muted-foreground">
+              {t('لأول طلب، أرسلنا رمز تحقق عبر واتساب إلى رقمك')}
+              {otpMasked && <span dir="ltr" className="block mt-1 font-bold text-foreground">{otpMasked}</span>}
+            </p>
+            {otpPending && (
+              <div className="rounded bg-amber-500/10 border border-amber-500/30 p-2 text-xs text-amber-600" data-testid="customer-otp-pending">
+                {t('تعذّر إرسال الرمز حالياً. تواصل مع المطعم وأعد المحاولة.')}
+              </div>
+            )}
+            <Input
+              type="text"
+              inputMode="numeric"
+              maxLength={6}
+              value={otpCode}
+              onChange={(e) => setOtpCode(e.target.value.replace(/[^0-9]/g, ''))}
+              placeholder="______"
+              dir="ltr"
+              className="text-2xl text-center tracking-[0.4em]"
+              autoFocus
+              data-testid="customer-otp-input"
+            />
+            <div className="flex gap-2">
+              <Button
+                onClick={verifyCustomerOtp}
+                disabled={otpBusy}
+                className="flex-1 bg-green-600 hover:bg-green-700 text-white"
+                data-testid="customer-otp-verify-btn"
+              >
+                {otpBusy ? t('جارٍ التحقق...') : t('تأكيد وإرسال الطلب')}
+              </Button>
+              <Button
+                variant="outline"
+                onClick={requestCustomerOtp}
+                disabled={otpBusy}
+                data-testid="customer-otp-resend-btn"
+              >
+                {t('إعادة الإرسال')}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
       {/* Favorites List Dialog */}
       <Dialog open={showFavoritesDialog} onOpenChange={setShowFavoritesDialog}>
         <DialogContent className="max-w-md max-h-[80vh] overflow-y-auto">

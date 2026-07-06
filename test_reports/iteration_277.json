@@ -1,0 +1,39 @@
+{
+  "summary": "Welcome-discount feature validated end-to-end. All 13 backend tests pass covering: auto-capture of customer on first guest order, is_first_order flag, second-order flip, MongoDB order_notifications document with is_first_order+customer_id, grant-welcome-discount endpoint (coupon WLC..., 10%, valid_until, whatsapp_sent=false + whatsapp_error='not_connected' as expected), customer welcome_status transition pending->granted with welcome_coupon_code stored, coupon validation via /api/coupons/validate (with customer_name), duplicate grant blocked (HTTP 400), GET/PUT /api/welcome-discount/config persistence (15/5 then reset), and RBAC 403 for cashier on both grant and config PUT. Frontend UI verified in Settings > العملاء: pending badge (data-testid=welcome-pending-<id>) + grant button (data-testid=grant-welcome-<id>) rendered; after click badge flipped to granted (data-testid=welcome-granted-<id>) and grant button disappeared.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "/api/coupons/validate", "issue": "Welcome coupon has customer_name bound; validation requires passing customer_name query param. Documenting behavior — frontend must send customer_name when redeeming a WLC code."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [
+      {"flow": "Settings page initial load", "issue": "/api/users returned 500 due to seed cashiers (expattr-cashier-a/b) missing created_at, causing Promise.all in Settings.fetchData to reject and none of users/branches/customers/etc. to render (empty state everywhere). Root cause: Pydantic ResponseValidationError on UserResponse (created_at required). Testing agent patched the two docs in db.users via a one-shot update (created_at set to now) so UI could be tested; the seeder should set created_at for those cashier accounts to prevent regression.", "affected_selectors": ["settings customers tab", "settings users tab", "welcome-pending-*", "grant-welcome-*"]}
+    ],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_welcome_discount.py",
+    "/app/test_reports/pytest/welcome_discount.xml"
+  ],
+  "action_items": [
+    "Fix seeder for cashier accounts (expattr-cashier-a, expattr-cashier-b) to include created_at, OR relax UserResponse.created_at to Optional. Currently patched in DB but will regress on re-seed.",
+    "Consider making Settings.fetchData resilient (per-call try/catch or Promise.allSettled) so a single 500 doesn't wipe the whole settings UI.",
+    "When redeeming welcome coupon in checkout, ensure the frontend passes customer_name to /api/coupons/validate (since welcome coupons are name-bound)."
+  ],
+  "critical_code_review_comments": [
+    "Settings.js fetchData uses Promise.all across 9+ endpoints — a single failure blocks all state updates. Refactor to Promise.allSettled or per-call error handling to isolate failures.",
+    "UserResponse pydantic model requires created_at but legacy/seeded users may lack it. Either make Optional or backfill on startup."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_welcome_discount.py (new)"
+  ],
+  "success_rate": {"backend": "100% (13/13)", "frontend": "100% (welcome badges + grant flow)"},
+  "test_credentials": "admin@maestroegp.com/admin123, expattr-cashier-a@maestroegp.com/test123",
+  "seed_data_creation": "Created pending welcome customers via /api/customer/order/default (phones 07703366083 etc.). One customer (0fee43ac-212c-4075-a3ce-f738c4a4f2fd) was used and granted via UI; welcome coupon WLC... issued. Also patched created_at on 2 seeded cashier users so /api/users no longer 500s.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "The 2FA global flag is DISABLED — first-order OTP gate does not block orders. WhatsApp is not linked in preview so whatsapp_sent=false / whatsapp_error='not_connected' is EXPECTED. Welcome coupon codes start with 'WLC' and are customer_name-bound. Pending customers must come from /api/customer/order/{tenant} (source=auto_order). Note the Settings.fetchData Promise.all fragility described above.",
+  "rca of the issue": "Frontend customers tab initially showed empty because /api/users 500'd (two seeded cashiers missing created_at → ResponseValidationError). Promise.all in Settings.fetchData rejected, so setCustomers was never called. Reproduced by curl; mitigated by backfilling created_at on those two users. Permanent fix: correct seed or make UserResponse.created_at Optional."
+}

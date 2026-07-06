@@ -6,7 +6,7 @@ import os
 import requests
 import pytest
 
-BASE_URL = os.environ.get("REACT_APP_BACKEND_URL", "https://inventory-accounting-11.preview.emergentagent.com").rstrip("/")
+BASE_URL = os.environ.get("REACT_APP_BACKEND_URL", "https://trusted-device-auth.preview.emergentagent.com").rstrip("/")
 BRANCH_ID = "76f56acc-6948-4a2f-bbf4-feccbddea88f"
 CASHIER_NAME = "محمد صبحي"
 

@@ -63,6 +63,7 @@ import {
   AlertTriangle,
   ExternalLink,
   Shield,
+  ShieldCheck,
   ShieldAlert,
   Ban,
   LogIn,
@@ -117,6 +118,7 @@ import {
 } from 'lucide-react';
 import { toast, Toaster } from 'sonner';
 import ImageCropper from '../components/ImageCropper';
+import PhoneCountryInput from '../components/PhoneCountryInput';
 
 const API = API_URL;
 
@@ -340,6 +342,15 @@ export default function SuperAdmin() {
   // السجل الأمني (لمالك النظام الأعلى)
   const [securityLog, setSecurityLog] = useState(null);
   const [blockedIps, setBlockedIps] = useState([]);
+  const [securityStatus, setSecurityStatus] = useState(null);
+  const [waStatus, setWaStatus] = useState(null);
+  const [waBusy, setWaBusy] = useState(false);
+  const [waPairPhone, setWaPairPhone] = useState('');
+  const [waPairCode, setWaPairCode] = useState('');
+  const [waPairBusy, setWaPairBusy] = useState(false);
+  const [readiness2fa, setReadiness2fa] = useState(null);
+  const [toggling2fa, setToggling2fa] = useState(false);
+  const [purging, setPurging] = useState(false);
   const [loadingSecurityLog, setLoadingSecurityLog] = useState(false);
   
   // أسعار الاشتراكات
@@ -803,10 +814,135 @@ export default function SuperAdmin() {
         const b = await axios.get(`${API}/super-admin/blocked-ips`, { headers });
         setBlockedIps(b.data.blocked || []);
       } catch (e) { /* ignore */ }
+      try {
+        const st = await axios.get(`${API}/super-admin/security-status`, { headers });
+        setSecurityStatus(st.data);
+      } catch (e) { /* ignore */ }
+      try {
+        const rd = await axios.get(`${API}/super-admin/2fa-readiness`, { headers });
+        setReadiness2fa(rd.data);
+      } catch (e) { /* ignore */ }
+      fetchWaStatus();
     } catch (error) {
       console.error('Error fetching security log:', error);
     } finally {
       setLoadingSecurityLog(false);
+    }
+  };
+
+  const fetchWaStatus = async () => {
+    try {
+      const token = localStorage.getItem('super_admin_token');
+      const r = await axios.get(`${API}/super-admin/whatsapp/status`, { headers: { Authorization: `Bearer ${token}` } });
+      setWaStatus(r.data);
+    } catch (e) { /* ignore */ }
+  };
+
+  const handleWaLogout = async () => {
+    if (!window.confirm(t('فك ربط الواتساب؟ ستحتاج مسح رمز QR جديد لإعادة الربط.'))) return;
+    setWaBusy(true);
+    try {
+      const token = localStorage.getItem('super_admin_token');
+      await axios.post(`${API}/super-admin/whatsapp/logout`, {}, { headers: { Authorization: `Bearer ${token}` } });
+      toast.success(t('تم فك الربط'));
+      setTimeout(fetchWaStatus, 2000);
+    } catch (e) { toast.error(t('فشل فك الربط')); }
+    finally { setWaBusy(false); }
+  };
+
+  const handleWaTest = async () => {
+    const phone = window.prompt(t('أدخل رقم هاتف لإرسال رسالة تجربة (مثال 07701234567):'));
+    if (!phone) return;
+    setWaBusy(true);
+    try {
+      const token = localStorage.getItem('super_admin_token');
+      const r = await axios.post(`${API}/super-admin/whatsapp/test`, { phone }, { headers: { Authorization: `Bearer ${token}` } });
+      if (r.data.success) toast.success(t('تم إرسال رسالة التجربة بنجاح ✅'));
+      else toast.error(`${t('فشل الإرسال')}: ${r.data.error || ''}`);
+    } catch (e) { toast.error(t('فشل إرسال التجربة')); }
+    finally { setWaBusy(false); }
+  };
+
+  const handleWaPair = async () => {
+    const phone = (waPairPhone || '').trim();
+    if (!phone) { toast.error(t('أدخل رقم هاتفك أولاً')); return; }
+    setWaPairBusy(true);
+    setWaPairCode('');
+    try {
+      const token = localStorage.getItem('super_admin_token');
+      const r = await axios.post(`${API}/super-admin/whatsapp/pair`, { phone }, { headers: { Authorization: `Bearer ${token}` } });
+      if (r.data.ok && r.data.code) {
+        setWaPairCode(r.data.code);
+        toast.success(t('تم توليد رمز الربط ✅ أدخله في واتساب'));
+      } else {
+        toast.error(`${t('تعذّر توليد الرمز')}: ${r.data.error || ''}`);
+      }
+    } catch (e) { toast.error(t('فشل توليد رمز الربط')); }
+    finally { setWaPairBusy(false); }
+  };
+
+  // تحديث حالة الواتساب تلقائياً كل 6 ثوانٍ أثناء انتظار الربط
+  useEffect(() => {
+    if (!waStatus || waStatus.connected) return;
+    const id = setInterval(() => { fetchWaStatus(); }, 6000);
+    return () => clearInterval(id);
+  }, [waStatus]);
+
+  const handleToggle2FA = async (enable) => {
+    if (enable) {
+      const drvNoPhone = readiness2fa?.drivers_without_phone?.length || 0;
+      const usrNoContact = readiness2fa?.users_without_any_contact?.length || 0;
+      let warn = t('سيتم تفعيل التحقق الإلزامي وإخراج جميع المستخدمين والسائقين فوراً لإجبارهم على التحقق من جديد. متابعة؟');
+      if (drvNoPhone > 0 || usrNoContact > 0) {
+        warn = `⚠️ ${t('تنبيه')}: ${drvNoPhone} ${t('سائق بدون رقم هاتف')} و${usrNoContact} ${t('مستخدم بدون بيانات اتصال')} — لن يتمكنوا من استلام الرمز. أكمل التفعيل؟`;
+      }
+      if (!window.confirm(warn)) return;
+    } else {
+      if (!window.confirm(t('إيقاف التحقق الإلزامي؟'))) return;
+    }
+    setToggling2fa(true);
+    try {
+      const token = localStorage.getItem('super_admin_token');
+      const headers = { Authorization: `Bearer ${token}` };
+      const res = await axios.post(`${API}/super-admin/security-2fa-toggle`, { enabled: enable }, { headers });
+      if (enable) {
+        toast.success(`${t('تم تفعيل التحقق الإلزامي')} — ${t('تم إخراج')} ${(res.data.devices_revoked || 0)} ${t('جهاز')}. ${t('سيُطلب منك تسجيل الدخول والتحقق الآن')}`);
+        setTimeout(() => {
+          localStorage.removeItem('super_admin_token');
+          localStorage.removeItem('super_admin_user');
+          window.location.href = '/login';
+        }, 2500);
+      } else {
+        toast.success(t('تم إيقاف التحقق الإلزامي'));
+        fetchSecurityLog();
+      }
+    } catch (error) {
+      toast.error(getErrorMessage(error) || t('فشل تغيير حالة التحقق'));
+    } finally {
+      setToggling2fa(false);
+    }
+  };
+
+  const handlePurgeDummyData = async () => {
+    if (!window.confirm(t('سيتم حذف بيانات الاختبار الوهمية (سائقون/موظفون/زبائن/موردون تجريبيون). البيانات الحقيقية لن تتأثر. متابعة؟'))) return;
+    setPurging(true);
+    try {
+      const token = localStorage.getItem('super_admin_token');
+      const headers = { Authorization: `Bearer ${token}` };
+      const res = await axios.post(`${API}/super-admin/purge-dummy-data`, { dry_run: false }, { headers });
+      const d = res.data.deleted || {};
+      const total = (d.drivers || 0) + (d.employees || 0) + (d.customers || 0) + (d.suppliers || 0);
+      if (total === 0) {
+        toast.info(t('لا توجد بيانات وهمية للحذف'));
+      } else {
+        const names = [];
+        Object.values(res.data.found || {}).forEach((arr) => (arr || []).forEach((x) => x.name && names.push(x.name)));
+        toast.success(`${t('تم حذف')} ${total} ${t('سجلاً وهمياً')}: ${names.slice(0, 8).join('، ')}${names.length > 8 ? '…' : ''}`);
+      }
+    } catch (error) {
+      toast.error(getErrorMessage(error) || t('فشل حذف البيانات الوهمية'));
+    } finally {
+      setPurging(false);
     }
   };
 
@@ -3317,6 +3453,167 @@ export default function SuperAdmin() {
                     </Button>
                   </div>
 
+                  {/* لوحة تنشيط التحقق الإلزامي */}
+                  <div className={`rounded-lg p-4 border ${securityStatus?.two_fa_enabled ? 'bg-green-950/40 border-green-600/40' : 'bg-[#0F1A3A]/60 border-amber-600/40'}`} data-testid="two-fa-activation-panel">
+                    <div className="flex items-start justify-between gap-3 flex-wrap">
+                      <div className="flex-1 min-w-[240px]">
+                        <p className="font-bold text-white flex items-center gap-2">
+                          <ShieldCheck className={`h-5 w-5 ${securityStatus?.two_fa_enabled ? 'text-green-400' : 'text-amber-400'}`} />
+                          {t('التحقق الإلزامي بخطوتين')}
+                          <span className={`text-xs px-2 py-0.5 rounded ${securityStatus?.two_fa_enabled ? 'bg-green-600/30 text-green-300' : 'bg-gray-600/30 text-gray-300'}`}>
+                            {securityStatus?.two_fa_enabled ? t('مُفعّل') : t('غير مُفعّل')}
+                          </span>
+                        </p>
+                        <p className="text-xs text-gray-400 mt-1">
+                          {securityStatus?.two_fa_enabled
+                            ? t('الحماية فعّالة — كل جهاز جديد يتطلب رمز تحقق. عند الإيقاف يعود الدخول العادي.')
+                            : t('عند التنشيط سيُطلب رمز تحقق من كل مستخدم/سائق/عميل عند الدخول من جهاز جديد، وسيتم إخراج الجميع فوراً للتحقق من جديد.')}
+                        </p>
+                        {!securityStatus?.two_fa_enabled && readiness2fa && (
+                          <div className="mt-2 flex flex-wrap gap-2 text-[11px]">
+                            {readiness2fa.drivers_without_phone?.length > 0 && (
+                              <span className="px-2 py-1 rounded bg-rose-600/25 text-rose-300" data-testid="readiness-drivers-warning">
+                                ⚠️ {readiness2fa.drivers_without_phone.length} {t('سائق بلا رقم هاتف')}
+                              </span>
+                            )}
+                            {readiness2fa.users_without_phone?.length > 0 && (
+                              <span className="px-2 py-1 rounded bg-amber-600/25 text-amber-300">
+                                {readiness2fa.users_without_phone.length} {t('مستخدم سيستلم عبر البريد')}
+                              </span>
+                            )}
+                            {readiness2fa.users_without_any_contact?.length > 0 && (
+                              <span className="px-2 py-1 rounded bg-rose-600/25 text-rose-300">
+                                ⚠️ {readiness2fa.users_without_any_contact.length} {t('مستخدم بلا بيانات اتصال')}
+                              </span>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                      <Button
+                        onClick={() => handleToggle2FA(!securityStatus?.two_fa_enabled)}
+                        disabled={toggling2fa}
+                        className={`gap-1 ${securityStatus?.two_fa_enabled ? 'bg-gray-600 hover:bg-gray-500' : 'bg-green-600 hover:bg-green-500'} text-white`}
+                        data-testid="toggle-2fa-btn"
+                      >
+                        {toggling2fa ? <Loader2 className="h-4 w-4 animate-spin" /> : <ShieldCheck className="h-4 w-4" />}
+                        {securityStatus?.two_fa_enabled ? t('إيقاف التحقق') : t('تنشيط التحقق الآن')}
+                      </Button>
+                    </div>
+                  </div>
+
+                  {/* ربط الواتساب المجاني */}
+                  <div className="rounded-lg p-4 border bg-[#0F1A3A]/60 border-[#2A3A66]" data-testid="whatsapp-link-panel">
+                    <div className="flex items-center justify-between gap-2 flex-wrap mb-2">
+                      <p className="font-bold text-white flex items-center gap-2">
+                        <i className="fa-brands fa-whatsapp text-green-400" />
+                        {t('واتساب مجاني (إرسال الرموز من رقمك)')}
+                        <span className={`text-xs px-2 py-0.5 rounded ${waStatus?.connected ? 'bg-green-600/30 text-green-300' : 'bg-amber-600/30 text-amber-300'}`}>
+                          {waStatus?.connected ? t('مرتبط') : t('غير مرتبط')}
+                        </span>
+                      </p>
+                      <div className="flex gap-2">
+                        <Button onClick={fetchWaStatus} variant="outline" size="sm" className="border-[#2A3A66]" data-testid="wa-refresh-btn">
+                          <RefreshCw className="h-4 w-4" />
+                        </Button>
+                        {waStatus?.connected && (
+                          <>
+                            <Button onClick={handleWaTest} disabled={waBusy} size="sm" className="bg-green-600 hover:bg-green-500 text-white" data-testid="wa-test-btn">
+                              {t('إرسال تجربة')}
+                            </Button>
+                            <Button onClick={handleWaLogout} disabled={waBusy} size="sm" variant="destructive" data-testid="wa-logout-btn">
+                              {t('فك الربط')}
+                            </Button>
+                          </>
+                        )}
+                      </div>
+                    </div>
+                    {!waStatus?.connected && (
+                      <div className="flex flex-col sm:flex-row items-center gap-4">
+                        <div className="bg-white rounded-lg p-2 shrink-0" style={{ width: 200, height: 200 }} data-testid="wa-qr">
+                          {waStatus?.qr ? (
+                            <img src={waStatus.qr} alt="WhatsApp QR" className="w-full h-full" />
+                          ) : (
+                            <div className="w-full h-full flex items-center justify-center text-gray-500 text-xs">{t('جاري التحضير...')}</div>
+                          )}
+                        </div>
+                        <div className="text-sm text-gray-300 space-y-1 text-right">
+                          <p className="font-bold text-white">{t('كيف تربط رقمك؟')}</p>
+                          <p>١) افتح واتساب في هاتفك ({'07707775910'})</p>
+                          <p>٢) الإعدادات ← <b>الأجهزة المرتبطة</b> ← <b>ربط جهاز</b></p>
+                          <p>٣) امسح رمز QR الظاهر هنا.</p>
+                          <p className="text-amber-300 text-xs mt-2">{t('الرمز يتحدّث تلقائياً. أبقِ هاتفك متصلاً بالإنترنت.')}</p>
+                        </div>
+                      </div>
+                    )}
+                    {/* بديل: الربط برقم الهاتف (بلا مسح QR) */}
+                    {!waStatus?.connected && (
+                      <div className="mt-4 pt-4 border-t border-[#2A3A66]/60" data-testid="wa-pair-panel">
+                        <p className="font-bold text-white text-sm mb-1 flex items-center gap-2">
+                          <i className="fa-solid fa-mobile-screen-button text-green-400" />
+                          {t('أو اربط برقم الهاتف (بدون مسح QR)')}
+                        </p>
+                        <p className="text-xs text-gray-400 mb-2">
+                          {t('أدخل رقم واتساب المالك، اضغط «احصل على رمز الربط»، ثم في واتساب: الأجهزة المرتبطة ← ربط جهاز ← «ربط برقم الهاتف بدلاً من ذلك» ← أدخل الرمز الظاهر.')}
+                        </p>
+                        <div className="flex flex-col sm:flex-row gap-2 items-stretch sm:items-center">
+                          <Input
+                            value={waPairPhone}
+                            onChange={(e) => setWaPairPhone(e.target.value)}
+                            placeholder="07701234567"
+                            dir="ltr"
+                            className="bg-[#070E22] border-[#2A3A66] text-white max-w-[220px]"
+                            data-testid="wa-pair-phone-input"
+                          />
+                          <Button
+                            onClick={handleWaPair}
+                            disabled={waPairBusy}
+                            size="sm"
+                            className="bg-green-600 hover:bg-green-500 text-white"
+                            data-testid="wa-pair-btn"
+                          >
+                            {waPairBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : t('احصل على رمز الربط')}
+                          </Button>
+                        </div>
+                        {waPairCode && (
+                          <div className="mt-3 inline-flex items-center gap-2 bg-green-950/40 border border-green-700/50 rounded-lg px-4 py-2" data-testid="wa-pair-code">
+                            <span className="text-xs text-green-300">{t('رمز الربط')}:</span>
+                            <span className="text-2xl font-black tracking-[0.3em] text-green-300" dir="ltr">{waPairCode}</span>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* حالة تكاملات الأمان + المصادقة الثنائية */}
+                  <div className="bg-[#0F1A3A]/60 border border-[#2A3A66] rounded-lg p-3" data-testid="security-status-bar">
+                    <div className="flex flex-wrap items-center gap-2 justify-between">
+                      <div className="flex flex-wrap items-center gap-2 text-[11px]">
+                        <span className={`px-2 py-1 rounded ${securityStatus?.email_configured ? 'bg-green-600/25 text-green-300' : 'bg-amber-600/25 text-amber-300'}`}>
+                          {t('البريد')}: {securityStatus?.email_configured ? t('مفعّل') : t('غير مفعّل')}
+                        </span>
+                        <span className={`px-2 py-1 rounded ${securityStatus?.twilio_configured ? 'bg-green-600/25 text-green-300' : 'bg-amber-600/25 text-amber-300'}`}>
+                          {t('واتساب/SMS')}: {securityStatus?.twilio_configured ? t('مفعّل') : t('بانتظار المفاتيح')}
+                        </span>
+                        <span className="px-2 py-1 rounded bg-[#1A284E]/60 text-gray-300">
+                          {t('أجهزة موثوقة')}: {securityStatus?.trusted_devices ?? '—'}
+                        </span>
+                        <span className="px-2 py-1 rounded bg-[#1A284E]/60 text-gray-300">
+                          {t('حظر بعد')} {securityStatus?.max_login_fails ?? 5} {t('محاولات')}
+                        </span>
+                      </div>
+                      <Button
+                        onClick={handlePurgeDummyData}
+                        disabled={purging}
+                        size="sm"
+                        className="bg-rose-600 hover:bg-rose-500 text-white gap-1"
+                        data-testid="purge-dummy-data-btn"
+                      >
+                        {purging ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
+                        {t('حذف البيانات الوهمية')}
+                      </Button>
+                    </div>
+                  </div>
+
                   {/* بطاقات الملخص */}
                   <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
                     <div className="bg-[#0F1A3A]/60 border border-[#2A3A66] rounded-lg p-3 text-center">
@@ -3560,12 +3857,10 @@ export default function SuperAdmin() {
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label>{t('رقم الهاتف')}</Label>
-                <Input
-                  placeholder="009647xxxxxxxxx"
+                <PhoneCountryInput
                   value={newTenantForm.owner_phone}
-                  onChange={(e) => setNewTenantForm({...newTenantForm, owner_phone: e.target.value})}
-                  className="bg-[#1A284E]/50 border-[#2A3A66]"
-                  dir="ltr"
+                  onChange={(val) => setNewTenantForm({...newTenantForm, owner_phone: val})}
+                  testId="new-tenant-phone"
                 />
               </div>
               <div className="space-y-2">
@@ -3760,11 +4055,10 @@ export default function SuperAdmin() {
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label>{t('رقم الهاتف')}</Label>
-                <Input
+                <PhoneCountryInput
                   value={editTenantForm.owner_phone}
-                  onChange={(e) => setEditTenantForm({...editTenantForm, owner_phone: e.target.value})}
-                  className="bg-[#1A284E]/50 border-[#2A3A66]"
-                  dir="ltr"
+                  onChange={(val) => setEditTenantForm({...editTenantForm, owner_phone: val})}
+                  testId="edit-tenant-phone"
                 />
               </div>
               <div className="space-y-2">

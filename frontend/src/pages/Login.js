@@ -6,9 +6,10 @@ import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../components/ui/card';
-import { Lock, Mail, Eye, EyeOff, AlertCircle, Database, CheckCircle, Loader2, Truck, Key } from 'lucide-react';
+import { Lock, Mail, Eye, EyeOff, AlertCircle, Database, CheckCircle, Loader2, Truck, Key, ShieldCheck, RefreshCw } from 'lucide-react';
 import axios from 'axios';
 import { API_URL } from '../utils/api';
+import { getDeviceId } from '../utils/deviceId';
 
 const API = API_URL;
 
@@ -113,7 +114,14 @@ export default function Login() {
   const [isOwnerLogin, setIsOwnerLogin] = useState(false);
   const [ownerSecretKey, setOwnerSecretKey] = useState('');
 
-  const { login } = useAuth();
+  // ======== المصادقة الثنائية (2FA) ========
+  const [twoFA, setTwoFA] = useState(null); // {verificationId, channel, destinationMasked, pendingDelivery, isOwner}
+  const [otpCode, setOtpCode] = useState('');
+  const [twoFALoading, setTwoFALoading] = useState(false);
+  const [twoFAError, setTwoFAError] = useState('');
+  const [twoFAResent, setTwoFAResent] = useState(false);
+
+  const { login, completeTwoFactor, resendTwoFactor } = useAuth();
   const navigate = useNavigate();
   
   // Function to initialize database - requires secret key
@@ -212,9 +220,23 @@ export default function Login() {
         const response = await axios.post(`${API}/super-admin/login`, {
           email,
           password,
-          secret_key: ownerSecretKey
+          secret_key: ownerSecretKey,
+          device_id: getDeviceId(),
         });
-        
+
+        // المصادقة الثنائية للمالك (جهاز جديد)
+        if (response.data && response.data.requires_2fa) {
+          setTwoFA({
+            verificationId: response.data.verification_id,
+            channel: response.data.channel,
+            destinationMasked: response.data.destination_masked,
+            pendingDelivery: response.data.pending_delivery,
+            isOwner: true,
+          });
+          setLoading(false);
+          return;
+        }
+
         if (response.data.token) {
           localStorage.setItem('super_admin_token', response.data.token);
           localStorage.setItem('super_admin_user', JSON.stringify(response.data.user));
@@ -241,6 +263,15 @@ export default function Login() {
       window.dispatchEvent(new Event('show-splash'));
       // تأخير صغير ليضمن أن Splash مرسوم قبل الانتقال
       setTimeout(() => navigate('/'), 50);
+    } else if (result.requires2fa) {
+      // جهاز جديد → المصادقة الثنائية للموظف
+      setTwoFA({
+        verificationId: result.data.verification_id,
+        channel: result.data.channel,
+        destinationMasked: result.data.destination_masked,
+        pendingDelivery: result.data.pending_delivery,
+        isOwner: false,
+      });
     } else if (result.redirectToSuperAdmin) {
       // تحويل مالك النظام إلى بوابة المالك
       setIsOwnerLogin(true);
@@ -255,6 +286,53 @@ export default function Login() {
       }
     }
     
+    setLoading(false);
+  };
+
+  const handleVerifyOtp = async (e) => {
+    e.preventDefault();
+    setTwoFAError('');
+    setTwoFALoading(true);
+    const result = await completeTwoFactor(twoFA.verificationId, otpCode.trim(), password);
+    setTwoFALoading(false);
+    if (result.success) {
+      sessionStorage.setItem('show_post_login_splash', '1');
+      window.dispatchEvent(new Event('show-splash'));
+      if (result.isSuperAdmin) {
+        localStorage.setItem('super_admin_token', result.token);
+        localStorage.setItem('super_admin_user', JSON.stringify(result.user));
+        setTimeout(() => navigate('/super-admin'), 50);
+      } else {
+        setTimeout(() => navigate('/'), 50);
+      }
+    } else {
+      setTwoFAError(t(result.error || 'رمز التحقق غير صحيح'));
+    }
+  };
+
+  const handleResendOtp = async () => {
+    setTwoFAError('');
+    setTwoFAResent(false);
+    const result = await resendTwoFactor(twoFA.verificationId);
+    if (result.success) {
+      setTwoFA((prev) => ({
+        ...prev,
+        verificationId: result.data.verification_id,
+        destinationMasked: result.data.destination_masked,
+        pendingDelivery: result.data.pending_delivery,
+      }));
+      setTwoFAResent(true);
+      setOtpCode('');
+    } else {
+      setTwoFAError(t(result.error || 'تعذّر إعادة الإرسال'));
+    }
+  };
+
+  const cancelTwoFA = () => {
+    setTwoFA(null);
+    setOtpCode('');
+    setTwoFAError('');
+    setTwoFAResent(false);
     setLoading(false);
   };
 
@@ -525,6 +603,109 @@ export default function Login() {
           />
         ))}
       </div>
+
+      {/* ======== نافذة المصادقة الثنائية (2FA) ======== */}
+      {twoFA && (
+        <div
+          className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm"
+          data-testid="two-factor-modal"
+        >
+          <Card className="w-full max-w-md glass-effect border-amber-500/30 shadow-2xl">
+            <CardHeader className="text-center pb-2">
+              <div className="mx-auto mb-3 w-16 h-16 rounded-2xl bg-amber-500/15 border border-amber-500/30 flex items-center justify-center">
+                <ShieldCheck className="h-8 w-8 text-amber-400" />
+              </div>
+              <CardTitle className="text-2xl font-bold text-white">{t('التحقق بخطوتين')}</CardTitle>
+              <CardDescription className="text-gray-300 mt-2 text-sm">
+                {twoFA.channel === 'email'
+                  ? t('أرسلنا رمز التحقق تلقائياً إلى بريدك المسجّل في النظام')
+                  : twoFA.channel === 'whatsapp'
+                    ? t('أرسلنا رمز التحقق تلقائياً عبر واتساب إلى رقمك المسجّل')
+                    : t('أرسلنا رمز التحقق تلقائياً عبر رسالة نصية إلى رقمك المسجّل')}
+                {twoFA.destinationMasked && (
+                  <span dir="ltr" className="block mt-1 text-amber-400 font-bold tracking-wider" data-testid="twofa-destination">
+                    {twoFA.destinationMasked}
+                  </span>
+                )}
+                <span className="block mt-1 text-xs text-gray-400">
+                  {t('لا حاجة لإدخال أي رقم — النظام يعرف جهة الاتصال')}
+                </span>
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="pt-4">
+              {twoFA.pendingDelivery && (
+                <div
+                  className="mb-4 p-3 rounded-lg bg-red-500/10 border border-red-500/30 text-center"
+                  data-testid="otp-pending-error"
+                >
+                  <p className="text-red-300 text-xs">
+                    {t('تعذّر إرسال الرمز حالياً. تأكد من ربط الواتساب أو تواصل مع المالك، ثم أعد المحاولة.')}
+                  </p>
+                </div>
+              )}
+
+              {twoFAResent && (
+                <div className="mb-3 text-center text-green-400 text-xs" data-testid="otp-resent">
+                  {t('تم إعادة إرسال الرمز')}
+                </div>
+              )}
+
+              <form onSubmit={handleVerifyOtp} className="space-y-4">
+                {twoFAError && (
+                  <div className="bg-red-500/20 border border-red-500/30 text-red-300 rounded-lg p-3 flex items-center gap-2" data-testid="otp-error">
+                    <AlertCircle className="h-4 w-4 flex-shrink-0" />
+                    <span className="text-sm">{twoFAError}</span>
+                  </div>
+                )}
+                <Input
+                  type="text"
+                  inputMode="numeric"
+                  autoFocus
+                  maxLength={6}
+                  placeholder="______"
+                  value={otpCode}
+                  onChange={(e) => setOtpCode(e.target.value.replace(/[^0-9]/g, ''))}
+                  className="h-14 text-center text-2xl tracking-[0.5em] bg-white/5 border-white/10 text-white placeholder:text-gray-600"
+                  dir="ltr"
+                  data-testid="otp-input"
+                />
+                <Button
+                  type="submit"
+                  disabled={twoFALoading || otpCode.length < 4}
+                  className="w-full h-12 text-lg font-bold bg-gradient-to-r from-primary to-yellow-600 text-black hover:from-primary/90 hover:to-yellow-500 disabled:opacity-50"
+                  data-testid="verify-otp-btn"
+                >
+                  {twoFALoading ? (
+                    <span className="flex items-center gap-2">
+                      <Loader2 className="h-5 w-5 animate-spin" />
+                      {t('جاري التحقق...')}
+                    </span>
+                  ) : t('تأكيد الرمز')}
+                </Button>
+                <div className="flex items-center justify-between gap-2">
+                  <button
+                    type="button"
+                    onClick={handleResendOtp}
+                    className="flex items-center gap-1 text-sm text-amber-400 hover:text-amber-300"
+                    data-testid="resend-otp-btn"
+                  >
+                    <RefreshCw className="h-4 w-4" />
+                    {t('إعادة إرسال الرمز')}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={cancelTwoFA}
+                    className="text-sm text-gray-400 hover:text-white"
+                    data-testid="cancel-2fa-btn"
+                  >
+                    {t('إلغاء')}
+                  </button>
+                </div>
+              </form>
+            </CardContent>
+          </Card>
+        </div>
+      )}
 
       {/* Login Card */}
       <Card 

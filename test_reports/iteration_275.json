@@ -1,0 +1,25 @@
+{
+  "summary": "Backend regression tests for expense-to-shift attribution bug fix. All 10 tests pass. Verified: per-cashier expense isolation (A=15,000; B=5,000; no cross-mixing), expense POST stamps shift_id + cashier_id, cash-register-closing report returns 200 with expenses_by_cashier attribution, shift merging fully disabled (closing B leaves A open and unaffected), manager override flow works end-to-end (409 without approval, 409 with wrong password, 200 with valid admin creds), and 2FA dev_code is not leaked in /api/auth/login nor /api/super-admin/pending-2fa-codes responses.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": [
+    "/app/backend/tests/test_expense_attribution.py",
+    "/app/test_reports/pytest/expense_attr.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "shifts_routes.py exceeds 1900 lines — consider splitting close_cash_register, get_cash_register_summary, and reports handlers into separate modules for maintainability.",
+    "Seed script (seed_expense_attribution_test.py) does not clean auto-created shifts (created by /cash-register/summary auto-open) nor NEWEXP TEST expenses — added session-scoped cleanup fixture in test file to compensate. Consider adding same cleanup inside the seed script itself.",
+    "Manager override discrepancy rule requires total_sales > 0 (line 1743). If a shift has zero sales but a huge counted-cash discrepancy vs opening_cash+expenses, no approval is required. Consider also enforcing an absolute-value floor (e.g. any diff > 50,000 IQD) in addition to the 5% rule."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_expense_attribution.py (new)"
+  ],
+  "success_rate": {"backend": "100% (10/10)", "frontend": "not tested (skip per request)"},
+  "test_credentials": "Admin: admin@maestroegp.com/admin123; Owner: owner@maestroegp.com/owner123 (secret_key 271018); Cashiers: expattr-cashier-a@maestroegp.com/test123, expattr-cashier-b@maestroegp.com/test123",
+  "seed_data_creation": "Uses /app/backend/seed_expense_attribution_test.py (re-run automatically at session start). Test file additionally cleans NEWEXP TEST expenses, EXP-ATTR-TEST-ORDER orders, and any auto-created stray shifts for test cashiers before each session, and re-seeds+injects an order before each discrepancy-override test.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "test_expense_attribution.py is the canonical regression test for this accounting-bug fix. It re-seeds automatically. If backend refactors touch routes/shared.py shift_expense_query or routes/shifts_routes.py close/summary handlers, re-run this. Manager-override tests seed a real order via direct MongoDB write to force total_sales>0 (required by the 5% rule at line 1743).",
+  "rca of the issue": "Original bug: expenses had no shift linkage; attribution was by branch+time-window, causing cross-cashier mixing when multiple cashiers shared a branch/day; each screen used a slightly different query. Fix stamps shift_id + cashier_id on every new expense and uses one canonical shift_expense_query(shift, tenant_id) rule everywhere (routes/shared.py). Legacy expenses without shift_id fall back to branch+business_date+created_by==cashier match. Shift merging on close was removed entirely. Verified end-to-end via 10 pytest cases against the deployed backend."
+}

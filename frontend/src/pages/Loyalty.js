@@ -34,6 +34,7 @@ import {
 import { toast } from 'sonner';
 import { useNavigate } from 'react-router-dom';
 import { showApiError } from '../utils/apiError';
+import PhoneCountryInput from '../components/PhoneCountryInput';
 const API = API_URL;
 const TIER_ICONS = {
   bronze: '🥉',
@@ -427,12 +428,10 @@ export default function Loyalty() {
             </div>
             <div>
               <Label>{t('رقم الهاتف *')}</Label>
-              <Input
+              <PhoneCountryInput
                 value={memberForm.phone}
-                onChange={(e) => setMemberForm({ ...memberForm, phone: e.target.value })}
-                placeholder="07xxxxxxxxx"
-                dir="ltr"
-                required
+                onChange={(val) => setMemberForm({ ...memberForm, phone: val })}
+                testId="loyalty-member-phone"
               />
             </div>
             <div>

@@ -116,6 +116,16 @@ SMTP_USER = os.environ.get('SMTP_USER', '')
 SMTP_PASSWORD = os.environ.get('SMTP_PASSWORD', '')
 SMTP_FROM_NAME = os.environ.get('SMTP_FROM_NAME', 'Maestro EGP')
 
+# ==================== المصادقة الثنائية (2FA) + جهاز موثوق ====================
+import twilio_verify as _twilio_verify  # noqa: E402
+import whatsapp_free as _wa_free  # noqa: E402
+# عناوين بريد المالك التي تُرسَل إليها رموز التحقق عند الدخول من جهاز جديد
+OWNER_RECOVERY_EMAILS = [
+    e.strip().lower()
+    for e in (os.environ.get('OWNER_RECOVERY_EMAILS', 'owner@maestroegp.com,Moataz0111@gmail.com')).split(',')
+    if e.strip()
+]
+
 
 async def _load_email_config() -> dict:
     """Load email/SMTP config from DB (db.email_config id='global'), falling back to env vars.
@@ -266,9 +276,83 @@ async def _refresh_blocked_ips(force=False):
     except Exception:
         pass
 
+# عناوين IP الخاصة بالمالك — تُحفظ ولا تُحظر أبداً (طلب المالك)
+_OWNER_IPS = set()
+_OWNER_IPS_TS = 0.0
+
+async def _refresh_owner_ips(force=False):
+    global _OWNER_IPS, _OWNER_IPS_TS
+    import time as _t
+    now = _t.time()
+    if not force and (now - _OWNER_IPS_TS) < _BLOCKED_TTL:
+        return
+    try:
+        docs = await db.owner_trusted_ips.find({}, {"_id": 0, "ip": 1}).to_list(1000)
+        _OWNER_IPS = {d.get("ip") for d in docs if d.get("ip")}
+        _OWNER_IPS_TS = now
+    except Exception:
+        pass
+
+async def _is_owner_ip(ip):
+    if not ip or ip == "unknown":
+        return False
+    await _refresh_owner_ips()
+    return ip in _OWNER_IPS
+
+async def _save_owner_ip(ip, request=None):
+    """يحفظ عنوان IP للمالك في القائمة البيضاء (لا يُحظر أبداً)."""
+    if not ip or ip == "unknown":
+        return
+    try:
+        await db.owner_trusted_ips.update_one(
+            {"ip": ip},
+            {"$set": {"ip": ip, "saved_at": datetime.now(timezone.utc).isoformat(),
+                      "user_agent": (request.headers.get("user-agent", "") if request else "")}},
+            upsert=True,
+        )
+        # إن كان محظوراً بالخطأ سابقاً، ارفع الحظر عنه
+        await db.blocked_ips.delete_one({"ip": ip})
+        await _refresh_owner_ips(force=True)
+        await _refresh_blocked_ips(force=True)
+    except Exception:
+        pass
+
 async def _is_ip_blocked(ip):
+    # عنوان المالك لا يُحظر أبداً
+    if await _is_owner_ip(ip):
+        return False
     await _refresh_blocked_ips()
     return ip in _BLOCKED_IPS
+
+async def _ban_ip_permanent(ip, reason: str, request=None):
+    """حظر دائم لعنوان IP بعد تجاوز محاولات الدخول الفاشلة (يمنع كل الأجهزة على الشبكة).
+    يُستثنى عنوان المالك دائماً."""
+    if not ip or ip == "unknown":
+        return False
+    if await _is_owner_ip(ip):
+        return False
+    try:
+        await db.blocked_ips.update_one(
+            {"ip": ip},
+            {"$set": {
+                "ip": ip,
+                "reason": reason,
+                "blocked_by": "النظام (حظر دائم تلقائي)",
+                "auto": True,
+                "permanent": True,
+                "blocked_at": datetime.now(timezone.utc).isoformat(),
+            }},
+            upsert=True,
+        )
+        await _refresh_blocked_ips(force=True)
+        try:
+            await record_audit("security.permanent_ban", request=request, status=403,
+                               details={"ip": ip, "reason": reason})
+        except Exception:
+            pass
+        return True
+    except Exception:
+        return False
 
 # ==================== الحظر التلقائي للمخترقين (Auto-Ban) ====================
 from collections import deque as _deque, defaultdict as _ddict
@@ -280,6 +364,9 @@ _AUTO_BAN_ENABLED = True
 async def _register_offense(ip, request, path, method, sc):
     """يسجّل محاولة مشبوهة ويحظر العنوان تلقائياً عند تجاوز الحد."""
     if not _AUTO_BAN_ENABLED or not ip or ip == "unknown":
+        return
+    # عنوان المالك لا يُحظر أبداً
+    if await _is_owner_ip(ip):
         return
     import time as _t
     now = _t.time()
@@ -1067,24 +1154,14 @@ async def auto_migrate_business_dates():
                 biz = iraq_date_from_utc(rec.get("created_at")) or rec.get("date")
                 await coll.update_one({"id": rec["id"]}, {"$set": {"business_date": biz}})
         
-        # 5) إعادة احتساب total_expenses للورديات المُغلقة لاستبعاد المرتجعات
+        # 5) إعادة احتساب total_expenses للورديات المُغلقة (قاعدة معتمدة: shift_id/منشئ — لا خلط بين الكاشيرين)
+        from routes.shared import shift_expense_query as _shift_exp_q
         async for s in db.shifts.find(
-            {"status": "closed", "expenses_refund_fix_applied": {"$ne": True}},
-            {"_id": 0, "id": 1, "branch_id": 1, "tenant_id": 1, "started_at": 1, "opened_at": 1, "ended_at": 1, "cash_sales": 1, "opening_cash": 1, "opening_balance": 1}
+            {"status": "closed", "expenses_shift_scope_fix": {"$ne": True}},
+            {"_id": 0, "id": 1, "branch_id": 1, "tenant_id": 1, "cashier_id": 1, "business_date": 1,
+             "started_at": 1, "opened_at": 1, "ended_at": 1, "cash_sales": 1, "opening_cash": 1, "opening_balance": 1}
         ):
-            shift_start = s.get("started_at") or s.get("opened_at") or ""
-            shift_end = s.get("ended_at") or ""
-            if not shift_start:
-                continue
-            exp_q = {
-                "branch_id": s.get("branch_id"),
-                "category": {"$ne": "refund"},
-                "created_at": {"$gte": shift_start}
-            }
-            if s.get("tenant_id"):
-                exp_q["tenant_id"] = s["tenant_id"]
-            if shift_end:
-                exp_q["created_at"]["$lte"] = shift_end
+            exp_q = _shift_exp_q(s, s.get("tenant_id"))
             shift_expenses = await db.expenses.find(exp_q, {"_id": 0, "amount": 1}).to_list(500)
             total_exp = sum(float(e.get("amount") or 0) for e in shift_expenses)
             opening_cash = float(s.get("opening_cash") or s.get("opening_balance") or 0)
@@ -1095,7 +1172,7 @@ async def auto_migrate_business_dates():
                 {"$set": {
                     "total_expenses": total_exp,
                     "expected_cash": expected_cash,
-                    "expenses_refund_fix_applied": True
+                    "expenses_shift_scope_fix": True
                 }}
             )
             updated["shifts_recomputed"] += 1
@@ -1777,12 +1854,14 @@ class UserCreate(BaseModel):
     role: str = UserRole.CASHIER
     branch_id: Optional[str] = None
     permissions: List[str] = []
+    phone: Optional[str] = None  # لاستلام رمز التحقق عبر واتساب/SMS
     tenant_id: Optional[str] = None  # للنظام متعدد المستأجرين
 
 class UserLogin(BaseModel):
     email: str
     password: str
     secret_key: Optional[str] = None
+    device_id: Optional[str] = None
 
 class UserResponse(BaseModel):
     model_config = ConfigDict(extra="ignore")
@@ -1794,6 +1873,7 @@ class UserResponse(BaseModel):
     role: str
     branch_id: Optional[str] = None
     permissions: List[str] = []
+    phone: Optional[str] = None
     is_active: bool = True
     created_at: str
     tenant_id: Optional[str] = None
@@ -1806,6 +1886,7 @@ class UserUpdate(BaseModel):
     role: Optional[str] = None
     branch_id: Optional[str] = None
     permissions: Optional[List[str]] = None
+    phone: Optional[str] = None
     is_active: Optional[bool] = None
 
 # Branch Models
@@ -2034,6 +2115,7 @@ class TableResponse(BaseModel):
 class CustomerCreate(BaseModel):
     name: str
     phone: str
+    email: Optional[str] = None
     phone2: Optional[str] = None  # رقم إضافي
     address: Optional[str] = None
     area: Optional[str] = None  # المنطقة
@@ -2045,6 +2127,7 @@ class CustomerResponse(BaseModel):
     id: str
     name: str
     phone: str
+    email: Optional[str] = None
     phone2: Optional[str] = None
     address: Optional[str] = None
     area: Optional[str] = None
@@ -2054,6 +2137,10 @@ class CustomerResponse(BaseModel):
     total_spent: float = 0.0
     last_order_date: Optional[str] = None
     created_at: str
+    source: Optional[str] = None
+    welcome_status: Optional[str] = None
+    welcome_coupon_code: Optional[str] = None
+    welcome_whatsapp_sent: Optional[bool] = None
 
 # Order Models
 class OrderItemCreate(BaseModel):
@@ -2220,6 +2307,7 @@ class ShiftResponse(BaseModel):
 class DriverCreate(BaseModel):
     name: str
     phone: str
+    email: Optional[str] = None  # لاستلام رمز التحقق/الرسائل عبر البريد
     branch_id: str
     pin: str = "1234"  # رمز PIN الافتراضي - يجب تغييره
     user_id: Optional[str] = None  # ربط بحساب مستخدم
@@ -2229,6 +2317,7 @@ class DriverResponse(BaseModel):
     id: str
     name: str
     phone: str
+    email: Optional[str] = None
     branch_id: str
     is_available: bool = True
     current_order_id: Optional[str] = None
@@ -2554,6 +2643,7 @@ def create_token(user_id: str, role: str, branch_id: Optional[str] = None, tenan
         "role": role,
         "branch_id": branch_id,
         "tenant_id": tenant_id,
+        "iat": datetime.now(timezone.utc),
         "exp": expiration
     }
     return jwt.encode(payload, JWT_SECRET, algorithm=JWT_ALGORITHM)
@@ -2562,6 +2652,18 @@ async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(s
     try:
         token = credentials.credentials
         payload = jwt.decode(token, JWT_SECRET, algorithms=[JWT_ALGORITHM])
+        # إبطال الجلسات القديمة عند تفعيل المالك للتحقق الإلزامي (يُخرج الجميع)
+        cutoff = await _sessions_valid_after()
+        if cutoff and payload.get("iat"):
+            try:
+                iat = payload["iat"]
+                iat_ts = iat if isinstance(iat, (int, float)) else datetime.fromisoformat(str(iat)).timestamp()
+                if iat_ts < cutoff:
+                    raise HTTPException(status_code=401, detail="انتهت الجلسة — يرجى تسجيل الدخول لتفعيل التحقق")
+            except HTTPException:
+                raise
+            except Exception:
+                pass
         user = await db.users.find_one({"id": payload["user_id"]}, {"_id": 0})
         if not user:
             raise HTTPException(status_code=401, detail="المستخدم غير موجود")
@@ -2577,6 +2679,17 @@ async def get_current_driver(credentials: HTTPAuthorizationCredentials = Depends
     rec = await db.driver_tokens.find_one({"token": token})
     if not rec:
         raise HTTPException(status_code=401, detail="جلسة السائق غير صالحة - يرجى تسجيل الدخول")
+    # إبطال جلسات السائقين القديمة عند تفعيل التحقق الإلزامي
+    cutoff = await _sessions_valid_after()
+    if cutoff and rec.get("created_at"):
+        try:
+            if datetime.fromisoformat(rec["created_at"]).timestamp() < cutoff:
+                await db.driver_tokens.delete_one({"token": token})
+                raise HTTPException(status_code=401, detail="انتهت الجلسة — يرجى تسجيل الدخول")
+        except HTTPException:
+            raise
+        except Exception:
+            pass
     driver = await db.drivers.find_one({"id": rec.get("driver_id")}, {"_id": 0})
     if not driver:
         raise HTTPException(status_code=401, detail="السائق غير موجود")
@@ -2668,12 +2781,22 @@ async def check_login_lock(key: str):
         except Exception:
             pass
 
-async def record_login_fail(key: str):
+async def record_login_fail(key: str, ip: str = None, request=None):
+    """يسجّل محاولة فاشلة. عند بلوغ MAX_LOGIN_FAILS يُحظر عنوان الـIP نهائياً
+    (يمنع كل الأجهزة على نفس الشبكة) — يُستثنى عنوان المالك دائماً."""
     rec = await db.login_attempts.find_one({"key": key})
     count = (rec.get("count", 0) if rec else 0) + 1
-    update = {"key": key, "count": count, "last": datetime.now(timezone.utc).isoformat()}
+    update = {"key": key, "count": count, "ip": ip, "last": datetime.now(timezone.utc).isoformat()}
     if count >= MAX_LOGIN_FAILS:
-        update["locked_until"] = (datetime.now(timezone.utc) + timedelta(minutes=LOGIN_LOCK_MINUTES)).isoformat()
+        # حظر دائم لعنوان الـIP (بدل القفل المؤقت)
+        banned = False
+        if ip:
+            banned = await _ban_ip_permanent(
+                ip,
+                reason=f"حظر دائم: {count} محاولات دخول فاشلة",
+                request=request,
+            )
+        update["permanently_banned"] = banned
         update["count"] = 0
     await db.login_attempts.update_one({"key": key}, {"$set": update}, upsert=True)
 
@@ -2682,6 +2805,261 @@ async def clear_login_attempts(key: str):
         await db.login_attempts.delete_one({"key": key})
     except Exception:
         pass
+
+# ======== المصادقة الثنائية (2FA) — جهاز موثوق + رمز تحقق ========
+import hashlib as _hashlib
+import secrets as _secrets_2fa
+
+_OTP_TTL_MINUTES = 10
+_OTP_MAX_ATTEMPTS = 5
+
+def _new_device_id() -> str:
+    return _secrets_2fa.token_urlsafe(24)
+
+def _gen_otp_code() -> str:
+    return f"{_secrets_2fa.randbelow(1000000):06d}"
+
+def _hash_otp(code: str, salt: str) -> str:
+    return _hashlib.sha256(f"{salt}:{code}:{JWT_SECRET}".encode()).hexdigest()
+
+def _mask_email(email: str) -> str:
+    # إخفاء الاسم قبل @ بالكامل وإظهار ما بعده فقط
+    try:
+        _, domain = email.split("@", 1)
+        return f"***@{domain}"
+    except Exception:
+        return "***"
+
+def _mask_phone(phone: str) -> str:
+    # تقنيع كل الأرقام وإظهار آخر رقمين فقط
+    p = "".join(ch for ch in str(phone) if ch.isdigit())
+    if len(p) <= 2:
+        return "**"
+    return ("*" * (len(p) - 2)) + p[-2:]
+
+async def is_device_trusted(subject_type: str, subject_id: str, device_id: str) -> bool:
+    if not device_id or not subject_id:
+        return False
+    doc = await db.trusted_devices.find_one({
+        "subject_type": subject_type,
+        "subject_id": str(subject_id),
+        "device_id": device_id,
+        "revoked": {"$ne": True},
+    })
+    return bool(doc)
+
+async def trust_device(subject_type: str, subject_id: str, device_id: str, ip: str,
+                       user_agent: str = "", tenant_id=None, label: str = ""):
+    if not device_id:
+        return
+    now = datetime.now(timezone.utc).isoformat()
+    await db.trusted_devices.update_one(
+        {"subject_type": subject_type, "subject_id": str(subject_id), "device_id": device_id},
+        {"$set": {
+            "subject_type": subject_type,
+            "subject_id": str(subject_id),
+            "device_id": device_id,
+            "ip": ip,
+            "user_agent": user_agent,
+            "tenant_id": tenant_id,
+            "label": label,
+            "last_seen_at": now,
+            "revoked": False,
+        }, "$setOnInsert": {"id": str(uuid.uuid4()), "created_at": now}},
+        upsert=True,
+    )
+
+async def _phone_to_e164(phone: str) -> str:
+    """تحويل رقم عراقي محلي إلى صيغة E.164 (+964) إن لزم."""
+    p = "".join(ch for ch in str(phone or "") if ch.isdigit() or ch == "+")
+    if not p:
+        return p
+    if p.startswith("+"):
+        return p
+    if p.startswith("00"):
+        return "+" + p[2:]
+    if p.startswith("0"):
+        return "+964" + p[1:]
+    if p.startswith("964"):
+        return "+" + p
+    return "+" + p
+
+async def start_2fa_verification(subject_type, subject_id, subject_name, tenant_id,
+                                 channel, destination, device_id, ip, request=None, extra=None,
+                                 fallback_email=None):
+    """ينشئ جلسة تحقق ويُرسل الرمز بترتيب الأولوية:
+    واتساب مجاني (رقم المالك) ← البريد ← (الحالة القصوى) SMS مدفوع ← معلّق.
+    channel: 'email' | 'whatsapp' | 'sms' (القناة المفضّلة)."""
+    vid = str(uuid.uuid4())
+    salt = _secrets_2fa.token_hex(8)
+    expires = (datetime.now(timezone.utc) + timedelta(minutes=_OTP_TTL_MINUTES)).isoformat()
+    ua = request.headers.get("user-agent", "") if request else ""
+    method = None
+    code_hash = None
+    dev_code = None
+    pending = False
+    masked = ""
+
+    def _otp_email_html(code, name):
+        return f"""
+        <div style='font-family:Tahoma,Arial,sans-serif;direction:rtl;text-align:right;background:#0f0f1e;color:#fff;padding:24px;border-radius:12px'>
+          <h2 style='color:#ffd166'>رمز تحقق الدخول</h2>
+          <p>مرحباً {name or ''}،</p>
+          <p>تم طلب تسجيل الدخول من جهاز جديد. استخدم الرمز التالي (صالح {_OTP_TTL_MINUTES} دقائق):</p>
+          <div style='font-size:34px;font-weight:900;letter-spacing:8px;color:#ffd166;background:#1a1a2e;padding:16px;border-radius:10px;text-align:center;margin:16px 0'>{code}</div>
+          <p style='color:#94a3b8;font-size:13px'>إن لم تكن أنت، تجاهل الرسالة وغيّر كلمة المرور.</p>
+          <p style='color:#475569;font-size:12px'>Maestro EGP — نظام محمي</p>
+        </div>"""
+
+    if channel in ("sms", "whatsapp"):
+        e164 = await _phone_to_e164(destination)
+        destination = e164
+        masked = _mask_phone(e164)
+        code = _gen_otp_code()
+        code_hash = _hash_otp(code, salt)
+        wa_msg = f"رمز الدخول إلى Maestro EGP: {code}\nصالح {_OTP_TTL_MINUTES} دقائق. لا تُشاركه مع أحد."
+        sent = False
+        # 1) واتساب مجاني (رقم المالك المرتبط)
+        if await _wa_free.is_connected():
+            ok, err = await _wa_free.send_message(e164, wa_msg)
+            if ok:
+                sent = True
+                channel = "whatsapp"
+                method = "local"
+        # 2) البريد (إن توفّر بريد بديل)
+        if not sent and fallback_email:
+            recips = fallback_email if isinstance(fallback_email, list) else [fallback_email]
+            if await send_system_email(recips, "رمز تحقق الدخول — Maestro EGP", _otp_email_html(code, subject_name)):
+                sent = True
+                channel = "email"
+                method = "local"
+                masked = _mask_email(recips[0])
+        # 3) الحالة القصوى: SMS مدفوع عبر Twilio
+        if not sent and _twilio_verify.is_configured():
+            ok, status = await _twilio_verify.start_verification(e164, "sms")
+            if ok:
+                sent = True
+                channel = "sms"
+                method = "twilio"  # Twilio يتحقق من رمزه الخاص
+                code_hash = None
+        # 4) تعذّر الإرسال → معلّق (لا يُعرض الرمز في أي مكان — أمان صارم)
+        if not sent:
+            method = "local"
+            pending = True
+    else:  # email مباشرة (المالك/الموظف بلا هاتف)
+        recipients = destination if isinstance(destination, list) else [destination]
+        masked = _mask_email(recipients[0] if recipients else "")
+        method = "local"
+        code = _gen_otp_code()
+        code_hash = _hash_otp(code, salt)
+        sent = await send_system_email(recipients, "رمز تحقق الدخول — Maestro EGP", _otp_email_html(code, subject_name))
+        if not sent:
+            pending = True
+
+    session = {
+        "id": vid,
+        "subject_type": subject_type,
+        "subject_id": str(subject_id) if subject_id is not None else None,
+        "subject_name": subject_name,
+        "tenant_id": tenant_id,
+        "channel": channel,
+        "method": method,
+        "destination": destination if not isinstance(destination, list) else ",".join(destination),
+        "code_hash": code_hash,
+        "salt": salt,
+        "device_id": device_id or _new_device_id(),
+        "ip": ip,
+        "user_agent": ua,
+        "attempts": 0,
+        "consumed": False,
+        "pending_delivery": pending,
+        "extra": extra or {},
+        "created_at": datetime.now(timezone.utc).isoformat(),
+        "expires_at": expires,
+    }
+    await db.verification_sessions.insert_one(dict(session))
+    resp = {
+        "requires_2fa": True,
+        "verification_id": vid,
+        "channel": channel,
+        "destination_masked": masked,
+        "device_id": session["device_id"],
+        "expires_in_minutes": _OTP_TTL_MINUTES,
+        "pending_delivery": pending,
+    }
+    return resp
+
+async def verify_2fa_code(verification_id: str, code: str, ip: str = None):
+    """يتحقق من الرمز. يُرجع (ok: bool, session: dict|None, error: str|None)."""
+    sess = await db.verification_sessions.find_one({"id": verification_id}, {"_id": 0})
+    if not sess:
+        return False, None, "الجلسة غير موجودة أو منتهية"
+    if sess.get("consumed"):
+        return False, None, "تم استخدام هذا الرمز مسبقاً"
+    try:
+        if datetime.fromisoformat(sess["expires_at"]) < datetime.now(timezone.utc):
+            return False, None, "انتهت صلاحية الرمز — أعد الإرسال"
+    except Exception:
+        pass
+    if sess.get("attempts", 0) >= _OTP_MAX_ATTEMPTS:
+        return False, None, "تجاوزت عدد المحاولات — أعد الإرسال"
+
+    code = (code or "").strip()
+    approved = False
+    if sess.get("method") == "twilio":
+        ok, approved, err = await _twilio_verify.check_verification(sess["destination"], code)
+        if not ok:
+            approved = False
+    else:
+        approved = bool(sess.get("code_hash")) and _hash_otp(code, sess.get("salt", "")) == sess["code_hash"]
+
+    if not approved:
+        await db.verification_sessions.update_one({"id": verification_id}, {"$inc": {"attempts": 1}})
+        return False, None, "رمز التحقق غير صحيح"
+
+    await db.verification_sessions.update_one({"id": verification_id}, {"$set": {"consumed": True}})
+    return True, sess, None
+
+def _choose_user_2fa_channel(user: dict, is_owner: bool):
+    """يحدد قناة التحقق ووِجهته لمستخدم (موظف/مدير/مالك)."""
+    if is_owner:
+        return "email", list(OWNER_RECOVERY_EMAILS)
+    phone = user.get("phone") or user.get("mobile")
+    if phone:
+        return "whatsapp", phone
+    # لا هاتف → البريد الإلكتروني للحساب
+    return "email", (user.get("email") or "")
+
+# ======== مفتاح التفعيل الرئيسي للتحقق الإلزامي (بيد المالك) ========
+_SEC_CFG = None
+_SEC_CFG_TS = 0.0
+
+async def _refresh_security_config(force=False):
+    global _SEC_CFG, _SEC_CFG_TS
+    import time as _t
+    now = _t.time()
+    if not force and _SEC_CFG is not None and (now - _SEC_CFG_TS) < 15:
+        return _SEC_CFG
+    doc = await db.security_config.find_one({"id": "global"}, {"_id": 0}) or {}
+    _SEC_CFG = doc
+    _SEC_CFG_TS = now
+    return doc
+
+async def two_fa_enabled() -> bool:
+    cfg = await _refresh_security_config()
+    return bool(cfg.get("two_fa_enabled", False))
+
+async def _sessions_valid_after():
+    """يُرجع طابع زمني (epoch) — أي توكن أُصدر قبله يُعتبر منتهياً (لإخراج الجميع)."""
+    cfg = await _refresh_security_config()
+    val = cfg.get("sessions_valid_after")
+    if not val:
+        return None
+    try:
+        return datetime.fromisoformat(val).timestamp()
+    except Exception:
+        return None
+
 
 # دالة مساعدة للحصول على tenant_id للمستخدم
 def get_user_tenant_id(user: dict) -> Optional[str]:
@@ -2974,19 +3352,20 @@ async def register(user: UserCreate, current_user: dict = Depends(get_current_us
 
 @api_router.post("/auth/login")
 async def login(credentials: UserLogin, request: Request):
-    _lockkey = f"login:{_client_ip(request)}:{credentials.email}"
+    _ip = _client_ip(request)
+    _lockkey = f"login:{_ip}:{credentials.email}"
     await check_login_lock(_lockkey)
     user = await db.users.find_one({"email": credentials.email}, {"_id": 0})
     
     if not user:
-        await record_login_fail(_lockkey)
+        await record_login_fail(_lockkey, ip=_ip, request=request)
         await record_audit("auth.login.failed", request, details={"email": credentials.email, "reason": "user_not_found"}, status=401)
         raise HTTPException(status_code=401, detail="بيانات الدخول غير صحيحة")
     
     stored_hash = user.get("password_hash", user.get("password", ""))
     
     if not verify_password(credentials.password, stored_hash):
-        await record_login_fail(_lockkey)
+        await record_login_fail(_lockkey, ip=_ip, request=request)
         await record_audit("auth.login.failed", request, user=user, details={"email": credentials.email, "reason": "wrong_password"}, status=401)
         raise HTTPException(status_code=401, detail="بيانات الدخول غير صحيحة")
     
@@ -2999,7 +3378,7 @@ async def login(credentials: UserLogin, request: Request):
     if user.get("role") == UserRole.SUPER_ADMIN:
         _expected_secret = user.get("super_admin_secret") or user.get("secret_key") or SUPER_ADMIN_SECRET
         if not credentials.secret_key or not _hmac.compare_digest(str(credentials.secret_key), str(_expected_secret)):
-            await record_login_fail(_lockkey)
+            await record_login_fail(_lockkey, ip=_ip, request=request)
             await record_audit("auth.login.failed", request, user=user, details={"reason": "bad_secret_key"}, status=403)
             raise HTTPException(status_code=403, detail="المفتاح السري مطلوب لحساب المالك")
     else:
@@ -3008,7 +3387,7 @@ async def login(credentials: UserLogin, request: Request):
         _acct_secret = user.get("secret_key")
         if _acct_secret and (user.get("role") or "").lower() in ("admin", "manager", "owner"):
             if not credentials.secret_key or not _hmac.compare_digest(str(credentials.secret_key), str(_acct_secret)):
-                await record_login_fail(_lockkey)
+                await record_login_fail(_lockkey, ip=_ip, request=request)
                 await record_audit("auth.login.failed", request, user=user, details={"reason": "bad_secret_key_admin"}, status=403)
                 raise HTTPException(status_code=403, detail="المفتاح السري مطلوب لهذا الحساب")
 
@@ -3045,6 +3424,24 @@ async def login(credentials: UserLogin, request: Request):
         del user["password"]
     if "password_hash" in user:
         del user["password_hash"]
+
+    # ======== المصادقة الثنائية (جهاز موثوق) ========
+    _is_owner = (user.get("role") == UserRole.SUPER_ADMIN) or ((user.get("email") or "").lower() in OWNER_RECOVERY_EMAILS)
+    if _is_owner:
+        await _save_owner_ip(_ip, request)  # عنوان المالك يُحفظ ولا يُحظر أبداً
+    if await two_fa_enabled() and not await is_device_trusted("user", user["id"], credentials.device_id):
+        _channel, _dest = _choose_user_2fa_channel(user, _is_owner)
+        _uname = user.get("full_name") or user.get("username") or user.get("email")
+        resp2fa = await start_2fa_verification("user", user["id"], _uname, user.get("tenant_id"),
+                                               _channel, _dest, credentials.device_id, _ip, request,
+                                               extra={"purpose": "staff_login"},
+                                               fallback_email=user.get("email"))
+        await record_audit("auth.2fa.challenge", request, user=user, status=200, details={"channel": _channel})
+        return resp2fa
+    if await two_fa_enabled():
+        await trust_device("user", user["id"], credentials.device_id, _ip,
+                           request.headers.get("user-agent", ""), user.get("tenant_id"))
+
     token = create_token(user["id"], user["role"], user.get("branch_id"), user.get("tenant_id"))
     
     # تسجيل حدث الدخول في سجل المراقبة
@@ -3052,6 +3449,60 @@ async def login(credentials: UserLogin, request: Request):
     await record_audit("auth.login.success", request, user=user, status=200)
     
     return {"user": user, "token": token}
+
+
+class Verify2FARequest(BaseModel):
+    verification_id: str
+    code: str
+
+class Resend2FARequest(BaseModel):
+    verification_id: str
+
+@api_router.post("/auth/login/verify-2fa")
+async def verify_staff_2fa(payload: Verify2FARequest, request: Request):
+    """التحقق من رمز الدخول الثنائي للموظف/المالك وإصدار التوكن + توثيق الجهاز."""
+    _ip = _client_ip(request)
+    ok, sess, err = await verify_2fa_code(payload.verification_id, payload.code, _ip)
+    if not ok:
+        raise HTTPException(status_code=401, detail=err or "رمز التحقق غير صحيح")
+    if sess.get("subject_type") != "user":
+        raise HTTPException(status_code=400, detail="جلسة تحقق غير صالحة")
+    user = await db.users.find_one({"id": sess["subject_id"]}, {"_id": 0})
+    if not user:
+        raise HTTPException(status_code=404, detail="المستخدم غير موجود")
+    device_id = sess.get("device_id")
+    await trust_device("user", user["id"], device_id, _ip,
+                       request.headers.get("user-agent", ""), user.get("tenant_id"))
+    _is_owner = (user.get("role") == UserRole.SUPER_ADMIN) or ((user.get("email") or "").lower() in OWNER_RECOVERY_EMAILS)
+    if _is_owner:
+        await _save_owner_ip(_ip, request)
+    if "password" in user:
+        del user["password"]
+    if "password_hash" in user:
+        del user["password_hash"]
+    token = create_token(user["id"], user["role"], user.get("branch_id"), user.get("tenant_id"))
+    await record_audit("auth.2fa.success", request, user=user, status=200)
+    return {"user": user, "token": token, "device_id": device_id}
+
+@api_router.post("/auth/2fa/resend")
+async def resend_2fa(payload: Resend2FARequest, request: Request):
+    """إعادة إرسال رمز التحقق لجلسة قائمة (بنفس القناة والوِجهة)."""
+    _ip = _client_ip(request)
+    sess = await db.verification_sessions.find_one({"id": payload.verification_id}, {"_id": 0})
+    if not sess:
+        raise HTTPException(status_code=404, detail="الجلسة غير موجودة")
+    if sess.get("consumed"):
+        raise HTTPException(status_code=400, detail="تم استخدام هذه الجلسة")
+    dest = sess.get("destination")
+    if sess.get("channel") == "email" and "," in (dest or ""):
+        dest = dest.split(",")
+    resp = await start_2fa_verification(
+        sess["subject_type"], sess["subject_id"], sess.get("subject_name"),
+        sess.get("tenant_id"), sess["channel"], dest, sess.get("device_id"),
+        _ip, request, extra=sess.get("extra"),
+    )
+    return resp
+
 
 @api_router.get("/auth/me")
 async def get_me(current_user: dict = Depends(get_current_user)):
@@ -3416,6 +3867,8 @@ async def create_user(user: UserCreate, current_user: dict = Depends(get_current
         "role": user.role,
         "branch_id": user.branch_id,
         "permissions": user.permissions,
+        "phone": (user.phone or "").strip(),
+        "full_name_en": user.full_name_en,
         "tenant_id": tenant_id,  # إضافة tenant_id تلقائياً
         "is_active": True,
         "created_at": datetime.now(timezone.utc).isoformat()
@@ -4010,12 +4463,21 @@ async def create_expense(expense: ExpenseCreate, current_user: dict = Depends(ge
         return existing_dup  # إرجاع المصروف الموجود بدل إنشاء نسخة مكررة
     
     business_date = await _resolve_business_date(tenant_id_for_biz, branch_for_biz, current_user.get("id"))
+    # ربط المصروف بوردية الكاشير المفتوحة (إن وُجدت) — أساس احتساب مصاريف الوردية بدقة وبلا خلط
+    open_shift_q = {"status": "open", "cashier_id": current_user["id"]}
+    if branch_for_biz:
+        open_shift_q["branch_id"] = branch_for_biz
+    if tenant_id_for_biz:
+        open_shift_q["tenant_id"] = tenant_id_for_biz
+    open_shift = await db.shifts.find_one(open_shift_q, {"_id": 0, "id": 1})
     expense_doc = {
         "id": str(uuid.uuid4()),
         **expense.model_dump(),
         "tenant_id": tenant_id_for_biz,
         "date": expense.date or datetime.now(timezone.utc).strftime("%Y-%m-%d"),
         "business_date": business_date,
+        "shift_id": open_shift["id"] if open_shift else None,
+        "cashier_id": current_user["id"],
         "created_by": current_user["id"],
         "created_by_name": current_user.get("full_name", "") or current_user.get("username", ""),
         "created_at": datetime.now(timezone.utc).isoformat()
@@ -7011,6 +7473,193 @@ async def update_customer(customer_id: str, customer: CustomerCreate, current_us
 async def delete_customer(customer_id: str, current_user: dict = Depends(get_current_user)):
     await db.customers.delete_one({"id": customer_id})
     return {"message": "تم الحذف"}
+
+# ==================== WELCOME DISCOUNT (رسالة ترحيب + كود خصم) ====================
+DEFAULT_WELCOME_CONFIG = {
+    "enabled": True,
+    "discount_type": "percentage",  # percentage | fixed
+    "discount_value": 10,
+    "min_order_amount": 0,
+    "valid_days": 7,
+    "message_template": (
+        "مرحباً بك في {restaurant} 🎉\n"
+        "شكراً لأول طلب لديك! إليك كود خصم خاص لطلبك القادم:\n\n"
+        "🎁 {code}\n"
+        "قيمة الخصم: {discount} — صالح حتى {expiry}.\n\n"
+        "بالهناء والعافية 🌟"
+    ),
+}
+
+async def _get_welcome_config(tenant_id: Optional[str]) -> dict:
+    doc = await db.app_settings.find_one({"tenant_id": tenant_id, "key": "welcome_discount"}, {"_id": 0})
+    cfg = dict(DEFAULT_WELCOME_CONFIG)
+    if doc and isinstance(doc.get("value"), dict):
+        cfg.update(doc["value"])
+    return cfg
+
+@api_router.get("/welcome-discount/config")
+async def get_welcome_discount_config(current_user: dict = Depends(get_current_user)):
+    return await _get_welcome_config(get_user_tenant_id(current_user))
+
+@api_router.put("/welcome-discount/config")
+async def update_welcome_discount_config(payload: dict = Body(...), current_user: dict = Depends(get_current_user)):
+    if current_user.get("role") not in [UserRole.ADMIN, UserRole.MANAGER, UserRole.SUPER_ADMIN, "branch_manager"]:
+        raise HTTPException(status_code=403, detail="غير مصرح")
+    tenant_id = get_user_tenant_id(current_user)
+    allowed = {"enabled", "discount_type", "discount_value", "min_order_amount", "valid_days", "message_template"}
+    value = {k: payload[k] for k in payload if k in allowed}
+    await db.app_settings.update_one(
+        {"tenant_id": tenant_id, "key": "welcome_discount"},
+        {"$set": {"tenant_id": tenant_id, "key": "welcome_discount", "value": value,
+                  "updated_at": datetime.now(timezone.utc).isoformat()}},
+        upsert=True
+    )
+    return await _get_welcome_config(tenant_id)
+
+@api_router.get("/welcome-approvals")
+async def get_welcome_approvals(current_user: dict = Depends(get_current_user)):
+    """قائمة الزبائن الجدد بانتظار موافقة خصم الترحيب (إشعار داخل النظام بزر موافقة)."""
+    if current_user.get("role") not in [UserRole.ADMIN, UserRole.MANAGER, UserRole.SUPER_ADMIN, "branch_manager"]:
+        raise HTTPException(status_code=403, detail="غير مصرح")
+    query = build_tenant_query(current_user, {"welcome_status": "pending"})
+    customers = await db.customers.find(query, {"_id": 0}).sort("created_at", -1).to_list(100)
+    return {"pending": customers, "count": len(customers)}
+
+@api_router.post("/customers/{customer_id}/grant-welcome-discount")
+async def grant_welcome_discount(customer_id: str, payload: dict = Body(default={}), current_user: dict = Depends(get_current_user)):
+    """موافقة صاحب المطعم/المدير → كوبون شخصي باسم الزبون بعدد مرات وفروع يحددها المالك + واتساب احترافي."""
+    if current_user.get("role") not in [UserRole.ADMIN, UserRole.MANAGER, UserRole.SUPER_ADMIN, "branch_manager"]:
+        raise HTTPException(status_code=403, detail="يتطلب موافقة صاحب المطعم أو المدير")
+    tenant_id = get_user_tenant_id(current_user)
+    customer = await db.customers.find_one(build_tenant_query(current_user, {"id": customer_id}), {"_id": 0})
+    if not customer:
+        raise HTTPException(status_code=404, detail="العميل غير موجود")
+    if customer.get("welcome_status") == "granted":
+        raise HTTPException(status_code=400, detail="تم منح خصم الترحيب لهذا العميل مسبقاً")
+    cfg = await _get_welcome_config(tenant_id)
+    if not cfg.get("enabled", True):
+        raise HTTPException(status_code=400, detail="خصم الترحيب غير مُفعّل")
+
+    payload = payload or {}
+    try:
+        usage_limit = max(1, int(payload.get("usage_limit") or 1))
+    except (TypeError, ValueError):
+        usage_limit = 1
+    branch_ids = [b for b in (payload.get("branch_ids") or []) if isinstance(b, str)]
+    discount_type = payload.get("discount_type") or cfg.get("discount_type", "percentage")
+    try:
+        dval = float(payload.get("discount_value") if payload.get("discount_value") is not None else (cfg.get("discount_value", 10) or 0))
+    except (TypeError, ValueError):
+        dval = float(cfg.get("discount_value", 10) or 0)
+    try:
+        min_order = float(payload.get("min_order_amount") if payload.get("min_order_amount") is not None else (cfg.get("min_order_amount", 0) or 0))
+    except (TypeError, ValueError):
+        min_order = 0.0
+    try:
+        valid_days = max(1, int(payload.get("valid_days") or cfg.get("valid_days", 7) or 7))
+    except (TypeError, ValueError):
+        valid_days = 7
+
+    code = "WLC" + uuid.uuid4().hex[:6].upper()
+    now = datetime.now(timezone.utc)
+    valid_until = now + timedelta(days=valid_days)
+    is_pct = discount_type == "percentage"
+    customer_display_name = (customer.get("name") or "").strip() or "زبون"
+    coupon_doc = {
+        "id": str(uuid.uuid4()),
+        "code": code,
+        "name": f"خصم ترحيبي 🎁 — {customer_display_name}",
+        "description": f"كوبون ترحيبي شخصي باسم الزبون {customer_display_name} ({customer.get('phone','')})",
+        "discount_type": discount_type,
+        "discount_value": dval,
+        "min_order_amount": min_order,
+        "max_discount": None,
+        "usage_limit": usage_limit,
+        "usage_per_customer": usage_limit,
+        "valid_from": now.isoformat(),
+        "valid_until": valid_until.isoformat(),
+        "is_active": True,
+        "applicable_to": "all",
+        "applicable_ids": [],
+        "loyalty_tier_required": None,
+        "first_order_only": False,
+        "branch_ids": branch_ids,
+        "customer_name": customer_display_name,
+        "used_count": 0,
+        "total_discount_given": 0,
+        "is_welcome": True,
+        "tenant_id": tenant_id,
+        "created_by": current_user["id"],
+        "created_at": now.isoformat(),
+    }
+    await db.coupons.insert_one(coupon_doc)
+
+    # اسم المطعم للرسالة
+    restaurant = "مطعمنا"
+    if tenant_id:
+        t = await db.tenants.find_one({"id": tenant_id}, {"_id": 0, "name": 1})
+        if t and t.get("name"):
+            restaurant = t["name"]
+    if restaurant == "مطعمنا":
+        b = await db.branches.find_one(build_tenant_query(current_user), {"_id": 0, "name": 1})
+        if b and b.get("name"):
+            restaurant = b["name"]
+    discount_str = f"{int(dval)}%" if is_pct else f"{int(dval):,} د.ع"
+    expiry_str = valid_until.strftime("%Y-%m-%d")
+
+    # أسماء الفروع المتاحة للطلب بهذا الكوبون
+    _bq = {"tenant_id": tenant_id} if tenant_id else {}
+    if branch_ids:
+        _bq["id"] = {"$in": branch_ids}
+    _branches = await db.branches.find(_bq, {"_id": 0, "name": 1}).to_list(50)
+    branch_names = [b.get("name") for b in _branches if b.get("name")]
+    branches_str = "، ".join(branch_names) if branch_names else "جميع فروعنا"
+
+    uses_str = "مرة واحدة" if usage_limit == 1 else ("مرتين" if usage_limit == 2 else f"{usage_limit} مرات")
+    min_order_line = f"🛒 الحد الأدنى للطلب: {int(min_order):,} د.ع\n" if min_order > 0 else ""
+    message = (
+        f"🎉 أهلاً وسهلاً بك في {restaurant}!\n\n"
+        f"عميلنا العزيز {customer_display_name}، يسعدنا انضمامك إلينا، وهذه هدية ترحيبية خاصة باسمك:\n\n"
+        f"🎁 كود الخصم: {code}\n"
+        f"💰 قيمة الخصم: {discount_str}\n"
+        f"🔁 عدد مرات الاستخدام: {uses_str}\n"
+        f"🏪 الفروع المتاحة للطلب: {branches_str}\n"
+        f"{min_order_line}"
+        f"📅 صالح حتى: {expiry_str}\n\n"
+        f"هذا الكوبون شخصي باسمك ولا يمكن استخدامه من قبل غيرك.\n"
+        f"نتشرف بخدمتك دائماً 🌟\n{restaurant}"
+    )
+
+    wa_ok, wa_err = await _wa_free.send_message(customer.get("phone", ""), message)
+
+    # تعليم إشعار الموافقة المرتبط بهذا الزبون كمُعالج
+    await db.notifications.update_many(
+        {"type": "welcome_approval", "data.customer_id": customer_id},
+        {"$set": {"is_read": True, "handled_at": now.isoformat()}}
+    )
+
+    await db.customers.update_one(
+        {"id": customer_id},
+        {"$set": {
+            "welcome_status": "granted",
+            "welcome_coupon_code": code,
+            "welcome_granted_at": now.isoformat(),
+            "welcome_granted_by": current_user["id"],
+            "welcome_whatsapp_sent": bool(wa_ok),
+        }}
+    )
+    return {
+        "success": True,
+        "coupon_code": code,
+        "coupon_id": coupon_doc["id"],
+        "usage_limit": usage_limit,
+        "branches": branch_names or ["جميع الفروع"],
+        "discount": discount_str,
+        "valid_until": expiry_str,
+        "whatsapp_sent": bool(wa_ok),
+        "whatsapp_error": wa_err,
+        "message": "تم إنشاء كوبون باسم الزبون" + (" وإرساله عبر واتساب ✅" if wa_ok else " (تعذّر إرسال واتساب — الرقم غير مربوط أو غير متصل)")
+    }
 
 # ==================== ORDER ROUTES ====================
 
@@ -10375,8 +11024,9 @@ class TenantInvoiceSettings(BaseModel):
     default_delivery_fee: Optional[float] = 0  # مبلغ التوصيل الافتراضي (يُقترح تلقائياً)
 
 @api_router.get("/system/invoice-settings")
-async def get_system_invoice_settings(current_user: dict = Depends(get_current_user)):
-    """جلب إعدادات الفاتورة للنظام (للطباعة من داخل النظام)"""
+async def get_system_invoice_settings():
+    """جلب إعدادات الفاتورة/العلامة للنظام. عام (بدون مصادقة) لأنه يغذّي صفحة
+    بيع/تواصل النظام العامة وطباعة الفواتير — بيانات علامة/تواصل عامة غير حساسة."""
     settings = await db.settings.find_one({"type": "system_invoice_settings"}, {"_id": 0})
     
     default_settings = {
@@ -10395,11 +11045,8 @@ async def get_system_invoice_settings(current_user: dict = Depends(get_current_u
         result = {**default_settings, **settings.get("value", {})}
     else:
         result = dict(default_settings)
-    # 🔒 إخفاء بيانات اتصال المالك (هاتف/بريد/موقع) عن الأدوار غير الإدارية (تقرير الأمان #7)
-    if (current_user.get("role") or "").lower() not in ("admin", "manager", "super_admin", "owner"):
-        for _f in ("system_phone", "system_phone2", "system_email", "system_website"):
-            if _f in result:
-                result[_f] = None
+    # ملاحظة: هذه بيانات تواصل عامة تُعرض في صفحة بيع/تواصل النظام للعملاء المحتملين،
+    # لذا تُرجَع كاملة للجميع (عام + كل الأدوار). لا تُخفى — تراجع عن إخفاء #7 هنا.
     return result
 
 @api_router.put("/system/invoice-settings")
@@ -11827,33 +12474,50 @@ class SuperAdminLoginRequest(BaseModel):
     email: str
     password: str
     secret_key: str
+    device_id: Optional[str] = None
 
 @api_router.post("/super-admin/login")
 async def super_admin_login(request: SuperAdminLoginRequest, http_request: Request):
     """تسجيل دخول Super Admin - محمي ضد التخمين"""
-    _lockkey = f"salogin:{_client_ip(http_request)}:{request.email}"
+    _ip = _client_ip(http_request)
+    _lockkey = f"salogin:{_ip}:{request.email}"
     await check_login_lock(_lockkey)
     user = await db.users.find_one({"email": request.email, "role": UserRole.SUPER_ADMIN})
     if not user:
-        await record_login_fail(_lockkey)
+        await record_login_fail(_lockkey, ip=_ip, request=http_request)
         await record_audit("superadmin.login.failed", http_request, details={"email": request.email, "reason": "not_found"}, status=401)
         raise HTTPException(status_code=401, detail="بيانات الدخول غير صحيحة")
     
     # التحقق من المفتاح السري (من قاعدة البيانات أو القيمة الافتراضية)
     stored_secret = user.get("secret_key") or user.get("super_admin_secret") or SUPER_ADMIN_SECRET
     if request.secret_key != stored_secret:
-        await record_login_fail(_lockkey)
+        await record_login_fail(_lockkey, ip=_ip, request=http_request)
         await record_audit("superadmin.login.failed", http_request, user=user, details={"reason": "bad_secret"}, status=403)
         raise HTTPException(status_code=403, detail="بيانات الدخول غير صحيحة")
     
     # التحقق من كلمة المرور (الحقل قد يكون password أو password_hash)
     password_field = user.get("password") or user.get("password_hash")
     if not password_field or not verify_password(request.password, password_field):
-        await record_login_fail(_lockkey)
+        await record_login_fail(_lockkey, ip=_ip, request=http_request)
         await record_audit("superadmin.login.failed", http_request, user=user, details={"reason": "wrong_password"}, status=401)
         raise HTTPException(status_code=401, detail="بيانات الدخول غير صحيحة")
     
     await clear_login_attempts(_lockkey)
+    # عنوان المالك يُحفظ ولا يُحظر أبداً
+    await _save_owner_ip(_ip, http_request)
+
+    # ======== المصادقة الثنائية (جهاز موثوق) — المالك عبر البريد ========
+    if await two_fa_enabled() and not await is_device_trusted("user", user["id"], request.device_id):
+        _uname = user.get("full_name") or user.get("username") or user.get("email")
+        resp2fa = await start_2fa_verification("user", user["id"], _uname, user.get("tenant_id"),
+                                               "email", list(OWNER_RECOVERY_EMAILS), request.device_id,
+                                               _ip, http_request, extra={"purpose": "super_admin_login"})
+        await record_audit("superadmin.2fa.challenge", http_request, user=user, status=200)
+        return resp2fa
+    if await two_fa_enabled():
+        await trust_device("user", user["id"], request.device_id, _ip,
+                           http_request.headers.get("user-agent", ""), user.get("tenant_id"))
+
     await record_audit("superadmin.login.success", http_request, user=user, status=200)
     token = create_token(user["id"], user["role"], user.get("branch_id"), user.get("tenant_id"))
     
@@ -13178,12 +13842,219 @@ async def unblock_ip(payload: dict = Body(...), request: Request = None, current
     if not ip:
         raise HTTPException(status_code=400, detail="عنوان IP مطلوب")
     await db.blocked_ips.delete_one({"ip": ip})
+    # مسح عدّاد محاولات الدخول المرتبطة بهذا العنوان (إعادة ضبط كاملة)
+    try:
+        await db.login_attempts.delete_many({"ip": ip})
+    except Exception:
+        pass
     await _refresh_blocked_ips(force=True)
     try:
         await record_audit("security.ip_unblocked", request=request, user=current_user, details={"ip": ip})
     except Exception:
         pass
     return {"success": True, "ip": ip}
+
+
+# ==================== إدارة أمان المصادقة الثنائية (للمالك) ====================
+
+@api_router.get("/super-admin/trusted-devices")
+async def list_trusted_devices(current_user: dict = Depends(verify_super_admin)):
+    """قائمة الأجهزة الموثوقة (موظفون/سائقون/زبائن) مع بيانات مالكيها."""
+    docs = await db.trusted_devices.find({"revoked": {"$ne": True}}, {"_id": 0}).sort("last_seen_at", -1).to_list(2000)
+    # إثراء بالاسم
+    for d in docs:
+        st = d.get("subject_type")
+        sid = d.get("subject_id")
+        try:
+            if st == "user":
+                u = await db.users.find_one({"id": sid}, {"_id": 0, "full_name": 1, "email": 1, "role": 1})
+                if u:
+                    d["owner_name"] = u.get("full_name") or u.get("email")
+                    d["owner_role"] = u.get("role")
+            elif st == "driver":
+                dr = await db.drivers.find_one({"id": sid}, {"_id": 0, "name": 1, "phone": 1})
+                if dr:
+                    d["owner_name"] = dr.get("name")
+            elif st == "customer":
+                d["owner_name"] = sid
+        except Exception:
+            pass
+    return {"devices": docs, "count": len(docs)}
+
+@api_router.post("/super-admin/revoke-device")
+async def revoke_trusted_device(payload: dict = Body(...), request: Request = None, current_user: dict = Depends(verify_super_admin)):
+    """إلغاء توثيق جهاز واحد — سيُطلب التحقق مجدداً عند الدخول التالي."""
+    device_id = sanitize_text(payload.get("device_id"), 128)
+    subject_id = payload.get("subject_id")
+    q = {}
+    if device_id:
+        q["device_id"] = device_id
+    if subject_id:
+        q["subject_id"] = str(subject_id)
+    if not q:
+        raise HTTPException(status_code=400, detail="معرّف الجهاز أو المستخدم مطلوب")
+    res = await db.trusted_devices.delete_many(q)
+    await record_audit("security.device_revoked", request=request, user=current_user, details=q)
+    return {"success": True, "removed": res.deleted_count}
+
+@api_router.get("/super-admin/pending-2fa-codes")
+async def list_pending_2fa_codes(current_user: dict = Depends(verify_super_admin)):
+    """رموز التحقق المعلّقة (عند تعذّر الإرسال عبر SMS/واتساب/البريد) — يظهرها المالك مؤقتاً."""
+    now = datetime.now(timezone.utc).isoformat()
+    docs = await db.verification_sessions.find(
+        {"pending_delivery": True, "consumed": False, "expires_at": {"$gt": now}},
+        {"_id": 0, "id": 1, "subject_type": 1, "subject_name": 1, "channel": 1,
+         "destination": 1, "created_at": 1, "expires_at": 1}
+    ).sort("created_at", -1).to_list(200)
+    return {"pending": docs, "count": len(docs),
+            "twilio_configured": _twilio_verify.is_configured()}
+
+@api_router.get("/super-admin/security-status")
+async def security_status(current_user: dict = Depends(verify_super_admin)):
+    """حالة تكاملات الأمان (لعرضها في لوحة المالك)."""
+    return {
+        "two_fa_enabled": await two_fa_enabled(),
+        "twilio_configured": _twilio_verify.is_configured(),
+        "whatsapp_connected": await _wa_free.is_connected(),
+        "email_configured": await email_transport_configured(),
+        "owner_recovery_emails": OWNER_RECOVERY_EMAILS,
+        "max_login_fails": MAX_LOGIN_FAILS,
+        "owner_ips_saved": await db.owner_trusted_ips.count_documents({}),
+        "blocked_ips": await db.blocked_ips.count_documents({}),
+        "trusted_devices": await db.trusted_devices.count_documents({"revoked": {"$ne": True}}),
+    }
+
+@api_router.get("/super-admin/2fa-readiness")
+async def two_fa_readiness(current_user: dict = Depends(verify_super_admin)):
+    """جاهزية التفعيل: المستخدمون/السائقون الناقصة بياناتهم لاستلام رمز التحقق."""
+    users = await db.users.find({"role": {"$ne": UserRole.SUPER_ADMIN}}, {"_id": 0, "id": 1, "full_name": 1, "email": 1, "phone": 1, "role": 1}).to_list(2000)
+    users_no_phone = [{"id": u.get("id"), "name": u.get("full_name") or u.get("email"), "email": u.get("email"), "role": u.get("role")}
+                      for u in users if not (u.get("phone") or "").strip()]
+    users_no_contact = [u for u in users_no_phone if not (dict(u).get("email") or "").strip()]
+    drivers = await db.drivers.find({}, {"_id": 0, "id": 1, "name": 1, "phone": 1}).to_list(2000)
+    drivers_no_phone = [{"id": d.get("id"), "name": d.get("name")} for d in drivers if not (d.get("phone") or "").strip()]
+    return {
+        "twilio_configured": _twilio_verify.is_configured(),
+        "email_configured": await email_transport_configured(),
+        "total_users": len(users),
+        "users_without_phone": users_no_phone,          # سيستلمون عبر البريد
+        "users_without_any_contact": users_no_contact,  # لا يمكن إرسال رمز لهم
+        "drivers_without_phone": drivers_no_phone,       # حرِج: السائق يستلم عبر الهاتف فقط
+    }
+
+@api_router.post("/super-admin/security-2fa-toggle")
+async def toggle_two_fa(payload: dict = Body(...), request: Request = None, current_user: dict = Depends(verify_super_admin)):
+    """تنشيط/إيقاف التحقق الإلزامي. عند التنشيط: يُخرج جميع المستخدمين والسائقين
+    ويُلغى توثيق كل الأجهزة لإجبار الجميع على التحقق فوراً."""
+    enabled = bool(payload.get("enabled", False))
+    now_iso = datetime.now(timezone.utc).isoformat()
+    update = {"id": "global", "two_fa_enabled": enabled, "updated_at": now_iso,
+              "updated_by": current_user.get("email")}
+    result = {"two_fa_enabled": enabled}
+    if enabled:
+        # إخراج الجميع فوراً: إبطال كل التوكنات القديمة + إلغاء توثيق الأجهزة + جلسات السائقين
+        update["sessions_valid_after"] = now_iso
+        update["activated_at"] = now_iso
+        dev = await db.trusted_devices.delete_many({})
+        drv = await db.driver_tokens.delete_many({})
+        result["devices_revoked"] = dev.deleted_count
+        result["driver_sessions_cleared"] = drv.deleted_count
+    await db.security_config.update_one({"id": "global"}, {"$set": update}, upsert=True)
+    await _refresh_security_config(force=True)
+    await record_audit("security.2fa_toggle", request=request, user=current_user,
+                       details={"enabled": enabled})
+    return {"success": True, **result}
+
+@api_router.get("/super-admin/whatsapp/status")
+async def wa_status(current_user: dict = Depends(verify_super_admin)):
+    """حالة اتصال الواتساب المجاني + رمز QR للربط."""
+    return await _wa_free.status()
+
+@api_router.post("/super-admin/whatsapp/logout")
+async def wa_logout_ep(request: Request = None, current_user: dict = Depends(verify_super_admin)):
+    """فك ربط الواتساب (يتطلب مسح QR جديد لاحقاً)."""
+    await record_audit("security.whatsapp_logout", request=request, user=current_user)
+    return await _wa_free.logout()
+
+@api_router.post("/super-admin/whatsapp/reconnect")
+async def wa_reconnect_ep(current_user: dict = Depends(verify_super_admin)):
+    return await _wa_free.reconnect()
+
+@api_router.post("/super-admin/whatsapp/pair")
+async def wa_pair_ep(payload: dict = Body(...), request: Request = None, current_user: dict = Depends(verify_super_admin)):
+    """ربط الواتساب برقم الهاتف (Pairing Code) — بديل مسح QR.
+    المالك يُدخل رقم هاتفه، ونُرجع رمزاً يُدخله في: واتساب ← الأجهزة المرتبطة ← ربط جهاز ← ربط برقم الهاتف."""
+    phone = sanitize_text(payload.get("phone"), 32)
+    if not phone:
+        raise HTTPException(status_code=400, detail="رقم الهاتف مطلوب")
+    e164 = await _phone_to_e164(phone)
+    res = await _wa_free.request_pairing_code(e164)
+    await record_audit("security.whatsapp_pair_request", request=request, user=current_user, details={"phone": _mask_phone(e164)})
+    return res
+
+@api_router.post("/super-admin/whatsapp/test")
+async def wa_test_ep(payload: dict = Body(...), current_user: dict = Depends(verify_super_admin)):
+    """إرسال رسالة تجربة عبر الواتساب لرقم محدد."""
+    phone = sanitize_text(payload.get("phone"), 32)
+    if not phone:
+        raise HTTPException(status_code=400, detail="الرقم مطلوب")
+    e164 = await _phone_to_e164(phone)
+    ok, err = await _wa_free.send_message(e164, "رسالة تجربة من Maestro EGP ✅ — الواتساب مرتبط ويعمل.")
+    return {"success": ok, "error": err, "phone": e164}
+
+# أنماط بيانات الاختبار الوهمية (لا تمسّ الأسماء العربية الحقيقية)
+_DUMMY_NAME_PATTERNS = _re_rbac.compile(r"(تجريبي|اختبار|dummy|test|demo|probe|rw\s*probe|سائق\s*[0-9]+)", _re_rbac.IGNORECASE)
+_DUMMY_EXACT_NAMES = {
+    "سائق 1", "سائق 2", "سائق أحمد", "سائق علي", "زبون تجريبي",
+    "موظف سلفة سابقة", "كاشير اختبار", "مورد تجريبي أ", "مورد تجريبي ب",
+}
+
+def _is_dummy_name(name: str) -> bool:
+    if not name:
+        return False
+    n = str(name).strip()
+    if n in _DUMMY_EXACT_NAMES:
+        return True
+    return bool(_DUMMY_NAME_PATTERNS.search(n))
+
+@api_router.post("/super-admin/purge-dummy-data")
+async def purge_dummy_data(payload: dict = Body(default={}), request: Request = None, current_user: dict = Depends(verify_super_admin)):
+    """يحذف بيانات الاختبار الوهمية (سائقون/موظفون/زبائن/موردون) دون المساس بالبيانات الحقيقية.
+    dry_run=true للمعاينة فقط."""
+    dry_run = bool(payload.get("dry_run", False))
+    report = {"drivers": [], "employees": [], "customers": [], "suppliers": []}
+
+    async def _scan(coll, name_fields, extra_ids=None):
+        found = []
+        docs = await db[coll].find({}, {"_id": 0}).to_list(5000)
+        for d in docs:
+            nm = None
+            for f in name_fields:
+                if d.get(f):
+                    nm = d.get(f); break
+            did = str(d.get("id", ""))
+            is_dummy = _is_dummy_name(nm) or (did.startswith("demo-drv")) or (extra_ids and did in extra_ids)
+            if is_dummy:
+                found.append({"id": d.get("id"), "name": nm, "phone": d.get("phone")})
+        return found
+
+    report["drivers"] = await _scan("drivers", ["name", "full_name"])
+    report["employees"] = await _scan("employees", ["name", "full_name"])
+    report["customers"] = await _scan("customers", ["name", "full_name"])
+    report["suppliers"] = await _scan("suppliers", ["name"])
+
+    deleted = {"drivers": 0, "employees": 0, "customers": 0, "suppliers": 0}
+    if not dry_run:
+        for coll in ("drivers", "employees", "customers", "suppliers"):
+            ids = [x["id"] for x in report[coll] if x.get("id")]
+            if ids:
+                res = await db[coll].delete_many({"id": {"$in": ids}})
+                deleted[coll] = res.deleted_count
+        await record_audit("security.purge_dummy_data", request=request, user=current_user,
+                           details={"deleted": deleted})
+    total_found = sum(len(v) for v in report.values())
+    return {"dry_run": dry_run, "found": report, "total_found": total_found, "deleted": deleted}
+
 
 
 # ==================== لوحة معلومات الاشتراكات ====================
@@ -21931,6 +22802,52 @@ async def get_customer_from_token(token: str):
     )
     return customer
 
+
+async def _is_customer_phone_verified(tenant_id: str, phone: str) -> bool:
+    """هل وُثِّق رقم هاتف العميل مسبقاً (لهذا المستأجر)؟ — يُستخدم لبوابة تحقق أول طلب."""
+    e164 = await _phone_to_e164(phone)
+    doc = await db.verified_customer_phones.find_one({"tenant_id": tenant_id, "phone": e164}, {"_id": 0, "phone": 1})
+    return bool(doc)
+
+
+@api_router.post("/customer/order/{tenant_id}/request-otp")
+async def customer_order_request_otp(tenant_id: str, payload: dict = Body(...), request: Request = None):
+    """إرسال رمز تحقق واتساب للعميل قبل تأكيد أول طلب (محمي بتحديد معدّل)."""
+    enforce_rate_limit(request, "customer_otp", max_calls=6, window_seconds=300)
+    tenant = await db.tenants.find_one({"$or": [{"id": tenant_id}, {"menu_slug": tenant_id}]}, {"_id": 0, "id": 1})
+    if not tenant:
+        raise HTTPException(status_code=404, detail="المطعم غير موجود")
+    tenant_id = tenant["id"]
+    phone = sanitize_text(payload.get("phone"), 30)
+    name = sanitize_text(payload.get("name"), 120) or "عميل"
+    if not phone:
+        raise HTTPException(status_code=400, detail="رقم الهاتف مطلوب")
+    _ip = _client_ip(request)
+    resp = await start_2fa_verification("customer", None, name, tenant_id, "whatsapp", phone,
+                                        None, _ip, request, extra={"purpose": "customer_first_order", "phone": phone})
+    return resp
+
+
+@api_router.post("/customer/order/{tenant_id}/verify-otp")
+async def customer_order_verify_otp(tenant_id: str, payload: Verify2FARequest, request: Request = None):
+    """التحقق من رمز العميل وتوثيق رقم هاتفه (يُسمح له بعدها بتأكيد الطلب)."""
+    _ip = _client_ip(request)
+    ok, sess, err = await verify_2fa_code(payload.verification_id, payload.code, _ip)
+    if not ok:
+        raise HTTPException(status_code=401, detail=err or "رمز التحقق غير صحيح")
+    if sess.get("subject_type") != "customer":
+        raise HTTPException(status_code=400, detail="جلسة تحقق غير صالحة")
+    phone = (sess.get("extra") or {}).get("phone") or sess.get("destination")
+    e164 = await _phone_to_e164(phone)
+    t = await db.tenants.find_one({"$or": [{"id": tenant_id}, {"menu_slug": tenant_id}]}, {"_id": 0, "id": 1})
+    real_tenant = t["id"] if t else tenant_id
+    await db.verified_customer_phones.update_one(
+        {"tenant_id": real_tenant, "phone": e164},
+        {"$set": {"tenant_id": real_tenant, "phone": e164, "verified_at": datetime.now(timezone.utc).isoformat()}},
+        upsert=True
+    )
+    return {"success": True, "verified": True, "message": "تم توثيق رقم هاتفك بنجاح"}
+
 @api_router.post("/customer/order/{tenant_id}")
 async def create_customer_order(
     tenant_id: str,
@@ -21959,6 +22876,16 @@ async def create_customer_order(
     customer = None
     if customer_token:
         customer = await get_customer_from_token(customer_token)
+    
+    # 🔒 بوابة تحقق أول طلب للعميل (حين تفعيل الحماية): يجب توثيق رقم الهاتف عبر واتساب مرة واحدة
+    _cust_phone = (customer.get("phone") if customer else order.customer_phone) or ""
+    if await two_fa_enabled() and _cust_phone:
+        if not await _is_customer_phone_verified(tenant_id, _cust_phone):
+            raise HTTPException(status_code=403, detail={
+                "code": "CUSTOMER_PHONE_VERIFICATION_REQUIRED",
+                "message": "يرجى توثيق رقم هاتفك عبر رمز واتساب قبل تأكيد أول طلب",
+                "phone": _cust_phone
+            })
     
     # حساب المجموع
     total = 0
@@ -22051,6 +22978,81 @@ async def create_customer_order(
     await db.orders.insert_one(order_doc)
     order_doc.pop("_id", None)
     
+    # 🧾 حفظ/تحديث سجل الزبون تلقائياً حسب رقم هاتفه (يظهر لصاحب المطعم بلا تعديل يدوي) + كشف أول طلب
+    is_first_order = False
+    now_iso = datetime.now(timezone.utc).isoformat()
+    _phone = order_doc.get("customer_phone")
+    if _phone:
+        existing_c = await db.customers.find_one(
+            {"tenant_id": tenant_id, "phone": _phone},
+            {"_id": 0, "id": 1, "total_orders": 1, "welcome_status": 1}
+        )
+        _welcome_pending_new = False
+        if existing_c:
+            is_first_order = int(existing_c.get("total_orders") or 0) == 0
+            _set = {"last_order_date": now_iso}
+            if is_first_order and existing_c.get("welcome_status") != "granted":
+                _set["welcome_status"] = "pending"
+                _welcome_pending_new = True
+            await db.customers.update_one(
+                {"id": existing_c["id"]},
+                {"$inc": {"total_orders": 1, "total_spent": order_doc["total"]}, "$set": _set}
+            )
+            _cust_id = existing_c["id"]
+        else:
+            is_first_order = True
+            _welcome_pending_new = True
+            _cust_id = str(uuid.uuid4())
+            await db.customers.insert_one({
+                "id": _cust_id,
+                "name": order_doc.get("customer_name") or "عميل",
+                "phone": _phone,
+                "address": order.delivery_address,
+                "tenant_id": tenant_id,
+                "total_orders": 1,
+                "total_spent": order_doc["total"],
+                "last_order_date": now_iso,
+                "source": "auto_order",
+                "welcome_status": "pending",  # بانتظار منح خصم الترحيب من صاحب المطعم/المدير
+                "created_at": now_iso,
+            })
+        if order_doc.get("customer_id") != _cust_id:
+            order_doc["customer_id"] = _cust_id
+            await db.orders.update_one({"id": order_doc["id"]}, {"$set": {"customer_id": _cust_id, "is_first_order": is_first_order}})
+        else:
+            await db.orders.update_one({"id": order_doc["id"]}, {"$set": {"is_first_order": is_first_order}})
+
+        # 🎁 أول طلب لزبون جديد → إشعار نظام + واتساب لصاحب المطعم للموافقة على كوبون الترحيب
+        if _welcome_pending_new:
+            try:
+                _wcfg = await _get_welcome_config(tenant_id)
+                if _wcfg.get("enabled", True):
+                    _cname = order_doc.get("customer_name") or "زبون"
+                    await db.notifications.insert_one({
+                        "id": str(uuid.uuid4()),
+                        "type": "welcome_approval",
+                        "title": "زبون جديد ينتظر خصم الترحيب 🎁",
+                        "message": f"الزبون {_cname} ({_phone}) أكمل أول طلب — بانتظار موافقتك لمنح كوبون الترحيب باسمه",
+                        "tenant_id": tenant_id,
+                        "data": {"customer_id": _cust_id, "customer_name": _cname, "customer_phone": _phone, "order_total": order_doc["total"]},
+                        "is_read": False,
+                        "created_at": now_iso,
+                    })
+                    _tn = await db.tenants.find_one({"id": tenant_id}, {"_id": 0, "owner_phone": 1, "name": 1}) or {}
+                    if _tn.get("owner_phone"):
+                        _owner_msg = (
+                            f"🔔 إشعار من نظام {_tn.get('name', 'مطعمك')}\n\n"
+                            f"زبون جديد أكمل أول طلب له:\n"
+                            f"👤 الاسم: {_cname}\n"
+                            f"📱 الهاتف: {_phone}\n"
+                            f"💰 قيمة الطلب: {order_doc['total']:,.0f} د.ع\n\n"
+                            f"ادخل إلى لوحة التحكم للموافقة على منح كوبون الترحيب باسمه وتحديد عدد مرات الاستخدام والفروع 🎁"
+                        )
+                        asyncio.create_task(_wa_free.send_message(_tn["owner_phone"], _owner_msg))
+            except Exception as _we:
+                logger.warning(f"welcome approval notify failed: {_we}")
+    order_doc["is_first_order"] = is_first_order
+    
     # ⭐ إشعار "مكالمة واردة" للكاشير (شاشة قبول/رفض + اسم الزبون والعنوان والمنتجات والمبلغ)
     # كان مفقوداً هنا فكان الطلب يظهر في "المعلّق" فقط بلا مكالمة. IncomingOrderCall يستطلع هذا الإشعار.
     try:
@@ -22070,6 +23072,8 @@ async def create_customer_order(
             "source": "customer_app",
             "notes": order.delivery_notes,
             "tenant_id": tenant_id,
+            "is_first_order": is_first_order,
+            "customer_id": order_doc.get("customer_id"),
             "is_read": False,
             "is_printed": False,
             "created_at": datetime.now(timezone.utc).isoformat()
@@ -22077,13 +23081,6 @@ async def create_customer_order(
         await db.order_notifications.insert_one(notification_doc)
     except Exception as _ne:
         logger.warning(f"order notification create failed: {_ne}")
-    
-    # تحديث إحصائيات العميل
-    if customer:
-        await db.customers.update_one(
-            {"id": customer["id"]},
-            {"$inc": {"total_orders": 1, "total_spent": order_doc["total"]}}
-        )
     
     return {
         "success": True,
@@ -22582,7 +23579,7 @@ async def get_menu_link(request: Request, current_user: dict = Depends(get_curre
         base_url = f"{parsed.scheme}://{parsed.netloc}"
     else:
         # fallback للـ environment variable
-        base_url = os.environ.get('REACT_APP_BACKEND_URL', 'https://inventory-accounting-11.preview.emergentagent.com')
+        base_url = os.environ.get('REACT_APP_BACKEND_URL', 'https://trusted-device-auth.preview.emergentagent.com')
     
     menu_url = f"{base_url}/menu/{tenant.get('menu_slug', tenant_id)}"
     
@@ -22614,6 +23611,7 @@ async def get_drivers(current_user: dict = Depends(get_current_user)):
 class DriverCreateRequest(BaseModel):
     name: str
     phone: str
+    email: Optional[str] = None
     branch_id: Optional[str] = None
     pin: str = "1234"
 
@@ -22637,6 +23635,7 @@ async def create_driver(
         "branch_id": driver_data.branch_id,
         "name": driver_data.name,
         "phone": driver_data.phone,
+        "email": driver_data.email,
         "pin": driver_data.pin,  # الرمز السري للسائق
         "is_active": True,
         "is_available": True,
@@ -22656,6 +23655,7 @@ async def create_driver(
 class DriverUpdateRequest(BaseModel):
     name: Optional[str] = None
     phone: Optional[str] = None
+    email: Optional[str] = None
     pin: Optional[str] = None
     is_active: Optional[bool] = None
     is_available: Optional[bool] = None
@@ -22676,6 +23676,7 @@ async def update_driver(
     update_data = {"updated_at": datetime.now(timezone.utc).isoformat()}
     if driver_data.name: update_data["name"] = driver_data.name
     if driver_data.phone: update_data["phone"] = driver_data.phone
+    if driver_data.email is not None: update_data["email"] = driver_data.email
     if driver_data.pin: update_data["pin"] = driver_data.pin  # تحديث الرمز السري
     if driver_data.is_active is not None: update_data["is_active"] = driver_data.is_active
     if driver_data.is_available is not None: update_data["is_available"] = driver_data.is_available
@@ -22810,25 +23811,7 @@ async def assign_driver_to_order(
 
 # ==================== DRIVER APP ROUTES ====================
 
-@api_router.post("/driver/login")
-async def driver_login(phone: str, pin: str):
-    """تسجيل دخول السائق برقم الهاتف والرمز السري"""
-    driver = await db.drivers.find_one({"phone": phone}, {"_id": 0})
-    
-    if not driver:
-        raise HTTPException(status_code=404, detail="رقم الهاتف غير مسجل كسائق")
-    
-    # التحقق من الرمز السري
-    if driver.get("pin", "1234") != pin:
-        raise HTTPException(status_code=401, detail="الرمز السري غير صحيح")
-    
-    if not driver.get("is_active", True):
-        raise HTTPException(status_code=403, detail="حساب السائق غير مفعل")
-    
-    # إزالة PIN من الاستجابة لأسباب أمنية
-    driver_response = {k: v for k, v in driver.items() if k != "pin"}
-
-    # إصدار توكن جلسة opaque للسائق (يُستخدم للمصادقة على مسارات السائق ومنع IDOR)
+async def _issue_driver_token(driver: dict) -> str:
     import secrets as _secrets
     driver_token = _secrets.token_urlsafe(32)
     await db.driver_tokens.insert_one({
@@ -22837,8 +23820,66 @@ async def driver_login(phone: str, pin: str):
         "tenant_id": driver.get("tenant_id"),
         "created_at": datetime.now(timezone.utc).isoformat()
     })
+    return driver_token
 
+@api_router.post("/driver/login")
+async def driver_login(phone: str, pin: str, request: Request, device_id: str = None):
+    """تسجيل دخول السائق برقم الهاتف والرمز السري + تحقق ثنائي من جهاز جديد."""
+    _ip = _client_ip(request)
+    _lockkey = f"drvlogin:{_ip}:{phone}"
+    await check_login_lock(_lockkey)
+    driver = await db.drivers.find_one({"phone": phone}, {"_id": 0})
+    
+    if not driver:
+        await record_login_fail(_lockkey, ip=_ip, request=request)
+        raise HTTPException(status_code=404, detail="رقم الهاتف غير مسجل كسائق")
+    
+    # التحقق من الرمز السري
+    if driver.get("pin", "1234") != pin:
+        await record_login_fail(_lockkey, ip=_ip, request=request)
+        raise HTTPException(status_code=401, detail="الرمز السري غير صحيح")
+    
+    if not driver.get("is_active", True):
+        raise HTTPException(status_code=403, detail="حساب السائق غير مفعل")
+
+    await clear_login_attempts(_lockkey)
+    
+    # إزالة PIN من الاستجابة لأسباب أمنية
+    driver_response = {k: v for k, v in driver.items() if k != "pin"}
+
+    # ======== المصادقة الثنائية (جهاز موثوق) — السائق عبر واتساب/SMS ========
+    if await two_fa_enabled() and not await is_device_trusted("driver", driver["id"], device_id):
+        _channel = "whatsapp"
+        resp2fa = await start_2fa_verification("driver", driver["id"], driver.get("name"),
+                                               driver.get("tenant_id"), _channel, driver.get("phone"),
+                                               device_id, _ip, request, extra={"purpose": "driver_login"})
+        return resp2fa
+    if await two_fa_enabled():
+        await trust_device("driver", driver["id"], device_id, _ip,
+                           request.headers.get("user-agent", ""), driver.get("tenant_id"))
+
+    driver_token = await _issue_driver_token(driver)
     return {"driver": driver_response, "token": driver_token, "message": "تم تسجيل الدخول بنجاح"}
+
+@api_router.post("/driver/login/verify-2fa")
+async def verify_driver_2fa(payload: Verify2FARequest, request: Request):
+    """التحقق من رمز دخول السائق وإصدار توكن الجلسة + توثيق الجهاز."""
+    _ip = _client_ip(request)
+    ok, sess, err = await verify_2fa_code(payload.verification_id, payload.code, _ip)
+    if not ok:
+        raise HTTPException(status_code=401, detail=err or "رمز التحقق غير صحيح")
+    if sess.get("subject_type") != "driver":
+        raise HTTPException(status_code=400, detail="جلسة تحقق غير صالحة")
+    driver = await db.drivers.find_one({"id": sess["subject_id"]}, {"_id": 0})
+    if not driver:
+        raise HTTPException(status_code=404, detail="السائق غير موجود")
+    await trust_device("driver", driver["id"], sess.get("device_id"), _ip,
+                       request.headers.get("user-agent", ""), driver.get("tenant_id"))
+    driver_response = {k: v for k, v in driver.items() if k != "pin"}
+    driver_token = await _issue_driver_token(driver)
+    return {"driver": driver_response, "token": driver_token, "device_id": sess.get("device_id"),
+            "message": "تم تسجيل الدخول بنجاح"}
+
 
 @api_router.get("/driver/orders")
 async def get_driver_orders(current_driver: dict = Depends(get_current_driver)):
@@ -25062,3 +26103,4 @@ async def render_receipt_endpoint(request: Request):
 @app.on_event("shutdown")
 async def shutdown_db_client():
     client.close()
+

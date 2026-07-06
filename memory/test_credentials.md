@@ -138,3 +138,59 @@
 - Frontend PurchasesPage.js: زر التفاصيل view-purchase-{id} → نافذة التفاصيل بها detail-item-correct-{idx} لكل صنف (canCorrect=owner/manager/admin) → نافذة correct-item-dialog: correct-quantity-input / correct-cost-input / correct-reason-input / correct-new-line-total / correct-submit-btn / correct-cancel-btn.
 - حارس إدخال: تأكيد window.confirm عند كمية > 1000 لوحدات [كغم,كجم,غرام,جرام,لتر,مل] (منع خطأ الفاصلة العشرية مثل 7999 بدل 7.999) + حارس موجود مسبقاً عند إجمالي > 10,000,000.
 - اختبار e2e: seed فاتورة مُستلمة+مدفوعة بـ اورغانو 7999 كغم@9000 → correct-item new_quantity=7.999 → total 95,991, stock 7.999, supplier 95,991, treasury_refund 71,919,009.
+
+## 2FA + جهاز موثوق + حظر IP دائم (6 يوليو 2026 — fork)
+- نموذج: "جهاز موثوق". أول دخول/جهاز جديد → رمز تحقق. بعد التحقق يُوثَّق الجهاز (trusted_devices) ولا يُطلب الرمز مجدداً من نفس الجهاز.
+- الموظف/المالك: POST /api/auth/login {email,password,secret_key?,device_id?}. لو الجهاز غير موثوق → يرجع {requires_2fa:true, verification_id, channel, pending_delivery, dev_code?}. القناة: المالك=email، الموظف بلا هاتف=email، بهاتف+Twilio=whatsapp.
+  - في المعاينة: SMTP والـTwilio غير مُهيّأين → pending_delivery=true ويُرجَع dev_code (الرمز) في الاستجابة للتشغيل/الاختبار. في الإنتاج (بريد مفعّل) لا يُرجَع.
+  - التحقق: POST /api/auth/login/verify-2fa {verification_id, code} → {user, token, device_id}. أعد إرسال: POST /api/auth/2fa/resend {verification_id}.
+  - تمرير device_id موثوق في /auth/login يتخطى 2FA ويُصدر التوكن مباشرة.
+- المالك: POST /api/super-admin/login {email,password,secret_key:271018,device_id?} → 2fa email → verify عبر /auth/login/verify-2fa.
+- السائق: POST /api/driver/login?phone=..&pin=..&device_id=.. → requires_2fa (whatsapp، pending→dev_code) → POST /api/driver/login/verify-2fa {verification_id,code}.
+- **حظر IP دائم:** 5 محاولات دخول فاشلة لنفس الـIP → يُضاف إلى blocked_ips (دائم) ويمنع كل الأجهزة على الشبكة. الوسيط يرجع 403 block لكل الطلبات من ذلك الـIP. للاختبار مرّر ترويسة X-Forwarded-For بعنوان اختبار (ليس عنوان المالك!) لأن الحظر سيمنع ذلك العنوان.
+- **عنوان المالك لا يُحظر أبداً:** يُحفظ في owner_trusted_ips عند نجاح دخول المالك؛ مُستثنى من الحظر التلقائي والدائم.
+- نقاط المالك (توكن super_admin): GET /api/super-admin/blocked-ips، POST /api/super-admin/unblock-ip {ip}، GET /api/super-admin/trusted-devices، POST /api/super-admin/revoke-device {device_id|subject_id}، GET /api/super-admin/pending-2fa-codes، GET /api/super-admin/security-status، POST /api/super-admin/purge-dummy-data {dry_run:true|false}.
+- حذف البيانات الوهمية: يطابق أنماط (تجريبي/اختبار/dummy/test/demo/probe/"سائق N") + أسماء seed المعروفة + معرّفات demo-drv. لا يمسّ الأسماء الحقيقية.
+
+## fork — بريد لكل سائق/زبون (النظام رقم واحد للإرسال) (6 يوليو 2026)
+- توضيح المستخدم: الرقم المربوط = رقم النظام (المُرسِل). كل مستأجر/مستخدم/سائق/زبون له هاتف + بريد (مستلِم).
+- المستأجر: owner_phone + owner_email (موجود). المستخدم: email + phone (موجود).
+- **السائق**: أُضيف حقل email — routes/drivers_routes.py (DriverCreate/Response/Update + create/update). واجهة: Delivery.js (new-driver-email / edit-driver-email).
+- **الزبون**: أُضيف حقل email — server.py (CustomerCreate/Response + create/update). واجهة: Settings ← العملاء (settings-customer-email / edit-customer-email).
+- مُختبَر: iteration_278 (backend 5/5، frontend 100%).
+- تنبيه نشر: خدمة واتساب المجانية (wa_service على 3002) خدمة Node منفصلة — قد لا تعمل تلقائياً في نشر Emergent القياسي (backend+frontend فقط)؛ عندها يتحوّل الإرسال للبريد/SMS ولا تُرسل رسائل واتساب. تحقّق بعد النشر.
+
+## fork — رسالة ترحيب + خصم للعملاء الجدد + حفظ تلقائي (6 يوليو 2026)
+- **حفظ تلقائي للزبون** عند إتمام أي طلب (upsert حسب tenant_id+phone). كشف أول طلب (is_first_order). سجل جديد: source="auto_order", welcome_status="pending". يظهر في Settings ← العملاء.
+- **إشعار أول طلب**: order_notifications يحمل is_first_order + customer_id.
+- **منح خصم ترحيبي (موافقة يدوية)**: POST /api/customers/{id}/grant-welcome-discount (admin/manager/super_admin/branch_manager) → يولّد كوبون WLC****** (خصم افتراضي 10%، صالح 7 أيام، استخدام واحد، غير مقيّد باسم) + يرسل رسالة واتساب باسم المطعم للزبون لطلبه القادم + welcome_status→granted. إعادة المنح → 400. الكاشير → 403.
+- **إعداد الخصم**: GET/PUT /api/welcome-discount/config {enabled, discount_type, discount_value, min_order_amount, valid_days, message_template}. مخزّن في db.app_settings key=welcome_discount.
+- **واجهة المالك**: Settings ← العملاء: شارة welcome-pending-{id}/welcome-granted-{id} + زر grant-welcome-{id}.
+- ملاحظة: إرسال واتساب يتطلب ربط رقم المالك (في preview whatsapp_sent=false error=not_connected — طبيعي).
+- مُختبَر: iteration_277 (backend 13/13، frontend 100%).
+
+## fork — بوابة تحقق العميل (أول طلب) + ربط واتساب برقم الهاتف (6 يوليو 2026)
+- **ربط واتساب برقم الهاتف (Pairing Code) بديلاً عن QR**: POST /api/super-admin/whatsapp/pair {phone} (super_admin) → {ok, code:"XXXX-XXXX"}. المالك يُدخل رقمه في لوحة الأمان (test-ids: wa-pair-panel, wa-pair-phone-input, wa-pair-btn, wa-pair-code) ثم يُدخل الرمز في واتساب: الأجهزة المرتبطة ← ربط جهاز ← «ربط برقم الهاتف». يتطلب اتصال wa_service بشبكة واتساب (قد يفشل في preview).
+- **تحقق أول طلب للعميل**: عند تفعيل الحماية العامة (2FA)، يجب توثيق رقم هاتف العميل عبر رمز واتساب قبل أول طلب.
+  - POST /api/customer/order/{tenant}/request-otp {phone, name} → جلسة 2FA (بلا كشف الرمز).
+  - POST /api/customer/order/{tenant}/verify-otp {verification_id, code} → يوثّق الرقم في verified_customer_phones (tenant_id+phone بصيغة E.164).
+  - create_customer_order يرجع 403 code=CUSTOMER_PHONE_VERIFICATION_REQUIRED للعميل غير الموثّق (حين 2FA مفعّل). الواجهة (CustomerMenu.js) تفتح customer-otp-dialog (customer-otp-input/verify/resend) وتعيد الطلب بعد التوثيق.
+- ⚠️ ملاحظة تشغيلية مهمة: تفعيل 2FA العام يُبطل كل الجلسات ويُلزم OTP للجميع. تأكد أن قناة تسليم OTP (واتساب/بريد) تعمل **قبل** التفعيل، وإلا خطر قفل الوصول (الرمز لا يُعرض إطلاقاً بطلب المستخدم).
+
+## fork — إصلاح احتساب المصاريف لكل وردية + إلغاء الدمج + موافقة المدير (6 يوليو 2026)
+- **قاعدة معتمدة واحدة لمصاريف الوردية** (routes/shared.py `shift_expense_query`): المصروف يخصّ الوردية إذا `shift_id`=معرّف الوردية، أو (سجل قديم بلا shift_id) نفس الفرع+اليوم التشغيلي+منشئ المصروف (created_by=cashier_id). مطبّقة في: cash-register/summary، cash-register/close، وتقرير الإغلاق (فلترة تفاصيل المصاريف في Reports.js). المصاريف الجديدة تُختم بـ shift_id + cashier_id عند الإنشاء (POST /api/expenses).
+- **إلغاء الدمج نهائياً**: `_resolve_open_shift_for_close` لم تعد تجمع الورديات؛ كل وردية تُغلق مستقلة. أزيل وسم "merged".
+- **بيانات اختبار الإسناد** (`python3 seed_expense_attribution_test.py`): فرع الفرع الرئيسي، اليوم التشغيلي = اليوم.
+  - كاشير أ اختبار: expattr-cashier-a@maestroegp.com / test123 (وردية expattr-shift-a) — مصاريف 10,000+2,000 + 3,000 قديمة = **15,000**
+  - كاشير ب اختبار: expattr-cashier-b@maestroegp.com / test123 (وردية expattr-shift-b) — مصاريف **5,000**
+  - المتوقع: كل وردية تُظهر مصاريفها فقط (لا خلط). إجمالي الفرع اليومي = 20,000.
+- **موافقة المدير على فرق نقدي كبير** (تقرير الأمان #9): عند إغلاق الكاشير بفرق >5% من المبيعات → 409 code=CASH_DISCREPANCY_APPROVAL_REQUIRED. الواجهة (Dashboard.js) تفتح نافذة manager-approval-dialog تطلب بريد+كلمة مرور مدير. الخلفية تتحقق فعلياً من صلاحية المدير (admin/manager/super_admin/branch_manager) وكلمة مروره قبل السماح. test-ids: manager-email-input, manager-password-input, manager-approval-confirm-btn, manager-approval-cancel-btn.
+- **2FA معطّل افتراضياً** (owner-controlled). يُفعّله المالك من لوحته.
+- تبديل: POST /api/super-admin/security-2fa-toggle {enabled:true|false} (super_admin). عند التفعيل: يحذف كل trusted_devices + driver_tokens ويضبط sessions_valid_after=now → يُبطل كل التوكنات القديمة (401) لإخراج الجميع فوراً.
+- عند enabled=false: الدخول مباشر بدون 2FA. عند enabled=true: الدخول من جهاز جديد يتطلب رمز.
+- جاهزية: GET /api/super-admin/2fa-readiness → users_without_phone, users_without_any_contact, drivers_without_phone.
+- security-status يتضمن الآن two_fa_enabled.
+- إبطال الجلسات: التوكن يحوي iat؛ get_current_user و get_current_driver يرفضان التوكنات الأقدم من sessions_valid_after (401).
+- **تقنيع الوِجهة في نافذة التحقق:** البريد = ***@domain (يُخفى الاسم قبل @)؛ الهاتف = تقنيع كل الأرقام وإظهار آخر رقمين فقط (********67).
+- **هاتف المستخدم:** حقل phone أُضيف لـ UserCreate/UserUpdate و /users POST/PUT. نموذج المستخدم في Settings.js فيه حقل هاتف باختيار البلد.
+- **حقل اختيار البلد (PhoneCountryInput):** مُطبّق في: السائقين (Delivery إنشاء/تعديل)، العملاء (Settings customerForm، Loyalty memberForm، Orders fixForm)، الموظفين (HR employeeForm)، المستخدمين (Settings userForm/editUserForm)، المستأجرين (SuperAdmin new/edit). يُخزّن E.164 (+964..).

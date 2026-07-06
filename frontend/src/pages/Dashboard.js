@@ -82,6 +82,7 @@ import TargetCelebration from '../components/TargetCelebration';
 import LowStockBanner from '../components/LowStockBanner';
 import SupplierDuesBanner from '../components/SupplierDuesBanner';
 import PriceAlertsBell from '../components/PriceAlertsBell';
+import WelcomeApprovalsBell from '../components/WelcomeApprovalsBell';
 import InstallPWAButton from '../components/InstallPWAButton';
 import { toast } from 'sonner';
 import {
@@ -226,6 +227,11 @@ export default function Dashboard() {
   const [closeNotes, setCloseNotes] = useState('');
   const [closingResult, setClosingResult] = useState(null);
   const [isClosing, setIsClosing] = useState(false);
+  // موافقة المدير على فرق نقدي كبير (تقرير الأمان #9)
+  const [discrepancyDialog, setDiscrepancyDialog] = useState(null); // {difference, expected, counted, threshold, noCashMode}
+  const [mgrEmail, setMgrEmail] = useState('');
+  const [mgrPassword, setMgrPassword] = useState('');
+  const [mgrApproving, setMgrApproving] = useState(false);
   const [showReport, setShowReport] = useState(false);
   
   // معاينة الفاتورة (تفاصيل الطلب)
@@ -1007,7 +1013,7 @@ export default function Dashboard() {
   };
 
   // إغلاق الصندوق
-  const handleCloseRegister = async (noCashMode = false) => {
+  const handleCloseRegister = async (noCashMode = false, managerApproval = null) => {
     const countedCash = noCashMode ? 0 : calculateCountedCash();
     
     if (!noCashMode && countedCash === 0 && (cashSummary?.expected_cash || 0) > 0) {
@@ -1020,15 +1026,25 @@ export default function Dashboard() {
     try {
       const branchId = activeShift?.branch_id || getBranchIdForApi();
       const token = localStorage.getItem('token');
-      const res = await axios.post(`${API}/cash-register/close`, {
+      const payload = {
         denominations: noCashMode ? { "250": 0, "500": 0, "1000": 0, "5000": 0, "10000": 0, "25000": 0, "50000": 0 } : denominations,
         notes: closeNotes,
         branch_id: branchId
-      }, {
+      };
+      if (managerApproval) {
+        payload.force_close_with_discrepancy = true;
+        payload.manager_email = managerApproval.email;
+        payload.manager_password = managerApproval.password;
+      }
+      const res = await axios.post(`${API}/cash-register/close`, payload, {
         headers: { Authorization: `Bearer ${token}` }
       });
       
       toast.success(t('تم إغلاق الصندوق والوردية بنجاح!'));
+      // إغلاق نافذة موافقة المدير إن كانت مفتوحة
+      setDiscrepancyDialog(null);
+      setMgrEmail('');
+      setMgrPassword('');
       
       // تحديث حالة اليوم
       fetchDayStatus();
@@ -1062,9 +1078,44 @@ export default function Dashboard() {
       }, 1500);
       
     } catch (error) {
-      showApiError(error, t('فشل في إغلاق الصندوق'));
+      const detail = error?.response?.data?.detail;
+      if (error?.response?.status === 409 && detail && typeof detail === 'object'
+          && detail.code === 'CASH_DISCREPANCY_APPROVAL_REQUIRED') {
+        // فرق نقدي كبير → افتح نافذة موافقة المدير
+        if (managerApproval) {
+          // فشل اعتماد المدير (بيانات خاطئة) — أبقِ النافذة واعرض الخطأ
+          toast.error(t('بيانات المدير غير صحيحة أو لا يملك صلاحية الاعتماد'));
+        } else {
+          setDiscrepancyDialog({
+            difference: detail.difference,
+            expected: detail.expected_cash,
+            counted: detail.counted_cash,
+            threshold: detail.threshold,
+            noCashMode,
+          });
+        }
+      } else {
+        showApiError(error, t('فشل في إغلاق الصندوق'));
+      }
     } finally {
       setIsClosing(false);
+    }
+  };
+
+  // اعتماد المدير للفرق النقدي الكبير ثم إعادة محاولة الإغلاق
+  const submitManagerApproval = async () => {
+    if (!mgrEmail.trim() || !mgrPassword.trim()) {
+      toast.error(t('أدخل بريد المدير وكلمة المرور'));
+      return;
+    }
+    setMgrApproving(true);
+    try {
+      await handleCloseRegister(discrepancyDialog?.noCashMode || false, {
+        email: mgrEmail.trim(),
+        password: mgrPassword,
+      });
+    } finally {
+      setMgrApproving(false);
     }
   };
 
@@ -2035,6 +2086,9 @@ export default function Dashboard() {
             <InstallPWAButton />
             {/* Price Alerts Bell - تنبيهات تغير الأسعار (للمالك فقط) */}
             <PriceAlertsBell user={user} />
+
+            {/* طلبات خصم الترحيب — زبائن جدد بانتظار الموافقة */}
+            <WelcomeApprovalsBell user={user} />
 
             {/* Branch Selector - مكون اختيار الفرع العام */}
             {!isCentralRole && <BranchSelector />}
@@ -3501,6 +3555,86 @@ export default function Dashboard() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* نافذة موافقة المدير على فرق نقدي كبير (تقرير الأمان #9) */}
+      <Dialog open={!!discrepancyDialog} onOpenChange={(o) => { if (!o) { setDiscrepancyDialog(null); setMgrEmail(''); setMgrPassword(''); } }}>
+        <DialogContent className="max-w-md" data-testid="manager-approval-dialog">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-amber-600">
+              <AlertTriangle className="h-5 w-5" />
+              {t('موافقة المدير مطلوبة')}
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div className="rounded-lg bg-amber-50 dark:bg-amber-950/30 border border-amber-300 dark:border-amber-800 p-3 text-sm">
+              <p className="text-amber-700 dark:text-amber-300">
+                {t('الفرق النقدي يتجاوز 5% من المبيعات ويتطلب اعتماد مدير لإتمام إغلاق الصندوق.')}
+              </p>
+              <div className="mt-2 space-y-1 text-xs">
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">{t('المتوقع')}</span>
+                  <span className="font-semibold" data-testid="disc-expected">{formatPrice(discrepancyDialog?.expected || 0)}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">{t('المجرود')}</span>
+                  <span className="font-semibold" data-testid="disc-counted">{formatPrice(discrepancyDialog?.counted || 0)}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">{t('الفرق')}</span>
+                  <span className={`font-bold ${(discrepancyDialog?.difference || 0) < 0 ? 'text-red-600' : 'text-green-600'}`} data-testid="disc-difference">
+                    {(discrepancyDialog?.difference || 0) >= 0 ? '+' : ''}{formatPrice(discrepancyDialog?.difference || 0)}
+                  </span>
+                </div>
+              </div>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="mgr-email">{t('بريد المدير')}</Label>
+              <Input
+                id="mgr-email"
+                type="email"
+                dir="ltr"
+                autoComplete="off"
+                value={mgrEmail}
+                onChange={(e) => setMgrEmail(e.target.value)}
+                placeholder="manager@example.com"
+                data-testid="manager-email-input"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="mgr-pass">{t('كلمة مرور المدير')}</Label>
+              <Input
+                id="mgr-pass"
+                type="password"
+                dir="ltr"
+                autoComplete="new-password"
+                value={mgrPassword}
+                onChange={(e) => setMgrPassword(e.target.value)}
+                onKeyDown={(e) => { if (e.key === 'Enter') submitManagerApproval(); }}
+                placeholder="••••••••"
+                data-testid="manager-password-input"
+              />
+            </div>
+          </div>
+          <DialogFooter className="gap-2">
+            <Button
+              variant="outline"
+              onClick={() => { setDiscrepancyDialog(null); setMgrEmail(''); setMgrPassword(''); }}
+              data-testid="manager-approval-cancel-btn"
+            >
+              {t('إلغاء')}
+            </Button>
+            <Button
+              onClick={submitManagerApproval}
+              disabled={mgrApproving || isClosing}
+              className="bg-amber-600 hover:bg-amber-700 text-white"
+              data-testid="manager-approval-confirm-btn"
+            >
+              {mgrApproving || isClosing ? t('جارٍ الاعتماد...') : t('اعتماد وإغلاق الصندوق')}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
 
       {/* Day Management Dialog - إدارة اليوم */}
       <Dialog open={showDayCloseDialog} onOpenChange={setShowDayCloseDialog}>

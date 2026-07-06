@@ -1,0 +1,33 @@
+{
+  "summary": "Iteration 279 — Welcome coupon approval flow end-to-end verified. Backend: 6/6 pytest passed (first-order → pending customer + welcome_approval notification via GET /api/welcome-approvals; role-guard 401/403 unauth; grant with full payload creates personalized WLC coupon in customer's name with usage_limit=3, usage_per_customer=3, branch_ids set, is_welcome=true; customer flips to granted; notification is_read=true; second grant → 400; empty body defaults usage_limit=1; regression: regular POST /api/coupons still works). WhatsApp send fails gracefully with whatsapp_sent=false as expected in preview. Frontend: dashboard header bell [welcome-approvals-bell] shows badge=5, opens [welcome-approvals-panel] with per-customer [welcome-approve-btn-*] launching [welcome-grant-dialog]; /coupons tab [welcome-approvals-tab] lists [welcome-pending-card-*] with [coupons-welcome-approve-*] opening the same dialog; filled usage_limit=2, confirmed → customer disappears from pending and personalized coupon 'خصم ترحيبي 🎁 — {name}' shows in الكوبونات tab; Settings > العملاء [grant-welcome-{id}] opens the same dialog.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "/coupons (and /settings, /dashboard)", "issues": ["ManagementOrderAlerts overlays [data-testid^='management-alert-'] are absolutely positioned top-left and intercept pointer events on left-column primary actions — on /coupons they overlap the first welcome-pending-card approve button. Same issue flagged in iter278 for Settings tabs. Recommend scoping these alerts to the delivery/dashboard route only, or making them auto-dismiss / stack in a corner outside interactive columns."]}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_welcome_approvals_iter279.py",
+    "/app/test_reports/pytest/iter279.xml"
+  ],
+  "action_items": [
+    "Optional UX polish: scope/relocate ManagementOrderAlerts overlays so they don't overlap left-column primary buttons on non-delivery pages (Coupons/Settings)."
+  ],
+  "critical_code_review_comments": [
+    "server.py grant_welcome_discount (~L7529): payload defaults applied correctly; personalized coupon fields (customer_name, name with 🎁 — {name}, usage_limit==usage_per_customer, branch_ids, is_welcome=true) all persist. Second-grant guard on welcome_status=='granted' returns 400 as required.",
+    "create_customer_order first-order branch (~L22981-23054): correctly detects new customer, sets welcome_status='pending', inserts db.notifications type='welcome_approval' with data.customer_id/name/phone/order_total, and fires-and-forgets owner WhatsApp via asyncio.create_task — graceful degradation on wa_service not paired is verified (whatsapp_sent=false).",
+    "Coupons.js is 969 lines and Settings.js still 8052 lines (flagged iter278) — recommend split. Non-blocking."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_welcome_approvals_iter279.py (new)"
+  ],
+  "success_rate": {"backend": "100% (6/6)", "frontend": "100% (bell/panel + coupons tab + settings dialog + coupon persistence all verified)"},
+  "test_credentials": "admin@maestroegp.com / admin123 (tenant default)",
+  "seed_data_creation": "Backend tests created 3 fresh pending customers via POST /api/customer/order/default with random 0770XXXXXXX phones, prefixed TEST_ (not cleaned up — safe test data).",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Backend test file: /app/backend/tests/test_welcome_approvals_iter279.py. POST /api/customer/order/{tenant} returns {success, message, order:{id,...}} — response wraps order, not top-level. Login response uses 'token' (also has 'access_token'). Frontend: ALWAYS strip management-alert overlays before clicking left-side buttons on /coupons, /settings, /dashboard: document.querySelectorAll('[data-testid^=\"management-alert-\"]').forEach(n=>n.remove()). WelcomeGrantDialog testids: welcome-usage-limit-input, welcome-valid-days-input, welcome-discount-type-select, welcome-discount-value-input, welcome-min-order-input, welcome-branch-{branchId}, welcome-grant-confirm-btn, welcome-grant-cancel-btn. Dashboard route may not be /dashboard (some routes redirect to /) — don't wait_for_url(**/dashboard**).",
+  "rca of the issue": "N/A — no functional bugs. Only a pre-existing UX layering issue: ManagementOrderAlerts (data-testid=management-alert-{order_id}) are globally rendered and absolutely positioned, occasionally covering interactive elements on other pages. Mitigation: scope render to delivery/dashboard route or use lower z-index / non-interactive position."
+}

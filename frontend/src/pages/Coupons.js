@@ -36,6 +36,7 @@ import {
 import { toast } from 'sonner';
 import { useNavigate } from 'react-router-dom';
 import { showApiError } from '../utils/apiError';
+import WelcomeGrantDialog from '../components/WelcomeGrantDialog';
 const API = API_URL;
 export default function Coupons() {
   const navigate = useNavigate();
@@ -50,6 +51,8 @@ export default function Coupons() {
   const [editingCoupon, setEditingCoupon] = useState(null);
   const [editingPromotion, setEditingPromotion] = useState(null);
   const [copiedCode, setCopiedCode] = useState(null);
+  const [welcomePending, setWelcomePending] = useState([]);
+  const [grantCustomer, setGrantCustomer] = useState(null);
   const [couponForm, setCouponForm] = useState({
     code: '',
     name: '',
@@ -95,15 +98,17 @@ export default function Coupons() {
       const token = localStorage.getItem('token');
       const headers = { Authorization: `Bearer ${token}` };
       
-      const [couponsRes, promotionsRes, branchesRes] = await Promise.all([
+      const [couponsRes, promotionsRes, branchesRes, welcomeRes] = await Promise.all([
         axios.get(`${API}/coupons`, { headers }),
         axios.get(`${API}/promotions`, { headers }),
-        axios.get(`${API}/branches`, { headers }).catch(() => ({ data: [] }))
+        axios.get(`${API}/branches`, { headers }).catch(() => ({ data: [] })),
+        axios.get(`${API}/welcome-approvals`, { headers }).catch(() => ({ data: { pending: [] } }))
       ]);
       
       setCoupons(couponsRes.data);
       setPromotions(promotionsRes.data);
       setBranches(branchesRes.data || []);
+      setWelcomePending(welcomeRes.data?.pending || []);
     } catch (error) {
       console.error('Error:', error);
     } finally {
@@ -276,6 +281,12 @@ export default function Coupons() {
   }
   return (
     <div className="min-h-screen bg-background p-6" dir="rtl">
+      <WelcomeGrantDialog
+        open={!!grantCustomer}
+        customer={grantCustomer}
+        onClose={() => setGrantCustomer(null)}
+        onGranted={() => { setGrantCustomer(null); fetchData(); }}
+      />
       {/* Header */}
       <div className="flex items-center justify-between mb-6">
         <div className="flex items-center gap-3">
@@ -356,7 +367,51 @@ export default function Coupons() {
           <TabsTrigger value="promotions" className="gap-2">
             <Sparkles className="h-4 w-4" /> {t('العروض')}
           </TabsTrigger>
+          <TabsTrigger value="welcome" className="gap-2" data-testid="welcome-approvals-tab">
+            <Gift className="h-4 w-4" /> {t('طلبات الترحيب')}
+            {welcomePending.length > 0 && (
+              <Badge className="bg-red-500 text-white text-[10px] px-1.5">{welcomePending.length}</Badge>
+            )}
+          </TabsTrigger>
         </TabsList>
+        {/* Welcome Approvals Tab */}
+        <TabsContent value="welcome">
+          {welcomePending.length === 0 ? (
+            <Card>
+              <CardContent className="p-10 text-center text-muted-foreground">
+                <Gift className="h-12 w-12 mx-auto mb-3 opacity-30" />
+                <p>{t('لا توجد طلبات موافقة على خصم الترحيب حالياً')}</p>
+                <p className="text-xs mt-1 opacity-70">{t('عند أول طلب لزبون جديد سيظهر هنا لمنحه كوبوناً باسمه')}</p>
+              </CardContent>
+            </Card>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {welcomePending.map((c) => (
+                <Card key={c.id} className="border-green-500/30" data-testid={`welcome-pending-card-${c.id}`}>
+                  <CardContent className="p-4">
+                    <div className="flex items-center gap-3 mb-3">
+                      <div className="w-11 h-11 rounded-full bg-green-500/15 flex items-center justify-center">
+                        <Gift className="h-5 w-5 text-green-600" />
+                      </div>
+                      <div className="min-w-0">
+                        <p className="font-bold truncate">{c.name}</p>
+                        <p className="text-xs text-muted-foreground" dir="ltr">{c.phone}</p>
+                      </div>
+                    </div>
+                    <p className="text-xs text-muted-foreground mb-3">
+                      {t('أول طلب')}: {(c.total_spent || 0).toLocaleString()} د.ع {c.last_order_date ? `• ${c.last_order_date.slice(0, 10)}` : ''}
+                    </p>
+                    <Button className="w-full bg-green-600 hover:bg-green-700 text-white"
+                      onClick={() => setGrantCustomer(c)}
+                      data-testid={`coupons-welcome-approve-${c.id}`}>
+                      <Gift className="h-4 w-4 ml-2" /> {t('موافقة ومنح كوبون باسمه')}
+                    </Button>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          )}
+        </TabsContent>
         {/* Coupons Tab */}
         <TabsContent value="coupons">
           <div className="flex justify-end mb-4">

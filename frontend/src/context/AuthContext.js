@@ -4,6 +4,7 @@ import { API_URL, BACKEND_URL } from '../utils/api';
 import offlineStorage from '../lib/offlineStorage';
 import { getOnlineStatus } from '../hooks/useOnlineStatus';
 import { subscribeToPush, isPushSupported, getNotificationPermission } from '../lib/pushService';
+import { getDeviceId } from '../utils/deviceId';
 
 const AuthContext = createContext(null);
 
@@ -259,7 +260,13 @@ export const AuthProvider = ({ children }) => {
     // محاولة تسجيل الدخول Online أولاً
     if (isOnline) {
       try {
-        const response = await axios.post(`${API}/auth/login`, { email, password });
+        const response = await axios.post(`${API}/auth/login`, { email, password, device_id: getDeviceId() });
+
+        // ======== المصادقة الثنائية: جهاز جديد يتطلب رمز تحقق ========
+        if (response.data && response.data.requires_2fa) {
+          return { success: false, requires2fa: true, data: response.data };
+        }
+
         const { user: userData, token: newToken } = response.data;
         
         // التحقق إذا كان المستخدم هو super_admin - تحويله إلى /super-admin
@@ -271,51 +278,7 @@ export const AuthProvider = ({ children }) => {
           };
         }
         
-        // مسح البيانات القديمة قبل حفظ الجديدة (لضمان عزل البيانات بين المستأجرين)
-        localStorage.removeItem('branches');
-        localStorage.removeItem('selectedBranchId');
-        sessionStorage.removeItem('branches_loaded');
-        console.log('🗑️ تم مسح بيانات الفروع القديمة');
-        
-        localStorage.setItem('token', newToken);
-        axios.defaults.headers.common['Authorization'] = `Bearer ${newToken}`;
-        setToken(newToken);
-        setUser(userData);
-        setIsOfflineLogin(false);
-        
-        // حفظ بيانات المستخدم في localStorage للعمل Offline
-        localStorage.setItem('cached_user', JSON.stringify(userData));
-        console.log('💾 تم حفظ بيانات المستخدم في localStorage');
-        
-        // حفظ بيانات المستخدم للدخول Offline (IndexedDB)
-        const passwordHash = await hashPassword(password);
-        await offlineStorage.saveUserForOfflineLogin(userData, passwordHash);
-        
-        // تهيئة البيانات المحلية
-        await offlineStorage.initializeOfflineData(newToken);
-        
-        // تخزين جميع ملفات التطبيق للعمل Offline
-        cacheAppAssets();
-        
-        // تسجيل اشتراك Push للإشعارات (إذا كان المتصفح يدعمه)
-        if (isPushSupported() && getNotificationPermission() !== 'denied') {
-          setTimeout(() => {
-            subscribeToPush(newToken).catch(err => {
-              console.log('Push subscription skipped:', err.message);
-            });
-          }, 2000);
-        }
-        
-        // إرسال حدث تسجيل الدخول لتحديث إعدادات العملة
-        window.dispatchEvent(new CustomEvent('userLoggedIn'));
-        
-        // فتح وردية تلقائياً للكاشير فقط - المالك يختار كاشير من لوحة التحكم
-        if (['cashier'].includes(userData.role)) {
-          setTimeout(async () => {
-            await autoOpenShift();
-          }, 500);
-        }
-        
+        await persistSession(userData, newToken, password);
         return { success: true, user: userData };
       } catch (error) {
         // إذا فشل الاتصال، جرب Offline Login
@@ -333,6 +296,70 @@ export const AuthProvider = ({ children }) => {
       return await offlineLogin(email, password);
     }
   };
+
+  // حفظ الجلسة بعد نجاح الدخول (يُستخدم للدخول العادي وإتمام المصادقة الثنائية)
+  const persistSession = async (userData, newToken, password) => {
+    localStorage.removeItem('branches');
+    localStorage.removeItem('selectedBranchId');
+    sessionStorage.removeItem('branches_loaded');
+
+    localStorage.setItem('token', newToken);
+    axios.defaults.headers.common['Authorization'] = `Bearer ${newToken}`;
+    setToken(newToken);
+    setUser(userData);
+    setIsOfflineLogin(false);
+
+    localStorage.setItem('cached_user', JSON.stringify(userData));
+
+    if (password) {
+      try {
+        const passwordHash = await hashPassword(password);
+        await offlineStorage.saveUserForOfflineLogin(userData, passwordHash);
+      } catch (e) { /* ignore */ }
+    }
+    try { await offlineStorage.initializeOfflineData(newToken); } catch (e) { /* ignore */ }
+    cacheAppAssets();
+
+    if (isPushSupported() && getNotificationPermission() !== 'denied') {
+      setTimeout(() => {
+        subscribeToPush(newToken).catch(() => {});
+      }, 2000);
+    }
+    window.dispatchEvent(new CustomEvent('userLoggedIn'));
+
+    if (['cashier'].includes(userData.role)) {
+      setTimeout(async () => { await autoOpenShift(); }, 500);
+    }
+  };
+
+  // إتمام المصادقة الثنائية للموظف/المالك برمز التحقق
+  const completeTwoFactor = async (verificationId, code, password) => {
+    try {
+      const response = await axios.post(`${API}/auth/login/verify-2fa`, {
+        verification_id: verificationId,
+        code,
+      });
+      const { user: userData, token: newToken } = response.data;
+      if (userData.role === 'super_admin') {
+        return { success: true, user: userData, token: newToken, isSuperAdmin: true };
+      }
+      await persistSession(userData, newToken, password);
+      return { success: true, user: userData };
+    } catch (error) {
+      return { success: false, error: error.response?.data?.detail || 'رمز التحقق غير صحيح' };
+    }
+  };
+
+  // إعادة إرسال رمز التحقق
+  const resendTwoFactor = async (verificationId) => {
+    try {
+      const response = await axios.post(`${API}/auth/2fa/resend`, { verification_id: verificationId });
+      return { success: true, data: response.data };
+    } catch (error) {
+      return { success: false, error: error.response?.data?.detail || 'تعذّر إعادة الإرسال' };
+    }
+  };
+
 
   // تسجيل دخول Offline
   const offlineLogin = async (email, password) => {
@@ -454,6 +481,8 @@ export const AuthProvider = ({ children }) => {
       token,
       loading,
       login,
+      completeTwoFactor,
+      resendTwoFactor,
       register,
       logout,
       hasPermission,

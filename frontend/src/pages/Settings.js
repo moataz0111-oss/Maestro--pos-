@@ -141,7 +141,9 @@ import {
   TableRow,
 } from '../components/ui/table';
 import ImageUploader from '../components/ImageUploader';
+import WelcomeGrantDialog from '../components/WelcomeGrantDialog';
 import { showApiError } from '../utils/apiError';
+import PhoneCountryInput from '../components/PhoneCountryInput';
 
 const API = API_URL;
 
@@ -600,7 +602,7 @@ export default function Settings() {
   
   // Form data
   const [userForm, setUserForm] = useState({
-    username: '', email: '', password: '', full_name: '', full_name_en: '', role: 'cashier', branch_id: '', permissions: []
+    username: '', email: '', password: '', full_name: '', full_name_en: '', role: 'cashier', branch_id: '', permissions: [], phone: ''
   });
   const [editUserForm, setEditUserForm] = useState(null);
   const [branchForm, setBranchForm] = useState({
@@ -657,9 +659,10 @@ export default function Settings() {
   });
   const [editKitchenSectionForm, setEditKitchenSectionForm] = useState(null);
   const [customerForm, setCustomerForm] = useState({
-    name: '', phone: '', phone2: '', address: '', area: '', notes: '', is_blocked: false
+    name: '', phone: '', email: '', phone2: '', address: '', area: '', notes: '', is_blocked: false
   });
   const [editCustomerForm, setEditCustomerForm] = useState(null);
+  const [welcomeGrantCustomer, setWelcomeGrantCustomer] = useState(null);
   const [dashboardSettings, setDashboardSettings] = useState({
     // الإجراءات السريعة
     showPOS: true,
@@ -1729,6 +1732,7 @@ export default function Settings() {
       role: u.role,
       branch_id: u.branch_id || '',
       permissions: u.permissions || [],
+      phone: u.phone || '',
       is_active: u.is_active !== false
     });
     setEditUserDialogOpen(true);
@@ -1807,6 +1811,7 @@ export default function Settings() {
         role: editUserForm.role,
         branch_id: editUserForm.branch_id || null,
         permissions: editUserForm.permissions,
+        phone: editUserForm.phone || '',
         is_active: editUserForm.is_active
       });
       
@@ -3131,6 +3136,16 @@ export default function Settings() {
                                   className="mt-1"
                                 />
                               </div>
+                              <div>
+                                <Label className="text-foreground">{t('رقم الهاتف (لاستلام رمز التحقق عبر واتساب/SMS)')}</Label>
+                                <div className="mt-1">
+                                  <PhoneCountryInput
+                                    value={userForm.phone}
+                                    onChange={(val) => setUserForm({ ...userForm, phone: val })}
+                                    testId="new-user-phone"
+                                  />
+                                </div>
+                              </div>
                               <div className="grid grid-cols-2 gap-4">
                                 <div>
                                   <Label className="text-foreground">{t('الصلاحية')}</Label>
@@ -3375,6 +3390,16 @@ export default function Settings() {
                                 onChange={(e) => { const val = e.target.value; setEditUserForm(prev => ({ ...prev, email: val })); }}
                                 className="bg-background border-input"
                               />
+                            </div>
+                            <div>
+                              <Label className="text-foreground">{t('رقم الهاتف (لاستلام رمز التحقق عبر واتساب/SMS)')}</Label>
+                              <div className="mt-1">
+                                <PhoneCountryInput
+                                  value={editUserForm.phone || ''}
+                                  onChange={(val) => setEditUserForm(prev => ({ ...prev, phone: val }))}
+                                  testId="edit-user-phone"
+                                />
+                              </div>
                             </div>
                             <div className="grid grid-cols-2 gap-4">
                               <div>
@@ -7511,7 +7536,7 @@ export default function Settings() {
                             await axios.post(`${API}/customers`, customerForm);
                             toast.success(t('تم إضافة العميل'));
                             setCustomerDialogOpen(false);
-                            setCustomerForm({ name: '', phone: '', phone2: '', address: '', area: '', notes: '', is_blocked: false });
+                            setCustomerForm({ name: '', phone: '', email: '', phone2: '', address: '', area: '', notes: '', is_blocked: false });
                             fetchData();
                           } catch (error) {
                             showApiError(error, t('فشل في إضافة العميل'));
@@ -7530,24 +7555,25 @@ export default function Settings() {
                             </div>
                             <div>
                               <Label className="text-foreground">{t('رقم الهاتف *')}</Label>
-                              <Input
-                                value={customerForm.phone}
-                                onChange={(e) => setCustomerForm({ ...customerForm, phone: e.target.value })}
-                                placeholder="07xxxxxxxxx"
-                                required
-                                className="mt-1"
-                              />
+                              <div className="mt-1">
+                                <PhoneCountryInput
+                                  value={customerForm.phone}
+                                  onChange={(val) => setCustomerForm({ ...customerForm, phone: val })}
+                                  testId="settings-customer-phone"
+                                />
+                              </div>
                             </div>
                           </div>
                           <div className="grid grid-cols-2 gap-4">
                             <div>
                               <Label className="text-foreground">{t('رقم هاتف إضافي')}</Label>
-                              <Input
-                                value={customerForm.phone2}
-                                onChange={(e) => setCustomerForm({ ...customerForm, phone2: e.target.value })}
-                                placeholder={t('اختياري')}
-                                className="mt-1"
-                              />
+                              <div className="mt-1">
+                                <PhoneCountryInput
+                                  value={customerForm.phone2}
+                                  onChange={(val) => setCustomerForm({ ...customerForm, phone2: val })}
+                                  testId="settings-customer-phone2"
+                                />
+                              </div>
                             </div>
                             <div>
                               <Label className="text-foreground">{t('المنطقة')}</Label>
@@ -7566,6 +7592,18 @@ export default function Settings() {
                               onChange={(e) => setCustomerForm({ ...customerForm, address: e.target.value })}
                               placeholder={t('العنوان بالتفصيل...')}
                               className="mt-1"
+                            />
+                          </div>
+                          <div>
+                            <Label className="text-foreground">{t('البريد الإلكتروني')}</Label>
+                            <Input
+                              type="email"
+                              dir="ltr"
+                              value={customerForm.email}
+                              onChange={(e) => setCustomerForm({ ...customerForm, email: e.target.value })}
+                              placeholder="customer@example.com"
+                              className="mt-1"
+                              data-testid="settings-customer-email"
                             />
                           </div>
                           <div>
@@ -7619,6 +7657,12 @@ export default function Settings() {
                                 {customer.is_blocked && (
                                   <span className="text-xs px-2 py-0.5 bg-red-500/20 text-red-500 rounded">{t('محظور')}</span>
                                 )}
+                                {customer.welcome_status === 'pending' && (
+                                  <span className="text-xs px-2 py-0.5 bg-amber-500/20 text-amber-600 rounded" data-testid={`welcome-pending-${customer.id}`}>{t('أول طلب — بانتظار الخصم')}</span>
+                                )}
+                                {customer.welcome_status === 'granted' && (
+                                  <span className="text-xs px-2 py-0.5 bg-green-500/20 text-green-600 rounded" data-testid={`welcome-granted-${customer.id}`}>🎁 {t('خصم ترحيبي ممنوح')}</span>
+                                )}
                               </div>
                               <div className="flex items-center gap-3 text-sm text-muted-foreground">
                                 <span className="flex items-center gap-1">
@@ -7638,6 +7682,16 @@ export default function Settings() {
                             </div>
                           </div>
                           <div className="flex items-center gap-2">
+                            {customer.welcome_status === 'pending' && (
+                              <Button
+                                size="sm"
+                                className="bg-green-600 hover:bg-green-700 text-white text-xs"
+                                onClick={() => setWelcomeGrantCustomer(customer)}
+                                data-testid={`grant-welcome-${customer.id}`}
+                              >
+                                <Gift className="h-3.5 w-3.5 ml-1" />{t('منح خصم ترحيبي')}
+                              </Button>
+                            )}
                             <Button
                               variant="ghost"
                               size="icon"
@@ -7688,6 +7742,12 @@ export default function Settings() {
               </Card>
 
               {/* Edit Customer Dialog */}
+              <WelcomeGrantDialog
+                open={!!welcomeGrantCustomer}
+                customer={welcomeGrantCustomer}
+                onClose={() => setWelcomeGrantCustomer(null)}
+                onGranted={() => { setWelcomeGrantCustomer(null); fetchData(); }}
+              />
               <Dialog open={editCustomerDialogOpen} onOpenChange={setEditCustomerDialogOpen}>
                 <DialogContent className="max-w-lg">
                   <DialogHeader>
@@ -7700,6 +7760,7 @@ export default function Settings() {
                         await axios.put(`${API}/customers/${editCustomerForm.id}`, {
                           name: editCustomerForm.name,
                           phone: editCustomerForm.phone,
+                          email: editCustomerForm.email || null,
                           phone2: editCustomerForm.phone2 || null,
                           address: editCustomerForm.address || null,
                           area: editCustomerForm.area || null,
@@ -7758,6 +7819,18 @@ export default function Settings() {
                           value={editCustomerForm.address}
                           onChange={(e) => setEditCustomerForm({ ...editCustomerForm, address: e.target.value })}
                           className="mt-1"
+                        />
+                      </div>
+                      <div>
+                        <Label className="text-foreground">{t('البريد الإلكتروني')}</Label>
+                        <Input
+                          type="email"
+                          dir="ltr"
+                          value={editCustomerForm.email}
+                          onChange={(e) => setEditCustomerForm({ ...editCustomerForm, email: e.target.value })}
+                          placeholder="customer@example.com"
+                          className="mt-1"
+                          data-testid="edit-customer-email"
                         />
                       </div>
                       <div>

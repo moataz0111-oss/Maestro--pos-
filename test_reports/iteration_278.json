@@ -1,0 +1,35 @@
+{
+  "summary": "Verified driver + customer email capture end-to-end for iteration 278 (Maestro EGP). Backend: 5/5 pytest passed for create/list/update of driver and customer email plus optional-email regressions. Frontend: driver dialog on /delivery exposes [data-testid=new-driver-email] and accepts input; Settings > العملاء dialog exposes [data-testid=settings-customer-email] and accepts input. Also fixed a build-blocking syntax error in Settings.js (stray duplicate </DialogContent></Dialog></div>); ) after the component's closing brace at line 8052) that was preventing the frontend from compiling at all when tests started.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Settings page", "issues": ["Left column alert cards from Delivery (management-alert-* toasts) render over the Settings tabs area, obstructing focus/clicks on the tab list. Automated Playwright had to dismiss them and dispatch synthesized pointer events to activate the العملاء tab; a normal click on the tab in-scroll worked only after alerts dismissed. Worth ensuring these floating alerts are z-index/scope-limited to the Delivery page or auto-dismissed."]}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_driver_customer_email_iter278.py",
+    "/app/test_reports/pytest/iter278.xml"
+  ],
+  "action_items": [
+    "None required for the email feature — everything working end-to-end.",
+    "Consider scoping the management-alert toasts so they don't overlap Settings tabs (design/UX polish, not blocking)."
+  ],
+  "critical_code_review_comments": [
+    "Settings.js had 5 lines of stray duplicate JSX (</DialogContent> </Dialog> </div> ); }) after the top-level component closing brace, causing a Babel SyntaxError at 8053:2 and a total frontend compile failure. Removed the leftover lines. Main agent should audit end-of-file diff to prevent recurrence.",
+    "Settings.js is 8052 lines — well beyond the 700-line guideline. Strongly recommend splitting into per-tab modules (Appearance/Customers/Users/etc.) for maintainability.",
+    "Delivery.js is 2332 lines — also candidate for splitting."
+  ],
+  "updated_files": [
+    "/app/frontend/src/pages/Settings.js (removed 5 stray trailing lines that broke the build)",
+    "/app/backend/tests/test_driver_customer_email_iter278.py (new)"
+  ],
+  "success_rate": {"backend": "100% (5/5)", "frontend": "100% (both dialogs render and accept email)"},
+  "test_credentials": "admin@maestroegp.com / admin123",
+  "seed_data_creation": "Created TEST_-prefixed drivers and TEST_-prefixed customers via API tests (idempotent, not cleaned up).",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Backend pytest: /app/backend/tests/test_driver_customer_email_iter278.py, uses r.json().get('token') because /api/auth/login returns 'token' not 'access_token'. Also note frontend Settings tabs are Radix TabsTrigger — Playwright must dismiss floating management-alert-* toasts and dispatch pointerdown/pointerup to activate a non-visible-active tab. Add-driver button is data-testid=add-driver-btn on /delivery; add-customer button label is 'إضافة عميل'.",
+  "rca of the issue": "Frontend was broken with SyntaxError at Settings.js:8053 due to leftover duplicate JSX after the component's real closing `}` on 8052. Deleted lines 8053-8057 (5 stray lines). Confirmed rebuild success and both driver + customer email flows visible/typable."
+}

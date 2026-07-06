@@ -11,7 +11,7 @@ import logging
 from .shared import (
     get_database, get_current_user, get_user_tenant_id,
     build_tenant_query, UserRole, OrderStatus, PaymentMethod, OrderType,
-    iraq_date_from_utc, resolve_business_date
+    iraq_date_from_utc, resolve_business_date, verify_password, shift_expense_query
 )
 
 logger = logging.getLogger(__name__)
@@ -134,6 +134,8 @@ class CashRegisterClose(BaseModel):
     branch_id: Optional[str] = None
     force_close_without_count: Optional[bool] = False  # تجاوز فحص الجرد (للمالك/المدير)
     force_close_with_discrepancy: Optional[bool] = False  # موافقة المدير على فرق نقدي كبير (تقرير الأمان #9)
+    manager_email: Optional[str] = None  # اعتماد المدير للفرق النقدي الكبير
+    manager_password: Optional[str] = None
 
 class ShiftResponse(BaseModel):
     model_config = ConfigDict(extra="ignore")
@@ -1244,13 +1246,12 @@ async def get_shifts(
 
 # ==================== CASH REGISTER ====================
 async def _resolve_open_shift_for_close(db, shift_query, tenant_id):
-    """يحل مشكلة تعدّد الورديات المفتوحة (باغ الفتح المزدوج) عند الإغلاق/الملخص.
+    """يختار الوردية المفتوحة للإغلاق/الملخص **دون أي دمج** (كل وردية مستقلة تماماً).
 
-    بدل اختيار وردية مفتوحة عشوائية (كان يُظهر مبيعات جزئية فقط)، نختار الوردية **الأقدم بدءاً**
-    كمرساة ونجمع كل الورديات المفتوحة لنفس (الفرع + الكاشير + اليوم التشغيلي) — فتُحسب المبيعات
-    من بداية أقدم وردية وتشمل طلبات كل تلك الورديات، فيطابق الإغلاق كامل مبيعات اليوم كما في التقرير.
+    عند وجود أكثر من وردية مفتوحة مطابِقة (نادر) نختار الأقدم بدءاً فقط،
+    ولا نجمع أي ورديات أخرى معها — التزاماً بمتطلّب المستخدم: لا دمج إطلاقاً.
 
-    يُعيد: (anchor_shift, consolidated_ids, earliest_start). للحالة العادية (وردية واحدة) لا يتغيّر السلوك."""
+    يُعيد: (shift, [shift_id], started_at)."""
     opens = await db.shifts.find(shift_query, {"_id": 0}).to_list(200)
     if not opens:
         return None, [], None
@@ -1258,29 +1259,9 @@ async def _resolve_open_shift_for_close(db, shift_query, tenant_id):
     def _st(s):
         return s.get("started_at") or s.get("opened_at") or ""
 
-    def _day(s):
-        bd = s.get("business_date")
-        return str(bd)[:10] if bd else str(_st(s))[:10]
-
-    def _norm(n):
-        return (n or "").strip().lower()
-
     opens.sort(key=lambda s: str(_st(s)))
     anchor = opens[0]
-    a_branch = anchor.get("branch_id")
-    a_cashier = _norm(anchor.get("cashier_name")) or (anchor.get("cashier_id") or "")
-    a_day = _day(anchor)
-
-    group = [
-        s for s in opens
-        if s.get("branch_id") == a_branch
-        and ((_norm(s.get("cashier_name")) or (s.get("cashier_id") or "")) == a_cashier)
-        and _day(s) == a_day
-    ]
-    consolidated_ids = [s["id"] for s in group if s.get("id")]
-    if anchor.get("id") and anchor["id"] not in consolidated_ids:
-        consolidated_ids.append(anchor["id"])
-    return anchor, consolidated_ids, _st(anchor)
+    return anchor, [anchor["id"]] if anchor.get("id") else [], _st(anchor)
 
 
 
@@ -1480,14 +1461,8 @@ async def get_cash_register_summary(
             cancelled_by[cancelled_by_id]["count"] += 1
             cancelled_by[cancelled_by_id]["total"] += _safe_num(o.get("total"))
     
-    # جلب المصروفات خلال فترة الوردية (باستثناء المرتجعات)
-    expense_query = {
-        "branch_id": shift.get("branch_id"),
-        "category": {"$ne": "refund"},
-        "created_at": {"$gte": shift_start}
-    }
-    if tenant_id:
-        expense_query["tenant_id"] = tenant_id
+    # جلب المصروفات الخاصة بهذه الوردية فقط (قاعدة معتمدة: shift_id أو منشئ+يوم+فرع)
+    expense_query = shift_expense_query(shift, tenant_id)
     
     expenses = await db.expenses.find(expense_query).to_list(100)
     total_expenses = sum(_safe_num(e.get("amount")) for e in expenses)
@@ -1753,12 +1728,7 @@ async def close_cash_register(close_data: CashRegisterClose, current_user: dict 
             cancelled_by[cancelled_by_id]["count"] += 1
             cancelled_by[cancelled_by_id]["total"] += _safe_num(o.get("total"))
     
-    expenses = await db.expenses.find({
-        "branch_id": shift.get("branch_id"),
-        "category": {"$ne": "refund"},
-        "created_at": {"$gte": shift.get("started_at", shift.get("opened_at", ""))},
-        **({"tenant_id": tenant_id} if tenant_id else {})
-    }, {"_id": 0}).to_list(100)
+    expenses = await db.expenses.find(shift_expense_query(shift, tenant_id), {"_id": 0}).to_list(100)
     total_expenses = sum(_safe_num(e.get("amount")) for e in expenses)
     
     net_profit = gross_profit - total_expenses
@@ -1766,19 +1736,45 @@ async def close_cash_register(close_data: CashRegisterClose, current_user: dict 
     expected_cash = opening_cash + cash_sales - total_expenses
     cash_difference = closing_cash - expected_cash
     
-    # 🔒 تقرير الأمان #9: موافقة إلزامية على فرق نقدي كبير (>5% من المبيعات).
+    # 🔒 تقرير الأمان #9: موافقة إلزامية على فرق نقدي كبير (>5% من المبيعات، أو تجاوز حدّ مطلق).
     # الكاشير يُمنَع من إتمام إغلاق بفرق كبير دون موافقة المدير؛ المدير/المالك يُتمّه.
     _disc_threshold = total_sales * 0.05
-    if total_sales > 0 and abs(cash_difference) > _disc_threshold and not is_manager \
-            and not bool(getattr(close_data, "force_close_with_discrepancy", False)):
-        raise HTTPException(status_code=409, detail={
-            "code": "CASH_DISCREPANCY_APPROVAL_REQUIRED",
-            "message": f"الفرق النقدي ({abs(cash_difference):,.0f} د.ع) يتجاوز 5% من المبيعات — يلزم موافقة المدير لإتمام الإغلاق",
-            "difference": cash_difference,
-            "expected_cash": expected_cash,
-            "counted_cash": closing_cash,
-            "threshold": _disc_threshold,
-        })
+    _ABS_DISC_FLOOR = 50000  # حدّ مطلق: أي فرق يتجاوزه يتطلب موافقة حتى لو المبيعات صفر
+    discrepancy_approved_by = None
+    _needs_approval = (total_sales > 0 and abs(cash_difference) > _disc_threshold) or (abs(cash_difference) > _ABS_DISC_FLOOR)
+    if _needs_approval and not is_manager:
+        # اعتماد المدير: يجب إدخال بريد المدير وكلمة مروره والتحقق منهما فعلياً.
+        approved = False
+        if bool(getattr(close_data, "force_close_with_discrepancy", False)):
+            m_email = (getattr(close_data, "manager_email", "") or "").strip().lower()
+            m_pass = getattr(close_data, "manager_password", "") or ""
+            if m_email and m_pass:
+                manager = await db.users.find_one({"email": m_email}, {"_id": 0})
+                if manager:
+                    m_role = manager.get("role", "")
+                    m_hash = manager.get("password_hash", manager.get("password", ""))
+                    same_tenant = (not tenant_id) or manager.get("tenant_id") == tenant_id
+                    if m_role in ["admin", "super_admin", "manager", "branch_manager"] \
+                            and (same_tenant or m_role == "super_admin") \
+                            and manager.get("is_active", True) \
+                            and verify_password(m_pass, m_hash):
+                        approved = True
+                        discrepancy_approved_by = {
+                            "id": manager.get("id"),
+                            "name": manager.get("full_name") or manager.get("email"),
+                            "email": manager.get("email"),
+                            "role": m_role,
+                            "at": datetime.now(timezone.utc).isoformat(),
+                        }
+        if not approved:
+            raise HTTPException(status_code=409, detail={
+                "code": "CASH_DISCREPANCY_APPROVAL_REQUIRED",
+                "message": f"الفرق النقدي ({abs(cash_difference):,.0f} د.ع) يتجاوز 5% من المبيعات — يلزم موافقة المدير لإتمام الإغلاق",
+                "difference": cash_difference,
+                "expected_cash": expected_cash,
+                "counted_cash": closing_cash,
+                "threshold": _disc_threshold,
+            })
     
     update_data = {
         "closing_cash": closing_cash,
@@ -1804,23 +1800,16 @@ async def close_cash_register(close_data: CashRegisterClose, current_user: dict 
         "ended_at": datetime.now(timezone.utc).isoformat(),
         "status": "closed",
         "notes": close_data.notes,
-        "denominations": close_data.denominations
+        "denominations": close_data.denominations,
+        "discrepancy_approved_by": discrepancy_approved_by,
     }
     
     await db.shifts.update_one({"id": shift_id}, {"$set": update_data})
     
-    # دمج الورديات المفتوحة المكررة الأخرى لنفس الكاشير/اليوم (باغ الفتح المزدوج): تُغلق كـ"merged"
-    # حتى لا تبقى مفتوحة ولا تُضاعف المبيعات — طلباتها محتسبة بالفعل في هذه الوردية.
-    other_ids = [sid for sid in consolidated_ids if sid and sid != shift_id]
-    if other_ids:
-        await db.shifts.update_many(
-            {"id": {"$in": other_ids}, "status": "open"},
-            {"$set": {"status": "merged", "merged_into": shift_id, "ended_at": datetime.now(timezone.utc).isoformat()}}
-        )
-    
+    # لا دمج إطلاقاً — كل وردية تُغلق مستقلة (بطلب المستخدم الصريح).
     updated_shift = await db.shifts.find_one({"id": shift_id}, {"_id": 0})
     updated_shift["branch_name"] = branch["name"] if branch else ""
-    updated_shift["merged_shifts_count"] = len(other_ids)
+    updated_shift["merged_shifts_count"] = 0
     
     return updated_shift
 

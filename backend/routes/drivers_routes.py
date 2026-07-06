@@ -21,6 +21,7 @@ router = APIRouter(prefix="/drivers", tags=["Drivers"], dependencies=[Depends(ge
 class DriverCreate(BaseModel):
     name: str
     phone: str
+    email: Optional[str] = None
     branch_id: str
     pin: str = "1234"  # الرمز السري للسائق
     user_id: Optional[str] = None
@@ -30,6 +31,7 @@ class DriverResponse(BaseModel):
     id: str
     name: str
     phone: str
+    email: Optional[str] = None
     branch_id: str
     is_available: bool = True
     current_order_id: Optional[str] = None
@@ -57,6 +59,7 @@ async def create_driver(driver: DriverCreate, current_user: dict = Depends(get_c
         "id": str(uuid.uuid4()),
         "name": driver.name,
         "phone": driver.phone,
+        "email": driver.email,
         "branch_id": driver.branch_id,
         "pin": driver.pin,  # حفظ الرمز السري
         "user_id": driver.user_id,
@@ -218,6 +221,7 @@ async def drivers_performance(period: str = "today", branch_id: Optional[str] = 
 class DriverUpdate(BaseModel):
     name: Optional[str] = None
     phone: Optional[str] = None
+    email: Optional[str] = None
     pin: Optional[str] = None
     is_active: Optional[bool] = None
     is_available: Optional[bool] = None
@@ -238,6 +242,8 @@ async def update_driver(driver_id: str, driver: DriverUpdate, current_user: dict
         update_data["name"] = driver.name
     if driver.phone:
         update_data["phone"] = driver.phone
+    if driver.email is not None:
+        update_data["email"] = driver.email
     if driver.pin:
         update_data["pin"] = driver.pin  # تحديث الرمز السري
     if driver.is_active is not None:

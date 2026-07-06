@@ -8,7 +8,7 @@ import os
 import requests
 import pytest
 
-BASE_URL = (os.environ.get("REACT_APP_BACKEND_URL") or "https://inventory-accounting-11.preview.emergentagent.com").rstrip("/")
+BASE_URL = (os.environ.get("REACT_APP_BACKEND_URL") or "https://trusted-device-auth.preview.emergentagent.com").rstrip("/")
 ADMIN_EMAIL = "admin@maestroegp.com"
 ADMIN_PASSWORD = "admin123"
 OWNER_EMAIL = "owner@maestroegp.com"

@@ -232,6 +232,38 @@ def iraq_date_from_utc(utc_iso_str: Optional[str] = None) -> str:
     except Exception:
         return (datetime.now(timezone.utc) + timedelta(hours=IRAQ_TZ_OFFSET_HOURS)).strftime("%Y-%m-%d")
 
+# ==================== SHIFT EXPENSE ATTRIBUTION (canonical) ====================
+# قاعدة واحدة معتمدة لربط المصروف بالوردية — تُستخدم في كل الشاشات (إغلاق الصندوق،
+# ملخص الصندوق، تقرير الإغلاق) لضمان تطابق الأرقام تماماً وعدم خلط مصاريف الكاشيرين.
+# مصروف يخصّ الوردية إذا:
+#   - shift_id للمصروف = معرّف الوردية (المصاريف الجديدة تُختم بهذا)، أو
+#   - (سجلات قديمة بلا shift_id) نفس الفرع + نفس اليوم التشغيلي + نفس منشئ المصروف (الكاشير).
+def shift_expense_query(shift: dict, tenant_id: Optional[str] = None) -> dict:
+    """يبني Mongo query لمصاريف وردية محددة وفق القاعدة المعتمدة (بلا خلط بين الكاشيرين)."""
+    sid = shift.get("id")
+    branch = shift.get("branch_id")
+    cashier = shift.get("cashier_id")
+    bd = shift.get("business_date")
+    if not bd:
+        started = shift.get("started_at") or shift.get("opened_at")
+        bd = iraq_date_from_utc(started) if started else iraq_date_from_utc()
+
+    no_shift = [{"shift_id": {"$exists": False}}, {"shift_id": None}, {"shift_id": ""}]
+    legacy = {
+        "$or": no_shift,
+        "branch_id": branch,
+        "created_by": cashier,
+        "business_date": bd,
+    }
+    q = {
+        "category": {"$ne": "refund"},
+        "$or": [{"shift_id": sid}, legacy],
+    }
+    if tenant_id:
+        q["tenant_id"] = tenant_id
+    return q
+
+
 async def resolve_business_date(tenant_id: Optional[str], branch_id: Optional[str]) -> str:
     """
     الحصول على business_date من الوردية المفتوحة الحالية لهذا الفرع.

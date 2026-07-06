@@ -45,6 +45,7 @@ import { MapContainer, TileLayer, Marker, Popup, useMap } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import { VoiceRecordButton, VoiceBubble, MessageTicks } from '../components/VoiceChat';
+import { getDeviceId } from '../utils/deviceId';
 
 const API = API_URL;
 
@@ -120,6 +121,9 @@ export default function DriverApp() {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [driverPhone, setDriverPhone] = useState('');
   const [driverPin, setDriverPin] = useState('');
+  const [driver2FA, setDriver2FA] = useState(null);
+  const [driverOtp, setDriverOtp] = useState('');
+  const [verifyingOtp, setVerifyingOtp] = useState(false);
   const [driver, setDriver] = useState(null);
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -294,27 +298,65 @@ export default function DriverApp() {
 
     setLoading(true);
     try {
-      const res = await axios.post(`${API}/driver/login?phone=${driverPhone}&pin=${driverPin}`);
-      
+      const res = await axios.post(`${API}/driver/login?phone=${driverPhone}&pin=${driverPin}&device_id=${encodeURIComponent(getDeviceId())}`);
+
+      if (res.data.requires_2fa) {
+        setDriver2FA({
+          verificationId: res.data.verification_id,
+          channel: res.data.channel,
+          destinationMasked: res.data.destination_masked,
+          pendingDelivery: res.data.pending_delivery,
+        });
+        setLoading(false);
+        return;
+      }
+
       if (res.data.driver) {
-        const driverData = res.data.driver;
-        if (res.data.token) {
-          localStorage.setItem('driver_token', res.data.token);
-        }
-        setDriver(driverData);
-        setIsLoggedIn(true);
-        localStorage.setItem('driver_app_session', JSON.stringify(driverData));
-        localStorage.setItem('driver_phone', driverPhone);
-        toast.success(`${t('مرحباً')} ${driverData.name}!`);
-        fetchOrders(driverData.id);
-        subscribeDriverPush(driverPhone);
-        call.primeMic();
+        finishDriverLogin(res.data);
       }
     } catch (error) {
       const message = error.response?.data?.detail || t('فشل في تسجيل الدخول');
       toast.error(message);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const finishDriverLogin = (data) => {
+    const driverData = data.driver;
+    if (data.token) {
+      localStorage.setItem('driver_token', data.token);
+    }
+    setDriver(driverData);
+    setIsLoggedIn(true);
+    setDriver2FA(null);
+    setDriverOtp('');
+    localStorage.setItem('driver_app_session', JSON.stringify(driverData));
+    localStorage.setItem('driver_phone', driverPhone);
+    toast.success(`${t('مرحباً')} ${driverData.name}!`);
+    fetchOrders(driverData.id);
+    subscribeDriverPush(driverPhone);
+    call.primeMic();
+  };
+
+  const verifyDriverOtp = async () => {
+    if (!driverOtp || driverOtp.length < 4) {
+      toast.error(t('يرجى إدخال رمز التحقق'));
+      return;
+    }
+    setVerifyingOtp(true);
+    try {
+      const res = await axios.post(`${API}/driver/login/verify-2fa`, {
+        verification_id: driver2FA.verificationId,
+        code: driverOtp.trim(),
+      });
+      if (res.data.driver) {
+        finishDriverLogin(res.data);
+      }
+    } catch (error) {
+      toast.error(error.response?.data?.detail || t('رمز التحقق غير صحيح'));
+    } finally {
+      setVerifyingOtp(false);
     }
   };
 
@@ -627,8 +669,10 @@ export default function DriverApp() {
                 onChange={(e) => setDriverPhone(e.target.value)}
                 className="text-lg text-center"
                 data-testid="driver-phone-input"
+                disabled={!!driver2FA}
               />
             </div>
+            {!driver2FA && (
             <div>
               <label className="text-sm font-medium mb-2 block">{t('الرمز السري')} (PIN)</label>
               <Input
@@ -642,6 +686,54 @@ export default function DriverApp() {
                 onKeyDown={(e) => e.key === 'Enter' && loginDriver()}
               />
             </div>
+            )}
+
+            {/* خطوة رمز التحقق (جهاز جديد) */}
+            {driver2FA && (
+              <div className="space-y-3 rounded-lg border p-3 bg-muted/40" data-testid="driver-2fa-step">
+                <p className="text-sm text-foreground text-center font-medium">
+                  {driver2FA.channel === 'whatsapp'
+                    ? t('أرسلنا رمز التحقق عبر واتساب إلى رقمك المسجّل')
+                    : driver2FA.channel === 'email'
+                      ? t('أرسلنا رمز التحقق إلى بريدك المسجّل')
+                      : t('أرسلنا رمز التحقق عبر رسالة نصية إلى رقمك المسجّل')}
+                  {driver2FA.destinationMasked && (
+                    <span dir="ltr" className="block mt-1 font-bold text-foreground">{driver2FA.destinationMasked}</span>
+                  )}
+                </p>
+                {driver2FA.pendingDelivery && (
+                  <div className="text-center bg-background rounded p-2 border border-red-300">
+                    <p className="text-xs text-red-600">{t('تعذّر إرسال الرمز حالياً. تواصل مع الإدارة وأعد المحاولة.')}</p>
+                  </div>
+                )}
+                <Input
+                  type="text"
+                  inputMode="numeric"
+                  maxLength={6}
+                  placeholder="______"
+                  value={driverOtp}
+                  onChange={(e) => setDriverOtp(e.target.value.replace(/[^0-9]/g, ''))}
+                  className="text-2xl text-center tracking-[0.4em]"
+                  dir="ltr"
+                  autoFocus
+                  data-testid="driver-otp-input"
+                  onKeyDown={(e) => e.key === 'Enter' && verifyDriverOtp()}
+                />
+              </div>
+            )}
+
+            {driver2FA ? (
+              <Button
+                onClick={verifyDriverOtp}
+                disabled={verifyingOtp || driverOtp.length < 4}
+                className="w-full h-12 bg-gradient-to-r from-[#f6a623] to-[#ffd166] text-[#08122e] font-extrabold"
+                data-testid="driver-verify-otp-btn"
+              >
+                {verifyingOtp ? (
+                  <><Loader2 className={`h-5 w-5 animate-spin ${isRTL ? 'ml-2' : 'mr-2'}`} />{t('جاري التحقق...')}</>
+                ) : t('تأكيد الرمز')}
+              </Button>
+            ) : (
             <Button
               onClick={loginDriver}
               disabled={loading || !isOnline}
@@ -660,6 +752,7 @@ export default function DriverApp() {
                 </>
               )}
             </Button>
+            )}
 
             {/* زر تثبيت التطبيق */}
             {isPWAInstallable && (
