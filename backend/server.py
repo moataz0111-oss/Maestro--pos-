@@ -17291,12 +17291,20 @@ async def get_cash_register_closings_history(
         query["branch_id"] = branch_id
     if cashier_id:
         query["cashier_id"] = cashier_id
-    if start_date:
-        query["closed_at"] = {"$gte": start_date}
-    if end_date:
-        if "closed_at" not in query:
-            query["closed_at"] = {}
-        query["closed_at"]["$lte"] = end_date
+    if start_date or end_date:
+        # فلترة باليوم التشغيلي (business_date) أولاً — يضمن تطابق تقرير الإغلاق مع يوم الشفت
+        biz_range = {}
+        closed_range = {}
+        if start_date:
+            biz_range["$gte"] = start_date
+            closed_range["$gte"] = start_date
+        if end_date:
+            biz_range["$lte"] = end_date
+            closed_range["$lte"] = end_date + "T23:59:59"
+        query["$or"] = [
+            {"business_date": biz_range},
+            {"business_date": {"$exists": False}, "closed_at": closed_range},
+        ]
     
     closings = await db.cash_register_closings.find(query, {"_id": 0}).sort("closed_at", -1).to_list(limit)
     # إزالة صفوف الإغلاق المكررة تلقائياً (نفس الوردية سُجّلت مرتين بسبب باغ فتح شفتين متزامنين)
@@ -21124,6 +21132,21 @@ async def start_auto_close_scheduler():
     asyncio.create_task(scheduler())
     logger.info("✅ Auto day close scheduler started")
 
+@app.on_event("startup")
+async def start_integrity_scheduler():
+    """🛡 فحص سلامة دوري تلقائي كل ساعة لكل المستأجرين — بلا أي تدخل يدوي"""
+    async def _integrity_loop():
+        while True:
+            await asyncio.sleep(3600)  # كل ساعة
+            try:
+                from routes.shifts_routes import run_startup_integrity_check
+                await run_startup_integrity_check(db)
+            except Exception as e:
+                logger.warning(f"periodic integrity check failed: {e}")
+    
+    asyncio.create_task(_integrity_loop())
+    logger.info("🛡 Hourly automatic integrity check scheduler started")
+
 # إضافة indexes عند بدء التطبيق
 async def setup_database_indexes():
     """إعداد indexes لتحسين الأداء"""
@@ -21869,6 +21892,39 @@ async def auto_heal_shifts_and_business_dates():
                 fixed_shifts += 1
         if fixed_shifts:
             logger.info(f"   🕐 صُحّح business_date لـ {fixed_shifts} شفت")
+        
+        # === 2b) استكمال business_date لسجلات إغلاق الصندوق (من يوم الشفت المرتبط) ===
+        fixed_closings = 0
+        _shift_bd_cache = {}
+        async for c in db.cash_register_closings.find(
+            {"$or": [{"business_date": {"$exists": False}}, {"business_date": None}, {"business_date": ""}]},
+            {"_id": 0, "id": 1, "shift_id": 1, "shift_start": 1, "closed_at": 1}
+        ):
+            bd = None
+            sid = c.get("shift_id")
+            if sid:
+                if sid in _shift_bd_cache:
+                    bd = _shift_bd_cache[sid]
+                else:
+                    _sh = await db.shifts.find_one({"id": sid}, {"_id": 0, "business_date": 1, "started_at": 1, "opened_at": 1})
+                    if _sh:
+                        bd = _sh.get("business_date") or iraq_date_from_utc(_sh.get("started_at") or _sh.get("opened_at") or "")
+                    _shift_bd_cache[sid] = bd
+            if not bd:
+                _ref = c.get("shift_start") or c.get("closed_at")
+                bd = iraq_date_from_utc(_ref) if _ref else None
+            if bd:
+                await db.cash_register_closings.update_one({"id": c["id"]}, {"$set": {"business_date": bd}})
+                fixed_closings += 1
+        if fixed_closings:
+            logger.info(f"   🧾 استُكمل business_date لـ {fixed_closings} سجل إغلاق")
+        
+        # === 2c) فحص سلامة تلقائي لليومين الأخيرين (إشعار + واتساب للمالك عند عدم التطابق) ===
+        try:
+            from routes.shifts_routes import run_startup_integrity_check
+            await run_startup_integrity_check(db)
+        except Exception as _ie:
+            logger.warning(f"integrity startup check skipped: {_ie}")
         
         # === 3) تصحيح business_date للمصاريف ===
         # ابحث عن مصاريف لها created_by + branch_id + created_at، واربطها بالشفت

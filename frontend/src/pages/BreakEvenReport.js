@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { API_URL } from '../utils/api';
+import { localDate } from '../utils/date';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { useAuth } from '../context/AuthContext';
@@ -53,8 +54,8 @@ export default function BreakEvenReport() {
   const [loading, setLoading] = useState(true);
   const [dailyData, setDailyData] = useState(null);
   const [monthlyData, setMonthlyData] = useState(null);
-  const [dateFrom, setDateFrom] = useState(new Date().toISOString().split('T')[0]);
-  const [dateTo, setDateTo] = useState(new Date().toISOString().split('T')[0]);
+  const [dateFrom, setDateFrom] = useState(localDate());
+  const [dateTo, setDateTo] = useState(localDate());
   const [selectedMonth, setSelectedMonth] = useState(new Date().toISOString().slice(0, 7));
   const [expandedBranches, setExpandedBranches] = useState({});
   const [viewMode, setViewMode] = useState('daily'); // daily or monthly

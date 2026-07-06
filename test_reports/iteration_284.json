@@ -1,0 +1,20 @@
+{
+  "summary": "RETEST PASSED. Verified frontend integrity auto-check fix on /reports → 'إغلاق الصندوق' tab. With default 'جميع الفروع' branch and range 2026-06-25 → 2026-07-07, clicking تحديث now auto-populates [data-testid='integrity-results-panel'] with the REAL results: 'فحص السلامة التلقائي: 7 شفت — 5 متطابق ✓ • 2 غير متطابق ⚠' and renders exactly 2 [data-testid^='integrity-mismatch-'] cards (كاشير ب اختبار 2026-07-06 and كاشير اختبار 2026-06-30, both 'لا يوجد سجل إغلاق مطابق لهذا الشفت'). No more false all-clear green 0/0 banner. Bug from iteration_283 is fixed.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": ["/app/test_reports/iteration_284.json"],
+  "action_items": [],
+  "critical_code_review_comments": [],
+  "updated_files": [],
+  "success_rate": {"backend": "n/a (skipped)", "frontend": "100%"},
+  "test_credentials": "admin@maestroegp.com / admin123",
+  "seed_data_creation": "none",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Integrity auto-check now correctly strips branch_id when 'all' and backend treats 'all/*/empty' as no filter. Verified checked=7, ok=5, mismatch=2 with 2 mismatch cards for range 2026-06-25→2026-07-07. Only 1 tenant branch exists so specific-branch dropdown test only shows 'جميع الفروع' + one branch; switching to the specific branch still triggers the auto-refresh mechanism (URL params correctly include branch_id when non-'all').",
+  "rca of the issue": "Previously frontend sent branch_id=all as literal string; backend filtered by that string and returned 0 rows, producing false green all-clear. Fix (verified): Reports.js runIntegrityCheck skips appending branch_id when value is 'all'; backend shifts-check treats 'all'/'*'/'' as no filter."
+}

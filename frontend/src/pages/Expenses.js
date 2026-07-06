@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { API_URL, BACKEND_URL } from '../utils/api';
+import { localDate } from '../utils/date';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { useAuth } from '../context/AuthContext';
@@ -70,8 +71,8 @@ export default function Expenses() {
   const [branches, setBranches] = useState([]);
   const [selectedBranch, setSelectedBranch] = useState(null);
   const [selectedCategory, setSelectedCategory] = useState('all');
-  const [startDate, setStartDate] = useState(new Date().toISOString().split('T')[0]);
-  const [endDate, setEndDate] = useState(new Date().toISOString().split('T')[0]);
+  const [startDate, setStartDate] = useState(localDate());
+  const [endDate, setEndDate] = useState(localDate());
   const [businessDate, setBusinessDate] = useState(null);
   const [loading, setLoading] = useState(true);
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -89,7 +90,7 @@ export default function Expenses() {
     amount: '',
     payment_method: 'cash',
     reference_number: '',
-    date: new Date().toISOString().split('T')[0],
+    date: localDate(),
     custom_category_name: '' // حقل جديد للتصنيف المخصص
   });
 
@@ -312,7 +313,7 @@ export default function Expenses() {
           amount: '',
           payment_method: 'cash',
           reference_number: '',
-          date: new Date().toISOString().split('T')[0],
+          date: localDate(),
           custom_category_name: ''
         });
         return;
@@ -328,7 +329,7 @@ export default function Expenses() {
         amount: '',
         payment_method: 'cash',
         reference_number: '',
-        date: new Date().toISOString().split('T')[0],
+        date: localDate(),
         custom_category_name: ''
       });
       fetchData();

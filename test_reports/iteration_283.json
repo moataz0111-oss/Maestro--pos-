@@ -1,0 +1,42 @@
+{
+  "summary": "Tested automatic integrity check (Reports > إغلاق الصندوق). Backend: 7 passed / 1 skipped (previous regression) + 5/5 new tests. Scheduler startup log present. Post-close on clean shift creates NO integrity_alert. Frontend: manual button [data-testid='integrity-check-btn'] correctly REMOVED. Panel [data-testid='integrity-results-panel'] DOES appear AUTOMATICALLY with title 'فحص السلامة التلقائي' when closings load and re-runs on تحديث. HOWEVER — critical bug: panel shows 0/0/0 (no mismatch cards) even though the API without branch filter returns checked=7, ok=5, mismatch=2 for the same range. Root cause: frontend sends branch_id=all when 'جميع الفروع' is selected, and the backend treats 'all' as a literal branch id, returning 0 shifts. This makes the automatic panel misleading in the default (all branches) view.",
+  "backend_issues": {
+    "critical": [
+      {"endpoint": "GET /api/integrity/shifts-check", "issue": "Passing branch_id=all returns checked=0 instead of treating it as no filter. Same range without branch_id returns checked=7. Either accept 'all' as sentinel OR frontend must strip it.", "priority": "HIGH"}
+    ],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "Reports.js runIntegrityCheck (~line 1261)", "issue": "Sends branch_id=all when localBranchId==='all' → API returns 0 rows → auto panel always shows 'فحص السلامة التلقائي: 0 شفت — 0 متطابق' with green 'الحسابات سليمة 100%' banner. This is a FALSE ALL-CLEAR that hides real mismatches (2 mismatches exist per API). Fix: `if (localBranchId && localBranchId !== 'all') params.append('branch_id', localBranchId);`", "selector": "[data-testid='integrity-results-panel']", "priority": "CRITICAL"}
+    ],
+    "integration_issues": [
+      {"flow": "Auto integrity check on default (all branches) view", "issue": "Panel renders but data is 0/0/0 due to branch_id=all bug; mismatch cards [data-testid^='integrity-mismatch-'] never render in default view", "affected_selectors": ["[data-testid='integrity-results-panel']", "[data-testid^='integrity-mismatch-']"]}
+    ],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_integrity_check.py",
+    "/app/backend/tests/test_auto_integrity_iter283.py",
+    "/app/test_reports/pytest/iter283_integrity.xml",
+    "/app/test_reports/pytest/iter283_auto.xml"
+  ],
+  "action_items": [
+    "CRITICAL: Fix integrity check branch filter bug — either frontend strips branch_id='all' before appending (Reports.js ~1261) or backend `/api/integrity/shifts-check` treats branch_id in ('all','','*') as no-op. Preferred: frontend fix (one-liner). After fix, panel should show checked=7 ok=5 mismatch=2 with 2 mismatch cards for range 2026-06-25..2026-07-07."
+  ],
+  "critical_code_review_comments": [
+    "Reports.js line 1261: `if (localBranchId) params.append('branch_id', localBranchId);` — must exclude sentinel 'all'. Same issue may exist in similar closings fetch code paths (double-check other endpoints where localBranchId is forwarded).",
+    "runIntegrityCheck silently swallows errors and sets integrity=null (line 1264-1266). Combined with the branch_id=all bug this hides API failures from the user. Consider logging or showing a subtle 'تعذر فحص السلامة' badge.",
+    "useEffect depends only on [closingsHistory] (line 1277). If closings load returns the same empty array on error, panel won't re-run. Consider also depending on [dateRange.start, dateRange.end, localBranchId] to guarantee re-run on filter change."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_auto_integrity_iter283.py (NEW)"
+  ],
+  "success_rate": {"backend": "100% (12/12 executed, 1 skipped for missing cashier account)", "frontend": "60% — auto-run + button-removal + auto-rerun work, but data is wrong in default view due to branch_id=all bug"},
+  "test_credentials": "admin@maestroegp.com / admin123 (tenant default)",
+  "seed_data_creation": "Test inserts+removes clean TEST_ITER283_SHIFT_* (cleaned in finally block)",
+  "retest_needed": true,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "The manual button was successfully removed and panel auto-appears — verified. The ONLY blocker is the branch_id=all filter bug in runIntegrityCheck. Backend scheduler + post-close async task work correctly (no false alarms on clean close). Backend pytest suite: use env DB_NAME=maestro_pos (not the default 'test_database' baked into old fixtures). Directly-inserted date via Playwright input.fill on <input type='date'> DOES propagate to React state (verified via captured network calls with correct start/end).",
+  "rca of the issue": "runIntegrityCheck builds URLSearchParams and unconditionally appends branch_id whenever localBranchId is truthy. The branch dropdown uses 'all' as a sentinel for 'جميع الفروع', so the URL becomes /api/integrity/shifts-check?start_date=...&end_date=...&branch_id=all. Backend shifts-check filter Mongo query {branch_id:'all'} matches zero shifts, so response is {checked:0, ok_count:0, mismatch_count:0, rows:[]}. Panel then renders the 'safe' green state and hides real mismatches. Reproduction: login admin, /reports → إغلاق الصندوق → keep 'جميع الفروع' → set 2026-06-25..2026-07-07 → click تحديث → observe panel = 0 شفت while list below shows 4 closings + backend curl without branch_id returns checked=7. Mitigation: `if (localBranchId && localBranchId !== 'all') params.append('branch_id', localBranchId);`."
+}

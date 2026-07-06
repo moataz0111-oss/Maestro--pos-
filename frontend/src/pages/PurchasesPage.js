@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useTranslation } from '../hooks/useTranslation';
 import { API_URL, BACKEND_URL } from '../utils/api';
+import { localDate } from '../utils/date';
 import { useNavigate, useLocation } from 'react-router-dom';
 import axios from 'axios';
 import { useAuth } from '../context/AuthContext';
@@ -117,7 +118,7 @@ export default function PurchasesPage() {
   const [supplierAccounts, setSupplierAccounts] = useState({});
   // نموذج تسديد المورد
   const [payModal, setPayModal] = useState(null); // {supplier, mode:'partial'|'full'}
-  const [payForm, setPayForm] = useState({ amount: '', payment_method: 'cash', payment_date: new Date().toISOString().split('T')[0], notes: '' });
+  const [payForm, setPayForm] = useState({ amount: '', payment_method: 'cash', payment_date: localDate(), notes: '' });
   const [paySubmitting, setPaySubmitting] = useState(false);
   // كشف حساب المورد
   const [detailModal, setDetailModal] = useState(null); // supplier
@@ -276,7 +277,7 @@ export default function PurchasesPage() {
     setPayForm({
       amount: mode === 'full' ? String(remaining) : '',
       payment_method: 'cash',
-      payment_date: new Date().toISOString().split('T')[0],
+      payment_date: localDate(),
       notes: ''
     });
     setPayModal({ supplier, mode });

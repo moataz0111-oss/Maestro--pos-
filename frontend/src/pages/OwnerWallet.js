@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { API_URL } from '../utils/api';
+import { localDate } from '../utils/date';
 import axios from 'axios';
 import { useAuth } from '../context/AuthContext';
 import { useTranslation } from '../hooks/useTranslation';
@@ -110,8 +111,8 @@ export default function OwnerWallet() {
   const [closingDialogOpen, setClosingDialogOpen] = useState(false);
   
   // بيانات النماذج
-  const [newDeposit, setNewDeposit] = useState({ amount: '', date: new Date().toISOString().split('T')[0], description: '', source: 'cash_sales', branch_id: '', external_source: '', payment_method: 'cash', custom_method: '' });
-  const [newWithdrawal, setNewWithdrawal] = useState({ amount: '', date: new Date().toISOString().split('T')[0], beneficiary: '', description: '', category: 'transfer', branch_id: '', external_source: '', payment_method: 'cash', custom_method: '' });
+  const [newDeposit, setNewDeposit] = useState({ amount: '', date: localDate(), description: '', source: 'cash_sales', branch_id: '', external_source: '', payment_method: 'cash', custom_method: '' });
+  const [newWithdrawal, setNewWithdrawal] = useState({ amount: '', date: localDate(), beneficiary: '', description: '', category: 'transfer', branch_id: '', external_source: '', payment_method: 'cash', custom_method: '' });
   // طرق الدفع غير النقدية المحفوظة (بطاقة كي، زين كاش، حساب بنكي...)
   const [paymentMethods, setPaymentMethods] = useState([]);
   const [newProfitTransfer, setNewProfitTransfer] = useState({ amount: '', month: selectedDate, description: '', branch_id: '', external_source: '' });
@@ -355,7 +356,7 @@ export default function OwnerWallet() {
       await axios.post(`${API}/owner-wallet/deposits`, payload);
       toast.success(t('تم إضافة الإيداع بنجاح'));
       setDepositDialogOpen(false);
-      setNewDeposit({ amount: '', date: new Date().toISOString().split('T')[0], description: '', source: 'cash_sales', branch_id: '', external_source: '', payment_method: 'cash', custom_method: '' });
+      setNewDeposit({ amount: '', date: localDate(), description: '', source: 'cash_sales', branch_id: '', external_source: '', payment_method: 'cash', custom_method: '' });
       fetchData();
     } catch (error) {
       showApiError(error, t('فشل في إضافة الإيداع'));
@@ -398,7 +399,7 @@ export default function OwnerWallet() {
       await axios.post(`${API}/owner-wallet/withdrawals`, payload);
       toast.success(t('تم إضافة السحب بنجاح'));
       setWithdrawalDialogOpen(false);
-      setNewWithdrawal({ amount: '', date: new Date().toISOString().split('T')[0], beneficiary: '', description: '', category: 'transfer', branch_id: '', external_source: '', payment_method: 'cash', custom_method: '' });
+      setNewWithdrawal({ amount: '', date: localDate(), beneficiary: '', description: '', category: 'transfer', branch_id: '', external_source: '', payment_method: 'cash', custom_method: '' });
       fetchData();
     } catch (error) {
       showApiError(error, t('فشل في إضافة السحب'));

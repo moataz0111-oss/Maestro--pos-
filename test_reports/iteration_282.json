@@ -1,0 +1,36 @@
+{
+  "summary": "Frontend-only test of new 'حسب الكاشير' view mode toggle in Reports > إغلاق الصندوق tab. All flows verified end-to-end: toggle appears, per-cashier grouping renders, aggregation math correct, expand shows individual shift rows with their own business_date/sales/orders/diff (proving shifts remain separate in data), regression toggles (كل شفت بمفرده / مجمّع) and integrity check still work.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "Reports.js is very large (5631 lines) — consider splitting cash-register closing report into its own module for maintainability.",
+    "closingsHistory merges API closings with orphan shift-derived rows (~line 1561). Because of this, UI shift counts per cashier can differ from raw GET /api/reports/cash-register-closings API counts. This is pre-existing behavior, not caused by this iteration."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "N/A (not tested per request)", "frontend": "100%"},
+  "test_credentials": "admin@maestroegp.com / admin123 (tenant default)",
+  "seed_data_creation": "None (used existing closings 2026-06-25..2026-07-07)",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Playwright note: do NOT manually remove [data-testid='splash-screen'] via JS — it triggers a React NotFoundError removeChild in ErrorBoundary. Wait ~10-15s for it to auto-detach after each of (initial load, post-login, post-navigation). Removing management-alert-* via JS is safe. Reports tab click on 'إغلاق الصندوق' only works after splash detaches (not with force=True while splash is still mounted).",
+  "verification_details": {
+    "date_range_used": "2026-06-25 to 2026-07-07",
+    "cashier_groups_rendered": 4,
+    "groups": [
+      {"cashier": "كاشير أ اختبار", "shifts": 1, "total_sales": "10,000 IQD", "orders": 1, "expenses": "15,000 IQD", "diff": "+5,000 IQD", "badge": "زيادة"},
+      {"cashier": "كاشير كلوز QA", "shifts": 1, "total_sales": "450 IQD", "orders": 3, "expenses": "0", "diff": "-450 IQD", "badge": "نقص"},
+      {"cashier": "كاشير اختبار", "shifts": 1, "total_sales": "0 IQD", "orders": 0, "diff": "0", "badge": "مطابق"},
+      {"cashier": "كاشير ب اختبار", "shifts": 1, "total_sales": "0 IQD", "orders": 0, "expenses": "5,000 IQD", "diff": "+5,000 IQD", "badge": "زيادة"}
+    ],
+    "expand_verified": "cashier-group-0 expanded to 1 shift row with 📅 2026-07-06, 10,000 IQD, 1 طلب, +5,000 IQD, نشط badge (data-testid cashier-group-0-shift-0 present)",
+    "aggregation_math_correct": true,
+    "shifts_stay_separate_when_expanded": true,
+    "toggle_regression": {"view-individual-shifts": "OK (cashier-group elements=0)", "view-all-shifts": "OK", "integrity-check-btn": "OK (السلامة result panel rendered)"}
+  }
+}

@@ -1044,6 +1044,7 @@ async def close_shift(shift_id: str, close_data: ShiftClose, current_user: dict 
         "cashier_name": shift.get("cashier_name", ""),
         "shift_id": shift_id,
         "shift_start": shift.get("started_at"),
+        "business_date": shift.get("business_date") or iraq_date_from_utc(shift.get("started_at") or ""),
         "shift_end": datetime.now(timezone.utc).isoformat(),
         "closed_at": datetime.now(timezone.utc).isoformat(),
         "total_sales": total_sales,
@@ -1067,6 +1068,24 @@ async def close_shift(shift_id: str, close_data: ShiftClose, current_user: dict 
     }
     await db.cash_register_closings.insert_one(closing_record)
     del closing_record["_id"]
+    
+    # 🛡 فحص سلامة تلقائي فوري لهذا الشفت بعد الإغلاق مباشرة (بلا أي تدخل يدوي)
+    try:
+        import asyncio as _aio
+        _sid_check = shift_id
+        _tid_check = shift_tenant
+        async def _post_close_integrity():
+            try:
+                fresh = await db.shifts.find_one({"id": _sid_check}, {"_id": 0})
+                if fresh:
+                    rows, mc = await _integrity_rows_for_shifts(db, [fresh])
+                    if mc:
+                        await _notify_integrity_mismatches(db, _tid_check, rows)
+            except Exception as _e:
+                logger.warning(f"post-close integrity failed: {_e}")
+        _aio.create_task(_post_close_integrity())
+    except Exception:
+        pass
     
     return updated_shift
 
@@ -1926,3 +1945,200 @@ async def get_active_shift_details(shift_id: Optional[str] = None, cashier_id: O
     shift["opening_cash"] = opening_cash
     
     return shift
+
+
+
+# ==================== INTEGRITY CHECK (فحص السلامة اليومي) ====================
+# يقارن مجاميع كل شفت مغلق مع الطلبات والمصاريف الفعلية وسجل إغلاق الصندوق.
+# قراءة فقط — لا يعدّل أي بيانات ولا يغيّر قواعد الحساب المعتمدة.
+
+async def _recompute_shift_actuals(db, shift: dict) -> dict:
+    """إعادة حساب مبيعات/مصاريف الوردية من السجلات الفعلية بنفس منطق الإغلاق حرفياً."""
+    shift_id = shift.get("id")
+    shift_cashier = shift.get("cashier_id")
+    shift_tenant = shift.get("tenant_id")
+    shift_branch = shift.get("branch_id")
+    shift_start = shift.get("started_at") or shift.get("opened_at") or ""
+    shift_end_time = shift.get("ended_at") or datetime.now(timezone.utc).isoformat()
+
+    orders_query = {
+        "status": {"$nin": [OrderStatus.CANCELLED, "canceled", "deleted"]},
+        "$or": [
+            {"shift_id": shift_id},
+            {
+                "shift_id": {"$in": [None, ""]},
+                "cashier_id": shift_cashier,
+                "created_at": {"$gte": shift_start, "$lte": shift_end_time},
+            },
+        ],
+    }
+    if shift_tenant:
+        orders_query["tenant_id"] = shift_tenant
+    if shift_branch:
+        orders_query["branch_id"] = shift_branch
+    all_orders_raw = await db.orders.find(orders_query, {"_id": 0, "total": 1, "status": 1}).to_list(5000)
+    orders = [o for o in all_orders_raw if o.get("status") != "refunded"]
+    actual_sales = sum(_safe_num(o.get("total")) for o in orders)
+
+    expenses_query = {
+        "branch_id": shift_branch,
+        "category": {"$ne": "refund"},
+        "created_at": {"$gte": shift_start, "$lte": shift_end_time},
+        "$or": [
+            {"cashier_id": shift_cashier},
+            {"created_by": shift_cashier},
+            {"cashier_id": {"$exists": False}, "created_by": {"$exists": False}},
+        ],
+    }
+    if shift_tenant:
+        expenses_query["tenant_id"] = shift_tenant
+    expenses = await db.expenses.find(expenses_query, {"_id": 0, "amount": 1}).to_list(500)
+    actual_expenses = sum(_safe_num(e.get("amount")) for e in expenses)
+
+    return {"actual_sales": actual_sales, "actual_expenses": actual_expenses, "actual_orders": len(orders)}
+
+
+async def _integrity_rows_for_shifts(db, shifts: list):
+    rows = []
+    mismatch_count = 0
+    TOL = 1.0
+    for s in shifts:
+        actual = await _recompute_shift_actuals(db, s)
+        stored_sales = _safe_num(s.get("total_sales"))
+        stored_exp = _safe_num(s.get("total_expenses"))
+        stored_orders = int(s.get("total_orders") or 0)
+        closing = await db.cash_register_closings.find_one(
+            {"shift_id": s.get("id")},
+            {"_id": 0, "total_sales": 1, "total_expenses": 1, "business_date": 1, "difference": 1},
+            sort=[("closed_at", -1)]
+        )
+        issues = []
+        if abs(stored_sales - actual["actual_sales"]) > TOL:
+            issues.append(f"مبيعات الشفت {stored_sales:,.0f} ≠ الطلبات الفعلية {actual['actual_sales']:,.0f}")
+        if abs(stored_exp - actual["actual_expenses"]) > TOL:
+            issues.append(f"مصاريف الشفت {stored_exp:,.0f} ≠ المصاريف الفعلية {actual['actual_expenses']:,.0f}")
+        if stored_orders != actual["actual_orders"]:
+            issues.append(f"عدد الطلبات {stored_orders} ≠ الفعلي {actual['actual_orders']}")
+        if closing:
+            if abs(_safe_num(closing.get("total_sales")) - stored_sales) > TOL:
+                issues.append(f"مبيعات تقرير الإغلاق {_safe_num(closing.get('total_sales')):,.0f} ≠ بطاقة الشفت {stored_sales:,.0f}")
+            c_bd = closing.get("business_date")
+            if c_bd and s.get("business_date") and c_bd != s.get("business_date"):
+                issues.append(f"يوم تقرير الإغلاق {c_bd} ≠ يوم الشفت {s.get('business_date')}")
+        elif not s.get("auto_close_reason"):
+            issues.append("لا يوجد سجل إغلاق مطابق لهذا الشفت")
+        ok = len(issues) == 0
+        if not ok:
+            mismatch_count += 1
+        rows.append({
+            "shift_id": s.get("id"),
+            "cashier_name": s.get("cashier_name", ""),
+            "branch_id": s.get("branch_id"),
+            "business_date": s.get("business_date"),
+            "status": "ok" if ok else "mismatch",
+            "stored": {"total_sales": stored_sales, "total_expenses": stored_exp, "total_orders": stored_orders},
+            "actual": {"total_sales": actual["actual_sales"], "total_expenses": actual["actual_expenses"], "total_orders": actual["actual_orders"]},
+            "closing_found": bool(closing),
+            "issues": issues,
+        })
+    return rows, mismatch_count
+
+
+async def _notify_integrity_mismatches(db, tenant_id, rows) -> int:
+    """إشعار نظام + واتساب للمالك عند اكتشاف عدم تطابق (تنبيه واحد لكل شفت — بلا تكرار)."""
+    import asyncio
+    import whatsapp_free as _wa_free
+    bad = [r for r in rows if r["status"] == "mismatch"]
+    if not bad:
+        return 0
+    sent = 0
+    for r in bad:
+        exists = await db.notifications.find_one(
+            {"type": "integrity_alert", "data.shift_id": r["shift_id"]}, {"_id": 0, "id": 1}
+        )
+        if exists:
+            continue
+        await db.notifications.insert_one({
+            "id": str(uuid.uuid4()),
+            "type": "integrity_alert",
+            "title": "⚠️ عدم تطابق في حسابات شفت",
+            "message": f"شفت {r['cashier_name']} ({r['business_date']}): " + " | ".join(r["issues"])[:400],
+            "tenant_id": tenant_id,
+            "data": {"shift_id": r["shift_id"], "cashier_name": r["cashier_name"], "business_date": r["business_date"], "issues": r["issues"]},
+            "is_read": False,
+            "created_at": datetime.now(timezone.utc).isoformat(),
+        })
+        sent += 1
+    if sent and tenant_id:
+        tn = await db.tenants.find_one({"id": tenant_id}, {"_id": 0, "owner_phone": 1, "name": 1}) or {}
+        if tn.get("owner_phone"):
+            lines = "\n".join(f"• {r['cashier_name']} ({r['business_date']}): {r['issues'][0]}" for r in bad[:5])
+            msg = (
+                f"⚠️ فحص السلامة — {tn.get('name', 'نظامك')}\n\n"
+                f"اكتُشف عدم تطابق في {len(bad)} شفت:\n{lines}\n\n"
+                f"راجع: التقارير ← إغلاق الصندوق ← فحص السلامة."
+            )
+            try:
+                asyncio.create_task(_wa_free.send_message(tn["owner_phone"], msg))
+            except Exception:
+                pass
+    return sent
+
+
+@router.get("/integrity/shifts-check")
+async def integrity_shifts_check(
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None,
+    branch_id: Optional[str] = None,
+    notify: bool = False,
+    current_user: dict = Depends(get_current_user)
+):
+    """فحص سلامة الحسابات لفترة محددة — مقارنة الشفتات المغلقة مع الطلبات/المصاريف/سجل الإغلاق."""
+    if current_user.get("role") not in [UserRole.ADMIN, UserRole.MANAGER, UserRole.SUPER_ADMIN, "branch_manager"]:
+        raise HTTPException(status_code=403, detail="غير مصرح")
+    db = get_database()
+    tenant_id = get_user_tenant_id(current_user)
+    q = build_tenant_query(current_user, {"status": "closed"})
+    if branch_id and branch_id not in ("all", "*", ""):
+        q["branch_id"] = branch_id
+    sd = start_date or iraq_date_from_utc()
+    ed = end_date or sd
+    q["$or"] = [
+        {"business_date": {"$gte": sd, "$lte": ed}},
+        {"business_date": {"$exists": False}, "started_at": {"$gte": sd, "$lte": ed + "T23:59:59"}},
+    ]
+    shifts = await db.shifts.find(q, {"_id": 0}).sort("started_at", -1).to_list(200)
+    rows, mismatch_count = await _integrity_rows_for_shifts(db, shifts)
+    notified = 0
+    if notify and mismatch_count:
+        notified = await _notify_integrity_mismatches(db, tenant_id, rows)
+    return {
+        "start_date": sd,
+        "end_date": ed,
+        "checked": len(rows),
+        "ok_count": len(rows) - mismatch_count,
+        "mismatch_count": mismatch_count,
+        "notified": notified,
+        "rows": rows,
+    }
+
+
+async def run_startup_integrity_check(db) -> int:
+    """فحص تلقائي عند كل إقلاع لليومين الأخيرين لكل مستأجر + تنبيه المالك (نظام + واتساب) عند عدم التطابق."""
+    from datetime import timedelta as _td
+    today = iraq_date_from_utc()
+    yest = (datetime.now(timezone.utc) + _td(hours=3) - _td(days=1)).strftime("%Y-%m-%d")
+    shifts = await db.shifts.find(
+        {"status": "closed", "business_date": {"$in": [today, yest]}}, {"_id": 0}
+    ).to_list(500)
+    by_tenant = {}
+    for s in shifts:
+        by_tenant.setdefault(s.get("tenant_id"), []).append(s)
+    total_alerts = 0
+    for tid, tshifts in by_tenant.items():
+        rows, mc = await _integrity_rows_for_shifts(db, tshifts)
+        if mc:
+            total_alerts += await _notify_integrity_mismatches(db, tid, rows)
+    if total_alerts:
+        logger.info(f"🛡 integrity check: أُنشئ {total_alerts} تنبيه عدم تطابق")
+    return total_alerts

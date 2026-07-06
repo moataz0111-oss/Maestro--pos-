@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { API_URL, BACKEND_URL } from '../utils/api';
+import { localDate } from '../utils/date';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { useAuth } from '../context/AuthContext';
@@ -889,7 +890,7 @@ export default function Dashboard() {
       
       // Fallback للطريقة القديمة
       try {
-        const today = new Date().toISOString().split('T')[0];
+        const today = localDate();
         const params = { start_date: today, end_date: today };
         if (getBranchIdForApi()) {
           params.branch_id = getBranchIdForApi();

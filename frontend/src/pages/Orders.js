@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { API_URL, BACKEND_URL } from '../utils/api';
+import { localDate } from '../utils/date';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { useAuth } from '../context/AuthContext';
@@ -236,7 +237,7 @@ export default function Orders() {
       }
       
       // === وضع Online ===
-      const today = new Date().toISOString().split('T')[0];
+      const today = localDate();
       const params = { date: today };
       if (selectedBranch) params.branch_id = selectedBranch;
       if (statusFilter !== 'all') params.status = statusFilter;

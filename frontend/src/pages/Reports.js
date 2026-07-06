@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { API_URL, BACKEND_URL } from '../utils/api';
+import { localDate } from '../utils/date';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { useAuth } from '../context/AuthContext';
@@ -52,7 +53,9 @@ import {
   Eye,
   ChevronRight,
   ChevronLeft,
-  User
+  User,
+  ShieldCheck,
+  AlertTriangle
 } from 'lucide-react';
 import { toast } from 'sonner';
 import {
@@ -223,7 +226,7 @@ const ComprehensiveReportTab = ({
   // حساب نطاق التاريخ بناءً على الفترة المختارة
   const computeDateRange = (p) => {
     const now = new Date();
-    const fmt = (d) => d.toISOString().split('T')[0];
+    const fmt = (d) => localDate(d);
     const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
     
     switch (p) {
@@ -1242,12 +1245,36 @@ const CashRegisterClosingTab = ({ t, formatPrice, selectedBranchId, branches, ge
   const [loading, setLoading] = useState(false);
   // فلاتر التاريخ الخاصة بتقرير إغلاق الصندوق
   const [dateRange, setDateRange] = useState({
-    start: new Date().toISOString().split('T')[0],
-    end: new Date().toISOString().split('T')[0]
+    start: localDate(),
+    end: localDate()
   });
   const [closingsHistory, setClosingsHistory] = useState([]);
   const [localBranchId, setLocalBranchId] = useState(selectedBranchId || '');
-  const [viewMode, setViewMode] = useState('individual'); // 'individual' = كل شفت لوحده، 'all' = مجمّع
+  const [viewMode, setViewMode] = useState('individual'); // 'individual' = كل شفت لوحده، 'all' = مجمّع، 'cashier' = حسب الكاشير
+  const [expandedCashier, setExpandedCashier] = useState(null);
+  const [integrity, setIntegrity] = useState(null);
+
+  const runIntegrityCheck = async () => {
+    try {
+      const token = localStorage.getItem('token');
+      const params = new URLSearchParams({ start_date: dateRange.start, end_date: dateRange.end });
+      if (localBranchId && localBranchId !== 'all') params.append('branch_id', localBranchId);
+      const res = await axios.get(`${API_URL}/integrity/shifts-check?${params}`, { headers: { Authorization: `Bearer ${token}` } });
+      setIntegrity(res.data);
+    } catch (e) {
+      setIntegrity(null);
+    }
+  };
+
+  // 🛡 فحص سلامة تلقائي بلا أزرار: يعمل تلقائياً عند تحميل الإغلاقات وأي تغيير للفترة/الفرع
+  useEffect(() => {
+    if (closingsHistory.length > 0) {
+      runIntegrityCheck();
+    } else {
+      setIntegrity(null);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [closingsHistory]);
   const [expandedShift, setExpandedShift] = useState(null); // شفت مفتوح للتفاصيل
   const [expandedExpensesShift, setExpandedExpensesShift] = useState(null); // فتح تفاصيل مصاريف شفت محدد
   const [shiftExpensesDetails, setShiftExpensesDetails] = useState({}); // {shiftIdx: [expenses]}
@@ -1742,6 +1769,34 @@ const CashRegisterClosingTab = ({ t, formatPrice, selectedBranchId, branches, ge
         </Button>
       </div>
 
+      {/* نتائج فحص السلامة */}
+      {integrity && (
+        <div className={`rounded-lg border p-4 ${integrity.mismatch_count > 0 ? 'bg-red-950/40 border-red-600/50' : 'bg-emerald-950/40 border-emerald-600/50'}`} data-testid="integrity-results-panel">
+          <div className="flex items-center gap-2 mb-2">
+            {integrity.mismatch_count > 0 ? (
+              <AlertTriangle className="h-5 w-5 text-red-400" />
+            ) : (
+              <ShieldCheck className="h-5 w-5 text-emerald-400" />
+            )}
+            <span className="font-bold text-white">
+              {t('فحص السلامة التلقائي')}: {integrity.checked} {t('شفت')} — {integrity.ok_count} {t('متطابق')} ✓
+              {integrity.mismatch_count > 0 && <span className="text-red-400"> • {integrity.mismatch_count} {t('غير متطابق')} ⚠</span>}
+            </span>
+          </div>
+          {integrity.rows?.filter(r => r.status === 'mismatch').map(r => (
+            <div key={r.shift_id} className="mt-2 p-3 rounded bg-red-900/30 border border-red-700/40 text-sm" data-testid={`integrity-mismatch-${r.shift_id}`}>
+              <p className="font-bold text-red-300">{r.cashier_name} — {r.business_date}</p>
+              <ul className="mt-1 text-red-200 text-xs space-y-0.5">
+                {r.issues.map((iss, i) => <li key={i}>• {iss}</li>)}
+              </ul>
+            </div>
+          ))}
+          {integrity.mismatch_count === 0 && (
+            <p className="text-emerald-300 text-sm">{t('كل شفت متطابق مع طلباته ومصاريفه وتقرير إغلاقه — الحسابات سليمة 100%')}</p>
+          )}
+        </div>
+      )}
+
       {/* زر التبديل بين العرض المجمّع والفردي */}
       {closingsHistory.length > 0 && (
         <div className="flex items-center gap-3 bg-[#070E22]/40 border border-emerald-700/30 rounded-lg p-3">
@@ -1760,6 +1815,13 @@ const CashRegisterClosingTab = ({ t, formatPrice, selectedBranchId, branches, ge
               data-testid="view-all-shifts"
             >
               {t('مجمّع')}
+            </button>
+            <button
+              onClick={() => setViewMode('cashier')}
+              className={`px-4 py-1.5 rounded-md text-sm font-medium transition-all ${viewMode === 'cashier' ? 'bg-emerald-600 text-white shadow' : 'text-gray-400 hover:text-white'}`}
+              data-testid="view-by-cashier"
+            >
+              {t('حسب الكاشير')}
             </button>
           </div>
         </div>
@@ -1838,6 +1900,93 @@ const CashRegisterClosingTab = ({ t, formatPrice, selectedBranchId, branches, ge
       {loading ? (
         <div className="flex justify-center py-12">
           <RefreshCw className="h-8 w-8 animate-spin text-emerald-500" />
+        </div>
+      ) : viewMode === 'cashier' && closingsHistory.length > 0 ? (
+        /* ========== عرض حسب الكاشير: تجميع مبيعات كل شفتات الكاشير (عرض فقط — الشفتات تبقى منفصلة) ========== */
+        <div className="space-y-4">
+          {(() => {
+            const groupsMap = {};
+            closingsHistory.forEach(c => {
+              const key = c.cashier_id || c.cashier_name || 'unknown';
+              if (!groupsMap[key]) {
+                groupsMap[key] = { cashier_name: c.cashier_name || t('كاشير'), shifts: [], total_sales: 0, total_orders: 0, total_expenses: 0, expected_cash: 0, actual_cash: 0 };
+              }
+              const g = groupsMap[key];
+              g.shifts.push(c);
+              g.total_sales += c.total_sales || 0;
+              g.total_orders += c.total_orders || c.orders_count || 0;
+              g.total_expenses += c.total_expenses || 0;
+              g.expected_cash += c.expected_cash || 0;
+              g.actual_cash += (c.closing_cash ?? c.actual_cash) || 0;
+            });
+            const groups = Object.values(groupsMap).sort((a, b) => b.total_sales - a.total_sales);
+            return groups.map((g, gi) => {
+              const gDiff = g.actual_cash - g.expected_cash;
+              const gType = gDiff > 0 ? 'surplus' : gDiff < 0 ? 'shortage' : 'exact';
+              const isOpen = expandedCashier === gi;
+              return (
+                <Card key={gi} className={`border transition-all cursor-pointer ${isOpen ? 'border-emerald-500 bg-[#070E22]/60' : 'border-[#2A3A66]/40 bg-[#070E22]/30 hover:border-emerald-700/50'}`} data-testid={`cashier-group-${gi}`}>
+                  <div className="flex items-center justify-between p-4" onClick={() => setExpandedCashier(isOpen ? null : gi)}>
+                    <div className="flex items-center gap-4">
+                      <div className="w-10 h-10 rounded-full bg-emerald-500/20 text-emerald-400 flex items-center justify-center">
+                        <User className="h-5 w-5" />
+                      </div>
+                      <div>
+                        <p className="font-bold text-white">{g.cashier_name}</p>
+                        <p className="text-xs text-gray-400">{g.shifts.length} {g.shifts.length === 1 ? t('شفت') : t('شفتات')} — {t('مجموع كل شفتاته للفترة المحددة')}</p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-6">
+                      <div className="text-left">
+                        <p className="text-xs text-gray-400">{t('إجمالي المبيعات')}</p>
+                        <p className="font-bold text-emerald-400 text-lg" data-testid={`cashier-group-total-sales-${gi}`}>{formatPrice(g.total_sales)}</p>
+                      </div>
+                      <div className="text-left">
+                        <p className="text-xs text-gray-400">{t('الطلبات')}</p>
+                        <p className="font-bold text-white">{g.total_orders}</p>
+                      </div>
+                      <div className="text-left">
+                        <p className="text-xs text-gray-400">{t('المصاريف')}</p>
+                        <p className="font-bold text-orange-400">{formatPrice(g.total_expenses)}</p>
+                      </div>
+                      <div className="text-left">
+                        <p className="text-xs text-gray-400">{t('الفرق')}</p>
+                        <p className={`font-bold ${gType === 'surplus' ? 'text-emerald-400' : gType === 'shortage' ? 'text-red-400' : 'text-gray-400'}`}>
+                          {gDiff > 0 ? '+' : ''}{formatPrice(gDiff)}
+                        </p>
+                      </div>
+                      <Badge className={gType === 'surplus' ? 'bg-emerald-500/20 text-emerald-400' : gType === 'shortage' ? 'bg-red-500/20 text-red-400' : 'bg-gray-500/20 text-gray-400'}>
+                        {gType === 'surplus' ? t('زيادة') : gType === 'shortage' ? t('نقص') : t('مطابق')}
+                      </Badge>
+                      <ChevronDown className={`h-5 w-5 text-gray-400 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
+                    </div>
+                  </div>
+                  {isOpen && (
+                    <div className="border-t border-[#2A3A66]/40 p-4 space-y-2">
+                      {g.shifts.map((c, si) => {
+                        const d = ((c.closing_cash ?? c.actual_cash) || 0) - (c.expected_cash || 0);
+                        return (
+                          <div key={si} className="flex items-center justify-between bg-[#0F1A3A]/50 rounded-lg px-3 py-2 text-sm" data-testid={`cashier-group-${gi}-shift-${si}`}>
+                            <div className="flex items-center gap-2">
+                              <span className="text-gray-400">#{si + 1}</span>
+                              {c.business_date && <span className="px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-400 text-xs border border-emerald-500/20">📅 {c.business_date}</span>}
+                              <span className="text-gray-400 text-xs">{c.closed_at ? new Date(c.closed_at).toLocaleString('ar-IQ') : ''}</span>
+                              {c.is_active && <Badge className="bg-green-500/30 text-green-400 animate-pulse text-[10px]">{t('نشط')}</Badge>}
+                            </div>
+                            <div className="flex items-center gap-4">
+                              <span className="text-white font-bold">{formatPrice(c.total_sales || 0)}</span>
+                              <span className="text-gray-400 text-xs">{c.total_orders || c.orders_count || 0} {t('طلب')}</span>
+                              <span className={`font-bold text-xs ${d > 0 ? 'text-emerald-400' : d < 0 ? 'text-red-400' : 'text-gray-400'}`}>{d > 0 ? '+' : ''}{formatPrice(d)}</span>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </Card>
+              );
+            });
+          })()}
         </div>
       ) : viewMode === 'individual' && closingsHistory.length > 0 ? (
         /* ========== عرض كل شفت بمفرده ========== */
@@ -3849,8 +3998,8 @@ export default function Reports() {
   const { t, isRTL } = useTranslation();
   const navigate = useNavigate();
   
-  const [startDate, setStartDate] = useState(new Date().toISOString().split('T')[0]);
-  const [endDate, setEndDate] = useState(new Date().toISOString().split('T')[0]);
+  const [startDate, setStartDate] = useState(localDate());
+  const [endDate, setEndDate] = useState(localDate());
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('sales');
   const [loadingComprehensive, setLoadingComprehensive] = useState(false);
