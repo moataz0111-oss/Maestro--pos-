@@ -45,7 +45,11 @@ async function startSock() {
     sock.ev.on('connection.update', async (update) => {
       const { connection, lastDisconnect, qr } = update;
       if (qr) {
-        try { currentQR = await QRCode.toDataURL(qr); } catch (e) { currentQR = null; }
+        try {
+          currentQR = await QRCode.toDataURL(qr);
+          // مسح الخطأ القديم عند توليد رمز جديد صالح لتفادي رسائل مربكة في الواجهة
+          lastError = null;
+        } catch (e) { currentQR = null; }
       }
       if (connection === 'open') {
         connected = true;
