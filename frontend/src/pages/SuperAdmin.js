@@ -850,6 +850,20 @@ export default function SuperAdmin() {
     finally { setWaBusy(false); }
   };
 
+  // إعادة توليد رمز QR بشكل فوري (مسح الجلسة الحالية غير المكتملة وبدء جلسة جديدة)
+  const handleWaRegenerate = async () => {
+    setWaBusy(true);
+    try {
+      const token = localStorage.getItem('super_admin_token');
+      await axios.post(`${API}/super-admin/whatsapp/logout`, {}, { headers: { Authorization: `Bearer ${token}` } });
+      toast.success(t('جارٍ توليد رمز جديد...'));
+      // انتظار قصير لتوليد الرمز الجديد ثم تحديث
+      setTimeout(fetchWaStatus, 2500);
+      setTimeout(fetchWaStatus, 5000);
+    } catch (e) { toast.error(t('تعذّر إعادة التوليد')); }
+    finally { setTimeout(() => setWaBusy(false), 2500); }
+  };
+
   const handleWaTest = async () => {
     const phone = window.prompt(t('أدخل رقم هاتف لإرسال رسالة تجربة (مثال 07701234567):'));
     if (!phone) return;
@@ -3515,6 +3529,19 @@ export default function SuperAdmin() {
                         <Button onClick={fetchWaStatus} variant="outline" size="sm" className="border-[#2A3A66]" data-testid="wa-refresh-btn">
                           <RefreshCw className="h-4 w-4" />
                         </Button>
+                        {!waStatus?.connected && (
+                          <Button
+                            onClick={handleWaRegenerate}
+                            disabled={waBusy}
+                            size="sm"
+                            className="bg-amber-600 hover:bg-amber-500 text-white gap-1"
+                            data-testid="wa-regenerate-qr-btn"
+                            title={t('إعادة توليد رمز QR فوراً')}
+                          >
+                            {waBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
+                            {t('توليد رمز جديد')}
+                          </Button>
+                        )}
                         {waStatus?.connected && (
                           <>
                             <Button onClick={handleWaTest} disabled={waBusy} size="sm" className="bg-green-600 hover:bg-green-500 text-white" data-testid="wa-test-btn">

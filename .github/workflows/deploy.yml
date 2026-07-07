@@ -38,6 +38,7 @@ jobs:
         REPO=$(echo '${{ github.repository }}' | tr '[:upper:]' '[:lower:]')
         echo "name=ghcr.io/${REPO}-frontend" >> "$GITHUB_OUTPUT"
         echo "backend=ghcr.io/${REPO}-backend" >> "$GITHUB_OUTPUT"
+        echo "wa=ghcr.io/${REPO}-wa-service" >> "$GITHUB_OUTPUT"
 
     - name: 🐳 Set up Buildx
       uses: docker/setup-buildx-action@v3
@@ -76,6 +77,20 @@ jobs:
           ${{ steps.img.outputs.backend }}:${{ github.sha }}
 
     # =============================================
+    # 📱 بناء خدمة الواتساب (Baileys) — مطلوبة لإرسال رموز التحقق مجاناً وعرض QR
+    # =============================================
+    - name: 🏗️ Build & push wa_service image
+      uses: docker/build-push-action@v6
+      with:
+        context: ./wa_service
+        push: true
+        tags: |
+          ${{ steps.img.outputs.wa }}:latest
+          ${{ steps.img.outputs.wa }}:${{ github.sha }}
+        cache-from: type=gha
+        cache-to: type=gha,mode=max
+
+    # =============================================
     # 🚀 النشر على الـVPS: بناء الـBackend محلياً + سحب صورة الواجهة الجاهزة
     # =============================================
     - name: 🔑 Deploy
@@ -85,6 +100,7 @@ jobs:
         GHCR_USER: ${{ github.actor }}
         FRONTEND_IMAGE: ${{ steps.img.outputs.name }}
         BACKEND_IMAGE: ${{ steps.img.outputs.backend }}
+        WA_IMAGE: ${{ steps.img.outputs.wa }}
         GIT_SHA: ${{ github.sha }}
       with:
         host: 158.220.118.54
@@ -92,7 +108,7 @@ jobs:
         key: ${{ secrets.VPS_SSH_KEY }}
         port: 22
         command_timeout: 60m
-        envs: GHCR_TOKEN,GHCR_USER,FRONTEND_IMAGE,BACKEND_IMAGE,GIT_SHA
+        envs: GHCR_TOKEN,GHCR_USER,FRONTEND_IMAGE,BACKEND_IMAGE,WA_IMAGE,GIT_SHA
         script: |
           echo "🚀 بدء النشر..."
           cd /var/www/maestro
@@ -146,6 +162,34 @@ jobs:
           echo "$GHCR_TOKEN" | docker login ghcr.io -u "$GHCR_USER" --password-stdin 2>&1 | grep -v "credentials are stored unencrypted\|Configure a credential helper\|credential-store" || true
 
           # =============================================
+          # 📱 تحديث/تشغيل خدمة الواتساب (Baileys) — قبل الـBackend لأنه يعتمد عليها
+          # =============================================
+          echo "📱 تحديث خدمة الواتساب..."
+          WA_TAG="$WA_IMAGE:$GIT_SHA"
+          if ! docker pull "$WA_TAG"; then
+            echo "⚠️ صورة wa_service للـSHA غير موجودة — محاولة :latest"
+            WA_TAG="$WA_IMAGE:latest"
+            docker pull "$WA_TAG" || WA_TAG=""
+          fi
+          if [ -n "$WA_TAG" ]; then
+            docker stop wa-service 2>/dev/null || true
+            docker rm wa-service 2>/dev/null || true
+            docker volume create maestro_wa_auth_data 2>/dev/null || true
+            docker run -d --name wa-service --restart unless-stopped \
+              --network maestro_maestro-network \
+              -v maestro_wa_auth_data:/app/auth \
+              -e WA_SERVICE_PORT=3002 \
+              -e WA_SERVICE_HOST=0.0.0.0 \
+              -e WA_SERVICE_TOKEN="maestro-wa-7f3a91c4e6b2" \
+              -e WA_AUTH_DIR=/app/auth \
+              "$WA_TAG"
+            sleep 3
+          else
+            echo "⚠️ تعذّر سحب صورة wa_service — الإبقاء على النسخة الحالية إن وُجدت."
+            docker start wa-service 2>/dev/null || true
+          fi
+
+          # =============================================
           # تحديث Backend — لا نُوقف القديمة إلا عند نجاح سحب الجديدة (يضمن عدم توقف الموقع)
           # =============================================
           echo "📦 تحديث Backend (سحب صورة هذا الإصدار بالـSHA من GHCR)..."
@@ -165,6 +209,8 @@ jobs:
               -e MONGO_URL="mongodb://maestro-mongodb:27017" \
               -e DB_NAME="maestro_db" \
               -e JWT_SECRET="0e7055b078e82bc7a767d735ca59238c89c24edfa8c6b1ecc861673f9f1b94d44b334e977a579f2b50da9cdc7027550f" \
+              -e WA_SERVICE_URL="http://wa-service:3002" \
+              -e WA_SERVICE_TOKEN="maestro-wa-7f3a91c4e6b2" \
               "$BK_TAG"
             sleep 10
           else
@@ -224,6 +270,9 @@ jobs:
           done
           if [ "$BACKEND_OK" = "1" ]; then
             echo "✅ النشر نجح والموقع يعمل والـBackend يستجيب!"
+            # تحقّق إضافي: خدمة الواتساب (لا تُفشل النشر إن كانت متعطلة، فقط تنبيه)
+            WA_STATUS=$(docker exec backend curl -s -m 5 -H "x-wa-token: maestro-wa-7f3a91c4e6b2" http://wa-service:3002/status 2>/dev/null || echo "unreachable")
+            echo "📱 حالة خدمة الواتساب: $WA_STATUS"
           else
             echo "❌❌❌ الـBackend لا يستجيب (502). سجلّ أخطاء الـBackend (آخر 100 سطر): ❌❌❌"
             echo "==================== BACKEND LOGS START ===================="

@@ -1,14 +1,14 @@
 /**
  * ManagementOrderAlerts — تنبيهات للإدارة (مالك/مدير/مدير عام/مشرف).
  * تظهر عندما لا يوافق الكاشير على طلب خلال 5 دقائق (تأخير) أو عند رفض الكاشير للطلب.
- * لا تظهر مكالمة الطلب للإدارة — فقط هذه التنبيهات.
+ * قابلة للطي إلى شارة صغيرة لتجنّب حجب أزرار الواجهة (خصوصاً في /coupons و /settings).
  */
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import axios from 'axios';
 import { API_URL } from '../utils/api';
 import { useAuth } from '../context/AuthContext';
-import { AlertTriangle, X, MapPin, User, Banknote, Package, Store } from 'lucide-react';
+import { AlertTriangle, X, MapPin, User, Banknote, Package, Store, ChevronDown, ChevronUp } from 'lucide-react';
 
 const API = API_URL;
 const MANAGEMENT_ROLES = ['admin', 'manager', 'owner', 'super_admin', 'supervisor'];
@@ -16,6 +16,8 @@ const MANAGEMENT_ROLES = ['admin', 'manager', 'owner', 'super_admin', 'superviso
 export const ManagementOrderAlerts = () => {
   const { user, isAuthenticated } = useAuth();
   const [alerts, setAlerts] = useState([]);
+  // افتراضياً مطوية لتجنّب حجب أزرار الواجهة — المستخدم يفتحها بالنقر على الشارة
+  const [collapsed, setCollapsed] = useState(true);
   const dismissedRef = useRef(new Set());
 
   const branchId = user?.branch_id || null;
@@ -29,8 +31,12 @@ export const ManagementOrderAlerts = () => {
       const res = await axios.get(`${API}/order-notifications/escalations?${params.toString()}`);
       const list = (res.data?.escalations || []).filter((a) => !dismissedRef.current.has(a.id));
       setAlerts(list);
+      // عند وصول أول تنبيه من دفعة جديدة، افتحها تلقائياً لجذب انتباه المدير
+      if (list.length > 0 && collapsed && !localStorage.getItem('mgmt_alerts_manual_collapse')) {
+        setCollapsed(false);
+      }
     } catch (e) { /* noop */ }
-  }, [branchId]);
+  }, [branchId, collapsed]);
 
   useEffect(() => {
     if (!enabled) return;
@@ -45,10 +51,51 @@ export const ManagementOrderAlerts = () => {
     try { await axios.put(`${API}/order-notifications/${a.id}/read`); } catch (e) { /* noop */ }
   };
 
+  const toggleCollapse = () => {
+    const next = !collapsed;
+    setCollapsed(next);
+    // حفظ اختيار المستخدم اليدوي في نفس الجلسة
+    if (next) localStorage.setItem('mgmt_alerts_manual_collapse', '1');
+    else localStorage.removeItem('mgmt_alerts_manual_collapse');
+  };
+
   if (!enabled || alerts.length === 0) return null;
 
+  const hasRejected = alerts.some((a) => a.alert_kind === 'rejected');
+  const badgeColor = hasRejected ? 'bg-red-600' : 'bg-amber-600';
+  const badgeBorder = hasRejected ? 'border-red-400/50' : 'border-amber-400/50';
+
+  // ===== الحالة المطويّة: شارة عائمة صغيرة لا تحجب أزرار الواجهة =====
+  if (collapsed) {
+    return createPortal((
+      <button
+        onClick={toggleCollapse}
+        data-testid="management-alerts-collapsed-badge"
+        className={`fixed bottom-4 left-4 z-[9998] flex items-center gap-2 rounded-full ${badgeColor} ${badgeBorder} border-2 text-white shadow-2xl px-4 py-2 hover:scale-105 transition-transform`}
+        title="عرض تنبيهات الإدارة"
+      >
+        <AlertTriangle className="h-4 w-4 animate-pulse" />
+        <span className="font-bold text-sm">{alerts.length}</span>
+        <ChevronUp className="h-4 w-4" />
+      </button>
+    ), document.body);
+  }
+
+  // ===== الحالة الموسّعة: البطاقات الكاملة =====
   return createPortal((
     <div className="fixed bottom-4 left-4 z-[9998] flex flex-col gap-3 max-w-sm w-full pointer-events-none" data-testid="management-order-alerts">
+      {/* شريط التحكم: زر الطي في الأعلى */}
+      <div className="pointer-events-auto flex justify-start">
+        <button
+          onClick={toggleCollapse}
+          data-testid="management-alerts-collapse-btn"
+          className="flex items-center gap-1 rounded-full bg-slate-800/90 border border-slate-600 text-slate-200 shadow-lg px-3 py-1 hover:bg-slate-700 text-xs"
+          title="طيّ التنبيهات"
+        >
+          <ChevronDown className="h-3.5 w-3.5" />
+          <span>طيّ</span>
+        </button>
+      </div>
       {alerts.slice(0, 3).map((a) => {
         const isRejected = a.alert_kind === 'rejected';
         return (

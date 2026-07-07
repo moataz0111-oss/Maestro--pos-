@@ -1300,9 +1300,20 @@ async def get_cash_register_summary(
     shift_id: Optional[str] = None,
     current_user: dict = Depends(get_current_user)
 ):
-    """جلب ملخص الصندوق الحالي للكاشير - قبل إغلاقه"""
+    """جلب ملخص الصندوق الحالي للكاشير - قبل إغلاقه.
+    
+    🛡 حماية صارمة: shift_id إلزامي دائماً لتفادي خلط بيانات ورديتين مفتوحتين في نفس الفرع
+    (مشكلة إغلاق وردية أحمد التي أظهرت 79 ألف بدل 802,750 — Iter 287).
+    """
     db = get_database()
     tenant_id = get_user_tenant_id(current_user)
+    
+    # 🛡 حماية 1: shift_id إلزامي — لن نُخمّن الوردية أبداً
+    if not shift_id:
+        raise HTTPException(
+            status_code=400,
+            detail="shift_id إلزامي — يجب تمرير معرّف الوردية النشطة صراحة لتفادي خلط ورديات متزامنة"
+        )
     
     # استخدام branch_id المرسل من الواجهة أو الافتراضي للمستخدم
     target_branch_id = branch_id or current_user.get("branch_id")
@@ -1312,23 +1323,13 @@ async def get_cash_register_summary(
     user_role = current_user.get("role", "")
     is_manager = user_role in ["admin", "super_admin", "manager", "branch_manager"]
     
-    shift_query = {"status": "open"}
+    shift_query = {"status": "open", "id": shift_id}
     if tenant_id:
         shift_query["tenant_id"] = tenant_id
     
-    if shift_id:
-        # ⭐ استهداف وردية محددة بدقة (الوردية النشطة المعروضة في الواجهة)
-        shift_query["id"] = shift_id
-        if not is_manager:
-            shift_query["cashier_id"] = current_user["id"]
-    elif is_manager and target_branch_id:
-        # المدير يمكنه إغلاق أي وردية للفرع
-        shift_query["branch_id"] = target_branch_id
-    else:
-        # الكاشير يغلق ورديته فقط
+    # 🛡 حماية 2: الكاشير لا يستطيع رؤية ملخص وردية غيره
+    if not is_manager:
         shift_query["cashier_id"] = current_user["id"]
-        if target_branch_id:
-            shift_query["branch_id"] = target_branch_id
     
     shift, consolidated_ids, earliest_start = await _resolve_open_shift_for_close(
         db, shift_query, tenant_id,
@@ -1338,7 +1339,7 @@ async def get_cash_register_summary(
     if not shift:
         # المالك/المدير: لا نُنشئ وردية تلقائياً - يجب اختيار كاشير
         if is_manager:
-            raise HTTPException(status_code=404, detail="لا توجد وردية مفتوحة - يرجى فتح وردية لكاشير من نقاط البيع")
+            raise HTTPException(status_code=404, detail=f"الوردية المطلوبة (shift_id={shift_id}) غير موجودة أو مُغلَقة")
         
         # الكاشير: نُنشئ وردية تلقائياً — لكن أولاً امنع الازدواج (وردية مفتوحة بنفس الاسم)
         _own, _other = await _open_shift_conflict(db, tenant_id, target_branch_id, current_user.get("id"), current_user.get("full_name", ""))
@@ -1541,9 +1542,20 @@ async def get_cash_register_summary(
 
 @router.post("/cash-register/close")
 async def close_cash_register(close_data: CashRegisterClose, current_user: dict = Depends(get_current_user)):
-    """إغلاق الصندوق مع جرد فئات النقود"""
+    """إغلاق الصندوق مع جرد فئات النقود.
+    
+    🛡 حماية صارمة: shift_id إلزامي دائماً — لن نُغلق أي وردية عمياء.
+    مشكلة أحمد (Iter 287): كان النظام يغلق أقدم وردية مفتوحة، ما تسبب في مزج بيانات الكاشيرين.
+    """
     db = get_database()
     tenant_id = get_user_tenant_id(current_user)
+    
+    # 🛡 حماية 1: shift_id إلزامي — لن نُخمّن الوردية أبداً
+    if not close_data.shift_id:
+        raise HTTPException(
+            status_code=400,
+            detail="shift_id إلزامي — يجب تمرير معرّف الوردية المراد إغلاقها صراحة (حماية ضد إغلاق وردية خطأ)"
+        )
     
     # استخدام branch_id المرسل أو الافتراضي للمستخدم
     target_branch_id = close_data.branch_id or current_user.get("branch_id")
@@ -1553,30 +1565,23 @@ async def close_cash_register(close_data: CashRegisterClose, current_user: dict 
     user_role = current_user.get("role", "")
     is_manager = user_role in ["admin", "super_admin", "manager", "branch_manager"]
     
-    shift_query = {"status": "open"}
+    shift_query = {"status": "open", "id": close_data.shift_id}
     if tenant_id:
         shift_query["tenant_id"] = tenant_id
     
-    if close_data.shift_id:
-        # ⭐ استهداف وردية محددة بدقة (الوردية المعروضة في نافذة الإغلاق)
-        shift_query["id"] = close_data.shift_id
-        if not is_manager:
-            shift_query["cashier_id"] = current_user["id"]
-    elif is_manager and target_branch_id:
-        # المدير يمكنه إغلاق أي وردية للفرع
-        shift_query["branch_id"] = target_branch_id
-    else:
-        # الكاشير يغلق ورديته فقط
+    # 🛡 حماية 2: الكاشير لا يستطيع إغلاق وردية غيره — حتى لو استطاع تخمين معرّفها
+    if not is_manager:
         shift_query["cashier_id"] = current_user["id"]
-        if target_branch_id:
-            shift_query["branch_id"] = target_branch_id
     
     shift, consolidated_ids, earliest_start = await _resolve_open_shift_for_close(
         db, shift_query, tenant_id,
         prefer_not_user_id=current_user["id"] if is_manager else None)
     
     if not shift:
-        raise HTTPException(status_code=404, detail="لا يوجد وردية مفتوحة")
+        raise HTTPException(
+            status_code=404,
+            detail=f"الوردية المطلوبة (shift_id={close_data.shift_id}) غير موجودة أو مُغلَقة أو ليست لك"
+        )
     
     shift_id = shift["id"]
     if not consolidated_ids:

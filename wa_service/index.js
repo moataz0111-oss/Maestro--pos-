@@ -14,6 +14,7 @@ const {
 } = require('@whiskeysockets/baileys');
 
 const PORT = process.env.WA_SERVICE_PORT || 3002;
+const HOST = process.env.WA_SERVICE_HOST || '127.0.0.1';
 const AUTH_TOKEN = process.env.WA_SERVICE_TOKEN || '';
 const AUTH_DIR = process.env.WA_AUTH_DIR || '/app/wa_service/auth';
 
@@ -160,7 +161,7 @@ app.post('/pair', auth, async (req, res) => {
   }
 });
 
-app.listen(PORT, '127.0.0.1', () => {
-  console.log(`WA service listening on 127.0.0.1:${PORT}`);
+app.listen(PORT, HOST, () => {
+  console.log(`WA service listening on ${HOST}:${PORT}`);
   startSock().catch((e) => console.error(e.message));
 });

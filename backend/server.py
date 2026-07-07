@@ -5927,6 +5927,11 @@ async def create_order(order: OrderCreate, current_user: dict = Depends(get_curr
         captain_name = current_user.get("full_name") or current_user.get("username", "")
     
     # البحث عن الوردية المفتوحة — أولوية لشفت الكاشير نفسه (وليس أي شفت في الفرع)
+    # 🛡 حماية: الوردية يجب أن تكون لليوم التشغيلي الحالي فقط (business_date = اليوم بتوقيت العراق).
+    #    وردية من يوم سابق → تُغلَق تلقائياً وتُفتح وردية جديدة نظيفة (منع خلط المبيعات بين الأيام).
+    _biz_hour_now = await get_business_day_start_hour(tenant_id)
+    today_biz_date = iraq_business_date_from_utc(start_hour=_biz_hour_now)
+    
     base_shift_query = {"status": "open"}
     if tenant_id:
         base_shift_query["tenant_id"] = tenant_id
@@ -5958,6 +5963,38 @@ async def create_order(order: OrderCreate, current_user: dict = Depends(get_curr
                 sort=[("started_at", -1)]
             )
     
+    # 🛡 التحقق من business_date: لو وُجدت وردية لكن ليست لليوم الحالي → أغلقها وأنشئ جديدة
+    if current_shift and not captain_link:
+        _shift_biz = current_shift.get("business_date")
+        if not _shift_biz:
+            # وردية قديمة بدون business_date: احتسبها من started_at
+            _st = current_shift.get("started_at") or current_shift.get("opened_at")
+            if _st:
+                try:
+                    _shift_biz = iraq_business_date_from_utc(_st, start_hour=_biz_hour_now)
+                except Exception:
+                    _shift_biz = None
+        if _shift_biz and _shift_biz != today_biz_date:
+            # وردية من يوم سابق — أغلقها تلقائياً ("منسية") لتفادي خلط المبيعات
+            logger.warning(
+                f"🛡 stale open shift detected: shift_id={current_shift.get('id')} "
+                f"business_date={_shift_biz} != today={today_biz_date}. Auto-closing & opening new."
+            )
+            try:
+                await db.shifts.update_one(
+                    {"id": current_shift["id"]},
+                    {"$set": {
+                        "status": "closed",
+                        "ended_at": datetime.now(timezone.utc).isoformat(),
+                        "auto_closed": True,
+                        "auto_close_reason": "stale_business_date_next_day_order",
+                        "notes": f"إغلاق تلقائي: وصل طلب جديد ليوم {today_biz_date} بينما الوردية لـ {_shift_biz}",
+                    }}
+                )
+            except Exception as _e:
+                logger.warning(f"failed to auto-close stale shift: {_e}")
+            current_shift = None  # سيتم إنشاء وردية جديدة أدناه
+    
     # إذا لم توجد وردية مفتوحة
     if not current_shift:
         user_role = current_user.get("role", "")
@@ -5967,12 +6004,12 @@ async def create_order(order: OrderCreate, current_user: dict = Depends(get_curr
             # المالك: لا ننشئ وردية باسمه - نرجع خطأ
             raise HTTPException(status_code=400, detail="لا توجد وردية مفتوحة - يرجى فتح وردية لكاشير أولاً من نقاط البيع")
         else:
-            # كاشير: امنع ازدواج الشفت — إن وُجدت وردية مفتوحة بنفس الاسم استخدمها بدل إنشاء مكررة
+            # كاشير: امنع ازدواج الشفت — إن وُجدت وردية مفتوحة بنفس الاسم لليوم الحالي استخدمها
             _cashier_name = current_user.get("full_name", "") or ""
             _nn = " ".join(_cashier_name.strip().split()).lower()
             dup_shift = None
             if _nn:
-                _open_q = {"status": "open"}
+                _open_q = {"status": "open", "business_date": today_biz_date}
                 if tenant_id:
                     _open_q["tenant_id"] = tenant_id
                 async for _s in db.shifts.find(_open_q, {"_id": 0, "id": 1, "cashier_name": 1}):
@@ -5982,7 +6019,7 @@ async def create_order(order: OrderCreate, current_user: dict = Depends(get_curr
             if dup_shift:
                 current_shift = dup_shift
             else:
-                # لا توجد وردية بنفس الاسم: ننشئ وردية تلقائياً
+                # لا توجد وردية بنفس الاسم لليوم: ننشئ وردية تلقائياً بتاريخ اليوم بالضبط
                 new_shift = {
                     "id": str(uuid.uuid4()),
                     "tenant_id": tenant_id,
@@ -5994,10 +6031,12 @@ async def create_order(order: OrderCreate, current_user: dict = Depends(get_curr
                     "status": "open",
                     "opening_balance": 0,
                     "created_at": datetime.now(timezone.utc).isoformat(),
-                    "business_date": iraq_business_date_from_utc(start_hour=await get_business_day_start_hour(tenant_id))
+                    "business_date": today_biz_date,
+                    "auto_opened_by_first_order": True,
                 }
                 await db.shifts.insert_one(new_shift)
                 current_shift = new_shift
+                logger.info(f"✅ فُتحت وردية جديدة تلقائياً للكاشير {current_user.get('full_name')} — business_date={today_biz_date}")
     
     shift_id = current_shift["id"] if current_shift else None
     
@@ -12812,6 +12851,97 @@ async def start_integrity_scheduler():
     
     asyncio.create_task(_integrity_loop())
     logger.info("🛡 Hourly automatic integrity check scheduler started")
+
+
+# ==================== 🚨 تنبيه الورديات المنسية (واتساب للمالك) ====================
+async def _alert_forgotten_open_shifts():
+    """يُنبّه مالك النظام إذا بقيت وردية مفتوحة أكثر من 12 ساعة (إشعار مبكر قبل الإغلاق التلقائي بـ24 ساعة).
+    ملاحظة: يُرسَل تنبيه واحد فقط لكل وردية (نستخدم علامة alerted_forgotten في الوردية)."""
+    try:
+        # عتبة: 12 ساعة (تعطي متسعاً بعد ساعة من نهاية اليوم العملي عادةً)
+        threshold = (datetime.now(timezone.utc) - timedelta(hours=12)).isoformat()
+        query = {
+            "status": "open",
+            "started_at": {"$lt": threshold},
+            "alerted_forgotten": {"$ne": True},
+        }
+        open_shifts = await db.shifts.find(query).to_list(500)
+        if not open_shifts:
+            return
+        
+        # حاول إرسال واتساب — إن لم يكن مرتبطاً تجاهل بصمت
+        try:
+            wa_connected = await _wa_free.is_connected()
+        except Exception:
+            wa_connected = False
+        
+        for shift in open_shifts:
+            shift_id = shift.get("id")
+            tenant_id = shift.get("tenant_id")
+            branch_id = shift.get("branch_id")
+            cashier_name = shift.get("cashier_name") or "غير معروف"
+            branch_name = shift.get("branch_name") or "غير محدد"
+            started_at = shift.get("started_at") or ""
+            
+            # تحديد رقم المالك: أول مستخدم دور admin/owner للمستأجر
+            owner_phone = None
+            if tenant_id:
+                owner_user = await db.users.find_one(
+                    {"tenant_id": tenant_id, "role": {"$in": ["admin", "owner"]}, "phone": {"$exists": True, "$ne": ""}},
+                    {"_id": 0, "phone": 1}
+                )
+                if owner_user:
+                    owner_phone = owner_user.get("phone")
+            
+            # إرسال الواتساب فقط إن كان مرتبطاً ورقم المالك متوفر
+            if wa_connected and owner_phone:
+                try:
+                    e164 = await _phone_to_e164(owner_phone)
+                    hours_open = 12
+                    try:
+                        if started_at:
+                            dt = datetime.fromisoformat(started_at.replace("Z", "+00:00"))
+                            hours_open = int((datetime.now(timezone.utc) - dt).total_seconds() // 3600)
+                    except Exception:
+                        pass
+                    msg = (
+                        f"⚠️ Maestro EGP — تنبيه وردية منسية\n"
+                        f"الفرع: {branch_name}\n"
+                        f"الكاشير: {cashier_name}\n"
+                        f"مفتوحة منذ: {hours_open} ساعة\n"
+                        f"يُرجى التحقق من إغلاقها قبل الإغلاق التلقائي (24 ساعة)."
+                    )
+                    ok, _err = await _wa_free.send_message(e164, msg)
+                    if ok:
+                        logger.info(f"🚨 تنبيه وردية منسية أُرسل للمالك ({shift_id})")
+                except Exception as _e:
+                    logger.warning(f"forgotten shift alert send failed for {shift_id}: {_e}")
+            
+            # ضع العلامة حتى لا يتكرر التنبيه لنفس الوردية
+            await db.shifts.update_one(
+                {"id": shift_id},
+                {"$set": {"alerted_forgotten": True, "alerted_forgotten_at": datetime.now(timezone.utc).isoformat()}}
+            )
+    except Exception as e:
+        logger.error(f"Error in _alert_forgotten_open_shifts: {e}")
+
+
+@app.on_event("startup")
+async def start_forgotten_shifts_scheduler():
+    """🚨 يشغّل مجدولاً كل 30 دقيقة لإشعار المالك بالورديات المنسية (>12 ساعة)."""
+    async def _loop():
+        # انتظار قصير عند البدء (لتفادي التنبيه فوراً بعد إعادة تشغيل)
+        await asyncio.sleep(120)
+        while True:
+            try:
+                await _alert_forgotten_open_shifts()
+            except Exception as e:
+                logger.warning(f"forgotten shifts alert loop error: {e}")
+            await asyncio.sleep(1800)  # كل 30 دقيقة
+    
+    asyncio.create_task(_loop())
+    logger.info("🚨 Forgotten shifts alert scheduler started (every 30 min)")
+
 
 # إضافة indexes عند بدء التطبيق
 async def setup_database_indexes():

@@ -24,13 +24,33 @@ services:
     restart: always
     depends_on:
       - mongodb
+      - wa_service
     environment:
       - MONGO_URL=mongodb://maestro_admin:Maestro%402024Secure@mongodb:27017/maestro_db?authSource=admin
       - DB_NAME=maestro_db
       - JWT_SECRET=your-super-secret-jwt-key-change-this-in-production
       - EMERGENT_LLM_KEY=sk-emergent-904C61aE58819BbA0E
+      - WA_SERVICE_URL=http://wa_service:3002
+      - WA_SERVICE_TOKEN=maestro-wa-7f3a91c4e6b2
     volumes:
       - ./uploads:/app/uploads
+    networks:
+      - maestro-network
+
+  # خدمة الواتساب المجاني (Baileys) — لإرسال رموز التحقق
+  wa_service:
+    build:
+      context: ./wa_service
+      dockerfile: Dockerfile
+    container_name: maestro-wa-service
+    restart: always
+    environment:
+      - WA_SERVICE_PORT=3002
+      - WA_SERVICE_HOST=0.0.0.0
+      - WA_SERVICE_TOKEN=maestro-wa-7f3a91c4e6b2
+      - WA_AUTH_DIR=/app/auth
+    volumes:
+      - wa_auth_data:/app/auth
     networks:
       - maestro-network
 
@@ -112,6 +132,7 @@ services:
 volumes:
   mongodb_data:
   portainer_data:
+  wa_auth_data:
 
 networks:
   maestro-network:

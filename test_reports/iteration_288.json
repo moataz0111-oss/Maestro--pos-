@@ -1,0 +1,34 @@
+{
+  "summary": "Iter 288 backend verification: shift_id STRICT enforcement + Lazy Shift + WhatsApp status/logout. 9/10 new tests PASS + 2/2 iter287 regression PASS. One real security regression found in cashier isolation on summary endpoint.",
+  "backend_issues": {
+    "critical": [
+      {
+        "endpoint": "GET /api/cash-register/summary",
+        "issue": "Cashier isolation BROKEN. When a cashier authenticates and requests summary with shift_id belonging to a DIFFERENT user (e.g. owner's shift 'closefix-shift-owner'), the endpoint returns HTTP 200 with the cashier's OWN open shift summary instead of 403/404. Root cause: shifts_routes.py:1326-1364 — when the strict query {id:X, cashier_id:current_user} returns no rows, the branch at lines 1339-1364 (is_manager=False) falls through to _open_shift_conflict which finds the cashier's own open shift and returns it as if it were the requested shift. The returned payload carries shift_id='closefix-shift-cashier' though caller asked for 'closefix-shift-owner'. Should raise 404 (or 403) same as manager path (line 1342). test_cashier_cannot_access_owner_shift reproduces this.",
+        "priority": "HIGH"
+      }
+    ],
+    "minor": []
+  },
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": [
+    "/app/backend/tests/test_iter288_shift_id_mandatory.py",
+    "/app/backend/tests/test_ahmed_shift_close_regression.py",
+    "/app/test_reports/pytest/iter288.xml"
+  ],
+  "action_items": [
+    "Fix cashier isolation in GET /api/cash-register/summary: when shift_id is supplied and the shift is not found under the caller's cashier_id (and caller is not a manager), raise 404 explicitly BEFORE the lazy-create fallback. E.g. add `if not shift and not is_manager: raise HTTPException(404, ...)` at shifts_routes.py:1340, or restrict the lazy-create fallback to invocations where shift_id was not supplied. Note: POST /close already handles this correctly (line 1580)."
+  ],
+  "critical_code_review_comments": [
+    "shifts_routes.py:1339-1364: lazy-shift-create in the summary endpoint ignores whether shift_id was explicitly supplied. When the client asks for a specific shift_id it should get 404 on miss, never a silent substitution with another shift. This is a data-integrity + security issue (cashier can enumerate/probe other shifts to at minimum confirm nonexistence — but worse, gets their own data returned under a stranger's shift_id key, which is confusing to any client relying on the returned shift_id).",
+    "shifts_routes.py:1641-1648 (from iter287): denomination_values.get(denom, int(denom)) still fragile to non-integer denomination keys."
+  ],
+  "updated_files": ["/app/backend/tests/test_iter288_shift_id_mandatory.py"],
+  "success_rate": {"backend": "90% (9/10 new + 2/2 regression)", "frontend": "skipped"},
+  "test_credentials": "admin@maestroegp.com/admin123; closefix-cashier@maestroegp.com/test1234; owner@maestroegp.com/owner123 secret=271018",
+  "seed_data_creation": "Ran /app/backend/seed_owner_cashier_close_test.py (idempotent). Creates closefix-shift-owner (admin, 79,500, 3h ago) and closefix-shift-cashier (احمد اختبار, 802,750, 2h ago) plus cashier user closefix-cashier@maestroegp.com/test1234. Also creates a throwaway lazy-* cashier per lazy-shift test (auto-cleaned).",
+  "retest_needed": true,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "New pytest at /app/backend/tests/test_iter288_shift_id_mandatory.py covers: (1) 400 on missing shift_id for summary & close with Arabic 'shift_id إلزامي', (2) 404 on fake shift_id, (3) correct totals per shift (802,750 & 79,500), (4) cashier isolation (FAILING — main agent to fix), (5) lazy shift opening on POST /orders (verified via direct DB check), (6) WA status shape (qr/connected/error), (7) WA logout returns ok:true. WA logout is slightly flaky right after another logout call — retry once. Re-run seed script before each test session because test_close cases (from other iter287 file) may close the cashier shift. wa_service at :3002 requires header 'x-wa-token: maestro-wa-7f3a91c4e6b2' (NOT Authorization Bearer).",
+  "rca_of_the_issue": "GET /api/cash-register/summary at shifts_routes.py:1339-1364 has a fallback that creates/returns a shift for cashiers when the primary query misses. When a cashier passes another user's shift_id, the strict query {id:X, cashier_id:me} misses, then _open_shift_conflict finds the cashier's own open shift, and the endpoint returns 200 with THAT shift's summary (visible in test failure: asked shift=closefix-shift-owner, response shift_id=closefix-shift-cashier). Fix: raise 404 for non-managers when the requested shift_id is provided but not found under their own cashier_id, mirroring the manager branch at line 1342 and the close endpoint at line 1580."
+}

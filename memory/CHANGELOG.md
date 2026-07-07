@@ -1,6 +1,60 @@
 # Maestro EGP - Changelog
 
 
+## Session: 07 Jul 2026 (fork) — عزل صارم للورديات + حماية شاملة ضد الأخطاء المحاسبية ✅
+
+**متطلبات المستخدم:**
+1. عند حفظ أول طلب، تُفتح وردية للكاشير تلقائياً.
+2. إذا كانت له وردية مفتوحة تُضاف الطلبات إليها.
+3. الوردية المفتوحة يجب أن تكون **لهذا اليوم** — ليست من يوم سابق ولا يوم لاحق.
+4. إغلاق الصندوق يجب أن يطابق مبيعات الكاشير + مصاريفه + كل عملياته بدقة تامة.
+
+**التعديلات في الباك إند:**
+- **`/app/backend/server.py`** `create_order` (سطور 5929-6060):
+  - إضافة `today_biz_date = iraq_business_date_from_utc()` قبل البحث عن الوردية.
+  - **🛡 كشف الوردية المتقادمة**: عند إيجاد وردية مفتوحة، يُقارن `business_date` بتاريخ اليوم. إذا اختلف → تُغلَق تلقائياً بـ`auto_close_reason="stale_business_date_next_day_order"` وتُنشأ وردية جديدة نظيفة.
+  - **🛡 دمج الازدواج**: عند البحث عن وردية بنفس اسم الكاشير، أضيف `business_date: today_biz_date` كشرط — منع دمج طلب اليوم بوردية أمس.
+  - **علامة تتبّع**: كل وردية مُنشأة عبر أول طلب تحصل `auto_opened_by_first_order: True` + log info.
+
+- **`/app/backend/routes/shifts_routes.py`** `get_cash_register_summary` (سطور 1297-1345):
+  - **🛡 shift_id إلزامي**: يرد HTTP 400 مع "shift_id إلزامي" إذا لم يُمرَّر.
+  - **🛡 عزل الكاشير**: البحث يُقيَّد بـ `cashier_id=current_user.id` للكاشير (لا يستطيع رؤية ملخص وردية زميله).
+  - **رسائل خطأ واضحة**: تحوي معرّف الوردية المطلوبة.
+
+- **`/app/backend/routes/shifts_routes.py`** `close_cash_register` (سطور 1542-1590):
+  - **🛡 shift_id إلزامي**: يرد HTTP 400 إذا لم يُمرَّر.
+  - **🛡 عزل الكاشير**: نفس القيد كأعلاه.
+
+**اختبارات regression جديدة (كلها نجحت 6/6):**
+- `/app/backend/tests/test_ahmed_shift_close_regression.py` (2 اختبارات):
+  - shift_id إلزامي؛ ملخص الوردية يطابق المبيعات الفعلية.
+- `/app/backend/tests/test_lazy_shift_and_daily_isolation.py` (4 اختبارات):
+  - A: كاشير بدون وردية → أول طلب → تُفتح وردية باليوم الحالي.
+  - B: وردية من الأمس → أول طلب اليوم → القديمة تُغلَق ووردية جديدة تُفتح.
+  - C: طلبان في نفس اليوم من نفس الكاشير → نفس الوردية.
+  - D: ملخص الصندوق يطابق مبيعات الكاشير بالضبط.
+
+**التعديلات في الواجهة:**
+- **`/app/frontend/src/pages/SuperAdmin.js`**: زر جديد "توليد رمز جديد" لإعادة توليد QR الواتساب فوراً (يمسح جلسة Baileys الحالية ويطلب رمزاً جديداً).
+- **`/app/frontend/src/pages/Login.js`**: تحسين رسالة "الجهاز غير موثوق" لتوضح للكاشير لماذا الرمز لم يُرسَل (الواتساب غير مرتبط أو لا يوجد بريد مسجّل).
+- **`/app/frontend/src/components/ManagementOrderAlerts.jsx`**: إعادة تصميم كامل — الآن تبدأ مطويّة كشارة عائمة صغيرة (bottom-4 left-4) لا تحجب الأزرار في `/coupons` و `/settings`. النقر عليها يُوسّعها؛ زر طيّ مخصّص لغلقها.
+
+**التعديلات في نشر الإنتاج (docker-compose + GitHub Actions):**
+- **`/app/wa_service/Dockerfile` (جديد):** بناء صورة `wa_service` على node:20-alpine.
+- **`/app/wa_service/.dockerignore` (جديد):** استبعاد node_modules و auth.
+- **`/app/wa_service/index.js`:** دعم `WA_SERVICE_HOST=0.0.0.0` داخل Docker + مسح `lastError` عند توليد QR جديد.
+- **`/app/docker-compose.yml`:** إضافة خدمة `wa_service` + volume `wa_auth_data` + ربط الباك إند عبر `WA_SERVICE_URL=http://wa_service:3002`.
+- **`/app/.github/workflows/deploy.yml`:** بناء صورة wa_service ودفعها إلى GHCR + تشغيلها على VPS قبل الباك إند + healthcheck.
+
+**مُجدول تنبيه الورديات المنسية:**
+- **`/app/backend/server.py`** — `_alert_forgotten_open_shifts()` + `start_forgotten_shifts_scheduler()`:
+  - يعمل كل 30 دقيقة.
+  - يُرسل واتساب للمالك عن أي وردية مفتوحة لأكثر من 12 ساعة (مع علامة `alerted_forgotten` لمنع التكرار).
+
+
+
+
+
 ## Session: 18 Jun 2026 (fork) — إعادة تصميم صفحة التواصل + غلاف ملف PDF ✅
 - **صفحة التواصل العامة `/contact`** (`SystemContact.js`) — يصلها الزبون عبر QR فاتورة الكاشير — أُعيد تصميمها بالكامل:
   - ثيم كحلي/ذهبي فاخر + الشعار الرسمي (SVG سداسي ذهبي inline) داخل هالة + إطار ذهبي.

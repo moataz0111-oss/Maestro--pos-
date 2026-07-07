@@ -646,8 +646,10 @@ export default function Login() {
                   className="mb-4 p-3 rounded-lg bg-red-500/10 border border-red-500/30 text-center"
                   data-testid="otp-pending-error"
                 >
-                  <p className="text-red-300 text-xs">
-                    {t('تعذّر إرسال الرمز حالياً. تأكد من ربط الواتساب أو تواصل مع المالك، ثم أعد المحاولة.')}
+                  <p className="text-red-300 text-xs leading-relaxed">
+                    <span className="font-bold block mb-1">⚠️ {t('لم يُرسَل الرمز حتى الآن')}</span>
+                    {t('جهازك جديد وغير موثوق بعد. تعذّر إرسال رمز التحقق (الواتساب غير مرتبط أو لا يوجد بريد مسجّل لحسابك).')}
+                    <span className="block mt-1 font-bold">{t('الحل: تواصل مع المالك ليربط الواتساب من لوحة السجل الأمني، ثم اضغط «إعادة إرسال الرمز».')}</span>
                   </p>
                 </div>
               )}
