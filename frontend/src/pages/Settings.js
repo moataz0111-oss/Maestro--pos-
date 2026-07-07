@@ -142,6 +142,7 @@ import {
 } from '../components/ui/table';
 import ImageUploader from '../components/ImageUploader';
 import WelcomeGrantDialog from '../components/WelcomeGrantDialog';
+import { WelcomeCouponStats } from '../components/WelcomeCouponStats';
 import { showApiError } from '../utils/apiError';
 import PhoneCountryInput from '../components/PhoneCountryInput';
 
@@ -7626,6 +7627,7 @@ export default function Settings() {
                   </div>
                 </CardHeader>
                 <CardContent>
+                  <WelcomeCouponStats />
                   {customers.length === 0 ? (
                     <div className="text-center py-12 text-muted-foreground">
                       <UserCheck className="h-12 w-12 mx-auto mb-4 opacity-50" />

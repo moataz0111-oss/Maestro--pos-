@@ -2,7 +2,7 @@
 Shared dependencies for all routes
 ملف المشتركات لجميع نقاط النهاية
 """
-from fastapi import Depends, HTTPException
+from fastapi import Depends, HTTPException, Request
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from motor.motor_asyncio import AsyncIOMotorClient
 from typing import Optional, List, Dict, Any
@@ -41,7 +41,17 @@ JWT_SECRET = os.environ.get('JWT_SECRET')
 JWT_ALGORITHM = 'HS256'
 JWT_EXPIRATION_HOURS = 24
 
-security = HTTPBearer()
+security = HTTPBearer(auto_error=False)
+
+AUTH_COOKIE_NAME = "access_token"
+
+def extract_token(request: Request, credentials) -> str:
+    if credentials and credentials.credentials:
+        return credentials.credentials
+    tok = request.cookies.get(AUTH_COOKIE_NAME) if request else None
+    if not tok:
+        raise HTTPException(status_code=401, detail="غير مصرح - يرجى تسجيل الدخول")
+    return tok
 
 # ==================== USER ROLES ====================
 class UserRole:
@@ -99,10 +109,10 @@ def create_token(user_id: str, role: str, branch_id: Optional[str] = None, tenan
     }
     return jwt.encode(payload, JWT_SECRET, algorithm=JWT_ALGORITHM)
 
-async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(security)):
+async def get_current_user(request: Request, credentials: HTTPAuthorizationCredentials = Depends(security)):
     db = get_database()
     try:
-        token = credentials.credentials
+        token = extract_token(request, credentials)
         payload = jwt.decode(token, JWT_SECRET, algorithms=[JWT_ALGORITHM])
         user = await db.users.find_one({"id": payload["user_id"]}, {"_id": 0})
         if not user:
@@ -113,18 +123,18 @@ async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(s
     except jwt.InvalidTokenError:
         raise HTTPException(status_code=401, detail="رمز غير صالح")
 
-async def verify_super_admin(credentials: HTTPAuthorizationCredentials = Depends(security)):
+async def verify_super_admin(request: Request, credentials: HTTPAuthorizationCredentials = Depends(security)):
     """التحقق من أن المستخدم هو Super Admin"""
-    user = await get_current_user(credentials)
+    user = await get_current_user(request, credentials)
     if user.get("role") != UserRole.SUPER_ADMIN:
         raise HTTPException(status_code=403, detail="هذه الوظيفة متاحة فقط لمالك النظام")
     return user
 
 # توكن منفصل للسائقين (opaque) مخزّن في driver_tokens
-async def get_current_driver(credentials: HTTPAuthorizationCredentials = Depends(security)):
+async def get_current_driver(request: Request, credentials: HTTPAuthorizationCredentials = Depends(security)):
     """التحقق من جلسة السائق عبر توكن opaque مخزّن في driver_tokens"""
     db = get_database()
-    token = credentials.credentials
+    token = extract_token(request, credentials)
     rec = await db.driver_tokens.find_one({"token": token})
     if not rec:
         raise HTTPException(status_code=401, detail="جلسة السائق غير صالحة - يرجى تسجيل الدخول")
@@ -136,10 +146,10 @@ async def get_current_driver(credentials: HTTPAuthorizationCredentials = Depends
     driver["_auth_type"] = "driver"
     return driver
 
-async def get_staff_or_driver(credentials: HTTPAuthorizationCredentials = Depends(security)):
+async def get_staff_or_driver(request: Request, credentials: HTTPAuthorizationCredentials = Depends(security)):
     """يقبل توكن موظف (JWT) أو توكن سائق (opaque). يُستخدم للمسارات المشتركة."""
     db = get_database()
-    token = credentials.credentials
+    token = extract_token(request, credentials)
     # محاولة توكن الموظف (JWT)
     try:
         payload = jwt.decode(token, JWT_SECRET, algorithms=[JWT_ALGORITHM])
@@ -217,9 +227,12 @@ def get_current_timestamp() -> str:
 # التي تنتمي لنفس الوردية تحمل نفس التاريخ - حتى لو امتدت الوردية بعد منتصف الليل.
 
 IRAQ_TZ_OFFSET_HOURS = 3
+# ساعة بداية اليوم التشغيلي (افتراضياً 6 صباحاً). أي وقت قبلها يُحسب على اليوم السابق،
+# لأن المطاعم تعمل بعد منتصف الليل — فمبيعات الساعة 1-5 فجراً تخص ليلة اليوم السابق.
+DEFAULT_BUSINESS_DAY_START_HOUR = 6
 
 def iraq_date_from_utc(utc_iso_str: Optional[str] = None) -> str:
-    """تحويل ISO datetime (UTC) لتاريخ العراق YYYY-MM-DD"""
+    """تحويل ISO datetime (UTC) لتاريخ العراق YYYY-MM-DD (تاريخ ميلادي صرف — منتصف الليل)"""
     try:
         if utc_iso_str:
             dt = datetime.fromisoformat(utc_iso_str.replace("Z", "+00:00"))
@@ -231,6 +244,44 @@ def iraq_date_from_utc(utc_iso_str: Optional[str] = None) -> str:
         return iraq_dt.strftime("%Y-%m-%d")
     except Exception:
         return (datetime.now(timezone.utc) + timedelta(hours=IRAQ_TZ_OFFSET_HOURS)).strftime("%Y-%m-%d")
+
+
+def iraq_business_date_from_utc(utc_iso_str: Optional[str] = None, start_hour: int = DEFAULT_BUSINESS_DAY_START_HOUR) -> str:
+    """اليوم التشغيلي بتوقيت العراق مع ساعة بداية اليوم.
+    إذا كانت الساعة (بتوقيت العراق) أقل من start_hour → يُنسب لليوم السابق.
+    مثال: شفت/طلب الساعة 1:54 فجراً و start_hour=6 → يُحسب على اليوم السابق."""
+    try:
+        if utc_iso_str:
+            dt = datetime.fromisoformat(utc_iso_str.replace("Z", "+00:00"))
+            if dt.tzinfo is None:
+                dt = dt.replace(tzinfo=timezone.utc)
+        else:
+            dt = datetime.now(timezone.utc)
+        iraq_dt = dt + timedelta(hours=IRAQ_TZ_OFFSET_HOURS)
+        try:
+            sh = int(start_hour)
+        except (TypeError, ValueError):
+            sh = DEFAULT_BUSINESS_DAY_START_HOUR
+        if not (0 <= sh <= 12):
+            sh = DEFAULT_BUSINESS_DAY_START_HOUR
+        if iraq_dt.hour < sh:
+            iraq_dt = iraq_dt - timedelta(days=1)
+        return iraq_dt.strftime("%Y-%m-%d")
+    except Exception:
+        return iraq_date_from_utc(utc_iso_str)
+
+
+async def get_business_day_start_hour(tenant_id: Optional[str]) -> int:
+    """يقرأ ساعة بداية اليوم التشغيلي من إعدادات المطعم (tenant). الافتراضي 6."""
+    try:
+        db = get_database()
+        if tenant_id:
+            t = await db.tenants.find_one({"id": tenant_id}, {"_id": 0, "business_day_start_hour": 1})
+            if t and t.get("business_day_start_hour") is not None:
+                return int(t["business_day_start_hour"])
+    except Exception:
+        pass
+    return DEFAULT_BUSINESS_DAY_START_HOUR
 
 # ==================== SHIFT EXPENSE ATTRIBUTION (canonical) ====================
 # قاعدة واحدة معتمدة لربط المصروف بالوردية — تُستخدم في كل الشاشات (إغلاق الصندوق،
@@ -286,3 +337,4 @@ async def resolve_business_date(tenant_id: Optional[str], branch_id: Optional[st
         if started:
             return iraq_date_from_utc(started)
     return iraq_date_from_utc()
+iraq_date_from_utc()

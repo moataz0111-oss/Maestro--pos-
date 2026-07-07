@@ -633,6 +633,14 @@ export default function Login() {
               </CardDescription>
             </CardHeader>
             <CardContent className="pt-4">
+              <div
+                className="mb-4 p-3 rounded-lg bg-amber-500/10 border border-amber-500/30 text-center"
+                data-testid="untrusted-device-notice"
+              >
+                <p className="text-amber-300 text-xs leading-relaxed">
+                  {t('تم رصد محاولة دخول من جهاز جديد غير موثوق. لحماية حسابك، أدخل رمز التحقق لتوثيق هذا الجهاز — لن يُطلب منك الرمز مجدداً من نفس الجهاز.')}
+                </p>
+              </div>
               {twoFA.pendingDelivery && (
                 <div
                   className="mb-4 p-3 rounded-lg bg-red-500/10 border border-red-500/30 text-center"

@@ -1,0 +1,38 @@
+{
+  "summary": "CRITICAL bug from iter285 FIXED and VERIFIED. Focused backend retest of POST /api/orders shift attribution: with fake open shift for cashier B in the same branch, cashier A's order now creates a NEW shift owned by cashier A (order.shift_id != B_shift, new_shift.cashier_id == cashier A). Cashier B's shift untouched. All 11/11 pytest cases passed including: business_date cutoff parity, order/shift business_date match, owner-no-shift → 400, owner-with-cashier-shift → attaches, report/closing parity within 1 IQD, and integrity/shifts-check ok.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": [
+    "/app/backend/tests/test_cashier_shift_isolation_iter286.py",
+    "/app/test_reports/pytest/iter286_results.xml"
+  ],
+  "action_items": [
+    "Iter285 CRITICAL fix is confirmed working. The MEDIUM-priority cashier UI login gate (trusted-device/2FA) noted in iter285 remains out of scope but unresolved — main agent should surface a message on /login when device is untrusted."
+  ],
+  "critical_code_review_comments": [
+    "server.py lines 7929-7937: the restricted fallback correctly checks role != 'cashier' before attaching to another cashier's branch shift. Verified via 4 direct behavioral tests (bug-repro path + isolation + regression).",
+    "server.py is still 26k+ lines — the shift-resolution logic in POST /api/orders (~7907-7978) should be extracted to a helper for future safety.",
+    "Order dedup fingerprint (per iter285) still does not include shift_id — a bug orthogonal to this fix but worth revisiting."
+  ],
+  "verified_working": [
+    "Cashier A POST /api/orders with cashier B's shift open in the same branch → creates NEW shift for A (not attached to B).",
+    "New shift cashier_id == cashier A's id; order.shift_id == new shift.id.",
+    "Cashier B's fake shift status remains 'open' and totals untouched.",
+    "shift.business_date follows 6-AM Iraq cutoff formula; order.business_date == shift.business_date.",
+    "Owner with no open shift in branch → 400 with Arabic 'لا توجد وردية مفتوحة' message.",
+    "Owner with cashier A's shift open → order attaches to A's shift (non-cashier fallback preserved).",
+    "Close shift → GET /api/reports/sales includes order total AND cash-register-closings shows same total_sales within 1 IQD.",
+    "GET /api/integrity/shifts-check for the business_date returns 200 with no mismatch reported.",
+    "GET /api/shifts/current for cashier A before first order returns no A-owned open shift (endpoint responds 200 without leaking B's shift)."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_cashier_shift_isolation_iter286.py (new, 11 test cases)"
+  ],
+  "success_rate": {"backend": "100% (11/11 pytest)", "frontend": "not tested (scope: backend only)"},
+  "test_credentials": "admin@maestroegp.com/admin123 and cashier1@maestroegp.com/cash123 both work via API.",
+  "seed_data_creation": "Ephemeral shifts 'iter286-fake-shift-B' and 'iter286-owner-attach-A' created for repro; all deleted in fixture teardown + post-run cleanup verified (0 iter286- shifts remain, 0 open shifts remain in branch 76f56acc).",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Iter285 CRITICAL cashier-shift-isolation bug is FULLY FIXED (server.py 7929-7937). Test file /app/backend/tests/test_cashier_shift_isolation_iter286.py is idempotent and can be re-run as a regression suite (uses pymongo directly to seed/cleanup fake shifts). Requires MONGO_URL/DB_NAME from /app/backend/.env. Remaining medium-priority issue: cashier UI login blocked at /login (trusted-device gate) — noted in iter285, out of iter286 scope.",
+  "rca_of_the_issue": "Root cause (from iter285): server.py POST /api/orders had an unconditional branch-wide 'grab any open shift' fallback after checking the cashier's own shift, which attached A's order to B's shift. Fix (verified in iter286): the fallback is now gated by `current_user.get('role', '') != 'cashier'`, so cashiers always fall through to the lazy shift-creation block that creates a shift owned by the ordering cashier. Owner/manager/admin flows retain the fallback (intentional attach to open cashier's shift). Behavior validated end-to-end including report/closing parity."
+}

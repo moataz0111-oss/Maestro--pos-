@@ -10,6 +10,9 @@ const AuthContext = createContext(null);
 
 const API = API_URL;
 
+// إرسال كوكيز الجلسة الآمنة (HttpOnly) مع كل الطلبات — طبقة حماية إضافية
+axios.defaults.withCredentials = true;
+
 // ⭐ Interceptor عام: يرفق التوكن من localStorage مع كل طلب وقت الإرسال.
 // يمنع سباق التهيئة (مثل 403 على /api/branches عند تحميل الصفحة قبل ضبط axios.defaults).
 let __authInterceptorRegistered = false;
@@ -184,10 +187,7 @@ export const AuthProvider = ({ children }) => {
       // حفظ بيانات المستخدم في التخزين المحلي للاستخدام في Electron
       localStorage.setItem('cached_user', JSON.stringify(userData));
       
-      // فتح وردية تلقائياً للكاشير فقط - المالك يختار كاشير من لوحة التحكم
-      if (['cashier'].includes(userData.role)) {
-        await autoOpenShift();
-      }
+      // ⛔ لا نفتح وردية عند الدخول — الوردية تُفتح تلقائياً عند حفظ أول طلب (لكل الكاشيرية)
     } catch (error) {
       console.error('Failed to fetch user:', error);
       
@@ -327,9 +327,7 @@ export const AuthProvider = ({ children }) => {
     }
     window.dispatchEvent(new CustomEvent('userLoggedIn'));
 
-    if (['cashier'].includes(userData.role)) {
-      setTimeout(async () => { await autoOpenShift(); }, 500);
-    }
+    // ⛔ لا نفتح وردية عند الدخول — تُفتح تلقائياً عند حفظ أول طلب في نقطة البيع
   };
 
   // إتمام المصادقة الثنائية للموظف/المالك برمز التحقق

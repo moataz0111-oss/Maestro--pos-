@@ -608,21 +608,8 @@ export default function POS() {
           setCurrentShift(null);
         }
       } else if (!shiftRes.data) {
-        try {
-          const autoOpenRes = await axios.post(`${API}/shifts/auto-open`);
-          setCurrentShift(autoOpenRes.data.shift);
-          // حفظ الوردية في localStorage للعمل offline
-          if (autoOpenRes.data.shift) {
-            localStorage.setItem('currentShift', JSON.stringify(autoOpenRes.data.shift));
-            console.log('💾 Saved shift to localStorage (auto-open):', autoOpenRes.data.shift.id);
-          }
-          if (!autoOpenRes.data.was_existing) {
-            toast.success(t('تم فتح وردية جديدة تلقائياً'));
-          }
-        } catch (autoOpenError) {
-          console.log('Could not auto-open shift:', autoOpenError);
-          setCurrentShift(null);
-        }
+        // ⛔ لا نفتح وردية عند تحميل نقطة البيع — تُفتح تلقائياً عند حفظ أول طلب
+        setCurrentShift(null);
       } else {
         setCurrentShift(shiftRes.data);
         // حفظ الوردية في localStorage للعمل offline
@@ -1924,6 +1911,17 @@ export default function POS() {
         const res = await axios.post(`${API}/orders`, orderData);
         playSuccess();
         
+        // ⭐ أول طلب في الوردية: الخادم فتح الوردية تلقائياً — نلتقطها للواجهة
+        if (!currentShift) {
+          try {
+            const shRes = await axios.get(`${API}/shifts/current`);
+            if (shRes.data && shRes.data.id) {
+              setCurrentShift(shRes.data);
+              localStorage.setItem('currentShift', JSON.stringify(shRes.data));
+            }
+          } catch (e) { /* silent */ }
+        }
+        
         // === إرسال الطلبات لطابعات المطبخ مباشرة (بدون checkAgentStatus) ===
         try {
           const kitchenPrinters = availablePrinters.filter(p => 
@@ -2508,6 +2506,17 @@ export default function POS() {
         orderId = res.data.id;
         orderNumber = res.data.order_number;
         setLastOrderNumber(orderNumber); // حفظ رقم الفاتورة
+        
+        // ⭐ أول طلب في الوردية: الخادم فتح الوردية تلقائياً — نلتقطها للواجهة
+        if (!currentShift) {
+          try {
+            const shRes = await axios.get(`${API}/shifts/current`);
+            if (shRes.data && shRes.data.id) {
+              setCurrentShift(shRes.data);
+              localStorage.setItem('currentShift', JSON.stringify(shRes.data));
+            }
+          } catch (e) { /* silent */ }
+        }
         
         // ===== تسجيل استخدام الكوبون (لتقارير الإغلاق والخصومات) =====
         if (appliedCoupon?.id && couponDiscount > 0) {

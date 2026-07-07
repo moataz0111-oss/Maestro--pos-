@@ -8,7 +8,7 @@ import os, uuid, time, datetime as dt
 import pytest, requests
 from pymongo import MongoClient
 
-BASE = os.environ.get("REACT_APP_BACKEND_URL", "https://trusted-device-auth.preview.emergentagent.com").rstrip("/")
+BASE = os.environ.get("REACT_APP_BACKEND_URL", "https://whatsapp-pos-system.preview.emergentagent.com").rstrip("/")
 MONGO_URL = os.environ.get("MONGO_URL", "mongodb://localhost:27017")
 DB_NAME = os.environ.get("DB_NAME", "maestro_pos")
 ADMIN = {"email": "admin@maestroegp.com", "password": "admin123"}

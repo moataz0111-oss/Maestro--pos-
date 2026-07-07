@@ -12,8 +12,10 @@ Expected (canonical per-shift rule):
 """
 import asyncio, os, uuid
 from datetime import datetime, timezone, timedelta
+from dotenv import load_dotenv
 from motor.motor_asyncio import AsyncIOMotorClient
 
+load_dotenv(os.path.join(os.path.dirname(__file__), ".env"))
 MONGO_URL = os.environ.get("MONGO_URL", "mongodb://localhost:27017")
 DB_NAME = os.environ.get("DB_NAME", "test_database")
 TENANT = "default"

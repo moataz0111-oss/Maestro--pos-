@@ -8,7 +8,7 @@ import os
 import pytest
 import requests
 
-BASE_URL = os.environ.get("REACT_APP_BACKEND_URL", "https://trusted-device-auth.preview.emergentagent.com").rstrip("/")
+BASE_URL = os.environ.get("REACT_APP_BACKEND_URL", "https://whatsapp-pos-system.preview.emergentagent.com").rstrip("/")
 API = f"{BASE_URL}/api"
 
 BRANCH_ID = "76f56acc-6948-4a2f-bbf4-feccbddea88f"

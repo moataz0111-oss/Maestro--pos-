@@ -4559,3 +4559,14 @@ for ing in recipe:
 - **الإصلاح:** كلا المسارين الآن يستخدمان فحص الاسم (_open_shift_conflict / بحث بالاسم المنظّم) و**يعيدان استخدام الشفت المفتوح الموجود بنفس الاسم** بدل إنشاء مكرر. كما أُضيف tenant_id لوثيقة الشفت في open_shift.
 - **التحقق:** testing_agent iter262 = **7/7 PASS** (4 حرّاس صريحة + 3 إنشاء تلقائي). الملفّات: tests/test_shift_guard_and_close.py + tests/test_shift_autocreate_dedup.py. لا شفت مكرر بأي مسار؛ الكاشير المنفرد لا يزال يحصل على شفت واحد طبيعي.
 - **⚠️ يتطلب نشراً جديداً (Save to GitHub + Deploy)** — النشر #449 كان قبل هذه الإصلاحات. السجلات المزدوجة القديمة على الإنتاج تبقى تاريخية.
+
+## 2026-07-07 — إعادة هيكلة الخادم + كوكيز آمنة + سياسة كلمات مرور + إحصائيات الترحيب ✅
+- **إعادة هيكلة server.py (P0):** استُخرج ~9,300 سطر (26,082 → 16,861) إلى 13 وحدة جديدة في /app/backend/routes/: super_admin_routes, cash_closing_report_routes, biometric_routes, customer_menu_api_routes, ratings_routes, smart_reports_routes, ocr_routes, printer_routes, pdf_export_routes, refunds_routes, coupons_promotions_routes, payroll_reports_routes, hr_routes. النمط: `from server import *` + include في أسفل server.py (سلوك مطابق 100%، تحقق iter100 = 33/33).
+- **كوكيز HttpOnly (هجين):** /auth/login و /auth/login/verify-2fa يضبطان كوكي access_token (HttpOnly, Secure, SameSite=lax). المصادقة تقبل Bearer أو الكوكي (get_current_user/get_current_driver/get_staff_or_driver في server.py + shared.py). /auth/logout يحذف الكوكي. axios.defaults.withCredentials=true. ملاحظة: localStorage يبقى للوضع Offline (متطلب أساسي) — الكوكي طبقة حماية إضافية.
+- **سياسة كلمات المرور:** validate_password_strength (≥8 أحرف + حرف + رقم) على POST /users و PUT /users/{id}/reset-password و POST /staff/{id}/reset-password (400 برسالة عربية).
+- **رسالة جهاز غير موثوق:** نافذة 2FA في Login.js تعرض الآن سبب الطلب (data-testid=untrusted-device-notice).
+- **إحصائيات كوبونات الترحيب:** GET /api/welcome-discount/stats (admin/manager/branch_manager) + لوحة WelcomeCouponStats في الإعدادات ← العملاء (welcome-coupon-stats).
+- **إصلاح 403 في الإعدادات:** /print-queue/agent-status يقبل الآن مستخدماً مسجّلاً (Bearer/كوكي) إضافة لمفتاح الوكيل.
+- **الطباعة التلقائية عند إغلاق الوردية:** موجودة مسبقاً (printClosingReceiptViaUSB في Dashboard.js) — لا حاجة لعمل إضافي.
+- **إصلاح seed_expense_attribution_test.py:** يقرأ DB_NAME من backend/.env (كان يكتب في قاعدة خاطئة).
+- **التحقق:** testing_agent iteration_100.json = backend 33/33 (100%) + frontend 100%. ملف الاختبار: /app/backend/tests/test_refactor_iter100.py

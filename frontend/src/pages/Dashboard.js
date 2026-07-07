@@ -495,16 +495,14 @@ export default function Dashboard() {
           }
         }
       } else {
-        // كاشير: فتح وردية تلقائياً
+        // كاشير: ⛔ لا نفتح وردية عند التحميل — تُفتح تلقائياً عند حفظ أول طلب
         const checkRes = await axios.get(`${API}/shifts/current`, {
           params: branchId ? { branch_id: branchId } : {}
         });
-        if (!checkRes.data || checkRes.data.message === t('لا توجد وردية مفتوحة')) {
-          await axios.post(`${API}/shifts/open`, {
-            opening_cash: 0,
-            branch_id: branchId
-          });
-          console.log('Auto-opened shift');
+        if (checkRes.data && checkRes.data.id) {
+          setActiveShift(checkRes.data);
+        } else {
+          setActiveShift(null);
         }
       }
     } catch (error) {
@@ -522,16 +520,8 @@ export default function Dashboard() {
             console.log('Error fetching cashiers:', e);
           }
         } else {
-          try {
-            const branchId = getBranchIdForApi();
-            await axios.post(`${API}/shifts/open`, {
-              opening_cash: 0,
-              branch_id: branchId
-            });
-            console.log('تم فتح الوردية تلقائياً');
-          } catch (openError) {
-            console.log('الوردية مفتوحة بالفعل أو حدث خطأ');
-          }
+          // كاشير بلا وردية مفتوحة — طبيعي، تُفتح عند أول طلب
+          setActiveShift(null);
         }
       }
     }

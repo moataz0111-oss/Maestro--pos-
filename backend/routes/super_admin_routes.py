@@ -1,0 +1,2447 @@
+"""Super Admin routes (extracted from server.py)"""
+from fastapi import APIRouter
+from server import *  # noqa: F401,F403
+from server import (_client_ip, _load_email_config, _mask_phone, _phone_to_e164,
+                    _refresh_blocked_ips, _refresh_security_config, _save_owner_ip, _sn,
+                    _re_rbac, _twilio_verify, _wa_free)
+
+router = APIRouter()
+
+# ==================== SUPER ADMIN & TENANT MANAGEMENT ====================
+# نظام إدارة المستأجرين - لوحة تحكم المالك الرئيسي
+
+class SuperAdminLoginRequest(BaseModel):
+    email: str
+    password: str
+    secret_key: str
+    device_id: Optional[str] = None
+
+@router.post("/super-admin/login")
+async def super_admin_login(request: SuperAdminLoginRequest, http_request: Request):
+    """تسجيل دخول Super Admin - محمي ضد التخمين"""
+    _ip = _client_ip(http_request)
+    _lockkey = f"salogin:{_ip}:{request.email}"
+    await check_login_lock(_lockkey)
+    user = await db.users.find_one({"email": request.email, "role": UserRole.SUPER_ADMIN})
+    if not user:
+        await record_login_fail(_lockkey, ip=_ip, request=http_request)
+        await record_audit("superadmin.login.failed", http_request, details={"email": request.email, "reason": "not_found"}, status=401)
+        raise HTTPException(status_code=401, detail="بيانات الدخول غير صحيحة")
+    
+    # التحقق من المفتاح السري (من قاعدة البيانات أو القيمة الافتراضية)
+    stored_secret = user.get("secret_key") or user.get("super_admin_secret") or SUPER_ADMIN_SECRET
+    if request.secret_key != stored_secret:
+        await record_login_fail(_lockkey, ip=_ip, request=http_request)
+        await record_audit("superadmin.login.failed", http_request, user=user, details={"reason": "bad_secret"}, status=403)
+        raise HTTPException(status_code=403, detail="بيانات الدخول غير صحيحة")
+    
+    # التحقق من كلمة المرور (الحقل قد يكون password أو password_hash)
+    password_field = user.get("password") or user.get("password_hash")
+    if not password_field or not verify_password(request.password, password_field):
+        await record_login_fail(_lockkey, ip=_ip, request=http_request)
+        await record_audit("superadmin.login.failed", http_request, user=user, details={"reason": "wrong_password"}, status=401)
+        raise HTTPException(status_code=401, detail="بيانات الدخول غير صحيحة")
+    
+    await clear_login_attempts(_lockkey)
+    # عنوان المالك يُحفظ ولا يُحظر أبداً
+    await _save_owner_ip(_ip, http_request)
+
+    # ======== المصادقة الثنائية (جهاز موثوق) — المالك عبر البريد ========
+    if await two_fa_enabled() and not await is_device_trusted("user", user["id"], request.device_id):
+        _uname = user.get("full_name") or user.get("username") or user.get("email")
+        resp2fa = await start_2fa_verification("user", user["id"], _uname, user.get("tenant_id"),
+                                               "email", list(OWNER_RECOVERY_EMAILS), request.device_id,
+                                               _ip, http_request, extra={"purpose": "super_admin_login"})
+        await record_audit("superadmin.2fa.challenge", http_request, user=user, status=200)
+        return resp2fa
+    if await two_fa_enabled():
+        await trust_device("user", user["id"], request.device_id, _ip,
+                           http_request.headers.get("user-agent", ""), user.get("tenant_id"))
+
+    await record_audit("superadmin.login.success", http_request, user=user, status=200)
+    token = create_token(user["id"], user["role"], user.get("branch_id"), user.get("tenant_id"))
+    
+    return {
+        "token": token,
+        "user": {
+            "id": user["id"],
+            "email": user["email"],
+            "full_name": user.get("full_name", user.get("username", "")),
+            "role": user["role"]
+        }
+    }
+
+class SuperAdminRegisterRequest(BaseModel):
+    email: str
+    password: str
+    full_name: str
+    secret_key: str
+
+@router.post("/super-admin/register")
+async def register_super_admin(request: SuperAdminRegisterRequest):
+    """إنشاء حساب Super Admin (مرة واحدة فقط)"""
+    if request.secret_key != SUPER_ADMIN_SECRET:
+        raise HTTPException(status_code=403, detail="مفتاح السر غير صحيح")
+    
+    # التحقق من عدم وجود Super Admin
+    existing = await db.users.find_one({"role": UserRole.SUPER_ADMIN})
+    if existing:
+        raise HTTPException(status_code=400, detail="يوجد Super Admin بالفعل")
+    
+    # التحقق من عدم وجود البريد
+    email_exists = await db.users.find_one({"email": request.email})
+    if email_exists:
+        raise HTTPException(status_code=400, detail="البريد الإلكتروني مستخدم")
+    
+    user_doc = {
+        "id": str(uuid.uuid4()),
+        "username": "super_admin",
+        "email": request.email,
+        "password": hash_password(request.password),
+        "full_name": request.full_name,
+        "role": UserRole.SUPER_ADMIN,
+        "branch_id": None,
+        "tenant_id": None,
+        "permissions": ["all", "super_admin"],
+        "is_active": True,
+        "created_at": datetime.now(timezone.utc).isoformat()
+    }
+    
+    await db.users.insert_one(user_doc)
+    
+    token = create_token(user_doc["id"], user_doc["role"], user_doc.get("branch_id"), user_doc.get("tenant_id"))
+    
+    return {
+        "message": "تم إنشاء حساب Super Admin بنجاح",
+        "token": token,
+        "user": {
+            "id": user_doc["id"],
+            "email": user_doc["email"],
+            "full_name": user_doc["full_name"],
+            "role": user_doc["role"]
+        }
+    }
+
+@router.get("/super-admin/tenants")
+async def get_all_tenants(current_user: dict = Depends(verify_super_admin)):
+    """جلب جميع العملاء (المستأجرين)"""
+    tenants = await db.tenants.find({}, {"_id": 0}).sort("created_at", -1).to_list(1000)
+    
+    # إضافة إحصائيات لكل مستأجر
+    for tenant in tenants:
+        tenant["users_count"] = await db.users.count_documents({"tenant_id": tenant["id"]})
+        tenant["branches_count"] = await db.branches.count_documents({"tenant_id": tenant["id"]})
+        tenant["orders_count"] = await db.orders.count_documents({"tenant_id": tenant["id"]})
+        # إضافة عدد الأجهزة المرخصة
+        tenant["devices_count"] = await db.license_devices.count_documents({
+            "tenant_id": tenant["id"],
+            "is_active": True
+        })
+        # التأكد من وجود max_devices
+        if "max_devices" not in tenant:
+            tenant["max_devices"] = 5
+    
+    # إرجاع قائمة العملاء فقط (النظام الرئيسي هو المالك ولا يظهر كعميل)
+    return tenants
+
+@router.post("/super-admin/tenants")
+async def create_tenant(tenant: TenantCreate, background_tasks: BackgroundTasks, current_user: dict = Depends(verify_super_admin)):
+    """إنشاء مستأجر جديد (عميل جديد) مع إرسال بريد ترحيبي وإشعار"""
+    
+    # التحقق من عدم وجود slug مكرر
+    existing = await db.tenants.find_one({"slug": tenant.slug})
+    if existing:
+        raise HTTPException(status_code=400, detail="الرابط المختصر مستخدم")
+    
+    # التحقق من عدم وجود البريد
+    email_exists = await db.users.find_one({"email": tenant.owner_email})
+    if email_exists:
+        raise HTTPException(status_code=400, detail="البريد الإلكتروني مستخدم")
+    
+    tenant_id = str(uuid.uuid4())
+    
+    # تحديد تاريخ انتهاء الاشتراك بناءً على المدة المحددة
+    subscription_duration = getattr(tenant, 'subscription_duration', 1)  # افتراضي شهر واحد
+    
+    if tenant.subscription_type == "trial":
+        expires_at = (datetime.now(timezone.utc) + timedelta(days=14)).isoformat()
+    elif tenant.subscription_type == "demo":
+        expires_at = (datetime.now(timezone.utc) + timedelta(days=30)).isoformat()
+    else:
+        # استخدام مدة الاشتراك المحددة بالأشهر
+        expires_at = (datetime.now(timezone.utc) + timedelta(days=30 * subscription_duration)).isoformat()
+    
+    tenant_doc = {
+        "id": tenant_id,
+        "name": tenant.name,
+        "slug": tenant.slug,
+        "owner_name": tenant.owner_name,
+        "owner_email": tenant.owner_email,
+        "owner_phone": tenant.owner_phone,
+        "subscription_type": tenant.subscription_type,
+        "subscription_duration": subscription_duration,
+        "max_branches": tenant.max_branches,
+        "max_users": tenant.max_users,
+        "is_active": True,
+        "is_demo": getattr(tenant, 'is_demo', False),
+        "created_at": datetime.now(timezone.utc).isoformat(),
+        "expires_at": expires_at,
+        "created_by": current_user["id"]
+    }
+    
+    await db.tenants.insert_one(tenant_doc)
+    
+    # إنشاء مستخدم admin للمستأجر
+    admin_password = f"{tenant.slug}123"  # كلمة مرور افتراضية
+    admin_doc = {
+        "id": str(uuid.uuid4()),
+        "username": f"{tenant.slug}_admin",
+        "email": tenant.owner_email,
+        "password": hash_password(admin_password),
+        "full_name": tenant.owner_name,
+        "role": UserRole.ADMIN,
+        "branch_id": None,
+        "tenant_id": tenant_id,
+        "permissions": ["all"],
+        "is_active": True,
+        "created_at": datetime.now(timezone.utc).isoformat()
+    }
+    
+    await db.users.insert_one(admin_doc)
+    
+    # لا يتم إنشاء فرع افتراضي - العميل يُنشئ فروعه بنفسه من الإعدادات
+    # هذا يمنع التداخل ويعطي العميل تحكماً كاملاً في فروعه
+    
+    # إنشاء فئات افتراضية للمستأجر الجديد
+    default_categories = [
+        {"id": str(uuid.uuid4()), "name": "المشروبات", "name_en": "Beverages", "icon": "☕", "color": "#8B4513", "sort_order": 1, "tenant_id": tenant_id, "is_active": True},
+        {"id": str(uuid.uuid4()), "name": "الوجبات الرئيسية", "name_en": "Main Dishes", "icon": "🥘", "color": "#D4AF37", "sort_order": 2, "tenant_id": tenant_id, "is_active": True},
+        {"id": str(uuid.uuid4()), "name": "المقبلات", "name_en": "Appetizers", "icon": "🧆", "color": "#228B22", "sort_order": 3, "tenant_id": tenant_id, "is_active": True},
+        {"id": str(uuid.uuid4()), "name": "الحلويات", "name_en": "Desserts", "icon": "🍰", "color": "#FF69B4", "sort_order": 4, "tenant_id": tenant_id, "is_active": True},
+    ]
+    
+    for cat in default_categories:
+        await db.categories.insert_one(cat)
+    
+    del tenant_doc["_id"]
+    
+    # إرسال بريد ترحيبي تلقائياً
+    background_tasks.add_task(
+        send_welcome_email,
+        recipient_email=tenant.owner_email,
+        tenant_name=tenant.name,
+        owner_name=tenant.owner_name,
+        username=tenant.owner_email,
+        password=admin_password
+    )
+    
+    # إنشاء إشعار للمالك عن العميل الجديد
+    notification_doc = {
+        "id": str(uuid.uuid4()),
+        "type": "new_tenant",
+        "title": "عميل جديد 🎉",
+        "message": f"تم إنشاء عميل جديد: {tenant.name} ({tenant.owner_name})",
+        "tenant_id": tenant_id,
+        "data": {
+            "tenant_name": tenant.name,
+            "owner_name": tenant.owner_name,
+            "owner_email": tenant.owner_email,
+            "subscription_type": tenant.subscription_type,
+            "subscription_duration": subscription_duration,
+            "expires_at": expires_at
+        },
+        "is_read": False,
+        "created_at": datetime.now(timezone.utc).isoformat()
+    }
+    await db.notifications.insert_one(notification_doc)
+    
+    return {
+        "tenant": tenant_doc,
+        "admin_credentials": {
+            "email": tenant.owner_email,
+            "password": admin_password,
+            "message": "يرجى تغيير كلمة المرور فور تسجيل الدخول"
+        },
+        "access_url": f"/tenant/{tenant.slug}",
+        "email_sent": True
+    }
+
+PUBLIC_DIR = "/app/frontend/public"
+
+@router.get("/download/profile-pdf")
+async def download_profile_pdf():
+    """تحميل بروفايل PDF مباشرةً (يتجاوز الـ Service Worker)."""
+    from fastapi.responses import FileResponse
+    path = f"{PUBLIC_DIR}/Maestro-EGP-Profile.pdf"
+    if not os.path.exists(path):
+        raise HTTPException(status_code=404, detail="الملف غير موجود")
+    return FileResponse(path, media_type="application/pdf", filename="Maestro-EGP-Profile.pdf")
+
+
+@router.get("/download/logo")
+async def download_logo():
+    """تحميل الشعار الموحّد الدائري."""
+    from fastapi.responses import FileResponse
+    path = f"{PUBLIC_DIR}/maestro-logo-circle.png"
+    if not os.path.exists(path):
+        raise HTTPException(status_code=404, detail="الملف غير موجود")
+    return FileResponse(path, media_type="image/png", filename="maestro-logo.png")
+
+
+@router.get("/download/splash-video")
+async def download_splash_video():
+    """تحميل فيديو شاشة التحميل."""
+    from fastapi.responses import FileResponse
+    path = f"{PUBLIC_DIR}/maestro-splash.mp4"
+    if not os.path.exists(path):
+        raise HTTPException(status_code=404, detail="الملف غير موجود")
+    return FileResponse(path, media_type="video/mp4", filename="maestro-splash.mp4")
+
+
+@router.get("/system/email-settings")
+async def get_email_settings(current_user: dict = Depends(verify_super_admin)):
+    """جلب إعدادات البريد (بدون كشف كلمة المرور)."""
+    doc = await db.email_config.find_one({"id": "global"}) or {}
+    cfg = await _load_email_config()
+    return {
+        "smtp_host": doc.get("smtp_host", SMTP_HOST or "mail.privateemail.com"),
+        "smtp_port": doc.get("smtp_port", SMTP_PORT or 465),
+        "smtp_user": doc.get("smtp_user", SMTP_USER or ""),
+        "from_name": doc.get("from_name", SMTP_FROM_NAME or "Maestro EGP"),
+        "sender_email": doc.get("sender_email", SENDER_EMAIL or ""),
+        "password_set": bool(cfg.get("smtp_password")),
+        "configured": bool((cfg.get("smtp_host") and cfg.get("smtp_user") and cfg.get("smtp_password")) or cfg.get("sendgrid_api_key")),
+    }
+
+
+@router.put("/system/email-settings")
+async def update_email_settings(payload: dict, current_user: dict = Depends(verify_super_admin)):
+    """حفظ إعدادات البريد في قاعدة البيانات (تبقى بعد النشر)."""
+    update = {
+        "id": "global",
+        "smtp_host": (payload.get("smtp_host") or "mail.privateemail.com").strip(),
+        "smtp_port": int(payload.get("smtp_port") or 465),
+        "smtp_user": (payload.get("smtp_user") or "").strip(),
+        "from_name": (payload.get("from_name") or "Maestro EGP").strip(),
+        "sender_email": (payload.get("sender_email") or payload.get("smtp_user") or "").strip(),
+        "updated_at": datetime.now(timezone.utc).isoformat(),
+        "updated_by": current_user.get("id"),
+    }
+    # كلمة المرور تُحدَّث فقط إذا أُرسلت (حتى لا تُمحى عند الحفظ بدون تغييرها)
+    pwd = payload.get("smtp_password")
+    if pwd:
+        update["smtp_password"] = pwd
+    await db.email_config.update_one({"id": "global"}, {"$set": update}, upsert=True)
+    cfg = await _load_email_config()
+    return {"success": True, "configured": bool(cfg.get("smtp_host") and cfg.get("smtp_user") and cfg.get("smtp_password"))}
+
+
+def _fetch_inbox_messages(host, user, password, limit=25):
+    """يجلب رسائل صندوق الوارد عبر IMAP (دالة متزامنة تُستدعى عبر to_thread)."""
+    import imaplib, email, hashlib
+    from email.header import decode_header
+    from email.utils import parseaddr
+
+    def _dec(val):
+        if not val:
+            return ""
+        parts = decode_header(val)
+        out = ""
+        for txt, enc in parts:
+            if isinstance(txt, bytes):
+                try:
+                    out += txt.decode(enc or "utf-8", errors="replace")
+                except Exception:
+                    out += txt.decode("utf-8", errors="replace")
+            else:
+                out += txt
+        return out
+
+    messages = []
+    imap = imaplib.IMAP4_SSL(host, 993, timeout=25)
+    try:
+        imap.login(user, password)
+        imap.select("INBOX")
+        typ, data = imap.search(None, "ALL")
+        ids = data[0].split()
+        ids = ids[-max(1, min(int(limit), 50)):]
+        for mid in reversed(ids):
+            typ, msg_data = imap.fetch(mid, "(RFC822)")
+            if typ != "OK" or not msg_data or not msg_data[0]:
+                continue
+            msg = email.message_from_bytes(msg_data[0][1])
+            from_raw = _dec(msg.get("From"))
+            from_name, from_addr = parseaddr(from_raw)
+            subject = _dec(msg.get("Subject"))
+            date = msg.get("Date", "")
+            msg_id = (msg.get("Message-ID") or msg.get("Message-Id") or "").strip()
+            if not msg_id:
+                msg_id = hashlib.md5(f"{date}|{from_raw}|{subject}".encode("utf-8", "replace")).hexdigest()
+            body_text, body_html = "", ""
+            if msg.is_multipart():
+                for part in msg.walk():
+                    ctype = part.get_content_type()
+                    disp = str(part.get("Content-Disposition") or "")
+                    if "attachment" in disp:
+                        continue
+                    try:
+                        payload = part.get_payload(decode=True)
+                        if not payload:
+                            continue
+                        charset = part.get_content_charset() or "utf-8"
+                        decoded = payload.decode(charset, errors="replace")
+                    except Exception:
+                        continue
+                    if ctype == "text/plain" and not body_text:
+                        body_text = decoded
+                    elif ctype == "text/html" and not body_html:
+                        body_html = decoded
+            else:
+                try:
+                    payload = msg.get_payload(decode=True)
+                    charset = msg.get_content_charset() or "utf-8"
+                    decoded = payload.decode(charset, errors="replace") if payload else ""
+                except Exception:
+                    decoded = ""
+                if msg.get_content_type() == "text/html":
+                    body_html = decoded
+                else:
+                    body_text = decoded
+            snippet = (body_text or "").strip().replace("\n", " ")[:140]
+            messages.append({
+                "message_id": msg_id,
+                "from": from_addr or from_raw,
+                "from_name": from_name or from_addr or from_raw,
+                "subject": subject,
+                "date": date,
+                "snippet": snippet,
+                "body_text": body_text[:20000],
+                "body_html": body_html[:50000],
+            })
+        return messages
+    finally:
+        try:
+            imap.logout()
+        except Exception:
+            pass
+
+
+@router.get("/system/inbox")
+async def get_inbox(limit: int = 25, current_user: dict = Depends(verify_super_admin)):
+    """جلب آخر الرسائل الواردة من صندوق البريد عبر IMAP (Namecheap Private Email)."""
+    import imaplib, socket
+    cfg = await _load_email_config()
+    host = cfg.get("smtp_host") or "mail.privateemail.com"
+    user = cfg.get("smtp_user")
+    password = cfg.get("smtp_password")
+    if not (user and password):
+        raise HTTPException(status_code=400, detail="لم يتم إعداد البريد بعد (أدخل البريد وكلمة المرور)")
+
+    try:
+        messages = await asyncio.to_thread(_fetch_inbox_messages, host, user, password, limit)
+        return {"messages": messages, "count": len(messages)}
+    except imaplib.IMAP4.error as e:
+        logger.error(f"IMAP login/select failed: {e}")
+        raise HTTPException(status_code=401, detail=f"فشل تسجيل الدخول إلى البريد عبر IMAP. تأكد أن كلمة المرور صحيحة وأن خدمة IMAP مُفعّلة في حساب privateemail.com. ({str(e)[:120]})")
+    except (TimeoutError, socket.timeout) as e:
+        logger.error(f"IMAP timeout: {e}")
+        raise HTTPException(status_code=504, detail="انتهت مهلة الاتصال بخادم البريد (993). حاول مرة أخرى.")
+    except Exception as e:
+        logger.error(f"IMAP inbox fetch failed: {type(e).__name__}: {e}")
+        raise HTTPException(status_code=502, detail=f"فشل الاتصال بصندوق البريد — {type(e).__name__}: {str(e)[:140]}")
+
+
+@router.get("/system/inbox/sync")
+async def sync_inbox(limit: int = 25, current_user: dict = Depends(verify_super_admin)):
+    """يجلب الوارد ويُنشئ إشعاراً فورياً لكل رسالة جديدة (للتحديث التلقائي بدون تدخل)."""
+    import imaplib, socket
+    cfg = await _load_email_config()
+    host = cfg.get("smtp_host") or "mail.privateemail.com"
+    user = cfg.get("smtp_user")
+    password = cfg.get("smtp_password")
+    if not (user and password):
+        # لا يوجد بريد مُعد بعد — أعد قائمة فارغة بهدوء (للتحديث التلقائي)
+        return {"messages": [], "count": 0, "new_count": 0, "configured": False}
+
+    try:
+        messages = await asyncio.to_thread(_fetch_inbox_messages, host, user, password, limit)
+    except Exception as e:
+        logger.error(f"IMAP sync fetch failed: {type(e).__name__}: {e}")
+        return {"messages": [], "count": 0, "new_count": 0, "error": str(e)[:140]}
+
+    # حالة الوارد المحفوظة (المعرفات التي سبق رؤيتها)
+    state = await db.email_inbox_state.find_one({"_id": "inbox"})
+    current_ids = [m["message_id"] for m in messages]
+    new_count = 0
+
+    if not state:
+        # أول مزامنة: علّم كل الرسائل الحالية كمرئية بدون إنشاء إشعارات (تجنّب الإغراق)
+        await db.email_inbox_state.insert_one({"_id": "inbox", "seen_ids": current_ids[:300],
+                                               "updated_at": datetime.now(timezone.utc).isoformat()})
+    else:
+        seen = set(state.get("seen_ids", []))
+        # الرسائل بترتيب الأحدث أولاً؛ ننشئ إشعارات للجديدة (نعكس لإنشائها بالترتيب الزمني)
+        new_msgs = [m for m in messages if m["message_id"] not in seen]
+        for m in reversed(new_msgs):
+            subj = m.get("subject") or "(بلا عنوان)"
+            sender = m.get("from_name") or m.get("from") or ""
+            snippet = (m.get("snippet") or "").strip()
+            body_preview = subj if not snippet else f"{subj} — {snippet}"
+            notif = {
+                "id": str(uuid.uuid4()),
+                "type": "new_email",
+                "title": f"📧 رسالة جديدة من {sender}",
+                "message": body_preview[:220],
+                "tenant_id": None,
+                "data": {
+                    "from": m.get("from"),
+                    "from_name": m.get("from_name"),
+                    "subject": subj,
+                    "date": m.get("date"),
+                    "snippet": snippet,
+                    "body_text": (m.get("body_text") or "")[:5000],
+                },
+                "is_read": False,
+                "created_at": datetime.now(timezone.utc).isoformat(),
+            }
+            await db.notifications.insert_one(notif)
+            new_count += 1
+        # حدّث المعرفات المرئية (آخر 300)
+        merged = current_ids + [i for i in state.get("seen_ids", []) if i not in current_ids]
+        await db.email_inbox_state.update_one(
+            {"_id": "inbox"},
+            {"$set": {"seen_ids": merged[:300], "updated_at": datetime.now(timezone.utc).isoformat()}}
+        )
+
+    return {"messages": messages, "count": len(messages), "new_count": new_count, "configured": True}
+
+
+@router.post("/system/test-email")
+async def send_test_email(payload: dict, current_user: dict = Depends(verify_super_admin)):
+    """إرسال بريد اختباري للتحقق من إعدادات SMTP/SendGrid."""
+    to = (payload or {}).get("email")
+    if not to:
+        raise HTTPException(status_code=400, detail="يرجى إدخال البريد الإلكتروني")
+    cfg = await _load_email_config()
+    transport = "SMTP" if (cfg.get("smtp_host") and cfg.get("smtp_user") and cfg.get("smtp_password")) else ("SendGrid" if cfg.get("sendgrid_api_key") else None)
+    if not transport:
+        raise HTTPException(status_code=400, detail="لم يتم إعداد أي خدمة بريد (SMTP/SendGrid)")
+    html = f"""
+    <html dir="rtl" style="font-family: Arial, sans-serif;">
+    <body style="background:#1a1a2e;padding:30px;">
+      <div style="max-width:520px;margin:0 auto;background:#16213e;border-radius:16px;padding:30px;border:1px solid rgba(212,175,55,.25);">
+        <h1 style="color:#D4AF37;text-align:center;margin:0;">👑 Maestro EGP</h1>
+        <p style="color:#10B981;text-align:center;font-size:18px;margin-top:20px;">✅ تم إعداد البريد بنجاح!</p>
+        <p style="color:#d1d5db;text-align:center;line-height:1.8;">
+          هذه رسالة اختبارية للتأكد من أن نظامك يستطيع إرسال الإيميلات تلقائياً.
+          عند إنشاء أي عميل جديد، ستُرسَل بيانات الدخول إليه تلقائياً.
+        </p>
+        <p style="color:#6b7280;text-align:center;font-size:12px;margin-top:25px;">عبر {transport} — {datetime.now().strftime('%Y-%m-%d %H:%M')}</p>
+      </div>
+    </body></html>
+    """
+    ok = await send_system_email([to], "✅ اختبار بريد Maestro EGP", html)
+    if not ok:
+        raise HTTPException(status_code=502, detail="فشل إرسال البريد — تحقق من كلمة المرور وإعدادات الخادم")
+    return {"success": ok, "transport": transport, "to": to}
+
+
+@router.get("/super-admin/tenants/{tenant_id}")
+async def get_tenant_details(tenant_id: str, current_user: dict = Depends(verify_super_admin)):
+    """تفاصيل مستأجر معين"""
+    
+    # التحقق إذا كان النظام الرئيسي
+    if tenant_id == "main-system":
+        # استعلام النظام الرئيسي يشمل: بدون tenant_id أو tenant_id = null أو tenant_id = "default"
+        main_system_query = {
+            "$or": [
+                {"tenant_id": {"$exists": False}}, 
+                {"tenant_id": None},
+                {"tenant_id": "default"}
+            ]
+        }
+        
+        # جلب مستخدمي النظام الرئيسي
+        users = await db.users.find({
+            **main_system_query,
+            "role": {"$ne": UserRole.SUPER_ADMIN}
+        }, {"_id": 0, "password": 0}).to_list(100)
+        
+        branches = await db.branches.find(main_system_query, {"_id": 0}).to_list(50)
+        
+        # إحصائيات المبيعات للنظام الرئيسي
+        today = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0).isoformat()
+        orders_today = await db.orders.count_documents({
+            **main_system_query,
+            "created_at": {"$gte": today}
+        })
+        
+        total_sales_cursor = db.orders.aggregate([
+            {"$match": {**main_system_query, "status": {"$ne": "cancelled"}}},
+            {"$group": {"_id": None, "total": {"$sum": "$total"}}}
+        ])
+        total_sales_result = await total_sales_cursor.to_list(1)
+        total_sales = total_sales_result[0]["total"] if total_sales_result else 0
+        
+        # إجمالي الطلبات
+        total_orders = await db.orders.count_documents(main_system_query)
+        
+        return {
+            "tenant": {
+                "id": "main-system",
+                "name": "🏠 النظام الرئيسي",
+                "slug": "main",
+                "owner_name": "المالك",
+                "owner_email": "admin@maestroegp.com",
+                "owner_phone": "",
+                "subscription_type": "premium",
+                "is_active": True,
+                "is_main_system": True,
+                "created_at": "2024-01-01T00:00:00"
+            },
+            "users": users,
+            "branches": branches,
+            "stats": {
+                "users_count": len(users),
+                "branches_count": len(branches),
+                "orders_today": orders_today,
+                "total_sales": total_sales,
+                "total_orders": total_orders
+            }
+        }
+    
+    # للعملاء العاديين
+    tenant = await db.tenants.find_one({"id": tenant_id}, {"_id": 0})
+    if not tenant:
+        raise HTTPException(status_code=404, detail="المستأجر غير موجود")
+    
+    # إحصائيات تفصيلية
+    users = await db.users.find({"tenant_id": tenant_id}, {"_id": 0, "password": 0}).to_list(100)
+    branches = await db.branches.find({"tenant_id": tenant_id}, {"_id": 0}).to_list(50)
+    
+    # جلب الأجهزة المرخصة
+    devices = await db.license_devices.find({"tenant_id": tenant_id}, {"_id": 0}).to_list(100)
+    
+    # إحصائيات المبيعات
+    today = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0).isoformat()
+    orders_today = await db.orders.count_documents({
+        "tenant_id": tenant_id,
+        "created_at": {"$gte": today}
+    })
+    
+    total_sales_cursor = db.orders.aggregate([
+        {"$match": {"tenant_id": tenant_id, "status": {"$ne": "cancelled"}}},
+        {"$group": {"_id": None, "total": {"$sum": "$total"}}}
+    ])
+    total_sales_result = await total_sales_cursor.to_list(1)
+    total_sales = total_sales_result[0]["total"] if total_sales_result else 0
+    
+    return {
+        "tenant": tenant,
+        "users": users,
+        "branches": branches,
+        "devices": devices,
+        "stats": {
+            "users_count": len(users),
+            "branches_count": len(branches),
+            "orders_today": orders_today,
+            "total_sales": total_sales,
+            "devices_count": len([d for d in devices if d.get("is_active")])
+        }
+    }
+
+@router.put("/super-admin/tenants/{tenant_id}/features")
+async def update_tenant_features(tenant_id: str, features: dict, current_user: dict = Depends(verify_super_admin)):
+    """تحديث ميزات العميل المتاحة"""
+    tenant = await db.tenants.find_one({"id": tenant_id})
+    if not tenant:
+        raise HTTPException(status_code=404, detail="المستأجر غير موجود")
+    
+    # قائمة الميزات المسموح بها
+    allowed_features = [
+        # الميزات الأساسية (جميع الإجراءات السريعة)
+        "showPOS", "showTables", "showOrders", "showKitchen",
+        "showReports", "showRatings", "showDelivery", "showInventoryReports",
+        "showBranchOrders", "showWarehouse", "showPurchasing", "showExpenses",
+        "showOwnerWallet", "showCoupons", "showLoyalty", "showCallLogs",
+        "showHR", "showReservations", "showSettings", "showExternalBranches",
+        # ميزات جديدة في الإجراءات السريعة
+        "showCaptainsManagement", "showExternalPurchasesReport", "showPriceIncreaseReport",
+        # ميزات إضافية
+        "showInventory", "showCallCenter", "showRecipes", "showReviews",
+        "showSmartReports", "showComprehensiveReport", "showBreakEvenReport",
+        "showCustomerMenu",
+        # خيارات الإعدادات
+        "settingsAppearance", "settingsRestaurant", "settingsUsers",
+        "settingsCustomers", "settingsBranches", "settingsCategories",
+        "settingsProducts", "settingsPrinters", "settingsDeliveryCompanies",
+        "settingsCallCenter", "settingsNotifications", "settingsInvoice",
+        "settingsSystem", "settingsInventory", "settingsPayment",
+        "settingsKitchenSections"
+    ]
+    
+    # فلترة الميزات المرسلة
+    enabled_features = {k: v for k, v in features.items() if k in allowed_features}
+    
+    # تحديث العميل
+    await db.tenants.update_one(
+        {"id": tenant_id},
+        {"$set": {"enabled_features": enabled_features}}
+    )
+    
+    return {"message": "تم تحديث ميزات العميل", "features": enabled_features}
+
+@router.get("/super-admin/tenants/{tenant_id}/features")
+async def get_tenant_features(tenant_id: str, current_user: dict = Depends(verify_super_admin)):
+    """جلب ميزات العميل المتاحة"""
+    tenant = await db.tenants.find_one({"id": tenant_id}, {"_id": 0, "enabled_features": 1, "name": 1})
+    if not tenant:
+        raise HTTPException(status_code=404, detail="المستأجر غير موجود")
+    
+    # الميزات الافتراضية للعميل الجديد
+    default_features = {
+        "showPOS": True,
+        "showTables": True,
+        "showOrders": True,
+        "showExpenses": True,
+        "showInventory": True,
+        "showDelivery": True,
+        "showReports": True,
+        "showSettings": True,
+        "showHR": False,
+        "showWarehouse": False,
+        "showCallLogs": False,
+        "showCallCenter": False,
+        "showKitchen": False,
+        "showLoyalty": True,
+        "showCoupons": True,
+        "showRecipes": False,
+        "showReservations": True,
+        "showReviews": True,
+        "showRatings": True,
+        "showSmartReports": True,
+        "showPurchasing": False,
+        "showBranchOrders": False,
+        "showCustomerMenu": True,
+        # الميزات الجديدة
+        "showOwnerWallet": True,
+        "showExternalBranches": True,
+        "showComprehensiveReport": True,
+        # خيارات الإعدادات
+        "settingsUsers": True,
+        "settingsCustomers": True,
+        "settingsBranches": True,
+        "settingsCategories": True,
+        "settingsProducts": True,
+        "settingsPrinters": True,
+        "settingsDeliveryCompanies": True,
+        "settingsCallCenter": True,
+        "settingsNotifications": True,
+        "settingsRestaurant": True,
+        "settingsAppearance": True,
+        "settingsInvoice": True,
+        "settingsSystem": True,
+        "settingsInventory": True,
+        "settingsPayment": True,
+        "settingsKitchenSections": True,
+        # التقارير
+        "showBreakEvenReport": True,
+        "showInventoryReports": True,
+        # ميزات جديدة في الإجراءات السريعة
+        "showCaptainsManagement": True,
+        "showExternalPurchasesReport": True,
+        "showPriceIncreaseReport": True
+    }
+    
+    # دمج الميزات المحفوظة مع الافتراضية
+    saved_features = tenant.get("enabled_features", {})
+    features = {**default_features, **saved_features}
+    
+    return {"tenant_name": tenant.get("name"), "features": features}
+
+@router.put("/super-admin/tenants/{tenant_id}")
+async def update_tenant(tenant_id: str, updates: dict, background_tasks: BackgroundTasks, current_user: dict = Depends(verify_super_admin)):
+    """تحديث بيانات مستأجر مع إرسال بريد إلكتروني تلقائي"""
+    tenant = await db.tenants.find_one({"id": tenant_id})
+    if not tenant:
+        raise HTTPException(status_code=404, detail="المستأجر غير موجود")
+    
+    # قائمة الحقول المسموح بتحديثها
+    allowed_updates = [
+        "name", "name_en", "name_ar", "owner_name", "owner_email", "owner_phone", 
+        "subscription_type", "subscription_end", "max_branches", "max_users", 
+        "is_active", "expires_at", "logo_url"
+    ]
+    update_data = {k: v for k, v in updates.items() if k in allowed_updates}
+    
+    # معالجة تمديد الاشتراك
+    extend_months = updates.get("extend_months", 0)
+    if extend_months > 0:
+        from datetime import datetime, timedelta
+        # الحصول على تاريخ انتهاء الاشتراك الحالي أو تاريخ اليوم
+        current_end = tenant.get("subscription_end")
+        if current_end:
+            if isinstance(current_end, str):
+                try:
+                    base_date = datetime.fromisoformat(current_end.replace('Z', '+00:00'))
+                except:
+                    base_date = datetime.now()
+            else:
+                base_date = current_end
+            # إذا كان التاريخ في الماضي، نبدأ من اليوم
+            if base_date < datetime.now():
+                base_date = datetime.now()
+        else:
+            base_date = datetime.now()
+        
+        # حساب التاريخ الجديد
+        new_end = base_date + timedelta(days=extend_months * 30)
+        update_data["subscription_end"] = new_end.isoformat()
+        logger.info(f"✅ تم تمديد اشتراك {tenant.get('name')} بـ {extend_months} شهر. ينتهي في: {new_end}")
+    
+    # التحقق من تغيير البريد الإلكتروني
+    email_changed = False
+    new_email = updates.get("owner_email")
+    if new_email and new_email != tenant.get("owner_email"):
+        # التحقق من عدم استخدام البريد من قبل
+        existing = await db.users.find_one({"email": new_email})
+        if existing:
+            raise HTTPException(status_code=400, detail="البريد الإلكتروني مستخدم من قبل")
+        email_changed = True
+    
+    if update_data:
+        await db.tenants.update_one({"id": tenant_id}, {"$set": update_data})
+    
+    # تحديث حالة المستخدمين عند تغيير is_active
+    if "is_active" in updates:
+        await db.users.update_many(
+            {"tenant_id": tenant_id},
+            {"$set": {"is_active": updates["is_active"]}}
+        )
+    
+    # تحديث بيانات المستخدم الأدمن إذا تم تغيير البريد أو الاسم
+    admin_update = {}
+    if new_email and email_changed:
+        admin_update["email"] = new_email
+    if updates.get("owner_name"):
+        admin_update["full_name"] = updates.get("owner_name")
+    
+    if admin_update:
+        await db.users.update_one(
+            {"tenant_id": tenant_id, "role": UserRole.ADMIN},
+            {"$set": admin_update}
+        )
+    
+    # إرسال بريد إلكتروني إذا طُلب ذلك
+    if updates.get("send_welcome_email"):
+        admin = await db.users.find_one({"tenant_id": tenant_id, "role": UserRole.ADMIN}, {"_id": 0})
+        if admin:
+            # إعادة تعيين كلمة مرور مؤقتة للإرسال
+            temp_password = updates.get("temp_password") or f"{tenant.get('slug')}123"
+            await db.users.update_one(
+                {"id": admin["id"]},
+                {"$set": {"password": hash_password(temp_password)}}
+            )
+            
+            # إرسال البريد في الخلفية
+            background_tasks.add_task(
+                send_welcome_email,
+                recipient_email=admin.get("email"),
+                tenant_name=update_data.get("name", tenant.get("name")),
+                owner_name=update_data.get("owner_name", tenant.get("owner_name")),
+                username=admin.get("email"),
+                password=temp_password
+            )
+    
+    updated = await db.tenants.find_one({"id": tenant_id}, {"_id": 0})
+    return updated
+
+@router.delete("/super-admin/tenants/{tenant_id}")
+async def delete_tenant(tenant_id: str, permanent: bool = False, current_user: dict = Depends(verify_super_admin)):
+    """حذف مستأجر (نهائي أو تعطيل) - متسامح: ينظّف أي حساب مرتبط بنفس المعرّف حتى لو لم يكن مستأجراً."""
+    tenant = await db.tenants.find_one({"id": tenant_id})
+
+    # إذا لم يوجد كمستأجر، قد يكون المعرّف لحساب مستخدم مزيّف (مثل حسابات الاختراق) — ننظّفه ونرجع نجاحاً
+    if not tenant:
+        deleted_user = await db.users.delete_one({"id": tenant_id})
+        await db.customers.delete_one({"id": tenant_id})
+        await db.drivers.delete_one({"id": tenant_id})
+        await record_audit("admin.delete_orphan", user=current_user, details={"target_id": tenant_id, "deleted_user": deleted_user.deleted_count})
+        return {"message": "تم حذف السجل المرتبط", "deleted": True}
+
+    if permanent:
+        # حذف نهائي - حذف جميع بيانات العميل
+        await db.users.delete_many({"tenant_id": tenant_id})
+        await db.branches.delete_many({"tenant_id": tenant_id})
+        await db.categories.delete_many({"tenant_id": tenant_id})
+        await db.products.delete_many({"tenant_id": tenant_id})
+        await db.orders.delete_many({"tenant_id": tenant_id})
+        await db.tables.delete_many({"tenant_id": tenant_id})
+        await db.shifts.delete_many({"tenant_id": tenant_id})
+        await db.inventory.delete_many({"tenant_id": tenant_id})
+        await db.customers.delete_many({"tenant_id": tenant_id})
+        await db.drivers.delete_many({"tenant_id": tenant_id})
+        await db.suppliers.delete_many({"tenant_id": tenant_id})
+        await db.recipes.delete_many({"tenant_id": tenant_id})
+        await db.printers.delete_many({"tenant_id": tenant_id})
+        await db.tenants.delete_one({"id": tenant_id})
+        await record_audit("admin.delete_tenant", user=current_user, details={"tenant_id": tenant_id, "name": tenant.get("name")})
+
+        return {"message": "تم حذف المستأجر نهائياً مع جميع بياناته"}
+    else:
+        # تعطيل بدلاً من الحذف
+        await db.tenants.update_one({"id": tenant_id}, {"$set": {"is_active": False}})
+        await db.users.update_many({"tenant_id": tenant_id}, {"$set": {"is_active": False}})
+        
+        return {"message": "تم تعطيل المستأجر وجميع مستخدميه"}
+
+@router.get("/super-admin/system-users")
+async def list_system_users(current_user: dict = Depends(verify_super_admin)):
+    """قائمة كل حسابات النظام (super_admin/admin/manager) — لاكتشاف وحذف أي حساب مشبوه/مخترَق."""
+    users = await db.users.find(
+        {"role": {"$in": [UserRole.SUPER_ADMIN, UserRole.ADMIN, UserRole.MANAGER]}},
+        {"_id": 0, "password": 0, "password_hash": 0, "secret_key": 0, "super_admin_secret": 0}
+    ).sort("created_at", -1).to_list(1000)
+    # تمييز الحساب الحالي حتى لا يحذف نفسه
+    for u in users:
+        u["is_current"] = (u.get("id") == current_user.get("id"))
+    return users
+
+@router.delete("/super-admin/system-users/{user_id}")
+async def delete_system_user(user_id: str, current_user: dict = Depends(verify_super_admin)):
+    """حذف حساب نظام مشبوه/مخترَق (super_admin/admin/manager) — متسامح وغير قابل لحذف الذات."""
+    if user_id == current_user.get("id"):
+        raise HTTPException(status_code=400, detail="لا يمكنك حذف حسابك الحالي")
+    target = await db.users.find_one({"id": user_id}, {"_id": 0, "password": 0})
+    # حذف أي توكنات سائق مرتبطة + الحساب نفسه (idempotent)
+    result = await db.users.delete_one({"id": user_id})
+    await record_audit("admin.delete_system_user", user=current_user,
+                       details={"target_id": user_id, "target_name": (target or {}).get("full_name") or (target or {}).get("username"),
+                                "target_role": (target or {}).get("role"), "deleted": result.deleted_count})
+    if result.deleted_count == 0:
+        return {"message": "الحساب غير موجود (تم تنظيفه مسبقاً)", "deleted": False}
+    return {"message": "تم حذف الحساب بنجاح", "deleted": True}
+
+@router.get("/super-admin/audit-logs")
+async def get_audit_logs(event: Optional[str] = None, limit: int = 200, current_user: dict = Depends(verify_super_admin)):
+    """سجل التدقيق الأمني: عمليات الدخول/الفشل/تغيير الصلاحيات/محاولات الوصول المرفوضة مع IP."""
+    q = {}
+    if event:
+        q["event"] = event
+    logs = await db.audit_logs.find(q, {"_id": 0, "ts": 0}).sort("created_at", -1).to_list(min(limit, 500))
+    return logs
+
+@router.put("/super-admin/tenants/{tenant_id}/reactivate")
+async def reactivate_tenant(tenant_id: str, current_user: dict = Depends(verify_super_admin)):
+    """إعادة تفعيل مستأجر معطل"""
+    tenant = await db.tenants.find_one({"id": tenant_id})
+    if not tenant:
+        raise HTTPException(status_code=404, detail="المستأجر غير موجود")
+    
+    # إعادة التفعيل
+    await db.tenants.update_one({"id": tenant_id}, {"$set": {"is_active": True}})
+    await db.users.update_many({"tenant_id": tenant_id}, {"$set": {"is_active": True}})
+    
+    # إنشاء إشعار عن التفعيل
+    notification_doc = {
+        "id": str(uuid.uuid4()),
+        "type": "tenant_activated",
+        "title": "تم تفعيل عميل ✅",
+        "message": f"تم إعادة تفعيل العميل: {tenant.get('name', 'Unknown')}",
+        "tenant_id": tenant_id,
+        "data": {
+            "tenant_name": tenant.get("name"),
+            "owner_name": tenant.get("owner_name"),
+            "action": "activated"
+        },
+        "is_read": False,
+        "created_at": datetime.now(timezone.utc).isoformat()
+    }
+    await db.notifications.insert_one(notification_doc)
+    
+    return {"message": "تم إعادة تفعيل المستأجر وجميع مستخدميه"}
+
+@router.put("/super-admin/tenants/{tenant_id}/deactivate")
+async def deactivate_tenant(tenant_id: str, current_user: dict = Depends(verify_super_admin)):
+    """تعطيل مستأجر"""
+    tenant = await db.tenants.find_one({"id": tenant_id})
+    if not tenant:
+        raise HTTPException(status_code=404, detail="المستأجر غير موجود")
+    
+    # التعطيل
+    await db.tenants.update_one({"id": tenant_id}, {"$set": {"is_active": False}})
+    await db.users.update_many({"tenant_id": tenant_id}, {"$set": {"is_active": False}})
+    
+    # إنشاء إشعار عن التعطيل
+    notification_doc = {
+        "id": str(uuid.uuid4()),
+        "type": "tenant_deactivated",
+        "title": "تم تعطيل عميل ⚠️",
+        "message": f"تم تعطيل العميل: {tenant.get('name', 'Unknown')}",
+        "tenant_id": tenant_id,
+        "data": {
+            "tenant_name": tenant.get("name"),
+            "owner_name": tenant.get("owner_name"),
+            "action": "deactivated"
+        },
+        "is_read": False,
+        "created_at": datetime.now(timezone.utc).isoformat()
+    }
+    await db.notifications.insert_one(notification_doc)
+    
+    return {"message": "تم تعطيل المستأجر وجميع مستخدميه"}
+
+
+@router.post("/super-admin/tenants/{tenant_id}/reset-password")
+async def reset_tenant_admin_password(tenant_id: str, new_password: str, current_user: dict = Depends(verify_super_admin)):
+    """إعادة تعيين كلمة مرور مدير المستأجر"""
+    
+    # التحقق إذا كان النظام الرئيسي
+    if tenant_id == "main-system":
+        # البحث عن admin النظام الرئيسي
+        admin = await db.users.find_one({
+            "$or": [{"tenant_id": {"$exists": False}}, {"tenant_id": None}],
+            "role": UserRole.ADMIN
+        })
+        if not admin:
+            raise HTTPException(status_code=404, detail="مدير النظام الرئيسي غير موجود")
+        
+        await db.users.update_one(
+            {"id": admin["id"]},
+            {"$set": {"password": hash_password(new_password)}}
+        )
+        
+        return {"message": "تم إعادة تعيين كلمة مرور مدير النظام الرئيسي", "email": admin["email"]}
+    
+    # للعملاء العاديين
+    tenant = await db.tenants.find_one({"id": tenant_id})
+    if not tenant:
+        raise HTTPException(status_code=404, detail="المستأجر غير موجود")
+    
+    # البحث عن admin المستأجر
+    admin = await db.users.find_one({"tenant_id": tenant_id, "role": UserRole.ADMIN})
+    if not admin:
+        raise HTTPException(status_code=404, detail="مدير المستأجر غير موجود")
+    
+    new_hash = hash_password(new_password)
+    await db.users.update_one(
+        {"id": admin["id"]},
+        {"$set": {"password": new_hash, "password_hash": new_hash}}
+    )
+    
+    return {"message": "تم إعادة تعيين كلمة المرور", "email": admin["email"]}
+
+# إعدادات المالك
+@router.get("/super-admin/owner-settings")
+async def get_owner_settings(current_user: dict = Depends(verify_super_admin)):
+    """جلب إعدادات المالك"""
+    owner = await db.users.find_one({"role": "super_admin"}, {"_id": 0, "email": 1, "username": 1})
+    return owner or {}
+
+@router.put("/super-admin/owner-settings")
+async def update_owner_settings(
+    settings: dict,
+    current_user: dict = Depends(verify_super_admin)
+):
+    """تحديث إعدادات المالك (كلمة المرور والمفتاح السري)"""
+    try:
+        update_data = {}
+        
+        if settings.get("password"):
+            hashed_password = bcrypt.hashpw(settings["password"].encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
+            update_data["password"] = hashed_password
+        
+        if settings.get("secret_key"):
+            update_data["secret_key"] = settings["secret_key"]
+        
+        if not update_data:
+            raise HTTPException(status_code=400, detail="لم يتم تقديم أي بيانات للتحديث")
+        
+        result = await db.users.update_one(
+            {"role": "super_admin"},
+            {"$set": update_data}
+        )
+        
+        if result.matched_count == 0:
+            raise HTTPException(status_code=404, detail="لم يتم العثور على حساب المالك")
+        
+        return {"message": "تم تحديث إعدادات المالك بنجاح"}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error updating owner settings: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"خطأ في التحديث: {str(e)}")
+
+@router.get("/super-admin/stats")
+async def get_super_admin_stats(current_user: dict = Depends(verify_super_admin)):
+    """إحصائيات شاملة للـ Super Admin"""
+    
+    # إجمالي العملاء (بدون الحسابات التجريبية)
+    total_tenants = await db.tenants.count_documents({"is_demo": {"$ne": True}})
+    active_tenants = await db.tenants.count_documents({"is_active": True, "is_demo": {"$ne": True}})
+    
+    # عدد الحسابات التجريبية
+    demo_tenants = await db.tenants.count_documents({"$or": [{"is_demo": True}, {"subscription_type": "demo"}]})
+    
+    # جلب IDs جميع العملاء الموجودين
+    all_tenants = await db.tenants.find({}, {"id": 1}).to_list(1000)
+    valid_tenant_ids = [t["id"] for t in all_tenants]
+    
+    # استبعاد مستخدمي النظام الرئيسي (super_admin و admin و default) والحسابات التجريبية
+    # جلب IDs الحسابات التجريبية
+    demo_tenant_ids = await db.tenants.find(
+        {"$or": [{"is_demo": True}, {"subscription_type": "demo"}]},
+        {"id": 1}
+    ).to_list(100)
+    demo_ids = [t["id"] for t in demo_tenant_ids]
+    
+    total_users = await db.users.count_documents({
+        "role": {"$nin": [UserRole.SUPER_ADMIN, UserRole.ADMIN]},
+        "tenant_id": {"$exists": True, "$ne": None, "$ne": "default", "$nin": demo_ids}
+    })
+    
+    # حساب الطلبات فقط للعملاء الموجودين فعلاً (استبعاد الطلبات اليتيمة)
+    total_orders = await db.orders.count_documents({
+        "tenant_id": {"$in": valid_tenant_ids, "$nin": demo_ids}
+    })
+    
+    # المبيعات الإجمالية - فقط للعملاء الموجودين فعلاً
+    sales_cursor = db.orders.aggregate([
+        {"$match": {
+            "status": {"$ne": "cancelled"}, 
+            "tenant_id": {"$in": valid_tenant_ids, "$nin": demo_ids}
+        }},
+        {"$group": {"_id": None, "total": {"$sum": "$total"}}}
+    ])
+    sales_result = await sales_cursor.to_list(1)
+    total_sales = sales_result[0]["total"] if sales_result else 0
+    
+    # المستأجرين حسب نوع الاشتراك (بدون التجريبي)
+    subscription_stats = await db.tenants.aggregate([
+        {"$match": {"is_demo": {"$ne": True}}},
+        {"$group": {"_id": "$subscription_type", "count": {"$sum": 1}}}
+    ]).to_list(10)
+    
+    # أحدث المستأجرين
+    recent_tenants = await db.tenants.find({}, {"_id": 0}).sort("created_at", -1).limit(5).to_list(5)
+    
+    return {
+        "total_tenants": total_tenants,
+        "active_tenants": active_tenants,
+        "inactive_tenants": total_tenants - active_tenants,
+        "demo_tenants": demo_tenants,
+        "total_users": total_users,
+        "total_orders": total_orders,
+        "total_sales": total_sales,
+        "subscription_stats": {item["_id"]: item["count"] for item in subscription_stats},
+        "recent_tenants": recent_tenants
+    }
+
+# ==================== نقاط نهاية الإشعارات ====================
+
+@router.get("/super-admin/notifications")
+async def get_notifications(
+    current_user: dict = Depends(verify_super_admin),
+    unread_only: bool = False,
+    limit: int = 50
+):
+    """جلب إشعارات المالك"""
+    query = {}
+    if unread_only:
+        query["is_read"] = False
+    
+    notifications = await db.notifications.find(
+        query, {"_id": 0}
+    ).sort("created_at", -1).limit(limit).to_list(limit)
+    
+    # عدد الإشعارات غير المقروءة
+    unread_count = await db.notifications.count_documents({"is_read": False})
+    
+    return {
+        "notifications": notifications,
+        "unread_count": unread_count
+    }
+
+@router.put("/super-admin/notifications/{notification_id}/read")
+async def mark_notification_read(notification_id: str, current_user: dict = Depends(verify_super_admin)):
+    """تعليم إشعار كمقروء"""
+    result = await db.notifications.update_one(
+        {"id": notification_id},
+        {"$set": {"is_read": True}}
+    )
+    if result.modified_count == 0:
+        raise HTTPException(status_code=404, detail="الإشعار غير موجود")
+    return {"message": "تم تعليم الإشعار كمقروء"}
+
+@router.put("/super-admin/notifications/read-all")
+async def mark_all_notifications_read(current_user: dict = Depends(verify_super_admin)):
+    """تعليم جميع الإشعارات كمقروءة"""
+    await db.notifications.update_many(
+        {"is_read": False},
+        {"$set": {"is_read": True}}
+    )
+    return {"message": "تم تعليم جميع الإشعارات كمقروءة"}
+
+@router.delete("/super-admin/notifications/{notification_id}")
+async def delete_notification(notification_id: str, current_user: dict = Depends(verify_super_admin)):
+    """حذف إشعار"""
+    result = await db.notifications.delete_one({"id": notification_id})
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="الإشعار غير موجود")
+    return {"message": "تم حذف الإشعار"}
+
+@router.delete("/super-admin/notifications")
+async def clear_all_notifications(current_user: dict = Depends(verify_super_admin)):
+    """حذف جميع الإشعارات"""
+    await db.notifications.delete_many({})
+    return {"message": "تم حذف جميع الإشعارات"}
+
+# ==================== إعدادات الإشعارات ====================
+
+@router.get("/super-admin/notification-settings")
+async def get_notification_settings(current_user: dict = Depends(verify_super_admin)):
+    """جلب إعدادات الإشعارات"""
+    settings = await db.settings.find_one({"type": "notification_settings"}, {"_id": 0})
+    
+    if not settings:
+        # إعدادات افتراضية
+        default_settings = {
+            "type": "notification_settings",
+            "value": {
+                "days_before_expiry": 15,
+                "email_notifications": False,
+                "push_notifications": True,
+                "notify_new_tenant": True,
+                "notify_tenant_status": True
+            }
+        }
+        await db.settings.insert_one(default_settings)
+        return default_settings["value"]
+    
+    return settings.get("value", {})
+
+@router.put("/super-admin/notification-settings")
+async def update_notification_settings(settings: NotificationSettings, current_user: dict = Depends(verify_super_admin)):
+    """تحديث إعدادات الإشعارات"""
+    await db.settings.update_one(
+        {"type": "notification_settings"},
+        {"$set": {"value": settings.model_dump()}},
+        upsert=True
+    )
+    return {"message": "تم حفظ إعدادات الإشعارات", "settings": settings.model_dump()}
+
+# ==================== فحص الاشتراكات المنتهية ====================
+
+@router.get("/super-admin/expiring-subscriptions")
+async def get_expiring_subscriptions(current_user: dict = Depends(verify_super_admin)):
+    """جلب الاشتراكات القريبة من الانتهاء"""
+    
+    # جلب إعدادات الإشعارات
+    settings = await db.settings.find_one({"type": "notification_settings"}, {"_id": 0})
+    days_before = 15
+    if settings and settings.get("value"):
+        days_before = settings["value"].get("days_before_expiry", 15)
+    
+    # حساب التاريخ المستهدف
+    target_date = (datetime.now(timezone.utc) + timedelta(days=days_before)).isoformat()
+    now = datetime.now(timezone.utc).isoformat()
+    
+    # جلب الاشتراكات القريبة من الانتهاء
+    expiring = await db.tenants.find({
+        "is_active": True,
+        "expires_at": {"$lte": target_date, "$gte": now}
+    }, {"_id": 0}).to_list(100)
+    
+    # جلب الاشتراكات المنتهية بالفعل
+    expired = await db.tenants.find({
+        "is_active": True,
+        "expires_at": {"$lt": now}
+    }, {"_id": 0}).to_list(100)
+    
+    return {
+        "expiring_soon": expiring,
+        "already_expired": expired,
+        "days_before_alert": days_before
+    }
+
+# ==================== السجل الأمني للمالك الأعلى (Security Log) ====================
+
+@router.get("/super-admin/security-log")
+async def get_security_log(current_user: dict = Depends(verify_super_admin), limit: int = 100):
+    """السجل الأمني — خاص بمالك النظام الأعلى فقط (ليس للعملاء):
+    أحداث الدخول/الخروج/الانتحال، حالة العملاء (نشط/معطل)، وتنبيهات الاشتراك (المتبقي)."""
+    now = datetime.now(timezone.utc)
+
+    # أحداث الأمان من سجل المراقبة (عبر كل العملاء)
+    events = await db.audit_logs.find({}, {"_id": 0}).sort("created_at", -1).limit(limit).to_list(limit)
+    tenant_ids = list({e.get("tenant_id") for e in events if e.get("tenant_id")})
+    tdocs = await db.tenants.find(
+        {"id": {"$in": tenant_ids}}, {"_id": 0, "id": 1, "name": 1, "name_ar": 1, "slug": 1}
+    ).to_list(2000)
+    tmap = {t["id"]: (t.get("name") or t.get("name_ar") or t.get("slug")) for t in tdocs}
+    for e in events:
+        e["tenant_name"] = tmap.get(e.get("tenant_id")) or e.get("tenant_id") or "—"
+
+    # ملخص حالة العملاء
+    all_tenants = await db.tenants.find(
+        {}, {"_id": 0, "id": 1, "name": 1, "name_ar": 1, "slug": 1, "is_active": 1,
+             "expires_at": 1, "subscription_type": 1, "is_demo": 1}
+    ).to_list(5000)
+    active = [t for t in all_tenants if t.get("is_active")]
+    disabled = [t for t in all_tenants if not t.get("is_active")]
+
+    # تنبيهات الاشتراك (المتبقي / المنتهي)
+    settings = await db.settings.find_one({"type": "notification_settings"}, {"_id": 0})
+    days_before = (settings or {}).get("value", {}).get("days_before_expiry", 15) if settings else 15
+    expiring, expired = [], []
+    for t in active:
+        exp = t.get("expires_at")
+        if not exp:
+            continue
+        try:
+            expdt = datetime.fromisoformat(str(exp).replace("Z", "+00:00"))
+        except Exception:
+            continue
+        days_left = (expdt.date() - now.date()).days
+        rec = {
+            "id": t["id"],
+            "name": t.get("name") or t.get("name_ar") or t.get("slug"),
+            "expires_at": exp,
+            "days_left": days_left,
+            "subscription_type": t.get("subscription_type"),
+        }
+        if days_left < 0:
+            expired.append(rec)
+        elif days_left <= days_before:
+            expiring.append(rec)
+    expiring.sort(key=lambda x: x["days_left"])
+    expired.sort(key=lambda x: x["days_left"])
+
+    return {
+        "events": events,
+        "summary": {
+            "total": len(all_tenants),
+            "active": len(active),
+            "disabled": len(disabled),
+            "expiring_soon": len(expiring),
+            "expired": len(expired),
+        },
+        "expiring_soon": expiring,
+        "expired": expired,
+    }
+
+
+
+# ==================== حظر عناوين IP من السجل الأمني ====================
+
+@router.get("/super-admin/blocked-ips")
+async def list_blocked_ips(current_user: dict = Depends(verify_super_admin)):
+    """قائمة عناوين IP المحظورة"""
+    docs = await db.blocked_ips.find({}, {"_id": 0}).sort("blocked_at", -1).to_list(1000)
+    return {"blocked": docs}
+
+
+@router.post("/super-admin/block-ip")
+async def block_ip(payload: dict = Body(...), request: Request = None, current_user: dict = Depends(verify_super_admin)):
+    """حظر عنوان IP — يُمنع من الوصول للنظام نهائياً"""
+    ip = sanitize_text(payload.get("ip"), 64)
+    if not ip:
+        raise HTTPException(status_code=400, detail="عنوان IP مطلوب")
+    # التحقق من صحة صيغة عنوان IP (منع إدخال قيم غير صالحة)
+    import ipaddress as _ipaddr
+    try:
+        _ipaddr.ip_address(ip)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="عنوان IP غير صالح")
+    # منع حظر عنوان المالك الحالي (تجنّب قفل النفس خارج النظام)
+    own_ip = _client_ip(request) if request else None
+    if ip == own_ip:
+        raise HTTPException(status_code=400, detail="لا يمكنك حظر عنوانك الحالي")
+    await db.blocked_ips.update_one(
+        {"ip": ip},
+        {"$set": {
+            "ip": ip,
+            "reason": sanitize_text(payload.get("reason"), 200),
+            "blocked_by": current_user.get("name") or current_user.get("email"),
+            "blocked_at": datetime.now(timezone.utc).isoformat(),
+        }},
+        upsert=True,
+    )
+    await _refresh_blocked_ips(force=True)
+    try:
+        await record_audit("security.ip_blocked", request=request, user=current_user, details={"ip": ip})
+    except Exception:
+        pass
+    return {"success": True, "ip": ip}
+
+
+@router.post("/super-admin/unblock-ip")
+async def unblock_ip(payload: dict = Body(...), request: Request = None, current_user: dict = Depends(verify_super_admin)):
+    """إلغاء حظر عنوان IP"""
+    ip = sanitize_text(payload.get("ip"), 64)
+    if not ip:
+        raise HTTPException(status_code=400, detail="عنوان IP مطلوب")
+    await db.blocked_ips.delete_one({"ip": ip})
+    # مسح عدّاد محاولات الدخول المرتبطة بهذا العنوان (إعادة ضبط كاملة)
+    try:
+        await db.login_attempts.delete_many({"ip": ip})
+    except Exception:
+        pass
+    await _refresh_blocked_ips(force=True)
+    try:
+        await record_audit("security.ip_unblocked", request=request, user=current_user, details={"ip": ip})
+    except Exception:
+        pass
+    return {"success": True, "ip": ip}
+
+
+# ==================== إدارة أمان المصادقة الثنائية (للمالك) ====================
+
+@router.get("/super-admin/trusted-devices")
+async def list_trusted_devices(current_user: dict = Depends(verify_super_admin)):
+    """قائمة الأجهزة الموثوقة (موظفون/سائقون/زبائن) مع بيانات مالكيها."""
+    docs = await db.trusted_devices.find({"revoked": {"$ne": True}}, {"_id": 0}).sort("last_seen_at", -1).to_list(2000)
+    # إثراء بالاسم
+    for d in docs:
+        st = d.get("subject_type")
+        sid = d.get("subject_id")
+        try:
+            if st == "user":
+                u = await db.users.find_one({"id": sid}, {"_id": 0, "full_name": 1, "email": 1, "role": 1})
+                if u:
+                    d["owner_name"] = u.get("full_name") or u.get("email")
+                    d["owner_role"] = u.get("role")
+            elif st == "driver":
+                dr = await db.drivers.find_one({"id": sid}, {"_id": 0, "name": 1, "phone": 1})
+                if dr:
+                    d["owner_name"] = dr.get("name")
+            elif st == "customer":
+                d["owner_name"] = sid
+        except Exception:
+            pass
+    return {"devices": docs, "count": len(docs)}
+
+@router.post("/super-admin/revoke-device")
+async def revoke_trusted_device(payload: dict = Body(...), request: Request = None, current_user: dict = Depends(verify_super_admin)):
+    """إلغاء توثيق جهاز واحد — سيُطلب التحقق مجدداً عند الدخول التالي."""
+    device_id = sanitize_text(payload.get("device_id"), 128)
+    subject_id = payload.get("subject_id")
+    q = {}
+    if device_id:
+        q["device_id"] = device_id
+    if subject_id:
+        q["subject_id"] = str(subject_id)
+    if not q:
+        raise HTTPException(status_code=400, detail="معرّف الجهاز أو المستخدم مطلوب")
+    res = await db.trusted_devices.delete_many(q)
+    await record_audit("security.device_revoked", request=request, user=current_user, details=q)
+    return {"success": True, "removed": res.deleted_count}
+
+@router.get("/super-admin/pending-2fa-codes")
+async def list_pending_2fa_codes(current_user: dict = Depends(verify_super_admin)):
+    """رموز التحقق المعلّقة (عند تعذّر الإرسال عبر SMS/واتساب/البريد) — يظهرها المالك مؤقتاً."""
+    now = datetime.now(timezone.utc).isoformat()
+    docs = await db.verification_sessions.find(
+        {"pending_delivery": True, "consumed": False, "expires_at": {"$gt": now}},
+        {"_id": 0, "id": 1, "subject_type": 1, "subject_name": 1, "channel": 1,
+         "destination": 1, "created_at": 1, "expires_at": 1}
+    ).sort("created_at", -1).to_list(200)
+    return {"pending": docs, "count": len(docs),
+            "twilio_configured": _twilio_verify.is_configured()}
+
+@router.get("/super-admin/security-status")
+async def security_status(current_user: dict = Depends(verify_super_admin)):
+    """حالة تكاملات الأمان (لعرضها في لوحة المالك)."""
+    return {
+        "two_fa_enabled": await two_fa_enabled(),
+        "twilio_configured": _twilio_verify.is_configured(),
+        "whatsapp_connected": await _wa_free.is_connected(),
+        "email_configured": await email_transport_configured(),
+        "owner_recovery_emails": OWNER_RECOVERY_EMAILS,
+        "max_login_fails": MAX_LOGIN_FAILS,
+        "owner_ips_saved": await db.owner_trusted_ips.count_documents({}),
+        "blocked_ips": await db.blocked_ips.count_documents({}),
+        "trusted_devices": await db.trusted_devices.count_documents({"revoked": {"$ne": True}}),
+    }
+
+@router.get("/super-admin/2fa-readiness")
+async def two_fa_readiness(current_user: dict = Depends(verify_super_admin)):
+    """جاهزية التفعيل: المستخدمون/السائقون الناقصة بياناتهم لاستلام رمز التحقق."""
+    users = await db.users.find({"role": {"$ne": UserRole.SUPER_ADMIN}}, {"_id": 0, "id": 1, "full_name": 1, "email": 1, "phone": 1, "role": 1}).to_list(2000)
+    users_no_phone = [{"id": u.get("id"), "name": u.get("full_name") or u.get("email"), "email": u.get("email"), "role": u.get("role")}
+                      for u in users if not (u.get("phone") or "").strip()]
+    users_no_contact = [u for u in users_no_phone if not (dict(u).get("email") or "").strip()]
+    drivers = await db.drivers.find({}, {"_id": 0, "id": 1, "name": 1, "phone": 1}).to_list(2000)
+    drivers_no_phone = [{"id": d.get("id"), "name": d.get("name")} for d in drivers if not (d.get("phone") or "").strip()]
+    return {
+        "twilio_configured": _twilio_verify.is_configured(),
+        "email_configured": await email_transport_configured(),
+        "total_users": len(users),
+        "users_without_phone": users_no_phone,          # سيستلمون عبر البريد
+        "users_without_any_contact": users_no_contact,  # لا يمكن إرسال رمز لهم
+        "drivers_without_phone": drivers_no_phone,       # حرِج: السائق يستلم عبر الهاتف فقط
+    }
+
+@router.post("/super-admin/security-2fa-toggle")
+async def toggle_two_fa(payload: dict = Body(...), request: Request = None, current_user: dict = Depends(verify_super_admin)):
+    """تنشيط/إيقاف التحقق الإلزامي. عند التنشيط: يُخرج جميع المستخدمين والسائقين
+    ويُلغى توثيق كل الأجهزة لإجبار الجميع على التحقق فوراً."""
+    enabled = bool(payload.get("enabled", False))
+    now_iso = datetime.now(timezone.utc).isoformat()
+    update = {"id": "global", "two_fa_enabled": enabled, "updated_at": now_iso,
+              "updated_by": current_user.get("email")}
+    result = {"two_fa_enabled": enabled}
+    if enabled:
+        # إخراج الجميع فوراً: إبطال كل التوكنات القديمة + إلغاء توثيق الأجهزة + جلسات السائقين
+        update["sessions_valid_after"] = now_iso
+        update["activated_at"] = now_iso
+        dev = await db.trusted_devices.delete_many({})
+        drv = await db.driver_tokens.delete_many({})
+        result["devices_revoked"] = dev.deleted_count
+        result["driver_sessions_cleared"] = drv.deleted_count
+    await db.security_config.update_one({"id": "global"}, {"$set": update}, upsert=True)
+    await _refresh_security_config(force=True)
+    await record_audit("security.2fa_toggle", request=request, user=current_user,
+                       details={"enabled": enabled})
+    return {"success": True, **result}
+
+@router.get("/super-admin/whatsapp/status")
+async def wa_status(current_user: dict = Depends(verify_super_admin)):
+    """حالة اتصال الواتساب المجاني + رمز QR للربط."""
+    return await _wa_free.status()
+
+@router.post("/super-admin/whatsapp/logout")
+async def wa_logout_ep(request: Request = None, current_user: dict = Depends(verify_super_admin)):
+    """فك ربط الواتساب (يتطلب مسح QR جديد لاحقاً)."""
+    await record_audit("security.whatsapp_logout", request=request, user=current_user)
+    return await _wa_free.logout()
+
+@router.post("/super-admin/whatsapp/reconnect")
+async def wa_reconnect_ep(current_user: dict = Depends(verify_super_admin)):
+    return await _wa_free.reconnect()
+
+@router.post("/super-admin/whatsapp/pair")
+async def wa_pair_ep(payload: dict = Body(...), request: Request = None, current_user: dict = Depends(verify_super_admin)):
+    """ربط الواتساب برقم الهاتف (Pairing Code) — بديل مسح QR.
+    المالك يُدخل رقم هاتفه، ونُرجع رمزاً يُدخله في: واتساب ← الأجهزة المرتبطة ← ربط جهاز ← ربط برقم الهاتف."""
+    phone = sanitize_text(payload.get("phone"), 32)
+    if not phone:
+        raise HTTPException(status_code=400, detail="رقم الهاتف مطلوب")
+    e164 = await _phone_to_e164(phone)
+    res = await _wa_free.request_pairing_code(e164)
+    await record_audit("security.whatsapp_pair_request", request=request, user=current_user, details={"phone": _mask_phone(e164)})
+    return res
+
+@router.post("/super-admin/whatsapp/test")
+async def wa_test_ep(payload: dict = Body(...), current_user: dict = Depends(verify_super_admin)):
+    """إرسال رسالة تجربة عبر الواتساب لرقم محدد."""
+    phone = sanitize_text(payload.get("phone"), 32)
+    if not phone:
+        raise HTTPException(status_code=400, detail="الرقم مطلوب")
+    e164 = await _phone_to_e164(phone)
+    ok, err = await _wa_free.send_message(e164, "رسالة تجربة من Maestro EGP ✅ — الواتساب مرتبط ويعمل.")
+    return {"success": ok, "error": err, "phone": e164}
+
+# أنماط بيانات الاختبار الوهمية (لا تمسّ الأسماء العربية الحقيقية)
+_DUMMY_NAME_PATTERNS = _re_rbac.compile(r"(تجريبي|اختبار|dummy|test|demo|probe|rw\s*probe|سائق\s*[0-9]+)", _re_rbac.IGNORECASE)
+_DUMMY_EXACT_NAMES = {
+    "سائق 1", "سائق 2", "سائق أحمد", "سائق علي", "زبون تجريبي",
+    "موظف سلفة سابقة", "كاشير اختبار", "مورد تجريبي أ", "مورد تجريبي ب",
+}
+
+def _is_dummy_name(name: str) -> bool:
+    if not name:
+        return False
+    n = str(name).strip()
+    if n in _DUMMY_EXACT_NAMES:
+        return True
+    return bool(_DUMMY_NAME_PATTERNS.search(n))
+
+@router.post("/super-admin/purge-dummy-data")
+async def purge_dummy_data(payload: dict = Body(default={}), request: Request = None, current_user: dict = Depends(verify_super_admin)):
+    """يحذف بيانات الاختبار الوهمية (سائقون/موظفون/زبائن/موردون) دون المساس بالبيانات الحقيقية.
+    dry_run=true للمعاينة فقط."""
+    dry_run = bool(payload.get("dry_run", False))
+    report = {"drivers": [], "employees": [], "customers": [], "suppliers": []}
+
+    async def _scan(coll, name_fields, extra_ids=None):
+        found = []
+        docs = await db[coll].find({}, {"_id": 0}).to_list(5000)
+        for d in docs:
+            nm = None
+            for f in name_fields:
+                if d.get(f):
+                    nm = d.get(f); break
+            did = str(d.get("id", ""))
+            is_dummy = _is_dummy_name(nm) or (did.startswith("demo-drv")) or (extra_ids and did in extra_ids)
+            if is_dummy:
+                found.append({"id": d.get("id"), "name": nm, "phone": d.get("phone")})
+        return found
+
+    report["drivers"] = await _scan("drivers", ["name", "full_name"])
+    report["employees"] = await _scan("employees", ["name", "full_name"])
+    report["customers"] = await _scan("customers", ["name", "full_name"])
+    report["suppliers"] = await _scan("suppliers", ["name"])
+
+    deleted = {"drivers": 0, "employees": 0, "customers": 0, "suppliers": 0}
+    if not dry_run:
+        for coll in ("drivers", "employees", "customers", "suppliers"):
+            ids = [x["id"] for x in report[coll] if x.get("id")]
+            if ids:
+                res = await db[coll].delete_many({"id": {"$in": ids}})
+                deleted[coll] = res.deleted_count
+        await record_audit("security.purge_dummy_data", request=request, user=current_user,
+                           details={"deleted": deleted})
+    total_found = sum(len(v) for v in report.values())
+    return {"dry_run": dry_run, "found": report, "total_found": total_found, "deleted": deleted}
+
+
+
+# ==================== لوحة معلومات الاشتراكات ====================
+
+@router.get("/super-admin/subscriptions-dashboard")
+async def get_subscriptions_dashboard(current_user: dict = Depends(verify_super_admin)):
+    """لوحة معلومات شاملة للاشتراكات"""
+    
+    now = datetime.now(timezone.utc)
+    
+    # جلب إعدادات التنبيه
+    settings = await db.settings.find_one({"type": "notification_settings"}, {"_id": 0})
+    days_before = 15
+    if settings and settings.get("value"):
+        days_before = settings["value"].get("days_before_expiry", 15)
+    
+    # حساب التواريخ
+    target_date = (now + timedelta(days=days_before)).isoformat()
+    now_iso = now.isoformat()
+    
+    # جلب جميع العملاء (غير التجريبية)
+    all_tenants = await db.tenants.find(
+        {"is_demo": {"$ne": True}},
+        {"_id": 0}
+    ).to_list(1000)
+    
+    # تصنيف الاشتراكات
+    active_subscriptions = []
+    expiring_soon = []
+    already_expired = []
+    
+    for tenant in all_tenants:
+        expires_at = tenant.get("expires_at")
+        if expires_at:
+            if expires_at < now_iso:
+                already_expired.append(tenant)
+            elif expires_at <= target_date:
+                expiring_soon.append(tenant)
+                if tenant.get("is_active"):
+                    active_subscriptions.append(tenant)
+            else:
+                if tenant.get("is_active"):
+                    active_subscriptions.append(tenant)
+        else:
+            if tenant.get("is_active"):
+                active_subscriptions.append(tenant)
+    
+    # إحصائيات حسب نوع الاشتراك
+    subscription_types = {}
+    for tenant in all_tenants:
+        sub_type = tenant.get("subscription_type", "unknown")
+        if sub_type not in subscription_types:
+            subscription_types[sub_type] = {"count": 0, "active": 0, "expired": 0}
+        subscription_types[sub_type]["count"] += 1
+        if tenant.get("is_active") and tenant not in already_expired:
+            subscription_types[sub_type]["active"] += 1
+        elif tenant in already_expired:
+            subscription_types[sub_type]["expired"] += 1
+    
+    # جلب أسعار الاشتراكات من قاعدة البيانات
+    prices_doc = await db.settings.find_one({"type": "subscription_prices"}, {"_id": 0})
+    
+    # الأسعار الافتراضية بالدولار
+    default_prices = {
+        "bronze": {"monthly": 15, "name": "برونزية"},
+        "silver": {"monthly": 30, "name": "فضية"},
+        "gold": {"monthly": 50, "name": "ذهبية"},
+        "basic": {"monthly": 25, "name": "أساسي"},
+        "premium": {"monthly": 50, "name": "مميز"},
+        "trial": {"monthly": 0, "name": "تجريبي"},
+        "demo": {"monthly": 0, "name": "عرض"}
+    }
+    
+    if prices_doc and prices_doc.get("value"):
+        subscription_prices = prices_doc["value"]
+    else:
+        subscription_prices = default_prices
+    
+    expected_revenue = {
+        "from_expiring": 0,
+        "from_active": 0,
+        "total_monthly": 0,
+        "currency": "USD",
+        "details": []
+    }
+    
+    for tenant in expiring_soon:
+        sub_type = tenant.get("subscription_type", "basic")
+        duration = tenant.get("subscription_duration", 1)
+        price_per_month = subscription_prices.get(sub_type, {}).get("monthly", 0)
+        expected_revenue["from_expiring"] += price_per_month * duration
+        expected_revenue["details"].append({
+            "tenant_name": tenant.get("name"),
+            "subscription_type": sub_type,
+            "duration_months": duration,
+            "expected_amount": price_per_month * duration,
+            "expires_at": tenant.get("expires_at")
+        })
+    
+    for tenant in active_subscriptions:
+        sub_type = tenant.get("subscription_type", "basic")
+        price_per_month = subscription_prices.get(sub_type, {}).get("monthly", 0)
+        expected_revenue["from_active"] += price_per_month
+    
+    expected_revenue["total_monthly"] = expected_revenue["from_active"]
+    
+    # ترتيب الاشتراكات القريبة من الانتهاء حسب التاريخ
+    expiring_soon.sort(key=lambda x: x.get("expires_at", ""))
+    already_expired.sort(key=lambda x: x.get("expires_at", ""), reverse=True)
+    
+    # حساب عدد الأيام المتبقية لكل اشتراك
+    for tenant in expiring_soon:
+        if tenant.get("expires_at"):
+            try:
+                exp_date = datetime.fromisoformat(tenant["expires_at"].replace("Z", "+00:00"))
+                days_left = (exp_date - now).days
+                tenant["days_left"] = max(0, days_left)
+            except:
+                tenant["days_left"] = None
+    
+    for tenant in already_expired:
+        if tenant.get("expires_at"):
+            try:
+                exp_date = datetime.fromisoformat(tenant["expires_at"].replace("Z", "+00:00"))
+                days_ago = (now - exp_date).days
+                tenant["days_expired"] = days_ago
+            except:
+                tenant["days_expired"] = None
+    
+    return {
+        "summary": {
+            "total_tenants": len(all_tenants),
+            "active_subscriptions": len(active_subscriptions),
+            "expiring_soon": len(expiring_soon),
+            "already_expired": len(already_expired),
+            "days_before_alert": days_before
+        },
+        "subscription_types": subscription_types,
+        "expected_revenue": expected_revenue,
+        "expiring_soon_list": expiring_soon[:10],  # أول 10
+        "expired_list": already_expired[:10],  # أول 10
+        "subscription_prices": subscription_prices
+    }
+
+# ==================== أسعار الاشتراكات ====================
+
+class SubscriptionPriceUpdate(BaseModel):
+    """تحديث سعر اشتراك واحد"""
+    subscription_type: str  # basic, premium
+    monthly_price: float  # السعر الشهري بالدولار
+
+class SubscriptionPricesUpdate(BaseModel):
+    """تحديث جميع أسعار الاشتراكات"""
+    bronze: float = 15  # السعر الشهري للبرونزية بالدولار
+    silver: float = 30  # السعر الشهري للفضية بالدولار
+    gold: float = 50  # السعر الشهري للذهبية بالدولار
+
+@router.get("/super-admin/subscription-prices")
+async def get_subscription_prices(current_user: dict = Depends(verify_super_admin)):
+    """جلب أسعار الاشتراكات"""
+    prices_doc = await db.settings.find_one({"type": "subscription_prices"}, {"_id": 0})
+    
+    # الأسعار الافتراضية بالدولار
+    default_prices = {
+        "gold": {"monthly": 50, "name": "ذهبية"},
+        "silver": {"monthly": 30, "name": "فضية"},
+        "bronze": {"monthly": 15, "name": "برونزية"},
+        "trial": {"monthly": 0, "name": "تجريبي"},
+        "demo": {"monthly": 0, "name": "عرض"}
+    }
+    
+    if prices_doc and prices_doc.get("value"):
+        return {
+            "prices": prices_doc["value"],
+            "currency": "USD"
+        }
+    
+    return {
+        "prices": default_prices,
+        "currency": "USD"
+    }
+
+@router.put("/super-admin/subscription-prices")
+async def update_subscription_prices(prices: SubscriptionPricesUpdate, current_user: dict = Depends(verify_super_admin)):
+    """تحديث أسعار الاشتراكات بالدولار"""
+    
+    new_prices = {
+        "gold": {"monthly": prices.gold, "name": "ذهبية"},
+        "silver": {"monthly": prices.silver, "name": "فضية"},
+        "bronze": {"monthly": prices.bronze, "name": "برونزية"},
+        "trial": {"monthly": 0, "name": "تجريبي"},
+        "demo": {"monthly": 0, "name": "عرض"}
+    }
+    
+    await db.settings.update_one(
+        {"type": "subscription_prices"},
+        {"$set": {"value": new_prices, "updated_at": datetime.now(timezone.utc).isoformat()}},
+        upsert=True
+    )
+    
+    return {
+        "message": "تم تحديث أسعار الاشتراكات",
+        "prices": new_prices,
+        "currency": "USD"
+    }
+
+@router.post("/super-admin/impersonate/{tenant_id}")
+async def impersonate_tenant(tenant_id: str, current_user: dict = Depends(verify_super_admin)):
+    """الدخول كعميل - للمشاهدة والتحكم المباشر"""
+    
+    # التحقق إذا كان النظام الرئيسي
+    if tenant_id == "main-system":
+        # البحث عن admin النظام الرئيسي
+        admin = await db.users.find_one({
+            "$or": [{"tenant_id": {"$exists": False}}, {"tenant_id": None}],
+            "role": UserRole.ADMIN
+        }, {"_id": 0, "password": 0})
+        if not admin:
+            raise HTTPException(status_code=404, detail="مدير النظام الرئيسي غير موجود")
+        
+        # إنشاء token للدخول
+        token = create_token(admin["id"], admin["role"], admin.get("branch_id"), admin.get("tenant_id"))
+        
+        # إضافة علامات الـ impersonation للمستخدم
+        admin["impersonated"] = True
+        admin["impersonated_by"] = current_user.get("id")
+        admin["original_role"] = UserRole.SUPER_ADMIN
+        
+        return {
+            "token": token,
+            "user": admin,
+            "tenant": {
+                "id": "main-system",
+                "name": "🏠 النظام الرئيسي",
+                "is_main_system": True
+            },
+            "impersonated": True,
+            "original_super_admin": current_user["id"]
+        }
+    
+    # للعملاء العاديين
+    tenant = await db.tenants.find_one({"id": tenant_id}, {"_id": 0})
+    if not tenant:
+        raise HTTPException(status_code=404, detail="العميل غير موجود")
+    
+    # البحث عن admin العميل
+    admin = await db.users.find_one({"tenant_id": tenant_id, "role": UserRole.ADMIN}, {"_id": 0, "password": 0})
+    if not admin:
+        raise HTTPException(status_code=404, detail="مدير العميل غير موجود")
+    
+    # إنشاء token للدخول كالعميل مع علامة impersonation
+    token = create_token(admin["id"], admin["role"], admin.get("branch_id"), admin.get("tenant_id"))
+    
+    # إضافة علامات الـ impersonation للمستخدم
+    admin["impersonated"] = True
+    admin["impersonated_by"] = current_user.get("id")
+    admin["original_role"] = UserRole.SUPER_ADMIN
+    
+    return {
+        "token": token,
+        "user": admin,
+        "tenant": tenant,
+        "impersonated": True,
+        "original_super_admin": current_user["id"]
+    }
+
+@router.get("/super-admin/tenants/{tenant_id}/live-stats")
+async def get_tenant_live_stats(tenant_id: str, current_user: dict = Depends(verify_super_admin)):
+    """إحصائيات حية للعميل"""
+    
+    # التحقق إذا كان النظام الرئيسي
+    if tenant_id == "main-system":
+        tenant = {
+            "id": "main-system",
+            "name": "🏠 النظام الرئيسي",
+            "is_main_system": True
+        }
+        tenant_query = {"$or": [{"tenant_id": {"$exists": False}}, {"tenant_id": None}]}
+    else:
+        tenant = await db.tenants.find_one({"id": tenant_id}, {"_id": 0})
+        if not tenant:
+            raise HTTPException(status_code=404, detail="العميل غير موجود")
+        tenant_query = {"tenant_id": tenant_id}
+    
+    # إحصائيات اليوم
+    today = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0).isoformat()
+    
+    today_query = {**tenant_query, "created_at": {"$gte": today}}
+    today_orders = await db.orders.find(today_query, {"_id": 0}).to_list(500)
+    
+    # حساب الإحصائيات
+    total_today = sum((o.get("total") or 0) for o in today_orders if o.get("status") != "cancelled")
+    pending_orders = len([o for o in today_orders if o.get("status") == "pending"])
+    preparing_orders = len([o for o in today_orders if o.get("status") == "preparing"])
+    delivered_orders = len([o for o in today_orders if o.get("status") == "delivered"])
+    cancelled_orders = len([o for o in today_orders if o.get("status") == "cancelled"])
+    
+    # المنتجات الأكثر مبيعاً اليوم
+    product_sales = {}
+    for order in today_orders:
+        if order.get("status") != "cancelled":
+            for item in order.get("items", []):
+                # استخدام اسم المنتج (product_name) أو الاسم العادي (name)
+                name = item.get("product_name") or item.get("name") or "غير معروف"
+                if name not in product_sales:
+                    product_sales[name] = {"quantity": 0, "total": 0}
+                product_sales[name]["quantity"] += _sn(item.get("quantity"))
+                product_sales[name]["total"] += _sn(item.get("subtotal"))
+    
+    top_products = sorted(product_sales.items(), key=lambda x: x[1]["total"], reverse=True)[:5]
+    
+    # المستخدمين النشطين (لديهم وردية مفتوحة)
+    active_shifts = await db.shifts.count_documents({
+        "status": "open"
+    })
+    
+    return {
+        "tenant": tenant,
+        "today": {
+            "total_sales": total_today,
+            "total_orders": len(today_orders),
+            "pending_orders": pending_orders,
+            "preparing_orders": preparing_orders,
+            "delivered_orders": delivered_orders,
+            "cancelled_orders": cancelled_orders
+        },
+        "top_products": [{"name": p[0], **p[1]} for p in top_products],
+        "active_shifts": active_shifts,
+        "recent_orders": today_orders[:10]  # آخر 10 طلبات
+    }
+
+@router.get("/super-admin/tenants/{tenant_id}/orders")
+async def get_tenant_orders(tenant_id: str, date: Optional[str] = None, status: Optional[str] = None, current_user: dict = Depends(verify_super_admin)):
+    """جلب طلبات عميل معين"""
+    
+    query = {"tenant_id": tenant_id}
+    if date:
+        query["created_at"] = {"$regex": f"^{date}"}
+    if status:
+        query["status"] = status
+    
+    orders = await db.orders.find(query, {"_id": 0}).sort("created_at", -1).limit(100).to_list(100)
+    return orders
+
+@router.get("/super-admin/tenants/{tenant_id}/products")
+async def get_tenant_products(tenant_id: str, current_user: dict = Depends(verify_super_admin)):
+    """جلب منتجات عميل معين"""
+    
+    products = await db.products.find({"tenant_id": tenant_id}, {"_id": 0}).to_list(500)
+    return products
+
+@router.delete("/super-admin/tenants/{tenant_id}/permanent")
+async def permanently_delete_tenant(tenant_id: str, confirm: bool = False, current_user: dict = Depends(verify_super_admin)):
+    """حذف عميل نهائياً مع جميع بياناته"""
+    
+    if not confirm:
+        raise HTTPException(status_code=400, detail="يجب تأكيد الحذف بإرسال confirm=true")
+    
+    tenant = await db.tenants.find_one({"id": tenant_id})
+    if not tenant:
+        raise HTTPException(status_code=404, detail="العميل غير موجود")
+    
+    # حذف جميع البيانات المرتبطة
+    await db.users.delete_many({"tenant_id": tenant_id})
+    await db.branches.delete_many({"tenant_id": tenant_id})
+    await db.orders.delete_many({"tenant_id": tenant_id})
+    await db.products.delete_many({"tenant_id": tenant_id})
+    await db.categories.delete_many({"tenant_id": tenant_id})
+    await db.inventory.delete_many({"tenant_id": tenant_id})
+    await db.customers.delete_many({"tenant_id": tenant_id})
+    await db.shifts.delete_many({"tenant_id": tenant_id})
+    await db.expenses.delete_many({"tenant_id": tenant_id})
+    await db.drivers.delete_many({"tenant_id": tenant_id})
+    await db.tenants.delete_one({"id": tenant_id})
+    
+    return {"message": f"تم حذف العميل '{tenant['name']}' وجميع بياناته نهائياً"}
+
+@router.post("/super-admin/reset-sales")
+async def reset_all_sales(confirm: bool = False, current_user: dict = Depends(verify_super_admin)):
+    """تصفير جميع المبيعات والطلبات - للتجربة"""
+    
+    if not confirm:
+        raise HTTPException(status_code=400, detail="يجب تأكيد التصفير بإرسال confirm=true")
+    
+    # حذف جميع الطلبات
+    orders_result = await db.orders.delete_many({})
+    
+    # حذف جميع الورديات
+    shifts_result = await db.shifts.delete_many({})
+    
+    # إعادة تعيين إحصائيات العملاء
+    await db.customers.update_many({}, {"$set": {
+        "total_orders": 0,
+        "total_spent": 0.0,
+        "last_order_date": None
+    }})
+    
+    # إعادة تعيين إحصائيات السائقين
+    await db.drivers.update_many({}, {"$set": {
+        "total_deliveries": 0,
+        "is_available": True,
+        "current_order_id": None
+    }})
+    
+    # تصفير خزينة المالك
+    deposits_result = await db.owner_deposits.delete_many({})
+    withdrawals_result = await db.owner_withdrawals.delete_many({})
+    profit_transfers_result = await db.owner_profit_transfers.delete_many({})
+    profit_withdrawals_result = await db.owner_profit_withdrawals.delete_many({})
+    
+    return {
+        "message": "تم تصفير جميع المبيعات بنجاح",
+        "deleted_orders": orders_result.deleted_count,
+        "deleted_shifts": shifts_result.deleted_count,
+        "owner_wallet_reset": {
+            "deleted_deposits": deposits_result.deleted_count,
+            "deleted_withdrawals": withdrawals_result.deleted_count,
+            "deleted_profit_transfers": profit_transfers_result.deleted_count,
+            "deleted_profit_withdrawals": profit_withdrawals_result.deleted_count
+        }
+    }
+
+@router.post("/super-admin/tenants/{tenant_id}/branches/{branch_id}/reset-sales")
+async def reset_branch_sales(
+    tenant_id: str,
+    branch_id: str,
+    confirm: bool = False,
+    current_user: dict = Depends(verify_super_admin)
+):
+    """تصفير شامل لفرع محدد لعميل محدد (super_admin فقط).
+    
+    يحذف من هذا الفرع فقط (كل البيانات المعاملاتية):
+    - الطلبات (نقد/بطاقة/آجل/توصيل/شركات) + الإلغاءات
+    - الورديات (شفتات قديمة وجديدة)
+    - إغلاقات الصندوق (قديمة وجديدة)
+    - سجلات الصندوق وحركاته
+    - المصاريف
+    - المرتجعات + counters المرتجعات
+    - أوامر الطباعة المعلقة
+    - حركات/معاملات المخزون
+    - الحجوزات + المراجعات
+    - استخدام الكوبونات
+    - سجلات التدقيق (audit) لهذا الفرع
+    - معاملات الدفع
+    
+    لن يحذف: المنتجات، الفئات، الموظفين، الطابعات، الإعدادات، الموردين، 
+    الرواتب، السلف، الحسومات، الموظفين، الحضور.
+    """
+    if not confirm:
+        raise HTTPException(status_code=400, detail="يجب تأكيد التصفير بإرسال confirm=true")
+    
+    branch = await db.branches.find_one({"id": branch_id, "tenant_id": tenant_id}, {"_id": 0})
+    if not branch:
+        raise HTTPException(status_code=404, detail="الفرع غير موجود لهذا العميل")
+    
+    base_q = {"tenant_id": tenant_id, "branch_id": branch_id}
+    # طلبات الفروع تُخزَّن بحقول to_branch_id/from_branch_id وليس branch_id — لذا نطابق كل الصيغ
+    branch_match = {"$or": [
+        {"branch_id": branch_id},
+        {"to_branch_id": branch_id},
+        {"from_branch_id": branch_id},
+    ]}
+    
+    # === حذف كل البيانات المعاملاتية للفرع ===
+    deleted = {}
+    
+    # طلبات + إلغاءات + توصيل (كلها بنفس collection)
+    deleted["orders"] = (await db.orders.delete_many(base_q)).deleted_count
+    deleted["branch_orders"] = (await db.branch_orders.delete_many(branch_match)).deleted_count
+    deleted["branch_orders_new"] = (await db.branch_orders_new.delete_many(branch_match)).deleted_count
+    
+    # ورديات + إغلاقات الصندوق
+    deleted["shifts"] = (await db.shifts.delete_many(base_q)).deleted_count
+    deleted["cash_register_closings"] = (await db.cash_register_closings.delete_many(base_q)).deleted_count
+    deleted["cash_register_closes"] = (await db.cash_register_closes.delete_many(base_q)).deleted_count
+    deleted["cash_drawer_logs"] = (await db.cash_drawer_logs.delete_many(base_q)).deleted_count
+    deleted["day_closures"] = (await db.day_closures.delete_many(base_q)).deleted_count
+    
+    # مصاريف + مرتجعات
+    deleted["expenses"] = (await db.expenses.delete_many(base_q)).deleted_count
+    deleted["refunds"] = (await db.refunds.delete_many(base_q)).deleted_count
+    deleted["refund_counters"] = (await db.refund_counters.delete_many(base_q)).deleted_count
+    
+    # طابور الطباعة
+    deleted["print_queue"] = (await db.print_queue.delete_many(base_q)).deleted_count
+    
+    # حركات المخزون والمعاملات
+    deleted["inventory_movements"] = (await db.inventory_movements.delete_many(base_q)).deleted_count
+    deleted["inventory_transactions"] = (await db.inventory_transactions.delete_many(base_q)).deleted_count
+    
+    # حجوزات + مراجعات
+    deleted["reservations"] = (await db.reservations.delete_many(base_q)).deleted_count
+    deleted["reviews"] = (await db.reviews.delete_many(base_q)).deleted_count
+    deleted["customer_reviews"] = (await db.customer_reviews.delete_many(base_q)).deleted_count
+    
+    # كوبونات + معاملات الدفع
+    deleted["coupon_usage"] = (await db.coupon_usage.delete_many(base_q)).deleted_count
+    deleted["payment_transactions"] = (await db.payment_transactions.delete_many(base_q)).deleted_count
+    
+    # سجلات التدقيق
+    deleted["audit_logs"] = (await db.audit_logs.delete_many(base_q)).deleted_count
+    
+    # سجلات المكالمات (call center) لهذا الفرع
+    deleted["call_logs"] = (await db.call_logs.delete_many(base_q)).deleted_count
+    
+    # === حذف مخزون الفرع نهائياً (ليعود الفرع جديداً بلا مواد) ===
+    # يرجع الفرع إلى حالة جديدة تماماً: لا منتجات ولا مخزون، ليبدأ بجرد صحيح من الصفر
+    inv_deleted = await db.branch_inventory.delete_many({"branch_id": branch_id})
+    branch_inventory_deleted = inv_deleted.deleted_count
+    
+    # تصفير حالة الطاولات (مهيأة للاستخدام)
+    await db.tables.update_many(base_q, {"$set": {
+        "status": "available",
+        "current_order_id": None
+    }})
+    
+    total_deleted = sum(deleted.values()) + branch_inventory_deleted
+    
+    return {
+        "message": f"تم تصفير فرع '{branch.get('name','')}' بنجاح",
+        "branch_name": branch.get("name", ""),
+        "total_deleted": total_deleted,
+        "branch_inventory_deleted": branch_inventory_deleted,
+        "details": deleted
+    }
+
+
+
+@router.post("/super-admin/tenants/{tenant_id}/reset-sales")
+async def reset_tenant_sales(tenant_id: str, confirm: bool = False, current_user: dict = Depends(verify_super_admin)):
+    """تصفير مبيعات عميل معين - للتجربة"""
+    
+    if not confirm:
+        raise HTTPException(status_code=400, detail="يجب تأكيد التصفير بإرسال confirm=true")
+    
+    # التحقق إذا كان النظام الرئيسي
+    if tenant_id == "main-system":
+        # حذف طلبات النظام الرئيسي (بدون tenant_id)
+        orders_result = await db.orders.delete_many({
+            "$or": [{"tenant_id": {"$exists": False}}, {"tenant_id": None}]
+        })
+        
+        # حذف ورديات النظام الرئيسي
+        shifts_result = await db.shifts.delete_many({
+            "$or": [{"tenant_id": {"$exists": False}}, {"tenant_id": None}]
+        })
+        
+        # إعادة تعيين إحصائيات عملاء النظام الرئيسي
+        await db.customers.update_many({
+            "$or": [{"tenant_id": {"$exists": False}}, {"tenant_id": None}]
+        }, {"$set": {
+            "total_orders": 0,
+            "total_spent": 0.0,
+            "last_order_date": None
+        }})
+        
+        # تصفير خزينة المالك للنظام الرئيسي
+        deposits_result = await db.owner_deposits.delete_many({
+            "$or": [{"tenant_id": {"$exists": False}}, {"tenant_id": None}]
+        })
+        withdrawals_result = await db.owner_withdrawals.delete_many({
+            "$or": [{"tenant_id": {"$exists": False}}, {"tenant_id": None}]
+        })
+        profit_transfers_result = await db.owner_profit_transfers.delete_many({
+            "$or": [{"tenant_id": {"$exists": False}}, {"tenant_id": None}]
+        })
+        profit_withdrawals_result = await db.owner_profit_withdrawals.delete_many({
+            "$or": [{"tenant_id": {"$exists": False}}, {"tenant_id": None}]
+        })
+        
+        # حذف المصاريف للنظام الرئيسي
+        expenses_result = await db.expenses.delete_many({
+            "$or": [{"tenant_id": {"$exists": False}}, {"tenant_id": None}]
+        })
+        
+        # حذف المرتجعات للنظام الرئيسي
+        refunds_result = await db.refunds.delete_many({
+            "$or": [{"tenant_id": {"$exists": False}}, {"tenant_id": None}]
+        })
+        
+        # حذف سجلات الصندوق للنظام الرئيسي
+        cash_drawer_result = await db.cash_drawer_logs.delete_many({
+            "$or": [{"tenant_id": {"$exists": False}}, {"tenant_id": None}]
+        })
+        
+        # حذف سجلات التدقيق للنظام الرئيسي
+        audit_logs_result = await db.audit_logs.delete_many({
+            "$or": [{"tenant_id": {"$exists": False}}, {"tenant_id": None}]
+        })
+        
+        return {
+            "message": "تم تصفير مبيعات النظام الرئيسي بنجاح",
+            "deleted_orders": orders_result.deleted_count,
+            "deleted_shifts": shifts_result.deleted_count,
+            "deleted_expenses": expenses_result.deleted_count,
+            "deleted_refunds": refunds_result.deleted_count,
+            "deleted_cash_drawer_logs": cash_drawer_result.deleted_count,
+            "deleted_audit_logs": audit_logs_result.deleted_count,
+            "owner_wallet_reset": {
+                "deleted_deposits": deposits_result.deleted_count,
+                "deleted_withdrawals": withdrawals_result.deleted_count,
+                "deleted_profit_transfers": profit_transfers_result.deleted_count,
+                "deleted_profit_withdrawals": profit_withdrawals_result.deleted_count
+            }
+        }
+    
+    # للعملاء العاديين
+    tenant = await db.tenants.find_one({"id": tenant_id})
+    if not tenant:
+        raise HTTPException(status_code=404, detail="العميل غير موجود")
+    
+    # البحث بـ tenant_id فقط
+    query = {"tenant_id": tenant_id}
+    
+    # حذف طلبات العميل
+    orders_result = await db.orders.delete_many(query)
+    
+    # حذف ورديات العميل
+    shifts_result = await db.shifts.delete_many(query)
+    
+    # إعادة تعيين إحصائيات عملاء هذا العميل
+    await db.customers.update_many(query, {"$set": {
+        "total_orders": 0,
+        "total_spent": 0.0,
+        "last_order_date": None
+    }})
+    
+    # تصفير خزينة المالك للعميل
+    deposits_result = await db.owner_deposits.delete_many(query)
+    withdrawals_result = await db.owner_withdrawals.delete_many(query)
+    profit_transfers_result = await db.owner_profit_transfers.delete_many(query)
+    profit_withdrawals_result = await db.owner_profit_withdrawals.delete_many(query)
+    
+    # حذف المصاريف
+    expenses_result = await db.expenses.delete_many(query)
+    
+    # حذف المرتجعات
+    refunds_result = await db.refunds.delete_many(query)
+    
+    # حذف سجلات الصندوق
+    cash_drawer_result = await db.cash_drawer_logs.delete_many(query)
+    
+    # حذف سجلات التدقيق (اختياري - للتنظيف الكامل)
+    audit_logs_result = await db.audit_logs.delete_many(query)
+    
+    return {
+        "message": f"تم تصفير مبيعات '{tenant['name']}' بنجاح",
+        "deleted_orders": orders_result.deleted_count,
+        "deleted_shifts": shifts_result.deleted_count,
+        "deleted_expenses": expenses_result.deleted_count,
+        "deleted_refunds": refunds_result.deleted_count,
+        "deleted_cash_drawer_logs": cash_drawer_result.deleted_count,
+        "deleted_audit_logs": audit_logs_result.deleted_count,
+        "owner_wallet_reset": {
+            "deleted_deposits": deposits_result.deleted_count,
+            "deleted_withdrawals": withdrawals_result.deleted_count,
+            "deleted_profit_transfers": profit_transfers_result.deleted_count,
+            "deleted_profit_withdrawals": profit_withdrawals_result.deleted_count
+        }
+    }
+
+@router.post("/super-admin/tenants/{tenant_id}/reset-inventory")
+async def reset_tenant_inventory(tenant_id: str, confirm: bool = False, delete_all: bool = False, current_user: dict = Depends(verify_super_admin)):
+    """تصفير بيانات المخزون والمشتريات لعميل معين - للمالك فقط"""
+    
+    if not confirm:
+        raise HTTPException(status_code=400, detail="يجب تأكيد التصفير بإرسال confirm=true")
+    
+    results = {
+        "reset_counts": {},
+        "tenant_name": ""
+    }
+    
+    # إذا كان delete_all=true، نحذف جميع البيانات بغض النظر عن tenant_id
+    if delete_all:
+        query = {}
+        results["tenant_name"] = "جميع البيانات"
+    # التحقق إذا كان النظام الرئيسي
+    elif tenant_id == "main-system":
+        query = {"$or": [{"tenant_id": {"$exists": False}}, {"tenant_id": None}]}
+        results["tenant_name"] = "النظام الرئيسي"
+    else:
+        tenant = await db.tenants.find_one({"id": tenant_id})
+        if not tenant:
+            raise HTTPException(status_code=404, detail="العميل غير موجود")
+        # البحث عن البيانات بـ tenant_id أو بدونه (للتوافق مع البيانات القديمة)
+        query = {"$or": [{"tenant_id": tenant_id}, {"tenant_id": {"$exists": False}}, {"tenant_id": None}]}
+        results["tenant_name"] = tenant.get("name", tenant_id)
+    
+    # حذف طلبات الفروع
+    deleted = await db.branch_orders_new.delete_many(query)
+    results["reset_counts"]["branch_orders"] = deleted.deleted_count
+    
+    # حذف فواتير الشراء
+    deleted_purchases = await db.purchases_new.delete_many(query)
+    results["reset_counts"]["purchases"] = deleted_purchases.deleted_count
+    
+    # حذف طلبات الشراء
+    deleted_requests = await db.purchase_requests.delete_many(query)
+    results["reset_counts"]["purchase_requests"] = deleted_requests.deleted_count
+    
+    # حذف سجلات التصنيع
+    deleted_mfg = await db.manufacturing_records.delete_many(query)
+    results["reset_counts"]["manufacturing_records"] = deleted_mfg.deleted_count
+    
+    # حذف حركات المخزون
+    deleted_movements = await db.inventory_movements.delete_many(query)
+    results["reset_counts"]["inventory_movements"] = deleted_movements.deleted_count
+    
+    # حذف المواد الخام بالكامل
+    deleted_raw = await db.raw_materials.delete_many(query)
+    results["reset_counts"]["raw_materials"] = deleted_raw.deleted_count
+    
+    # حذف مخزون التصنيع بالكامل
+    deleted_mfg_inv = await db.manufacturing_inventory.delete_many(query)
+    results["reset_counts"]["manufacturing_inventory"] = deleted_mfg_inv.deleted_count
+    
+    # حذف المنتجات المصنعة بالكامل
+    deleted_products = await db.manufactured_products.delete_many(query)
+    results["reset_counts"]["manufactured_products"] = deleted_products.deleted_count
+    
+    # حذف الموردين بالكامل
+    deleted_suppliers = await db.suppliers.delete_many(query)
+    results["reset_counts"]["suppliers"] = deleted_suppliers.deleted_count
+    
+    # حذف مخزون الفروع
+    deleted_branch_inv = await db.branch_inventory.delete_many(query)
+    results["reset_counts"]["branch_inventory"] = deleted_branch_inv.deleted_count
+    
+    # حذف حركات المخزون (واردات/صادرات)
+    deleted_transactions = await db.inventory_transactions.delete_many(query)
+    results["reset_counts"]["inventory_transactions"] = deleted_transactions.deleted_count
+    
+    # حذف تحويلات المخزن
+    deleted_transfers = await db.warehouse_transfers.delete_many(query)
+    results["reset_counts"]["warehouse_transfers"] = deleted_transfers.deleted_count
+    
+    # حذف فواتير الشراء الجديدة
+    deleted_purchase_invoices = await db.purchase_invoices.delete_many(query)
+    results["reset_counts"]["purchase_invoices"] = deleted_purchase_invoices.deleted_count
+    
+    # حذف موردي المشتريات
+    deleted_purchase_suppliers = await db.purchase_suppliers.delete_many(query)
+    results["reset_counts"]["purchase_suppliers"] = deleted_purchase_suppliers.deleted_count
+    
+    # حذف طلبات الشراء من المخزن
+    deleted_warehouse_requests = await db.warehouse_purchase_requests.delete_many(query)
+    results["reset_counts"]["warehouse_purchase_requests"] = deleted_warehouse_requests.deleted_count
+    
+    # ==================== تصفير مخزون التغليف (الورقيات) ====================
+    
+    # حذف مواد التغليف
+    deleted_packaging_materials = await db.packaging_materials.delete_many(query)
+    results["reset_counts"]["packaging_materials"] = deleted_packaging_materials.deleted_count
+    
+    # حذف طلبات التغليف
+    deleted_packaging_requests = await db.packaging_requests.delete_many(query)
+    results["reset_counts"]["packaging_requests"] = deleted_packaging_requests.deleted_count
+    
+    # حذف مخزون التغليف في الفروع
+    deleted_branch_packaging = await db.branch_packaging_inventory.delete_many(query)
+    results["reset_counts"]["branch_packaging_inventory"] = deleted_branch_packaging.deleted_count
+    
+    # ==================== تصفير المواد الغذائية ====================
+    
+    # حذف المواد الخام الجديدة
+    deleted_raw_new = await db.raw_materials_new.delete_many(query)
+    results["reset_counts"]["raw_materials_new"] = deleted_raw_new.deleted_count
+    
+    # حذف طلبات التصنيع (من المصنع للمخزن)
+    deleted_mfg_requests = await db.manufacturing_requests.delete_many(query)
+    results["reset_counts"]["manufacturing_requests"] = deleted_mfg_requests.deleted_count
+    
+    return {
+        "message": f"تم تصفير بيانات المخزون لـ '{results['tenant_name']}' بنجاح",
+        "success": True,
+        **results
+    }
+
+# ==================== تصفير الموارد البشرية ====================
+@router.post("/super-admin/tenants/{tenant_id}/reset-hr")
+async def reset_tenant_hr(tenant_id: str, confirm: bool = False, current_user: dict = Depends(verify_super_admin)):
+    """تصفير بيانات الموارد البشرية لعميل معين - للمالك فقط"""
+    if not confirm:
+        raise HTTPException(status_code=400, detail="يجب تأكيد التصفير بإرسال confirm=true")
+    
+    if tenant_id == "main":
+        query = {"$or": [{"tenant_id": {"$exists": False}}, {"tenant_id": None}, {"tenant_id": ""}]}
+    else:
+        tenant = await db.tenants.find_one({"id": tenant_id})
+        if not tenant:
+            raise HTTPException(status_code=404, detail="العميل غير موجود")
+        query = {"tenant_id": tenant_id}
+    
+    results = {"reset_counts": {}}
+    
+    # جلب أرقام البصمة للموظفين قبل الحذف (لحذفهم من جهاز البصمة)
+    employees_to_delete = await db.employees.find(
+        {**query, "biometric_uid": {"$ne": None, "$exists": True}},
+        {"_id": 0, "biometric_uid": 1, "name": 1}
+    ).to_list(1000)
+    biometric_uids_to_delete = [
+        {"uid": int(e["biometric_uid"]), "name": e.get("name", "")}
+        for e in employees_to_delete
+        if e.get("biometric_uid") and str(e["biometric_uid"]).isdigit()
+    ]
+    
+    # حذف الموظفين
+    deleted_employees = await db.employees.delete_many(query)
+    results["reset_counts"]["employees"] = deleted_employees.deleted_count
+    
+    # حذف الخصومات
+    deleted_deductions = await db.deductions.delete_many(query)
+    results["reset_counts"]["deductions"] = deleted_deductions.deleted_count
+    
+    # حذف المكافآت
+    deleted_bonuses = await db.bonuses.delete_many(query)
+    results["reset_counts"]["bonuses"] = deleted_bonuses.deleted_count
+    
+    # حذف السلف
+    deleted_advances = await db.advances.delete_many(query)
+    results["reset_counts"]["advances"] = deleted_advances.deleted_count
+    
+    # حذف سجلات الحضور
+    deleted_attendance = await db.attendance.delete_many(query)
+    results["reset_counts"]["attendance"] = deleted_attendance.deleted_count
+    
+    # حذف سجلات البصمة الخام
+    deleted_biometric = await db.biometric_attendance.delete_many(query)
+    results["reset_counts"]["biometric_attendance"] = deleted_biometric.deleted_count
+    
+    # حذف طلبات الوقت الإضافي
+    deleted_overtime = await db.overtime_requests.delete_many(query)
+    results["reset_counts"]["overtime_requests"] = deleted_overtime.deleted_count
+    
+    # حذف كشوف الرواتب
+    deleted_payroll = await db.payroll.delete_many(query)
+    results["reset_counts"]["payroll"] = deleted_payroll.deleted_count
+    
+    # حذف أجهزة البصمة
+    deleted_devices = await db.biometric_devices.delete_many(query)
+    results["reset_counts"]["biometric_devices"] = deleted_devices.deleted_count
+    
+    return {
+        "message": "تم تصفير بيانات الموارد البشرية بنجاح",
+        "success": True,
+        "biometric_uids_to_delete": biometric_uids_to_delete,
+        **results
+    }
+

@@ -194,3 +194,9 @@
 - **تقنيع الوِجهة في نافذة التحقق:** البريد = ***@domain (يُخفى الاسم قبل @)؛ الهاتف = تقنيع كل الأرقام وإظهار آخر رقمين فقط (********67).
 - **هاتف المستخدم:** حقل phone أُضيف لـ UserCreate/UserUpdate و /users POST/PUT. نموذج المستخدم في Settings.js فيه حقل هاتف باختيار البلد.
 - **حقل اختيار البلد (PhoneCountryInput):** مُطبّق في: السائقين (Delivery إنشاء/تعديل)، العملاء (Settings customerForm، Loyalty memberForm، Orders fixForm)، الموظفين (HR employeeForm)، المستخدمين (Settings userForm/editUserForm)، المستأجرين (SuperAdmin new/edit). يُخزّن E.164 (+964..).
+
+## 2026-07-07 — كوكيز آمنة + سياسة كلمات المرور
+- تسجيل الدخول يضبط الآن كوكي HttpOnly باسم access_token (المصادقة تقبل Bearer أو الكوكي).
+- كلمات مرور المستخدمين الجدد يجب أن تكون ≥8 أحرف وتحوي حرفاً ورقماً (الحسابات القديمة القصيرة مثل admin123 تعمل للدخول — السياسة على الإنشاء/التغيير فقط).
+- GET /api/welcome-discount/stats (admin token) — إحصائيات كوبونات الترحيب.
+- GET /api/print-queue/agent-status يقبل الآن توكن مستخدم عادي (كان يتطلب مفتاح الوكيل فقط).

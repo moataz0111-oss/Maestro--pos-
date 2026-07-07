@@ -1,0 +1,57 @@
+{
+  "summary": "Iter 285 — Verified business-day 6-AM Iraq cutoff, auto-heal DB state, lazy shift-on-first-order, order/shift business_date parity, and sales-report vs cash-closing parity. 13/13 backend tests passed. UNCOVERED a CRITICAL accounting bug: when a cashier has no open shift, the order endpoint falls back to attaching the order to the LATEST open shift in the branch — even if that shift belongs to ANOTHER cashier. This directly violates the user's core rule ('cashier sales must match between closing and report'). Frontend cashier UI login appears to be blocked at /login (no navigation, no visible error) — matches note about trusted-device gate; per instructions fell back to API-level verification.",
+  "backend_issues": {
+    "critical": [
+      {
+        "endpoint": "POST /api/orders",
+        "issue": "Cashier A's order gets attached to Cashier B's open shift when Cashier A has no own open shift but branch has another cashier's open shift (server.py:7929-7935 fallback). Reproduced: order.cashier_id=40bb3762 but order.shift_id=iter285-bug-shift (whose shift.cashier_id=iter285-fake-cashier-b). This makes the sales-per-cashier report differ from cash-register-closings per cashier — violates the exact accounting invariant the user demands.",
+        "priority": "CRITICAL"
+      }
+    ],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {
+        "component": "Login (cashier)",
+        "issue": "Clicking 'تسجيل الدخول' as cashier1@maestroegp.com/cash123 does not navigate away from /login and shows no visible error. API POST /api/auth/login for the same credentials returns 200 — so a client-side gate (trusted-device / captcha / silent check) likely blocks the UI. Consider surfacing a message when device is not trusted.",
+        "selector": "button:has-text('تسجيل الدخول')",
+        "priority": "MEDIUM"
+      }
+    ],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_business_day_cutoff_iter285.py",
+    "/app/test_reports/pytest/iter285_results.xml"
+  ],
+  "action_items": [
+    "URGENT: Fix server.py lines 7929-7935 — remove or restrict the 'grab any open shift in branch' fallback. For role=cashier, if the cashier has no own open shift, ALWAYS create a new shift for them (skip the branch-wide fallback). Only owner/manager should be allowed to attach to another cashier's shift, and only intentionally.",
+    "Surface a login-blocked message on the login screen when trusted-device or 2FA gate rejects a cashier so the user knows why they can't proceed."
+  ],
+  "critical_code_review_comments": [
+    "server.py order endpoint fallback (line 7930-7935) uses `db.shifts.find_one(base_shift_query, sort=[('started_at',-1)])` without restricting to current cashier — this is the root cause of the cashier↔shift attribution bug.",
+    "In dedup logic (line 7864-7871), fingerprint uses cashier+items+total but not the assigned shift_id — combined with the above bug, the same physical order can be silently dedup'd across shifts.",
+    "server.py is 26k+ lines. Splitting orders/shifts/reports out of it would materially reduce risk (repeated attempts already exist in routes/ but core /api/orders still lives in server.py)."
+  ],
+  "verified_working": [
+    "iraq_business_date_from_utc: 22:54 UTC → 2026-07-06 (before 6AM Iraq); 07:30 UTC → 2026-07-07; edge 05:59 → prev day; 06:00 → same day.",
+    "Auto-heal shifted expattr-shift-a/b (opened 18:33 UTC = 21:33 Iraq July 6) to business_date=2026-07-06 correctly; ZERO business_date mismatches found across all branch shifts.",
+    "Lazy shift creation: with no open shifts in branch, POST /api/orders as cashier1 auto-created shift 00e03a83 (cashier_id=40bb3762, business_date=2026-07-06 at current UTC 02:22 = 05:22 Iraq → prev day, correct).",
+    "Order.business_date == shift.business_date after lazy creation.",
+    "GET /api/reports/sales?start_date=2026-07-06&end_date=2026-07-06 returns 200; cash-register-closings for the same date includes the closed shift with matching total_sales (≤1 IQD tolerance).",
+    "GET /api/integrity/shifts-check for the business_date returns 200 with no reported mismatch.",
+    "REGRESSIONS: GET /api/welcome-approvals 200 for admin; GET /api/reports/sales for 2026-06-25→2026-07-07 returns 200; admin login unaffected."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_business_day_cutoff_iter285.py (new)"
+  ],
+  "success_rate": {"backend": "100% (13/13 pytest)", "frontend": "UI cashier login blocked; API-level verified per instructions"},
+  "test_credentials": "admin@maestroegp.com/admin123, cashier1@maestroegp.com/cash123 (both work via API; UI login for cashier appears gated)",
+  "seed_data_creation": "None persisted. Created ephemeral bug-repro shift 'iter285-bug-shift' + TEST_ orders and DELETED after reproduction. All open shifts on branch 76f56acc were closed during test.",
+  "retest_needed": true,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Backend tests live at /app/backend/tests/test_business_day_cutoff_iter285.py. Order dedup window is 150s and includes customer_name+items+cashier+discount in the fingerprint — to force new order, use unique customer_name. The critical bug is in server.py line 7929-7935 (cashier fallback attaches order to ANY open shift in branch). Reproduce by: (1) close all open shifts, (2) insert a shift for a different cashier_id with status='open', (3) POST /api/orders as cashier1 — the order.shift_id will point to the OTHER cashier's shift, breaking cashier-level closing/report parity.",
+  "rca_of_the_issue": "server.py POST /api/orders — after checking for the current cashier's own open shift (line 7924-7928), a fallback (line 7930-7935) selects the latest open shift in the branch REGARDLESS of cashier ownership. When a cashier lacks their own open shift but another cashier has an open shift in the same branch, the new order's shift_id points to that OTHER cashier's shift while order.cashier_id remains the ordering cashier. Consequences: (a) sales-per-cashier reports (grouped by order.cashier_id) will NOT match cash-register-closings (grouped by shift.cashier_id); (b) lazy shift creation for the intended cashier is skipped; (c) violates the user's zero-tolerance rule that closing and report must equal per cashier. FIX: for role=cashier, skip the branch-wide fallback and always create a new shift for the current cashier when they have no own open shift. Keep the fallback only for owner/manager/captain flows where they explicitly need to attach to an existing cashier's shift (or gate it behind is_owner)."
+}

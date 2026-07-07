@@ -197,8 +197,28 @@ async def get_pending_jobs(
         elapsed += check_interval
 
 
+async def verify_print_agent_or_user(request: Request):
+    """قراءة حالة الوسيط: تُسمح لوكيل الطباعة (بالمفتاح) أو لأي مستخدم مسجّل دخول."""
+    agent_key = os.environ.get("PRINT_AGENT_KEY")
+    provided = request.headers.get("X-Print-Key") or request.query_params.get("key")
+    if not agent_key or provided == agent_key:
+        return True
+    # fallback: مستخدم مسجّل دخول (Bearer أو كوكي)
+    import jwt as _jwt
+    from routes.shared import JWT_SECRET, JWT_ALGORITHM
+    auth = request.headers.get("Authorization", "")
+    token = auth[7:] if auth.startswith("Bearer ") else request.cookies.get("access_token")
+    if token:
+        try:
+            _jwt.decode(token, JWT_SECRET, algorithms=[JWT_ALGORITHM])
+            return True
+        except Exception:
+            pass
+    raise HTTPException(status_code=403, detail="Unauthorized print agent")
+
+
 @router.get("/print-queue/agent-status")
-async def get_agent_status(branch_id: str = Query(default=""), _auth: bool = Depends(verify_print_agent)):
+async def get_agent_status(branch_id: str = Query(default=""), _auth: bool = Depends(verify_print_agent_or_user)):
     """فحص حالة الوسيط الحقيقية من آخر heartbeat — مفلتر حسب الفرع إن مُرِّر"""
     db = get_database()
     

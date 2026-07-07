@@ -11,7 +11,8 @@ import logging
 from .shared import (
     get_database, get_current_user, get_user_tenant_id,
     build_tenant_query, UserRole, OrderStatus, PaymentMethod, OrderType,
-    iraq_date_from_utc, resolve_business_date, verify_password, shift_expense_query
+    iraq_date_from_utc, iraq_business_date_from_utc, get_business_day_start_hour,
+    resolve_business_date, verify_password, shift_expense_query
 )
 
 logger = logging.getLogger(__name__)
@@ -195,6 +196,8 @@ async def open_shift(shift: ShiftCreate, current_user: dict = Depends(get_curren
     if other:
         raise HTTPException(status_code=400, detail=_conflict_msg(other))
     
+    # اليوم التشغيلي مع ساعة بداية اليوم (شفت الفجر يُنسب لليوم السابق)
+    _biz_start_hour = await get_business_day_start_hour(tenant_id)
     shift_doc = {
         "id": str(uuid.uuid4()),
         "cashier_id": shift.cashier_id,
@@ -217,7 +220,7 @@ async def open_shift(shift: ShiftCreate, current_user: dict = Depends(get_curren
         "started_at": datetime.now(timezone.utc).isoformat(),
         "ended_at": None,
         "status": "open",
-        "business_date": iraq_date_from_utc()
+        "business_date": iraq_business_date_from_utc(start_hour=_biz_start_hour)
     }
     if tenant_id:
         shift_doc["tenant_id"] = tenant_id
@@ -357,7 +360,7 @@ async def quick_open_shift(data: QuickOpenShift, current_user: dict = Depends(ge
         "status": "open",
         "opened_by": user_id,
         "opened_by_name": current_user.get("full_name", ""),
-        "business_date": iraq_date_from_utc()
+        "business_date": iraq_business_date_from_utc(start_hour=await get_business_day_start_hour(tenant_id))
     }
     if tenant_id:
         shift_doc["tenant_id"] = tenant_id
@@ -424,7 +427,7 @@ async def open_shift_for_cashier(data: OpenShiftForCashier, current_user: dict =
         "status": "open",
         "opened_by": current_user["id"],
         "opened_by_name": current_user.get("full_name", ""),
-        "business_date": iraq_date_from_utc()
+        "business_date": iraq_business_date_from_utc(start_hour=await get_business_day_start_hour(tenant_id))
     }
     if tenant_id:
         shift_doc["tenant_id"] = tenant_id
@@ -519,7 +522,7 @@ async def auto_open_shift(current_user: dict = Depends(get_current_user)):
         "started_at": datetime.now(timezone.utc).isoformat(),
         "ended_at": None,
         "status": "open",
-        "business_date": iraq_date_from_utc()
+        "business_date": iraq_business_date_from_utc(start_hour=await get_business_day_start_hour(tenant_id))
     }
     
     if tenant_id:
@@ -1339,7 +1342,7 @@ async def get_cash_register_summary(
                 "status": "open",
                 "opening_balance": 0,
                 "created_at": datetime.now(timezone.utc).isoformat(),
-                "business_date": iraq_date_from_utc()
+                "business_date": iraq_business_date_from_utc(start_hour=await get_business_day_start_hour(tenant_id))
             }
             await db.shifts.insert_one(new_shift)
             shift = new_shift

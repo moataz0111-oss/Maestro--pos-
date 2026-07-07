@@ -1,109 +1,45 @@
 {
-  "summary": "Frontend testing for iteration 100 - Verified date input type changes and date/time formatting. All 6 features tested and passed: (1) Owner Wallet date input is type='date', (2) External Branches date input is type='date', (3) Owner Wallet data updates on date change, (4) External Branches data updates on date change, (5) Cash closing modal shows date/time in English numbers with DD/MM/YYYY format, (6) Delivery company edit feature works correctly in Settings.",
+  "summary": "Regression + new features verified for iter100 (13-module route extraction + hybrid cookie auth + password policy + welcome-discount stats). 33/33 backend tests PASS. Frontend login → dashboard → Settings/العملاء (welcome-coupon-stats visible with 4 chips) → Reports all working.",
   "backend_issues": {
     "critical": [],
-    "minor": []
+    "minor": [
+      {"endpoint": "GET /api/orders", "issue": "Returned 500 due to leftover seed order (expattr-order-a-*) with missing order_number/order_type. Deleted stale doc; endpoint now 200. Seed script bug, not the refactor."},
+      {"endpoint": "seed_expense_attribution_test.py", "issue": "Uses DB_NAME env default 'test_database' but backend uses 'maestro_pos'. Must run with DB_NAME=maestro_pos else seed writes to wrong DB and totals show 0. Fix: read DB_NAME from /app/backend/.env."}
+    ]
   },
   "frontend_issues": {
     "ui_bugs": [],
-    "integration_issues": [],
+    "integration_issues": [
+      {"flow": "Settings page load", "issue": "Two 403 console errors on background API calls (non-blocking; page renders fully).", "affected_selectors": []}
+    ],
     "design_issues": []
   },
   "test_report_links": [
-    "/app/test_reports/iteration_100.json"
+    "/app/backend/tests/test_refactor_iter100.py",
+    "/app/test_reports/pytest/iter100_results.xml"
   ],
-  "action_items": [],
-  "critical_code_review_comments": [],
-  "updated_files": [],
-  "success_rate": {
-    "backend": "N/A (frontend only testing)",
-    "frontend": "100%"
+  "action_items": [
+    "Fix seed_expense_attribution_test.py to use DB_NAME from backend/.env (currently defaults to 'test_database' but backend uses 'maestro_pos').",
+    "Add required order_number + order_type fields when the seed creates test orders (currently causes /api/orders 500).",
+    "Investigate 2 x 403 console errors on Settings page for polish (not blocking)."
+  ],
+  "critical_code_review_comments": [
+    "server.py at 16,861 lines is still very large despite extracting 13 modules — recommend continued modularization.",
+    "shift_expense_query with created_by fallback correctly isolates cashiers (verified live: A=15000, B=5000, no cross-mixing).",
+    "Hybrid cookie/bearer auth verified: HttpOnly cookie set on login, cleared on logout; /auth/me works with either credential type."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_refactor_iter100.py"
+  ],
+  "success_rate": {"backend": "100% (33/33)", "frontend": "100%"},
+  "test_credentials": {
+    "admin": "admin@maestroegp.com / admin123",
+    "super_admin": "owner@maestroegp.com / owner123 / secret_key 271018",
+    "expattr_a": "expattr-cashier-a@maestroegp.com / test123",
+    "expattr_b": "expattr-cashier-b@maestroegp.com / test123"
   },
-  "seed_data_creation": "Used existing demo user (demo@maestroegp.com)",
+  "seed_data_creation": "Re-ran seed_expense_attribution_test.py with DB_NAME=maestro_pos. Cleaned stale expattr-order-a-* order and 'NEWEXP TEST' expense from previous iterations to unblock /api/orders and get accurate 15000 total.",
   "retest_needed": false,
   "should_main_agent_self_test": false,
-  "context_for_next_testing_agent": "Date inputs on Owner Wallet and External Branches pages are now type='date' (full date DD/MM/YYYY). Cash closing modal uses toLocaleString('en-GB') for DD/MM/YYYY format with English numbers. Delivery company edit feature in Settings works correctly.",
-  "features_tested": {
-    "1_owner_wallet_date_input_type": {
-      "status": "PASS",
-      "description": "حقل التاريخ في صفحة خزينة المالك يجب أن يكون type=date وليس type=month",
-      "verified": [
-        "Date input on /owner-wallet page is type='date'",
-        "Found 1 date input and 0 month inputs",
-        "Date value format: YYYY-MM-DD (2026-02-22)",
-        "Code location: OwnerWallet.js line 258-261"
-      ]
-    },
-    "2_external_branches_date_input_type": {
-      "status": "PASS",
-      "description": "حقل التاريخ في صفحة الفروع الخارجية يجب أن يكون type=date وليس type=month",
-      "verified": [
-        "Date input on /external-branches page is type='date'",
-        "Found 1 date input and 0 month inputs",
-        "Date value format: YYYY-MM-DD (2026-02-22)",
-        "Code location: ExternalBranchesManagement.js line 259-263"
-      ]
-    },
-    "3_owner_wallet_data_update_on_date_change": {
-      "status": "PASS",
-      "description": "عند تغيير التاريخ في صفحة خزينة المالك، يجب أن تتحدث البيانات بشكل صحيح",
-      "verified": [
-        "Changed date from 2026-02-22 to 2026-01-15",
-        "Section headers updated to show (15/01/2026)",
-        "Data fetched for the new date correctly",
-        "useEffect triggers fetchData on selectedDate change (line 105-107)"
-      ]
-    },
-    "4_external_branches_data_update_on_date_change": {
-      "status": "PASS",
-      "description": "عند تغيير التاريخ في صفحة الفروع الخارجية، يجب أن تتحدث البيانات بشكل صحيح",
-      "verified": [
-        "Changed date from 2026-02-22 to 2026-01-10",
-        "Stats card updated to show 10/01/2026",
-        "Data fetched for the new date correctly",
-        "useEffect triggers fetchData on selectedDate change (line 113-115)"
-      ]
-    },
-    "5_cash_closing_modal_date_format": {
-      "status": "PASS",
-      "description": "التاريخ والوقت في نافذة إغلاق الصندوق يجب أن يكون بالأرقام الإنجليزية وتنسيق DD/MM/YYYY",
-      "verified": [
-        "Cash closing modal shows date: 21/02/2026, 18:31:56",
-        "All numbers are in English (no Arabic numerals)",
-        "Format is DD/MM/YYYY HH:MM:SS",
-        "Code uses toLocaleString('en-GB') for DD/MM/YYYY format (Dashboard.js line 1837)",
-        "Print report uses toLocaleString('en-US') (Dashboard.js lines 1615, 1625, 1626)"
-      ]
-    },
-    "6_delivery_company_edit_feature": {
-      "status": "PASS",
-      "description": "ميزة تعديل شركات التوصيل في الإعدادات تعمل بشكل صحيح",
-      "verified": [
-        "Edit button (pencil icon) visible for each delivery company",
-        "Edit dialog opens with fields: Arabic name, English name, Commission rate, Enable checkbox",
-        "Save button available",
-        "Code location: Settings.js lines 1409-1424 (handleEditDeliveryAppName function)"
-      ]
-    }
-  },
-  "code_verification": {
-    "owner_wallet_js": {
-      "date_input": "Line 258-261 - type='date' input with selectedDate state",
-      "fetch_data": "Line 114-115 - API calls use selectedDate.slice(0, 7) for month filtering"
-    },
-    "external_branches_js": {
-      "date_input": "Line 259-263 - type='date' input with selectedDate state",
-      "fetch_data": "Line 117-125 - API calls use selectedDate.slice(0, 7) for month filtering"
-    },
-    "dashboard_js": {
-      "cash_closing_modal_date": "Line 1837 - toLocaleString('en-GB', {...}) for DD/MM/YYYY format",
-      "print_report_dates": "Lines 1615, 1625, 1626 - toLocaleString('en-US') for print report"
-    },
-    "settings_js": {
-      "edit_delivery_app": "Lines 1409-1424 - handleEditDeliveryAppName function"
-    }
-  },
-  "test_credentials": {
-    "demo_user": "demo@maestroegp.com / demo123"
-  }
+  "context_for_next_testing_agent": "test_refactor_iter100.py covers auth+cookie+logout, super_admin (5 endpoints), all 13 extracted route modules, core POS regression, password policy (create+reset), welcome-discount stats RBAC (admin 200 / cashier 403), shift expense isolation, expenses POST. Seed for expense-attribution requires DB_NAME=maestro_pos env var when running python3 seed_expense_attribution_test.py."
 }
