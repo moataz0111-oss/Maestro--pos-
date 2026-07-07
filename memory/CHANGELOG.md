@@ -8,6 +8,49 @@
 2. إذا كانت له وردية مفتوحة تُضاف الطلبات إليها.
 3. الوردية المفتوحة يجب أن تكون **لهذا اليوم** — ليست من يوم سابق ولا يوم لاحق.
 4. إغلاق الصندوق يجب أن يطابق مبيعات الكاشير + مصاريفه + كل عملياته بدقة تامة.
+5. **[iter290] عزل صارم: كاشير لا يستطيع رؤية/إغلاق وردية زميله حتى لو خمّن معرّفها.**
+
+**التعديلات في الباك إند:**
+- **`/app/backend/server.py`** `create_order` (سطور 5929-6060):
+  - إضافة `today_biz_date = iraq_business_date_from_utc()` قبل البحث عن الوردية.
+  - **🛡 كشف الوردية المتقادمة**: وردية بـ `business_date` أقدم من اليوم → تُغلَق تلقائياً بـ`auto_close_reason="stale_business_date_next_day_order"` ووردية جديدة تُفتح.
+  - **علامة تتبّع**: كل وردية مُنشأة عبر أول طلب تحصل `auto_opened_by_first_order: True`.
+
+- **`/app/backend/routes/shifts_routes.py`** `get_cash_register_summary` (سطور 1297-1345):
+  - **🛡 shift_id إلزامي**: HTTP 400 مع "shift_id إلزامي" إذا لم يُمرَّر.
+  - **🛡 عزل الكاشير**: البحث مقيَّد بـ `cashier_id=current_user.id`.
+  - **🛡 [iter290] إزالة الـ fallback الخطير**: كان النظام يُنشئ وردية جديدة أو يعرض وردية أخرى إذا لم يجد الـshift_id → ثغرة أمنية. الآن يرجع HTTP 404 مباشرة.
+  - رسالة خطأ آمنة: "غير موجودة أو مُغلَقة أو ليست تحت صلاحيتك" (لا تُسرِّب معلومة عن وجود الوردية).
+
+- **`/app/backend/routes/shifts_routes.py`** `close_cash_register`:
+  - **🛡 shift_id إلزامي** + **عزل الكاشير** (نفس الحماية).
+
+**اختبارات regression (16/16 نجحت في iter290):**
+- `test_ahmed_shift_close_regression.py` (2 اختبارات): shift_id إلزامي؛ ملخص وردية أحمد 802,750 بدقة.
+- `test_lazy_shift_and_daily_isolation.py` (4 اختبارات): الفتح التلقائي، القديمة تُغلَق، طلبان بنفس الوردية، ملخص يطابق المبيعات.
+- `test_iter288_shift_id_mandatory.py` (10 اختبارات): عزل الكاشير الكامل + رفض الطلبات بدون shift_id + wa_service healthy.
+
+**التعديلات في الواجهة:**
+- **`/app/frontend/src/pages/SuperAdmin.js`**: زر "توليد رمز جديد" لـWhatsApp QR.
+- **`/app/frontend/src/pages/Login.js`**: تحسين رسالة "الجهاز غير موثوق" مع سبب واضح.
+- **`/app/frontend/src/components/ManagementOrderAlerts.jsx`**: تصميم جديد قابل للطي (شارة عائمة صغيرة افتراضياً).
+
+**نشر الإنتاج (Docker + CI):**
+- **`/app/wa_service/Dockerfile`**: تحديث نهائي من `node:20-alpine` (فشل) إلى `node:20-bookworm-slim` + `apt-get install python3 make g++ git ca-certificates` — لتوفير الأدوات اللازمة لـ Baileys libsignal.
+- **`/app/wa_service/index.js`:** دعم `WA_SERVICE_HOST=0.0.0.0` + مسح lastError عند توليد QR جديد.
+- **`/app/docker-compose.yml`:** إضافة خدمة `wa_service` + volume `wa_auth_data`.
+- **`/app/.github/workflows/deploy.yml`:** بناء صورة wa_service ودفعها إلى GHCR + تشغيلها على VPS قبل الباك إند.
+
+**مُجدول تنبيه الورديات المنسية:**
+- **`/app/backend/server.py`** `_alert_forgotten_open_shifts()` + scheduler كل 30 دقيقة — يُرسل واتساب للمالك عن أي وردية مفتوحة >12 ساعة.
+
+
+
+**متطلبات المستخدم:**
+1. عند حفظ أول طلب، تُفتح وردية للكاشير تلقائياً.
+2. إذا كانت له وردية مفتوحة تُضاف الطلبات إليها.
+3. الوردية المفتوحة يجب أن تكون **لهذا اليوم** — ليست من يوم سابق ولا يوم لاحق.
+4. إغلاق الصندوق يجب أن يطابق مبيعات الكاشير + مصاريفه + كل عملياته بدقة تامة.
 
 **التعديلات في الباك إند:**
 - **`/app/backend/server.py`** `create_order` (سطور 5929-6060):

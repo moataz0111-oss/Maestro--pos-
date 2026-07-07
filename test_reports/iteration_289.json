@@ -1,0 +1,49 @@
+{
+  "summary": "Iter 289 backend verification of wa_service Docker build fix + shift regressions. Dockerfile switched to node:20-bookworm-slim with apt-get install of python3/make/g++/git/ca-certificates verified. wa_service on :3002 responds with proper JSON shape (connected/qr/error). Regression suite 6/6 PASS. shift_id enforcement 400+Arabic works. Only pre-existing iter288 cashier isolation bug on /summary remains (unfixed, out-of-scope for this Docker fix).",
+  "backend_issues": {
+    "critical": [
+      {
+        "endpoint": "GET /api/cash-register/summary",
+        "issue": "PRE-EXISTING (iter288 unfixed): cashier isolation broken. Cashier passing another user's shift_id (closefix-shift-owner) receives HTTP 200 with THEIR OWN shift summary (closefix-shift-cashier) instead of 403/404. Root cause at shifts_routes.py:1339-1364 — lazy-create fallback fires when strict {id, cashier_id:me} query misses. Not related to Docker fix but still open.",
+        "priority": "HIGH"
+      }
+    ],
+    "minor": []
+  },
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "docker_fix_verification": {
+    "dockerfile_base": "node:20-bookworm-slim (verified line 4)",
+    "apt_packages": "python3 make g++ git ca-certificates (verified lines 7-9)",
+    "install_step": "conditional yarn install --production --frozen-lockfile with fallback to npm install (lines 17-23) — verified syntactically",
+    "package_json": "OK, 4 deps (@whiskeysockets/baileys 6.7.16, express 4.19.2, pino 9.4.0, qrcode 1.5.4)",
+    "yarn_lock": "present (72798 bytes)",
+    "index_js": "present (6230 bytes), supervised on :3002 — status endpoint returns valid JSON {connected:false, qr:base64-png, error:null}",
+    "docker_compose_wa_service": "verified: build ./wa_service, container maestro-wa-service, backend depends_on wa_service, WA_SERVICE_URL=http://wa_service:3002, wa_auth_data volume",
+    "workflow_yaml": "valid YAML; wa_service build+push step present (lines 82-91); deploy step pulls WA_IMAGE and docker-runs wa-service BEFORE backend (lines 164-190); backend env WA_SERVICE_URL=http://wa-service:3002 present (line 212); backend depends on wa-service network",
+    "backend_health": "GET /api/health = 200",
+    "super_admin_wa_status_auth": "GET /api/super-admin/whatsapp/status without auth = 401 (auth enforced)"
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_ahmed_shift_close_regression.py",
+    "/app/backend/tests/test_lazy_shift_and_daily_isolation.py",
+    "/app/backend/tests/test_iter288_shift_id_mandatory.py",
+    "/app/test_reports/pytest/iter289.xml"
+  ],
+  "action_items": [
+    "Docker fix is READY TO DEPLOY — Dockerfile, package.json, yarn.lock, index.js, docker-compose.yml, deploy.yml all verified.",
+    "STILL OPEN from iter288: fix cashier isolation on GET /api/cash-register/summary at shifts_routes.py:1339-1364 (raise 404 for non-managers when supplied shift_id not found under their cashier_id, mirroring close endpoint line 1580)."
+  ],
+  "critical_code_review_comments": [
+    "Dockerfile line 19-20: `yarn install --production --frozen-lockfile ... || yarn install --production` — the fallback masks lockfile drift; consider failing hard in CI. Acceptable trade-off for now.",
+    "docker-compose.yml service name is 'wa_service' but deploy.yml uses container name 'wa-service' (hyphen). Backend WA_SERVICE_URL differs: compose='http://wa_service:3002' (underscore) vs deploy.yml='http://wa-service:3002' (hyphen). This is intentional (compose uses service DNS, prod docker-run uses container name) but easy to break — worth a comment.",
+    "shifts_routes.py:1339-1364: cashier isolation still broken (unchanged from iter288)."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "6/6 regression + 9/10 iter288 = 15/16 (94%)", "frontend": "skipped"},
+  "test_credentials": "admin@maestroegp.com/admin123; owner@maestroegp.com/owner123 secret_key=271018; closefix-cashier@maestroegp.com/test1234; wa_service token 'maestro-wa-7f3a91c4e6b2' via 'x-wa-token' header",
+  "seed_data_creation": "used existing seed from iter288 (closefix-shift-owner + closefix-shift-cashier). No new seeds.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Docker build fix validated indirectly (no docker in preview) by: (a) YAML/JSON syntax checks, (b) live wa_service on supervisor proving JS deps work, (c) regression suite pass. Only remaining issue is pre-existing iter288 cashier isolation bug; unrelated to this task.",
+  "rca_of_the_issue": "N/A for this iter — Docker build failure fix is verified via file inspection + live wa_service smoke test. The unfixed cashier-isolation bug RCA is captured in iter288 report."
+}

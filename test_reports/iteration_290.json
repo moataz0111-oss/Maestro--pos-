@@ -1,0 +1,34 @@
+{
+  "summary": "Iter 290: Verified fix for HIGH-priority cashier isolation bug from iter288/289. GET /api/cash-register/summary and POST /api/cash-register/close both now return HTTP 404 (Arabic detail) when a cashier passes a shift_id belonging to another user. All 16 pytest tests pass (6/6 base regressions + 10/10 iter288 mandatory suite). No regressions.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "verification_details": {
+    "code_fix_location": "shifts_routes.py lines 1338-1345 — fallback lazy-create removed; raises HTTP 404 with Arabic detail 'الوردية المطلوبة (shift_id=...) غير موجودة أو مُغلَقة أو ليست تحت صلاحيتك' when strict {id, cashier_id:me} query misses for non-managers.",
+    "backend_health": "GET /api/health -> 200 {status:ok}",
+    "wa_service": "GET :3002/status with x-wa-token -> 200 JSON {connected:false, qr:<base64>, error:null}",
+    "seed_data": "Re-seeded via /app/backend/seed_owner_cashier_close_test.py (closefix-shift-owner=79,500; closefix-shift-cashier=802,750, احمد اختبار)",
+    "pytest_results": "16/16 PASS in 8.68s — includes: test_cashier_cannot_access_owner_shift, test_cashier_cannot_close_owner_shift, test_summary_fake_shift_id_returns_404, test_summary_without_shift_id_returns_400, test_summary_owner_shift_totals, test_summary_cashier_shift_totals, all 4 lazy-shift tests, wa_status_shape, wa_logout_ok."
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_ahmed_shift_close_regression.py",
+    "/app/backend/tests/test_lazy_shift_and_daily_isolation.py",
+    "/app/backend/tests/test_iter288_shift_id_mandatory.py",
+    "/app/test_reports/pytest/iter290.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "Fix is clean and minimal — only the fallback branch removed and replaced with a 404. Mirrors close_cash_register behavior (line ~1580) for consistency.",
+    "Arabic error message is user-friendly and does not leak whether the shift exists at all vs belongs to another user — good for security."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "16/16 (100%)", "frontend": "skipped"},
+  "test_credentials": "admin@maestroegp.com/admin123; closefix-cashier@maestroegp.com/test1234; owner@maestroegp.com/owner123 secret_key=271018; wa token maestro-wa-7f3a91c4e6b2",
+  "seed_data_creation": "Ran /app/backend/seed_owner_cashier_close_test.py to refresh both shifts before pytest run.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Iter288 HIGH-priority cashier isolation bug is now FIXED and verified. All 16 shift-related regression tests green. wa_service healthy. No open backend issues in this scope.",
+  "rca_of_the_issue": "Original bug: GET /api/cash-register/summary had a fallback that lazy-created or resolved to a different shift for the cashier when the requested shift_id didn't match {id, cashier_id:me}. This masked cross-cashier probing (200 with attacker's own shift instead of 404). Fix: fallback branch removed at shifts_routes.py:1338-1345; unconditional 404 raise when shift not found under user's authorization scope (cashier_id enforced for cashiers via line 1332)."
+}
