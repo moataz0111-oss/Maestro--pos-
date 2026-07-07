@@ -290,13 +290,22 @@ async def get_business_day_start_hour(tenant_id: Optional[str]) -> int:
 #   - shift_id للمصروف = معرّف الوردية (المصاريف الجديدة تُختم بهذا)، أو
 #   - (سجلات قديمة بلا shift_id) نفس الفرع + نفس اليوم التشغيلي + نفس منشئ المصروف (الكاشير).
 def shift_expense_query(shift: dict, tenant_id: Optional[str] = None) -> dict:
-    """يبني Mongo query لمصاريف وردية محددة وفق القاعدة المعتمدة (بلا خلط بين الكاشيرين)."""
+    """يبني Mongo query لمصاريف وردية محددة وفق القاعدة المعتمدة (بلا خلط بين الكاشيرين ولا بين الأيام).
+    
+    🛡 صارم:
+    1. المصاريف المرتبطة بـshift_id مباشرة (الحالة الأساسية).
+    2. المصاريف القديمة (legacy) التي لا shift_id لها — يجب أن تكون:
+       - في نفس الفرع
+       - من قبل نفس الكاشير
+       - في نفس business_date
+       - **وأُنشئت بعد بدء الوردية** (created_at >= started_at) — منع تسرب مصاريف سابقة على وردية جديدة.
+    """
     sid = shift.get("id")
     branch = shift.get("branch_id")
     cashier = shift.get("cashier_id")
     bd = shift.get("business_date")
+    started = shift.get("started_at") or shift.get("opened_at")
     if not bd:
-        started = shift.get("started_at") or shift.get("opened_at")
         bd = iraq_date_from_utc(started) if started else iraq_date_from_utc()
 
     no_shift = [{"shift_id": {"$exists": False}}, {"shift_id": None}, {"shift_id": ""}]
@@ -306,6 +315,11 @@ def shift_expense_query(shift: dict, tenant_id: Optional[str] = None) -> dict:
         "created_by": cashier,
         "business_date": bd,
     }
+    # 🛡 إذا وُجد started_at للوردية، أضف شرط created_at >= started_at للـlegacy
+    # (منع تسرب مصاريف أُنشئت قبل بدء الوردية إلى ملخصها)
+    if started:
+        legacy["created_at"] = {"$gte": started}
+    
     q = {
         "category": {"$ne": "refund"},
         "$or": [{"shift_id": sid}, legacy],

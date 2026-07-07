@@ -1,0 +1,33 @@
+{
+  "summary": "Backend-only regression + focused verification for the expense-to-shift binding fix (iter290 bug where 21,000 IQD from prior shifts leaked into new shift summary for cashier 'احمد زين'). All 10 target pytest tests PASS. shift_id 400 enforcement, wa_service /status endpoint, and auth all healthy.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_ahmed_shift_close_regression.py",
+    "/app/backend/tests/test_lazy_shift_and_daily_isolation.py",
+    "/app/backend/tests/test_expense_shift_isolation.py",
+    "/app/test_reports/pytest/iter291_results.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "Fix in routes/shared.py (shift_expense_query) correctly adds created_at >= shift.started_at to the legacy branch so pre-shift expenses without shift_id can no longer leak into a new shift's summary.",
+    "Lazy Shift Opening for expenses in server.py::create_expense mirrors the order flow — ensures every cashier-authored expense is bound to a valid shift_id at creation time, closing the root cause of the leakage.",
+    "Post-expense shift.total_expenses cache update now uses shift_expense_query (strict) instead of a loose branch_id-only query — prevents cache from being inflated by unrelated legacy expenses.",
+    "Consider a one-off backfill migration for historical expenses missing shift_id (assign to their contemporaneous shift by created_at range) so historical dashboards don't show inflated cross-shift totals. Not blocking."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "100%", "frontend": "N/A (skipped per request)"},
+  "test_credentials": "Admin: admin@maestroegp.com / admin123 (tenant=default) — verified working. Cashier test accounts used by pytest fixtures.",
+  "seed_data_creation": "None — pytest tests self-seed and clean up TEST_ prefixed data.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Iter291 verified expense-to-shift binding fix. 10/10 target tests PASS (test_ahmed_shift_close_regression: 2, test_lazy_shift_and_daily_isolation: 4, test_expense_shift_isolation: 4). Regression on shift_id enforcement (400) and wa_service /status healthy. No open backend issues.",
+  "rca of the issue": "Root cause (from iter290 screenshot): expenses without shift_id were matching the 'legacy' branch of shift_expense_query which filtered only by branch_id/cashier_id — expenses created earlier the same day but BEFORE the new shift started were being counted, producing negative expected-cash on close. Fix: (1) legacy branch now also requires created_at >= shift.started_at, (2) create_expense auto-opens a fresh shift for cashiers (Lazy Shift Opening) so new expenses always have shift_id set, (3) post-expense cache uses strict shift_expense_query. Verified by test_B_no_expense_leakage_across_shifts and test_C_summary_matches_expenses_exactly."
+}

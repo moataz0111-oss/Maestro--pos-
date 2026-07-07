@@ -4554,12 +4554,43 @@ async def create_expense(expense: ExpenseCreate, current_user: dict = Depends(ge
     
     business_date = await _resolve_business_date(tenant_id_for_biz, branch_for_biz, current_user.get("id"))
     # ربط المصروف بوردية الكاشير المفتوحة (إن وُجدت) — أساس احتساب مصاريف الوردية بدقة وبلا خلط
-    open_shift_q = {"status": "open", "cashier_id": current_user["id"]}
+    # 🛡 صارم: نبحث فقط عن الوردية المفتوحة لهذا الكاشير في هذا الفرع لليوم الحالي
+    open_shift_q = {
+        "status": "open",
+        "cashier_id": current_user["id"],
+        "business_date": business_date,
+    }
     if branch_for_biz:
         open_shift_q["branch_id"] = branch_for_biz
     if tenant_id_for_biz:
         open_shift_q["tenant_id"] = tenant_id_for_biz
     open_shift = await db.shifts.find_one(open_shift_q, {"_id": 0, "id": 1})
+    
+    # 🛡 Lazy Shift Opening للمصاريف: إذا لم توجد وردية مفتوحة للكاشير اليوم، افتحها تلقائياً
+    # هذا يضمن أن كل مصروف يحمل shift_id صحيح ولا يتسرّب لملخصات ورديات أخرى.
+    # نستثني المدراء/المالكين (يمكنهم تسجيل مصاريف عامة بلا وردية)
+    is_manager_role = current_user.get("role", "") in ["admin", "super_admin", "manager", "branch_manager"]
+    if not open_shift and branch_for_biz and not is_manager_role:
+        new_shift_id = str(uuid.uuid4())
+        new_shift_doc = {
+            "id": new_shift_id,
+            "tenant_id": tenant_id_for_biz,
+            "branch_id": branch_for_biz,
+            "cashier_id": current_user["id"],
+            "cashier_name": current_user.get("full_name", "") or current_user.get("username", ""),
+            "started_at": datetime.now(timezone.utc).isoformat(),
+            "opened_at": datetime.now(timezone.utc).isoformat(),
+            "status": "open",
+            "opening_balance": 0,
+            "opening_cash": 0,
+            "business_date": business_date,
+            "created_at": datetime.now(timezone.utc).isoformat(),
+            "auto_opened_by_first_expense": True,
+        }
+        await db.shifts.insert_one(new_shift_doc)
+        open_shift = {"id": new_shift_id}
+        logger.info(f"✅ فُتحت وردية جديدة تلقائياً لتسجيل مصروف — كاشير {current_user.get('full_name')} — business_date={business_date}")
+    
     expense_doc = {
         "id": str(uuid.uuid4()),
         **expense.model_dump(),
@@ -4576,18 +4607,16 @@ async def create_expense(expense: ExpenseCreate, current_user: dict = Depends(ge
     del expense_doc["_id"]
     
     # تحديث إجمالي مصروفات الوردية المفتوحة الحالية (لو كان المصروف ليس مرتجع)
-    if expense_doc.get("category") != "refund" and branch_for_biz:
+    if expense_doc.get("category") != "refund" and branch_for_biz and open_shift:
+        # 🛡 صارم: نُحدّث فقط الوردية التي رُبط بها المصروف (وليس أي وردية في الفرع)
         current_shift = await db.shifts.find_one(
-            {"branch_id": branch_for_biz, "status": "open", **({"tenant_id": tenant_id_for_biz} if tenant_id_for_biz else {})},
-            {"_id": 0, "id": 1, "started_at": 1, "opening_cash": 1, "opening_balance": 1, "cash_sales": 1}
+            {"id": open_shift["id"]},
+            {"_id": 0, "id": 1, "started_at": 1, "opening_cash": 1, "opening_balance": 1, "cash_sales": 1, "cashier_id": 1}
         )
         if current_shift:
-            exp_q = {
-                **({"tenant_id": tenant_id_for_biz} if tenant_id_for_biz else {}),
-                "branch_id": branch_for_biz,
-                "category": {"$ne": "refund"},
-                "created_at": {"$gte": current_shift.get("started_at", "")}
-            }
+            # نستخدم نفس منطق shift_expense_query لضمان اتساق العدّ
+            from routes.shared import shift_expense_query
+            exp_q = shift_expense_query(current_shift, tenant_id_for_biz)
             shift_expenses_live = await db.expenses.find(exp_q, {"_id": 0, "amount": 1}).to_list(500)
             total_exp_live = sum(float(e.get("amount") or 0) for e in shift_expenses_live)
             opening_cash_live = float(current_shift.get("opening_cash") or current_shift.get("opening_balance") or 0)
