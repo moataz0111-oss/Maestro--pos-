@@ -200,3 +200,8 @@
 - كلمات مرور المستخدمين الجدد يجب أن تكون ≥8 أحرف وتحوي حرفاً ورقماً (الحسابات القديمة القصيرة مثل admin123 تعمل للدخول — السياسة على الإنشاء/التغيير فقط).
 - GET /api/welcome-discount/stats (admin token) — إحصائيات كوبونات الترحيب.
 - GET /api/print-queue/agent-status يقبل الآن توكن مستخدم عادي (كان يتطلب مفتاح الوكيل فقط).
+
+## Seed إصلاح استهداف إغلاق الصندوق (7 يوليو 2026 — iter287)
+- Cashier: closefix-cashier@maestroegp.com / test1234 (احمد اختبار، فرع 76f56acc-...)
+- Re-seed: cd /app/backend && python3 seed_owner_cashier_close_test.py (وردية مالك 79,500 أقدم + وردية كاشير 802,750)
+- الاستخدام: GET /api/cash-register/summary?shift_id=... و POST /api/cash-register/close مع shift_id

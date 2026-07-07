@@ -4570,3 +4570,13 @@ for ing in recipe:
 - **الطباعة التلقائية عند إغلاق الوردية:** موجودة مسبقاً (printClosingReceiptViaUSB في Dashboard.js) — لا حاجة لعمل إضافي.
 - **إصلاح seed_expense_attribution_test.py:** يقرأ DB_NAME من backend/.env (كان يكتب في قاعدة خاطئة).
 - **التحقق:** testing_agent iteration_100.json = backend 33/33 (100%) + frontend 100%. ملف الاختبار: /app/backend/tests/test_refactor_iter100.py
+
+## 2026-07-07 (2) — إصلاح استهداف الوردية في إغلاق الصندوق (P0 — بلاغ المستخدم) ✅
+- **البلاغ:** نافذة إغلاق الصندوق أظهرت وردية المالك نفسه ("معتز مهنا"، 79,500) بدل وردية الكاشير النشط ("احمد زين"، 802,750) المعروضة بالشريط العلوي.
+- **سببان جذريان:** (1) _resolve_open_shift_for_close كانت تختار أقدم وردية مفتوحة بالفرع — قد تكون وردية المدير المفتوحة كسولاً. (2) الملخص كان يعيد اسم المستخدم الحالي كاسم كاشير بدل صاحب الوردية.
+- **الإصلاح (shifts_routes.py):** (أ) shift_id اختياري في GET /cash-register/summary وفي CashRegisterClose — يستهدف الوردية بدقة. (ب) prefer_not_user_id في _resolve: وردية المدير الطالب تأتي أخيراً (أولوية لورديات الكاشير الفعلية). (ج) الملخص يعيد cashier_id/cashier_name من الوردية نفسها. (د) تحصين قراءة فئات النقود (_denom_value).
+- **الواجهة (Dashboard.js):** openCashRegister يمرر shift_id=activeShift.id، وhandleCloseRegister يمرر shift_id=cashSummary.shift_id — إغلاق نفس الوردية المعروضة بالنافذة حرفياً.
+- **مضمون:** لا دمج؛ إغلاق وردية الكاشير لا يمس وردية المالك (بقيت مفتوحة بقيمها).
+- **التحقق:** testing_agent iteration_287 = باكند 5/5 (100%) + فرونتند 100% (الشريط العلوي=النافذة "احمد اختبار" 802,750؛ تبويب إغلاق الصندوق يعرض الورديات المفتوحة بشارة "نشط" الخضراء).
+- ملف الاختبار: /app/backend/tests/test_close_shift_isolation_iter287.py | Seed: seed_owner_cashier_close_test.py (closefix-cashier@maestroegp.com / test1234)
+- **⚠️ يتطلب Save to GitHub + نشر** للظهور على maestroegp.com.

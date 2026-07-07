@@ -1,0 +1,34 @@
+{
+  "summary": "Verified iter287 close-shift isolation fix (backend + frontend). All 5 backend pytest cases passed and full frontend UX flow confirmed: top bar cashier name matches close dialog cashier name (احمد اختبار, 802,750 IQD) — NOT the admin's own lazy shift. Reports 'إغلاق الصندوق' tab shows open cashier shifts with green 'نشط' badge.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "/api/cash-register/close", "issue": "denomination_values.get(denom, int(denom)) at shifts_routes.py:1646 will crash with ValueError if a decimal string denomination (e.g. '0.5', '0.25') is ever sent. Not currently reachable from frontend (piastre-int denominations only) but a latent bug. Suggest int(float(denom)) or Decimal handling."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_close_shift_isolation_iter287.py",
+    "/app/test_reports/pytest/iter287_close_isolation.xml"
+  ],
+  "action_items": [
+    "(Optional) Harden denomination parsing in close_cash_register to tolerate decimal string keys."
+  ],
+  "critical_code_review_comments": [
+    "shifts_routes.py:1641-1648: hardcoded denomination_values only covers IQD dinars (250..50000). int(denom) fallback is fragile — will explode on any non-integer key sent by future clients or offline sync payloads."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_close_shift_isolation_iter287.py"
+  ],
+  "success_rate": {"backend": "100% (5/5)", "frontend": "100% (dialog+reports tab both verified)"},
+  "test_credentials": "admin@maestroegp.com/admin123; expattr-cashier-a@maestroegp.com/test123",
+  "seed_data_creation": "Re-ran /app/backend/seed_owner_cashier_close_test.py and seed_expense_attribution_test.py (both idempotent). Note: test_close_cashier_shift_via_shift_id closes closefix-shift-cashier — re-run seed before any subsequent test that needs it as open.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Fix works end-to-end. Backend test file: /app/backend/tests/test_close_shift_isolation_iter287.py. Frontend confirmed via Playwright: (1) top-bar 'الوردية: احمد اختبار' matches dialog 'الكاشير: احمد اختبار' with total_sales=802,750; (2) Reports > 'إغلاق الصندوق' tab renders all 5 shifts today, 4 open shifts (expattr-a, expattr-b, احمد اختبار, مدير النظام) each show green 'نشط' badge with correct totals. Only latent concern: int(denom) fragile parsing in close endpoint (minor).",
+  "rca_of_the_issue": "Original bug: /cash-register/summary and /close used _resolve_open_shift_for_close which picked OLDEST open shift; admin's own lazy shift (closefix-shift-owner, 79,500) predated the real cashier shift (closefix-shift-cashier, 802,750) → wrong shift shown/closed. Fix verified: (a) summary+close now accept optional shift_id (respected verbatim); (b) _resolve_open_shift_for_close deprioritizes requesting manager's own shift when no shift_id supplied; (c) summary now returns the SHIFT's cashier_name (احمد اختبار) instead of current_user's name (مدير النظام); (d) Dashboard.js passes activeShift.id to summary and cashSummary.shift_id to close. Verified independent close: closing closefix-shift-cashier left closefix-shift-owner still open with untouched 79,500 sales — no cross-close, no merging."
+}

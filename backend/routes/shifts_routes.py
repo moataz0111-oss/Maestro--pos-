@@ -133,6 +133,7 @@ class CashRegisterClose(BaseModel):
     denominations: Dict[str, int] = {}
     notes: Optional[str] = None
     branch_id: Optional[str] = None
+    shift_id: Optional[str] = None  # ⭐ استهداف وردية محددة بدقة (الوردية المعروضة في نافذة الإغلاق)
     force_close_without_count: Optional[bool] = False  # تجاوز فحص الجرد (للمالك/المدير)
     force_close_with_discrepancy: Optional[bool] = False  # موافقة المدير على فرق نقدي كبير (تقرير الأمان #9)
     manager_email: Optional[str] = None  # اعتماد المدير للفرق النقدي الكبير
@@ -1267,10 +1268,11 @@ async def get_shifts(
     return shifts
 
 # ==================== CASH REGISTER ====================
-async def _resolve_open_shift_for_close(db, shift_query, tenant_id):
+async def _resolve_open_shift_for_close(db, shift_query, tenant_id, prefer_not_user_id=None):
     """يختار الوردية المفتوحة للإغلاق/الملخص **دون أي دمج** (كل وردية مستقلة تماماً).
 
-    عند وجود أكثر من وردية مفتوحة مطابِقة (نادر) نختار الأقدم بدءاً فقط،
+    عند وجود أكثر من وردية مفتوحة مطابِقة نُفضّل وردية الكاشير الحقيقي على
+    وردية المدير/المالك نفسه (prefer_not_user_id) ثم الأقدم بدءاً،
     ولا نجمع أي ورديات أخرى معها — التزاماً بمتطلّب المستخدم: لا دمج إطلاقاً.
 
     يُعيد: (shift, [shift_id], started_at)."""
@@ -1281,7 +1283,12 @@ async def _resolve_open_shift_for_close(db, shift_query, tenant_id):
     def _st(s):
         return s.get("started_at") or s.get("opened_at") or ""
 
-    opens.sort(key=lambda s: str(_st(s)))
+    def _key(s):
+        # وردية المدير الطالب نفسه تأتي أخيراً — الأولوية لوردية الكاشير النشط
+        is_own = 1 if (prefer_not_user_id and s.get("cashier_id") == prefer_not_user_id) else 0
+        return (is_own, str(_st(s)))
+
+    opens.sort(key=_key)
     anchor = opens[0]
     return anchor, [anchor["id"]] if anchor.get("id") else [], _st(anchor)
 
@@ -1290,6 +1297,7 @@ async def _resolve_open_shift_for_close(db, shift_query, tenant_id):
 @router.get("/cash-register/summary")
 async def get_cash_register_summary(
     branch_id: Optional[str] = None,
+    shift_id: Optional[str] = None,
     current_user: dict = Depends(get_current_user)
 ):
     """جلب ملخص الصندوق الحالي للكاشير - قبل إغلاقه"""
@@ -1308,7 +1316,12 @@ async def get_cash_register_summary(
     if tenant_id:
         shift_query["tenant_id"] = tenant_id
     
-    if is_manager and target_branch_id:
+    if shift_id:
+        # ⭐ استهداف وردية محددة بدقة (الوردية النشطة المعروضة في الواجهة)
+        shift_query["id"] = shift_id
+        if not is_manager:
+            shift_query["cashier_id"] = current_user["id"]
+    elif is_manager and target_branch_id:
         # المدير يمكنه إغلاق أي وردية للفرع
         shift_query["branch_id"] = target_branch_id
     else:
@@ -1317,7 +1330,9 @@ async def get_cash_register_summary(
         if target_branch_id:
             shift_query["branch_id"] = target_branch_id
     
-    shift, consolidated_ids, earliest_start = await _resolve_open_shift_for_close(db, shift_query, tenant_id)
+    shift, consolidated_ids, earliest_start = await _resolve_open_shift_for_close(
+        db, shift_query, tenant_id,
+        prefer_not_user_id=current_user["id"] if is_manager else None)
     
     # إذا لم توجد وردية مفتوحة
     if not shift:
@@ -1498,8 +1513,8 @@ async def get_cash_register_summary(
         "shift_id": shift["id"],
         "branch_id": shift.get("branch_id", ""),
         "branch_name": branch["name"] if branch else "",
-        "cashier_id": current_user["id"],
-        "cashier_name": current_user.get("full_name", current_user.get("username", "")),
+        "cashier_id": shift_cashier_id,
+        "cashier_name": shift.get("cashier_name") or current_user.get("full_name", current_user.get("username", "")),
         "started_at": shift.get("started_at", shift.get("opened_at", "")),
         "opening_cash": opening_cash,
         "total_sales": total_sales,
@@ -1542,7 +1557,12 @@ async def close_cash_register(close_data: CashRegisterClose, current_user: dict 
     if tenant_id:
         shift_query["tenant_id"] = tenant_id
     
-    if is_manager and target_branch_id:
+    if close_data.shift_id:
+        # ⭐ استهداف وردية محددة بدقة (الوردية المعروضة في نافذة الإغلاق)
+        shift_query["id"] = close_data.shift_id
+        if not is_manager:
+            shift_query["cashier_id"] = current_user["id"]
+    elif is_manager and target_branch_id:
         # المدير يمكنه إغلاق أي وردية للفرع
         shift_query["branch_id"] = target_branch_id
     else:
@@ -1551,7 +1571,9 @@ async def close_cash_register(close_data: CashRegisterClose, current_user: dict 
         if target_branch_id:
             shift_query["branch_id"] = target_branch_id
     
-    shift, consolidated_ids, earliest_start = await _resolve_open_shift_for_close(db, shift_query, tenant_id)
+    shift, consolidated_ids, earliest_start = await _resolve_open_shift_for_close(
+        db, shift_query, tenant_id,
+        prefer_not_user_id=current_user["id"] if is_manager else None)
     
     if not shift:
         raise HTTPException(status_code=404, detail="لا يوجد وردية مفتوحة")
@@ -1620,8 +1642,13 @@ async def close_cash_register(close_data: CashRegisterClose, current_user: dict 
         "250": 250, "500": 500, "1000": 1000, "5000": 5000,
         "10000": 10000, "25000": 25000, "50000": 50000
     }
+    def _denom_value(denom):
+        try:
+            return denomination_values.get(denom) or float(denom)
+        except (ValueError, TypeError):
+            return 0
     closing_cash = sum(
-        denomination_values.get(denom, int(denom)) * count
+        _denom_value(denom) * count
         for denom, count in close_data.denominations.items()
     )
     

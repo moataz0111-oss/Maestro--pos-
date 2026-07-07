@@ -960,9 +960,13 @@ export default function Dashboard() {
     setShowReport(false);
     
     try {
-      // إرسال branch_id من الفرع المحدد (أولوية) أو الوردية النشطة
+      // إرسال branch_id من الفرع المحدد (أولوية) أو الوردية النشطة + معرّف الوردية النشطة بدقة
       const branchId = getBranchIdForApi() || activeShift?.branch_id;
       const params = branchId ? { branch_id: branchId } : {};
+      // ⭐ استهداف الوردية النشطة المعروضة في الشريط العلوي بدقة (وليس أقدم وردية بالفرع)
+      if (activeShift?.id && (!branchId || !activeShift?.branch_id || activeShift.branch_id === branchId)) {
+        params.shift_id = activeShift.id;
+      }
       const token = localStorage.getItem('token');
       const res = await axios.get(`${API}/cash-register/summary`, { 
         params,
@@ -1022,6 +1026,9 @@ export default function Dashboard() {
         notes: closeNotes,
         branch_id: branchId
       };
+      // ⭐ إغلاق نفس الوردية المعروضة في النافذة بالضبط (وليس أقدم وردية بالفرع)
+      const targetShiftId = cashSummary?.shift_id || activeShift?.id;
+      if (targetShiftId) payload.shift_id = targetShiftId;
       if (managerApproval) {
         payload.force_close_with_discrepancy = true;
         payload.manager_email = managerApproval.email;
