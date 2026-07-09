@@ -11,7 +11,7 @@ import os
 import requests
 import pytest
 
-BASE_URL = os.environ.get("REACT_APP_BACKEND_URL", "https://whatsapp-pos-system.preview.emergentagent.com").rstrip("/")
+BASE_URL = os.environ.get("REACT_APP_BACKEND_URL", "https://multi-cashier-vault.preview.emergentagent.com").rstrip("/")
 ORDER_ID = "252ccd0a-e564-4a37-bb6c-974f8668169d"
 
 # Minimal WebM container header (valid EBML signature for audio/webm)

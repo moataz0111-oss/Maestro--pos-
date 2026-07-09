@@ -28,6 +28,115 @@ def _safe_num(val, default=0):
     except (TypeError, ValueError):
         return default
 
+
+# ==================== NOTIFICATION PREFERENCES (شفت / سلامة / …) ====================
+DEFAULT_NOTIFICATION_PREFS = {
+    "shift_close_report_whatsapp": True,   # إرسال تقرير الوردية بعد الإغلاق (المُوصى به)
+    "shift_close_report_email": True,
+    "shift_close_report_bell": True,
+    "integrity_check_whatsapp": False,     # رسالة "فحص السلامة" على واتساب (مُعطَّل افتراضياً)
+    "integrity_check_email": False,
+    "integrity_check_bell": True,          # يبقى في الجرس فقط للمراجعة الفنية
+}
+
+
+async def _get_notification_prefs(db, tenant_id: Optional[str] = None) -> dict:
+    """يقرأ تفضيلات الإشعارات من db.notification_preferences (per-tenant).
+    يُدمج مع الافتراضيات ليضمن وجود كل المفاتيح."""
+    q = {"id": "global"}
+    if tenant_id:
+        q["tenant_id"] = tenant_id
+    doc = await db.notification_preferences.find_one(q, {"_id": 0}) or {}
+    prefs = dict(DEFAULT_NOTIFICATION_PREFS)
+    for k, v in doc.items():
+        if k in prefs and isinstance(v, bool):
+            prefs[k] = v
+    return prefs
+
+
+async def _send_shift_close_report(db, shift: dict, closing_record: dict, tenant_id: Optional[str]) -> None:
+    """يُرسل تقرير إغلاق الوردية للمالك عبر واتساب + بريد + جرس (حسب التفضيلات).
+    
+    يحوي: الكاشير، الفرع، اليوم التشغيلي، إجمالي المبيعات، تفصيل حسب طريقة الدفع،
+    النقد المتوقع، النقد الفعلي، المصاريف، الفرق (زيادة/نقص).
+    """
+    try:
+        prefs = await _get_notification_prefs(db, tenant_id)
+        if not (prefs.get("shift_close_report_whatsapp") or
+                prefs.get("shift_close_report_email") or
+                prefs.get("shift_close_report_bell")):
+            return  # كل القنوات معطّلة
+        
+        cashier = shift.get("cashier_name") or "غير معروف"
+        branch = shift.get("branch_name") or closing_record.get("branch_name") or "غير محدد"
+        biz_date = closing_record.get("business_date") or shift.get("business_date") or "-"
+        total_sales = _safe_num(closing_record.get("total_sales"))
+        cash_sales = _safe_num(closing_record.get("cash_sales"))
+        card_sales = _safe_num(closing_record.get("card_sales"))
+        credit_sales = _safe_num(closing_record.get("credit_sales"))
+        delivery_sales = _safe_num(closing_record.get("delivery_sales"))
+        expected_cash = _safe_num(closing_record.get("expected_cash"))
+        actual_cash = _safe_num(closing_record.get("actual_cash") or closing_record.get("closing_cash"))
+        total_expenses = _safe_num(closing_record.get("total_expenses"))
+        diff = _safe_num(closing_record.get("difference"))
+        orders_count = int(closing_record.get("orders_count") or 0)
+        
+        if diff > 0.5:
+            diff_label = f"زيادة +{diff:,.0f}"
+            diff_emoji = "📈"
+        elif diff < -0.5:
+            diff_label = f"نقص {diff:,.0f}"
+            diff_emoji = "📉"
+        else:
+            diff_label = "مطابق ✓"
+            diff_emoji = "✅"
+        
+        title = f"📊 تقرير إغلاق وردية — {cashier}"
+        message = (
+            f"👤 الكاشير: {cashier}\n"
+            f"🏬 الفرع: {branch}\n"
+            f"📅 اليوم التشغيلي: {biz_date}\n"
+            f"🧾 عدد الطلبات: {orders_count}\n"
+            f"\n💰 المبيعات:\n"
+            f"  • نقدي: {cash_sales:,.0f}\n"
+            f"  • بطاقة: {card_sales:,.0f}\n"
+            f"  • آجل: {credit_sales:,.0f}\n"
+            f"  • تطبيقات توصيل: {delivery_sales:,.0f}\n"
+            f"  • الإجمالي: {total_sales:,.0f}\n"
+            f"\n💵 النقد:\n"
+            f"  • المتوقع: {expected_cash:,.0f}\n"
+            f"  • الفعلي: {actual_cash:,.0f}\n"
+            f"  • المصاريف: {total_expenses:,.0f}\n"
+            f"  {diff_emoji} الفرق: {diff_label}"
+        )
+        
+        try:
+            from server import notify_owner_multichannel
+            await notify_owner_multichannel(
+                title=title,
+                message=message,
+                severity="critical" if abs(diff) > (total_sales * 0.05) and total_sales > 0 else "info",
+                category="shift",
+                send_whatsapp=bool(prefs.get("shift_close_report_whatsapp")),
+                send_email=bool(prefs.get("shift_close_report_email")),
+                tenant_id=tenant_id,
+                metadata={
+                    "shift_id": shift.get("id"),
+                    "cashier_id": shift.get("cashier_id"),
+                    "cashier_name": cashier,
+                    "branch_id": shift.get("branch_id"),
+                    "business_date": biz_date,
+                    "total_sales": total_sales,
+                    "expected_cash": expected_cash,
+                    "actual_cash": actual_cash,
+                    "difference": diff,
+                },
+            )
+        except Exception as _e:
+            logger.warning(f"shift_close_report notify_owner_multichannel failed: {_e}")
+    except Exception as e:
+        logger.warning(f"_send_shift_close_report failed: {e}")
+
 # الأدوار التي لا تتعامل مع نقد المبيعات — رؤساء أقسام لا يجوز فتح وردية كاشير لهم
 # (أمين مخزن، تصنيع/مطبخ، مشتريات، كول سنتر، محاسب). يمنع ظهور فروقات نقد وهمية في تقرير الورديات.
 NON_CASHIER_ROLES = {
@@ -1078,6 +1187,12 @@ async def close_shift(shift_id: str, close_data: ShiftClose, current_user: dict 
         import asyncio as _aio
         _sid_check = shift_id
         _tid_check = shift_tenant
+        _closing_record_for_report = dict(closing_record)
+        _shift_for_report = dict(shift)
+        _shift_for_report.update({
+            "business_date": closing_record.get("business_date"),
+            "branch_name": closing_record.get("branch_name"),
+        })
         async def _post_close_integrity():
             try:
                 fresh = await db.shifts.find_one({"id": _sid_check}, {"_id": 0})
@@ -1088,6 +1203,8 @@ async def close_shift(shift_id: str, close_data: ShiftClose, current_user: dict 
             except Exception as _e:
                 logger.warning(f"post-close integrity failed: {_e}")
         _aio.create_task(_post_close_integrity())
+        # 📊 تقرير إغلاق الوردية (المبيعات/النقد/الفرق) — قابل للتشغيل/الإيقاف من SuperAdmin
+        _aio.create_task(_send_shift_close_report(db, _shift_for_report, _closing_record_for_report, _tid_check))
     except Exception:
         pass
     
@@ -1846,6 +1963,28 @@ async def close_cash_register(close_data: CashRegisterClose, current_user: dict 
     updated_shift["branch_name"] = branch["name"] if branch else ""
     updated_shift["merged_shifts_count"] = 0
     
+    # 📊 تقرير إغلاق الوردية للمالك (واتساب + بريد + جرس) — قابل للتحكم من SuperAdmin
+    try:
+        import asyncio as _aio
+        _closing_payload = {
+            "total_sales": total_sales,
+            "cash_sales": cash_sales,
+            "card_sales": card_sales,
+            "credit_sales": credit_sales,
+            "delivery_sales": sum(delivery_app_sales.values()) if delivery_app_sales else 0,
+            "expected_cash": expected_cash,
+            "actual_cash": closing_cash,
+            "closing_cash": closing_cash,
+            "total_expenses": total_expenses,
+            "difference": cash_difference,
+            "orders_count": len(orders),
+            "business_date": shift.get("business_date"),
+            "branch_name": branch["name"] if branch else "",
+        }
+        _aio.create_task(_send_shift_close_report(db, updated_shift, _closing_payload, tenant_id))
+    except Exception as _e:
+        logger.warning(f"post cash-register close notify failed: {_e}")
+    
     return updated_shift
 
 @router.get("/shifts/active-shift-details")
@@ -2061,12 +2200,13 @@ async def _integrity_rows_for_shifts(db, shifts: list):
 
 
 async def _notify_integrity_mismatches(db, tenant_id, rows) -> int:
-    """إشعار نظام + واتساب للمالك عند اكتشاف عدم تطابق (تنبيه واحد لكل شفت — بلا تكرار)."""
+    """إشعار جرس دائماً + واتساب/بريد للمالك حسب تفضيلات الإشعارات (لا يُرسل واتساب/بريد افتراضياً)."""
     import asyncio
     import whatsapp_free as _wa_free
     bad = [r for r in rows if r["status"] == "mismatch"]
     if not bad:
         return 0
+    prefs = await _get_notification_prefs(db, tenant_id)
     sent = 0
     for r in bad:
         exists = await db.notifications.find_one(
@@ -2074,18 +2214,21 @@ async def _notify_integrity_mismatches(db, tenant_id, rows) -> int:
         )
         if exists:
             continue
-        await db.notifications.insert_one({
-            "id": str(uuid.uuid4()),
-            "type": "integrity_alert",
-            "title": "⚠️ عدم تطابق في حسابات شفت",
-            "message": f"شفت {r['cashier_name']} ({r['business_date']}): " + " | ".join(r["issues"])[:400],
-            "tenant_id": tenant_id,
-            "data": {"shift_id": r["shift_id"], "cashier_name": r["cashier_name"], "business_date": r["business_date"], "issues": r["issues"]},
-            "is_read": False,
-            "created_at": datetime.now(timezone.utc).isoformat(),
-        })
+        # 🔔 الجرس: يبقى دائماً للمراجعة الفنية (كنا نعتمده كسجل داخلي)
+        if prefs.get("integrity_check_bell", True):
+            await db.notifications.insert_one({
+                "id": str(uuid.uuid4()),
+                "type": "integrity_alert",
+                "title": "⚠️ عدم تطابق في حسابات شفت",
+                "message": f"شفت {r['cashier_name']} ({r['business_date']}): " + " | ".join(r["issues"])[:400],
+                "tenant_id": tenant_id,
+                "data": {"shift_id": r["shift_id"], "cashier_name": r["cashier_name"], "business_date": r["business_date"], "issues": r["issues"]},
+                "is_read": False,
+                "created_at": datetime.now(timezone.utc).isoformat(),
+            })
         sent += 1
-    if sent and tenant_id:
+    # 📱 واتساب/بريد: فقط لو المالك فعّلها (معطّل افتراضياً — استُبدل بتقرير الوردية اليومي)
+    if sent and tenant_id and prefs.get("integrity_check_whatsapp", False):
         tn = await db.tenants.find_one({"id": tenant_id}, {"_id": 0, "owner_phone": 1, "name": 1}) or {}
         if tn.get("owner_phone"):
             lines = "\n".join(f"• {r['cashier_name']} ({r['business_date']}): {r['issues'][0]}" for r in bad[:5])

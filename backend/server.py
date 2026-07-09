@@ -156,12 +156,33 @@ SMTP_FROM_NAME = os.environ.get('SMTP_FROM_NAME', 'Maestro EGP')
 # ==================== المصادقة الثنائية (2FA) + جهاز موثوق ====================
 import twilio_verify as _twilio_verify  # noqa: E402
 import whatsapp_free as _wa_free  # noqa: E402
-# عناوين بريد المالك التي تُرسَل إليها رموز التحقق عند الدخول من جهاز جديد
-OWNER_RECOVERY_EMAILS = [
+# عناوين بريد المالك الاحتياطية (fallback من .env) — تُدار ديناميكياً من قاعدة البيانات
+_ENV_OWNER_RECOVERY_EMAILS = [
     e.strip().lower()
     for e in (os.environ.get('OWNER_RECOVERY_EMAILS', 'owner@maestroegp.com,Moataz0111@gmail.com')).split(',')
     if e.strip()
 ]
+# للاستخدام المتزامن (sync): يُحدَّث من قاعدة البيانات في _load_owner_recovery_emails
+OWNER_RECOVERY_EMAILS = list(_ENV_OWNER_RECOVERY_EMAILS)
+
+
+async def get_owner_recovery_emails() -> list:
+    """يُرجع قائمة بريد المالك الاحتياطية من قاعدة البيانات (تُدار من UI) أو من .env كافتراضي.
+    
+    الإعدادات المُدارة من UI (email_config.recovery_emails) لها الأولوية.
+    عند غياب قيمة في DB، نعود إلى قائمة .env كخيار احتياطي.
+    """
+    global OWNER_RECOVERY_EMAILS
+    try:
+        doc = await db.email_config.find_one({"id": "global"}, {"_id": 0, "recovery_emails": 1})
+        if doc and isinstance(doc.get("recovery_emails"), list) and doc["recovery_emails"]:
+            db_emails = [str(e).strip().lower() for e in doc["recovery_emails"] if str(e).strip() and "@" in str(e)]
+            if db_emails:
+                OWNER_RECOVERY_EMAILS = db_emails  # حدّث الكاش المتزامن
+                return db_emails
+    except Exception:
+        pass
+    return list(_ENV_OWNER_RECOVERY_EMAILS)
 
 
 async def _load_email_config() -> dict:
@@ -273,6 +294,99 @@ async def send_system_email(to_emails, subject: str, html_content: str) -> bool:
 async def email_transport_configured() -> bool:
     cfg = await _load_email_config()
     return bool((cfg.get("smtp_host") and cfg.get("smtp_user") and cfg.get("smtp_password")) or cfg.get("sendgrid_api_key"))
+
+
+# ============ إشعار المالك بثلاث قنوات: الجرس + الواتساب + البريد ============
+async def notify_owner_multichannel(
+    title: str,
+    message: str,
+    severity: str = "info",
+    category: str = "system",
+    send_whatsapp: bool = True,
+    send_email: bool = True,
+    tenant_id: Optional[str] = None,
+    metadata: Optional[dict] = None,
+) -> dict:
+    """يُرسل إشعاراً مهماً للمالك في 3 قنوات متزامنة:
+    
+    1. جرس لوحة التحكم (db.notifications) — يظهر في أيقونة الجرس الأعلى.
+    2. واتساب لرقم المالك المرتبط (إن كان الواتساب مربوطاً).
+    3. بريد إلكتروني إلى OWNER_RECOVERY_EMAILS (إن كان SMTP/SendGrid مُعدّاً).
+    
+    - severity: info | warning | critical (يُلوّن الجرس)
+    - category: security | shift | expense | subscription | system
+    - metadata: بيانات إضافية للجرس (تُخزّن مع الإشعار)
+    
+    يُرجع dict فيه {bell, whatsapp, email}: bool لكل قناة.
+    """
+    result = {"bell": False, "whatsapp": False, "email": False}
+    now_iso = datetime.now(timezone.utc).isoformat()
+    
+    # 1) الجرس (دائماً)
+    try:
+        await db.notifications.insert_one({
+            "id": str(uuid.uuid4()),
+            "title": title,
+            "message": message,
+            "severity": severity,
+            "category": category,
+            "is_read": False,
+            "created_at": now_iso,
+            "tenant_id": tenant_id,
+            "metadata": metadata or {},
+        })
+        result["bell"] = True
+    except Exception as e:
+        logger.warning(f"notify_owner_multichannel bell failed: {e}")
+    
+    # 2) الواتساب (لرقم المالك المرتبط بالخدمة)
+    if send_whatsapp:
+        try:
+            if await _wa_free.is_connected():
+                # الرقم المستقبِل: من env أو من قاعدة البيانات
+                owner_phone = os.environ.get("OWNER_ALERT_PHONE", "")
+                if not owner_phone:
+                    _owner_user = await db.users.find_one(
+                        {"role": {"$in": ["super_admin", "admin", "owner"]}, "phone": {"$exists": True, "$ne": ""}},
+                        {"_id": 0, "phone": 1}
+                    )
+                    if _owner_user:
+                        owner_phone = _owner_user.get("phone") or ""
+                if owner_phone:
+                    e164 = await _phone_to_e164(owner_phone)
+                    wa_msg = f"🔔 Maestro EGP — {title}\n\n{message}"
+                    ok, _err = await _wa_free.send_message(
+                        e164, wa_msg, purpose=f"owner_{category}", tenant_id=tenant_id
+                    )
+                    result["whatsapp"] = bool(ok)
+        except Exception as e:
+            logger.warning(f"notify_owner_multichannel whatsapp failed: {e}")
+    
+    # 3) البريد الإلكتروني (لكل بريد استرداد)
+    if send_email:
+        try:
+            _sev_color = {"info": "#3B82F6", "warning": "#F59E0B", "critical": "#EF4444"}.get(severity, "#3B82F6")
+            html = (
+                f"<div style='font-family:Arial,sans-serif;direction:rtl;text-align:right'>"
+                f"<div style='background:{_sev_color};color:#fff;padding:12px 16px;border-radius:8px 8px 0 0'>"
+                f"<h2 style='margin:0'>{title}</h2></div>"
+                f"<div style='background:#f9fafb;padding:16px;border-radius:0 0 8px 8px;border:1px solid #e5e7eb'>"
+                f"<pre style='white-space:pre-wrap;font-family:Arial,sans-serif;font-size:14px;color:#111'>{message}</pre>"
+                f"<hr style='margin:16px 0;border:none;border-top:1px solid #e5e7eb'/>"
+                f"<p style='font-size:12px;color:#6b7280;margin:0'>Maestro EGP — {now_iso}</p>"
+                f"</div></div>"
+            )
+            recovery_emails = await get_owner_recovery_emails()
+            ok = await send_system_email(
+                list(recovery_emails),
+                f"[Maestro EGP] {title}",
+                html
+            )
+            result["email"] = bool(ok)
+        except Exception as e:
+            logger.warning(f"notify_owner_multichannel email failed: {e}")
+    
+    return result
 
 # Static Files Configuration
 UPLOAD_DIR = ROOT_DIR / "uploads"
@@ -2985,6 +3099,7 @@ async def start_2fa_verification(subject_type, subject_id, subject_name, tenant_
     dev_code = None
     pending = False
     masked = ""
+    channels_sent = []  # جميع القنوات التي نجح فيها إرسال الرمز — يُرجَع للواجهة
 
     def _otp_email_html(code, name):
         return f"""
@@ -3005,33 +3120,56 @@ async def start_2fa_verification(subject_type, subject_id, subject_name, tenant_
         code_hash = _hash_otp(code, salt)
         wa_msg = f"رمز الدخول إلى Maestro EGP: {code}\nصالح {_OTP_TTL_MINUTES} دقائق. لا تُشاركه مع أحد."
         sent = False
+        channels_sent = []  # قائمة القنوات التي نجح فيها الإرسال (لعرضها للمستخدم)
+        
+        # 🔥 إرسال ثنائي: واتساب + بريد (بشكل متزامن) — يضمن وصول الرمز حتى لو تعطلت قناة
         # 1) واتساب مجاني (رقم المالك المرتبط)
         if await _wa_free.is_connected():
-            ok, err = await _wa_free.send_message(e164, wa_msg)
+            ok, err = await _wa_free.send_message(e164, wa_msg, purpose="otp")
             if ok:
                 sent = True
-                channel = "whatsapp"
+                channels_sent.append("whatsapp")
                 method = "local"
-        # 2) البريد (إن توفّر بريد بديل)
-        if not sent and fallback_email:
+        
+        # 2) البريد بالتوازي (إن توفّر بريد للمستخدم) — لا ينتظر فشل الواتساب
+        if fallback_email:
             recips = fallback_email if isinstance(fallback_email, list) else [fallback_email]
-            if await send_system_email(recips, "رمز تحقق الدخول — Maestro EGP", _otp_email_html(code, subject_name)):
-                sent = True
-                channel = "email"
-                method = "local"
-                masked = _mask_email(recips[0])
-        # 3) الحالة القصوى: SMS مدفوع عبر Twilio
+            recips = [r for r in recips if r and "@" in str(r)]
+            if recips:
+                try:
+                    email_ok = await send_system_email(
+                        recips,
+                        "رمز تحقق الدخول — Maestro EGP",
+                        _otp_email_html(code, subject_name)
+                    )
+                    if email_ok:
+                        sent = True
+                        channels_sent.append("email")
+                        if not method:
+                            method = "local"
+                        # إن كان البريد الوحيد الذي نجح، عرض عنوان البريد
+                        if not channels_sent or channels_sent == ["email"]:
+                            masked = _mask_email(recips[0])
+                except Exception as _e:
+                    logger.warning(f"OTP email delivery failed: {_e}")
+        
+        # 3) الحالة القصوى: SMS مدفوع عبر Twilio — فقط لو القناتان أعلاه فشلتا
         if not sent and _twilio_verify.is_configured():
             ok, status = await _twilio_verify.start_verification(e164, "sms")
             if ok:
                 sent = True
-                channel = "sms"
+                channels_sent.append("sms")
                 method = "twilio"  # Twilio يتحقق من رمزه الخاص
                 code_hash = None
-        # 4) تعذّر الإرسال → معلّق (لا يُعرض الرمز في أي مكان — أمان صارم)
+        
+        # 4) تعذّر الإرسال بالكامل → معلّق (لا يُعرض الرمز في أي مكان — أمان صارم)
         if not sent:
             method = "local"
             pending = True
+        
+        # القناة الرئيسية في الرد = أول قناة نجحت (للتوافق مع الواجهة)
+        if channels_sent:
+            channel = channels_sent[0]
     else:  # email مباشرة (المالك/الموظف بلا هاتف)
         recipients = destination if isinstance(destination, list) else [destination]
         masked = _mask_email(recipients[0] if recipients else "")
@@ -3039,7 +3177,9 @@ async def start_2fa_verification(subject_type, subject_id, subject_name, tenant_
         code = _gen_otp_code()
         code_hash = _hash_otp(code, salt)
         sent = await send_system_email(recipients, "رمز تحقق الدخول — Maestro EGP", _otp_email_html(code, subject_name))
-        if not sent:
+        if sent:
+            channels_sent.append("email")
+        else:
             pending = True
 
     session = {
@@ -3049,6 +3189,7 @@ async def start_2fa_verification(subject_type, subject_id, subject_name, tenant_
         "subject_name": subject_name,
         "tenant_id": tenant_id,
         "channel": channel,
+        "channels_sent": channels_sent if channel in ("sms", "whatsapp", "email") else [],
         "method": method,
         "destination": destination if not isinstance(destination, list) else ",".join(destination),
         "code_hash": code_hash,
@@ -3068,6 +3209,7 @@ async def start_2fa_verification(subject_type, subject_id, subject_name, tenant_
         "requires_2fa": True,
         "verification_id": vid,
         "channel": channel,
+        "channels_sent": session.get("channels_sent", []),
         "destination_masked": masked,
         "device_id": session["device_id"],
         "expires_in_minutes": _OTP_TTL_MINUTES,
@@ -11284,19 +11426,6 @@ async def receive_biometric_push(request: Request):
         logger.error(f"Biometric push error: {e}")
         return {"status": "error", "message": str(e)}
 
-@api_router.delete("/biometric/devices/{device_id}")
-async def delete_biometric_device(device_id: str, current_user: dict = Depends(get_current_user)):
-    """حذف جهاز بصمة"""
-    result = await db.biometric_devices.delete_one({
-        "id": device_id,
-        "tenant_id": current_user.get("tenant_id")
-    })
-    
-    if result.deleted_count == 0:
-        raise HTTPException(status_code=404, detail="الجهاز غير موجود")
-    
-    return {"message": "تم حذف الجهاز بنجاح"}
-
 @api_router.get("/biometric/attendance")
 async def get_biometric_attendance(
     branch_id: Optional[str] = None,
@@ -12885,7 +13014,9 @@ async def start_integrity_scheduler():
 # ==================== 🚨 تنبيه الورديات المنسية (واتساب للمالك) ====================
 async def _alert_forgotten_open_shifts():
     """يُنبّه مالك النظام إذا بقيت وردية مفتوحة أكثر من 12 ساعة (إشعار مبكر قبل الإغلاق التلقائي بـ24 ساعة).
-    ملاحظة: يُرسَل تنبيه واحد فقط لكل وردية (نستخدم علامة alerted_forgotten في الوردية)."""
+    ملاحظة: يُرسَل تنبيه واحد فقط لكل وردية (نستخدم علامة alerted_forgotten في الوردية).
+    
+    🔔 التنبيه يذهب في 3 قنوات: جرس لوحة المالك + واتساب + بريد إلكتروني."""
     try:
         # عتبة: 12 ساعة (تعطي متسعاً بعد ساعة من نهاية اليوم العملي عادةً)
         threshold = (datetime.now(timezone.utc) - timedelta(hours=12)).isoformat()
@@ -12898,53 +13029,48 @@ async def _alert_forgotten_open_shifts():
         if not open_shifts:
             return
         
-        # حاول إرسال واتساب — إن لم يكن مرتبطاً تجاهل بصمت
-        try:
-            wa_connected = await _wa_free.is_connected()
-        except Exception:
-            wa_connected = False
-        
         for shift in open_shifts:
             shift_id = shift.get("id")
             tenant_id = shift.get("tenant_id")
-            branch_id = shift.get("branch_id")
             cashier_name = shift.get("cashier_name") or "غير معروف"
             branch_name = shift.get("branch_name") or "غير محدد"
             started_at = shift.get("started_at") or ""
             
-            # تحديد رقم المالك: أول مستخدم دور admin/owner للمستأجر
-            owner_phone = None
-            if tenant_id:
-                owner_user = await db.users.find_one(
-                    {"tenant_id": tenant_id, "role": {"$in": ["admin", "owner"]}, "phone": {"$exists": True, "$ne": ""}},
-                    {"_id": 0, "phone": 1}
-                )
-                if owner_user:
-                    owner_phone = owner_user.get("phone")
+            # حساب عدد الساعات المفتوحة
+            hours_open = 12
+            try:
+                if started_at:
+                    dt = datetime.fromisoformat(started_at.replace("Z", "+00:00"))
+                    hours_open = int((datetime.now(timezone.utc) - dt).total_seconds() // 3600)
+            except Exception:
+                pass
             
-            # إرسال الواتساب فقط إن كان مرتبطاً ورقم المالك متوفر
-            if wa_connected and owner_phone:
-                try:
-                    e164 = await _phone_to_e164(owner_phone)
-                    hours_open = 12
-                    try:
-                        if started_at:
-                            dt = datetime.fromisoformat(started_at.replace("Z", "+00:00"))
-                            hours_open = int((datetime.now(timezone.utc) - dt).total_seconds() // 3600)
-                    except Exception:
-                        pass
-                    msg = (
-                        f"⚠️ Maestro EGP — تنبيه وردية منسية\n"
-                        f"الفرع: {branch_name}\n"
-                        f"الكاشير: {cashier_name}\n"
-                        f"مفتوحة منذ: {hours_open} ساعة\n"
-                        f"يُرجى التحقق من إغلاقها قبل الإغلاق التلقائي (24 ساعة)."
-                    )
-                    ok, _err = await _wa_free.send_message(e164, msg)
-                    if ok:
-                        logger.info(f"🚨 تنبيه وردية منسية أُرسل للمالك ({shift_id})")
-                except Exception as _e:
-                    logger.warning(f"forgotten shift alert send failed for {shift_id}: {_e}")
+            title = f"⚠️ وردية منسية — {branch_name}"
+            message = (
+                f"الفرع: {branch_name}\n"
+                f"الكاشير: {cashier_name}\n"
+                f"مفتوحة منذ: {hours_open} ساعة\n"
+                f"يُرجى التحقق من إغلاقها قبل الإغلاق التلقائي (24 ساعة)."
+            )
+            
+            # إرسال ثلاثي القنوات (جرس + واتساب + بريد)
+            try:
+                res = await notify_owner_multichannel(
+                    title=title,
+                    message=message,
+                    severity="warning",
+                    category="shift",
+                    tenant_id=tenant_id,
+                    metadata={
+                        "shift_id": shift_id,
+                        "hours_open": hours_open,
+                        "branch_name": branch_name,
+                        "cashier_name": cashier_name,
+                    }
+                )
+                logger.info(f"🚨 تنبيه وردية منسية {shift_id} — جرس:{res['bell']} واتساب:{res['whatsapp']} بريد:{res['email']}")
+            except Exception as _e:
+                logger.warning(f"forgotten shift multichannel alert failed for {shift_id}: {_e}")
             
             # ضع العلامة حتى لا يتكرر التنبيه لنفس الوردية
             await db.shifts.update_one(
@@ -12970,6 +13096,16 @@ async def start_forgotten_shifts_scheduler():
     
     asyncio.create_task(_loop())
     logger.info("🚨 Forgotten shifts alert scheduler started (every 30 min)")
+
+
+@app.on_event("startup")
+async def refresh_owner_recovery_emails_cache():
+    """يُحمّل قائمة بريد الاسترداد من قاعدة البيانات إلى الكاش المتزامن عند بدء التشغيل."""
+    try:
+        await get_owner_recovery_emails()
+        logger.info(f"📧 Owner recovery emails loaded: {len(OWNER_RECOVERY_EMAILS)} address(es)")
+    except Exception as e:
+        logger.warning(f"failed to preload owner recovery emails: {e}")
 
 
 # إضافة indexes عند بدء التطبيق
@@ -16867,6 +17003,8 @@ from routes.coupons_promotions_routes import router as coupons_promotions_router
 app.include_router(coupons_promotions_router, prefix="/api")
 from routes.payroll_reports_routes import router as payroll_reports_router
 app.include_router(payroll_reports_router, prefix="/api")
+from routes.notification_prefs_routes import router as notification_prefs_router
+app.include_router(notification_prefs_router, prefix="/api")
 
 # Middleware to prevent caching of API responses
 @app.middleware("http")

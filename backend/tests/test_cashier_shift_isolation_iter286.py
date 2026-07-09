@@ -35,7 +35,7 @@ os.environ.setdefault("DB_NAME", "maestro_pos")
 from pymongo import MongoClient  # noqa: E402
 
 BASE_URL = os.environ.get("REACT_APP_BACKEND_URL",
-    "https://whatsapp-pos-system.preview.emergentagent.com").rstrip("/")
+    "https://multi-cashier-vault.preview.emergentagent.com").rstrip("/")
 ADMIN_EMAIL = "admin@maestroegp.com"
 ADMIN_PASS = "admin123"
 CASHIER_EMAIL = "cashier1@maestroegp.com"

@@ -1,7 +1,7 @@
 """Welcome Discount feature tests (iteration 277)."""
 import os, time, uuid, requests, pytest
 
-BASE_URL = os.environ.get('REACT_APP_BACKEND_URL', 'https://whatsapp-pos-system.preview.emergentagent.com').rstrip('/')
+BASE_URL = os.environ.get('REACT_APP_BACKEND_URL', 'https://multi-cashier-vault.preview.emergentagent.com').rstrip('/')
 API = f"{BASE_URL}/api"
 
 ADMIN = {"email": "admin@maestroegp.com", "password": "admin123"}

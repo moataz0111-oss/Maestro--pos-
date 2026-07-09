@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { API_URL, BACKEND_URL } from '../utils/api';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
+import { localAgent } from '../utils/localAgent';
 import { formatPrice } from '../utils/currency';
 import { useTranslation } from '../hooks/useTranslation';
 import LanguageSwitcher from '../components/LanguageSwitcher';
@@ -103,6 +104,7 @@ import {
   FolderTree,
   Printer,
   Bell,
+  MessageSquare,
   Sparkles,
   QrCode,
   Save,
@@ -114,7 +116,8 @@ import {
   Store,
   Cog,
   Boxes,
-  CreditCard
+  CreditCard,
+  Fingerprint
 } from 'lucide-react';
 import { toast, Toaster } from 'sonner';
 import ImageCropper from '../components/ImageCropper';
@@ -138,6 +141,211 @@ const getErrorMessage = (error) => {
 
 // مفتاح Super Admin السري
 const SUPER_ADMIN_SECRET = "271018";
+
+// ==================== لوحة تفضيلات إشعارات المالك ====================
+function NotifRow({ id, k, label, hint, color, prefs, saving, onToggle }) {
+  return (
+    <div className="flex items-center justify-between p-3 bg-[#1A284E]/30 rounded-lg" data-testid={`notif-row-${id}`}>
+      <div>
+        <p className={`font-medium text-sm ${color || 'text-white'}`}>{label}</p>
+        {hint && <p className="text-xs text-gray-400 mt-1">{hint}</p>}
+      </div>
+      <Switch checked={!!prefs[k]} onCheckedChange={() => onToggle(k)} disabled={saving} data-testid={`notif-toggle-${k}`} />
+    </div>
+  );
+}
+
+function NotificationPrefsPanel() {
+  const { t } = useTranslation();
+  const [prefs, setPrefs] = React.useState(null);
+  const [loading, setLoading] = React.useState(false);
+  const [saving, setSaving] = React.useState(false);
+  const [error, setError] = React.useState('');
+
+  const load = async () => {
+    setLoading(true);
+    setError('');
+    try {
+      const token = localStorage.getItem('token');
+      const res = await axios.get(`${API_URL}/system/notification-preferences`, {
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+        withCredentials: true,
+      });
+      setPrefs(res.data.preferences);
+    } catch (e) {
+      setError(getErrorMessage(e?.response?.data?.detail || t('فشل تحميل الإعدادات')));
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  React.useEffect(() => { load(); }, []);
+
+  const toggle = async (key) => {
+    if (!prefs) return;
+    const next = { ...prefs, [key]: !prefs[key] };
+    setPrefs(next); // optimistic
+    setSaving(true);
+    try {
+      const token = localStorage.getItem('token');
+      await axios.put(`${API_URL}/system/notification-preferences`, { [key]: next[key] }, {
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+        withCredentials: true,
+      });
+    } catch (e) {
+      setPrefs(prefs); // rollback
+      setError(getErrorMessage(e?.response?.data?.detail || t('فشل حفظ الإعدادات')));
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  if (loading || !prefs) {
+    return <div className="text-gray-400 text-sm p-4" data-testid="notif-prefs-loading">{t('جاري التحميل...')}</div>;
+  }
+
+  return (
+    <div className="space-y-4" data-testid="notification-prefs-panel">
+      <h3 className="font-bold text-amber-400 border-b border-[#2A3A66] pb-2">
+        {t('تقرير الوردية اليومي')}
+      </h3>
+      <p className="text-xs text-gray-400">
+        {t('يُرسل تقرير مفصّل للمبيعات والنقد والفرق بعد إغلاق كل وردية مباشرة.')}
+      </p>
+      <NotifRow id="shift-wa" k="shift_close_report_whatsapp" label={t('واتساب — تقرير الوردية')} hint={t('يُرسَل تلقائياً لرقم واتساب المالك عند إغلاق كل وردية')} color="text-green-400" prefs={prefs} saving={saving} onToggle={toggle} />
+      <NotifRow id="shift-email" k="shift_close_report_email" label={t('بريد إلكتروني — تقرير الوردية')} hint={t('يُرسل نسخة HTML إلى بريد الاسترداد')} color="text-blue-400" prefs={prefs} saving={saving} onToggle={toggle} />
+      <NotifRow id="shift-bell" k="shift_close_report_bell" label={t('جرس اللوحة — تقرير الوردية')} hint={t('إشعار داخل النظام')} color="text-amber-400" prefs={prefs} saving={saving} onToggle={toggle} />
+
+      <h3 className="font-bold text-red-400 border-b border-[#2A3A66] pb-2 mt-6">
+        {t('فحص السلامة الفني')}
+      </h3>
+      <p className="text-xs text-gray-400">
+        {t('رسائل مقارنة الشفت مع الطلبات/المصاريف — كانت تُرسل تلقائياً وتُزعج. الآن مُعطَّلة افتراضياً؛ يبقى الجرس فقط للمراجعة الفنية.')}
+      </p>
+      <NotifRow id="integ-wa" k="integrity_check_whatsapp" label={t('واتساب — فحص السلامة')} hint={t('غير مُوصى به — استخدم تقرير الوردية بدلاً منه')} color="text-red-400" prefs={prefs} saving={saving} onToggle={toggle} />
+      <NotifRow id="integ-email" k="integrity_check_email" label={t('بريد إلكتروني — فحص السلامة')} color="text-red-400" prefs={prefs} saving={saving} onToggle={toggle} />
+      <NotifRow id="integ-bell" k="integrity_check_bell" label={t('جرس اللوحة — فحص السلامة')} hint={t('يبقى فعّالاً افتراضياً للمراجعة الداخلية')} color="text-amber-400" prefs={prefs} saving={saving} onToggle={toggle} />
+
+      {error && <p className="text-red-400 text-sm p-3 bg-red-500/10 border border-red-500/30 rounded" data-testid="notif-prefs-error">{error}</p>}
+      {saving && <p className="text-gray-400 text-xs" data-testid="notif-prefs-saving">{t('جاري الحفظ...')}</p>}
+    </div>
+  );
+}
+
+// ==================== لوحة صحّة أجهزة البصمة ====================
+function BiometricHealthCard() {
+  const { t } = useTranslation();
+  const [data, setData] = React.useState(null);
+  const [loading, setLoading] = React.useState(false);
+  const [error, setError] = React.useState('');
+
+  const load = async () => {
+    setLoading(true);
+    setError('');
+    try {
+      const token = localStorage.getItem('token');
+      const res = await axios.get(`${API_URL}/biometric/health?offline_after_minutes=15`, {
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+        withCredentials: true,
+      });
+      setData(res.data);
+    } catch (e) {
+      setError(getErrorMessage(e?.response?.data?.detail || t('فشل تحميل حالة الأجهزة')));
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  React.useEffect(() => { load(); const t2 = setInterval(load, 30000); return () => clearInterval(t2); }, []);
+
+  if (loading && !data) return <div className="text-gray-400 text-sm p-4" data-testid="bio-health-loading">{t('جاري التحميل...')}</div>;
+  if (error) return <p className="text-red-400 text-sm p-3 bg-red-500/10 border border-red-500/30 rounded" data-testid="bio-health-error">{error}</p>;
+  if (!data) return null;
+
+  const totals = data.totals || {};
+  const branches = data.branches || [];
+
+  return (
+    <Card className="bg-[#0F1A3A] border-[#2A3A66]" data-testid="biometric-health-card">
+      <CardHeader className="flex flex-row items-center justify-between">
+        <div>
+          <CardTitle className="text-amber-400 flex items-center gap-2">
+            <span>🖐</span>
+            {t('صحّة أجهزة البصمة')}
+          </CardTitle>
+          <CardDescription className="text-gray-400 text-xs mt-1">
+            {t('حالة كل الأجهزة عبر جميع الفروع، تحديث تلقائي كل 30 ثانية')}
+          </CardDescription>
+        </div>
+        <Button size="sm" variant="outline" onClick={load} disabled={loading} className="border-[#2A3A66]" data-testid="refresh-bio-health-btn">
+          <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
+        </Button>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <div className="grid grid-cols-2 md:grid-cols-7 gap-2 text-center">
+          <div className="p-2 bg-blue-500/10 border border-blue-500/30 rounded" data-testid="bio-total-devices">
+            <p className="text-2xl font-bold text-blue-400">{totals.devices_total || 0}</p>
+            <p className="text-xs text-gray-400">{t('إجمالي الأجهزة')}</p>
+          </div>
+          <div className="p-2 bg-green-500/10 border border-green-500/30 rounded" data-testid="bio-active-devices">
+            <p className="text-2xl font-bold text-green-400">{totals.devices_active || 0}</p>
+            <p className="text-xs text-gray-400">{t('نشطة')}</p>
+          </div>
+          <div className="p-2 bg-red-500/10 border border-red-500/30 rounded" data-testid="bio-offline-devices">
+            <p className="text-2xl font-bold text-red-400">{totals.devices_offline || 0}</p>
+            <p className="text-xs text-gray-400">{t('غير متصلة')}</p>
+          </div>
+          <div className="p-2 bg-amber-500/10 border border-amber-500/30 rounded" data-testid="bio-pending-jobs">
+            <p className="text-2xl font-bold text-amber-400">{totals.pending || 0}</p>
+            <p className="text-xs text-gray-400">{t('معلقة')}</p>
+          </div>
+          <div className="p-2 bg-purple-500/10 border border-purple-500/30 rounded" data-testid="bio-processing-jobs">
+            <p className="text-2xl font-bold text-purple-400">{totals.processing || 0}</p>
+            <p className="text-xs text-gray-400">{t('جارية')}</p>
+          </div>
+          <div className="p-2 bg-emerald-500/10 border border-emerald-500/30 rounded" data-testid="bio-completed-jobs">
+            <p className="text-2xl font-bold text-emerald-400">{totals.completed || 0}</p>
+            <p className="text-xs text-gray-400">{t('مكتملة')}</p>
+          </div>
+          <div className="p-2 bg-orange-500/10 border border-orange-500/30 rounded" data-testid="bio-failed-jobs">
+            <p className="text-2xl font-bold text-orange-400">{totals.failed || 0}</p>
+            <p className="text-xs text-gray-400">{t('فشلت')}</p>
+          </div>
+        </div>
+
+        {branches.length === 0 ? (
+          <p className="text-gray-400 text-sm text-center py-4" data-testid="bio-no-branches">{t('لا توجد أجهزة بصمة مُسجَّلة')}</p>
+        ) : (
+          <div className="space-y-2">
+            {branches.map((br) => (
+              <div key={br.branch_id} className="p-3 bg-[#1A284E]/30 rounded border border-[#2A3A66]" data-testid={`bio-branch-${br.branch_id}`}>
+                <div className="flex items-center justify-between mb-2">
+                  <div>
+                    <p className="font-medium text-white">{br.branch_name || t('فرع')} <span className="text-xs text-gray-400">— {br.devices_total} {t('جهاز')}</span></p>
+                    <p className="text-xs text-gray-400">{t('آخر مزامنة')}: {br.last_sync ? new Date(br.last_sync).toLocaleString('ar-IQ') : t('لم تتم بعد')}</p>
+                  </div>
+                  <div className="flex gap-1 text-xs">
+                    <Badge className="bg-green-500/20 text-green-400">{br.devices_active} {t('نشط')}</Badge>
+                    {br.devices_offline > 0 && <Badge className="bg-red-500/20 text-red-400">{br.devices_offline} offline</Badge>}
+                    {(br.queue?.pending || 0) > 0 && <Badge className="bg-amber-500/20 text-amber-400">{br.queue.pending} {t('معلق')}</Badge>}
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 md:grid-cols-3 gap-1 text-xs">
+                  {(br.devices || []).map((d) => (
+                    <div key={d.id} className={`p-2 rounded border ${d.is_offline ? 'border-red-500/30 bg-red-500/5' : 'border-green-500/30 bg-green-500/5'}`} data-testid={`bio-device-${d.id}`}>
+                      <p className="font-medium truncate">{d.name}</p>
+                      <p className="text-gray-400 truncate">{d.ip_address} • {d.model_name || d.device_type}</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
 
 export default function SuperAdmin() {
   const navigate = useNavigate();
@@ -208,7 +416,7 @@ export default function SuperAdmin() {
   const [savingOwnerSettings, setSavingOwnerSettings] = useState(false);
 
   // إعدادات البريد الإلكتروني (SMTP)
-  const [emailSettings, setEmailSettings] = useState({ smtp_host: 'mail.privateemail.com', smtp_port: 465, smtp_user: '', from_name: 'Maestro EGP', sender_email: '', password_set: false, configured: false });
+  const [emailSettings, setEmailSettings] = useState({ smtp_host: 'mail.privateemail.com', smtp_port: 465, smtp_user: '', from_name: 'Maestro EGP', sender_email: '', recovery_emails: [], password_set: false, configured: false });
   const [emailPassword, setEmailPassword] = useState('');
   const [savingEmail, setSavingEmail] = useState(false);
   const [testEmailAddr, setTestEmailAddr] = useState('');
@@ -352,6 +560,12 @@ export default function SuperAdmin() {
   const [toggling2fa, setToggling2fa] = useState(false);
   const [purging, setPurging] = useState(false);
   const [loadingSecurityLog, setLoadingSecurityLog] = useState(false);
+  
+  // سجل رسائل الواتساب (المُرسَلة من النظام)
+  const [waMessages, setWaMessages] = useState([]);
+  const [waMessagesCounts, setWaMessagesCounts] = useState({ total: 0, sent: 0, failed: 0 });
+  const [waMessagesLoading, setWaMessagesLoading] = useState(false);
+  const [waMessagesFilter, setWaMessagesFilter] = useState({ status: '', purpose: '' });
   
   // أسعار الاشتراكات
   const [showPricesModal, setShowPricesModal] = useState(false);
@@ -823,6 +1037,7 @@ export default function SuperAdmin() {
         setReadiness2fa(rd.data);
       } catch (e) { /* ignore */ }
       fetchWaStatus();
+      fetchWaMessages();  // 📱 جلب سجل رسائل الواتساب المُرسَلة
     } catch (error) {
       console.error('Error fetching security log:', error);
     } finally {
@@ -836,6 +1051,23 @@ export default function SuperAdmin() {
       const r = await axios.get(`${API}/super-admin/whatsapp/status`, { headers: { Authorization: `Bearer ${token}` } });
       setWaStatus(r.data);
     } catch (e) { /* ignore */ }
+  };
+
+  // جلب سجل رسائل الواتساب المُرسَلة
+  const fetchWaMessages = async () => {
+    setWaMessagesLoading(true);
+    try {
+      const token = localStorage.getItem('super_admin_token');
+      const params = new URLSearchParams({ limit: '50' });
+      if (waMessagesFilter.status) params.append('status', waMessagesFilter.status);
+      if (waMessagesFilter.purpose) params.append('purpose', waMessagesFilter.purpose);
+      const r = await axios.get(`${API}/super-admin/whatsapp/messages?${params.toString()}`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      setWaMessages(r.data?.messages || []);
+      setWaMessagesCounts(r.data?.counts || { total: 0, sent: 0, failed: 0 });
+    } catch (e) { toast.error(t('تعذّر جلب سجل رسائل الواتساب')); }
+    finally { setWaMessagesLoading(false); }
   };
 
   const handleWaLogout = async () => {
@@ -1340,7 +1572,7 @@ export default function SuperAdmin() {
       if (biometricUids.length > 0) {
         try {
           const AGENT_URL = 'http://localhost:9999';
-          const agentCheck = await axios.get(`${AGENT_URL}/status`, { timeout: 3000 }).catch(() => null);
+          const agentCheck = await localAgent.get(`/status`, { timeout: 3000 }).catch(() => null);
           if (agentCheck?.data?.status === 'running') {
             // جلب أجهزة البصمة المتاحة
             const devicesRes = await axios.get(`${API}/biometric/devices`, { headers }).catch(() => null);
@@ -1351,7 +1583,7 @@ export default function SuperAdmin() {
                 // لا تحذف الأدمن (uid=1) أو المدير (privilege > 0)
                 if (emp.uid === 1) continue;
                 try {
-                  await axios.post(`${AGENT_URL}/zk-delete-user`, {
+                  await localAgent.post(`/zk-delete-user`, {
                     ip: device.ip_address,
                     port: device.port || 4370,
                     timeout: 5000,
@@ -1710,6 +1942,10 @@ export default function SuperAdmin() {
         sender_email: emailSettings.sender_email || emailSettings.smtp_user,
       };
       if (emailPassword) payload.smtp_password = emailPassword;
+      // 📧 بريد الاسترداد (إن تم تعديله)
+      if (Array.isArray(emailSettings.recovery_emails) && emailSettings.recovery_emails.length > 0) {
+        payload.recovery_emails = emailSettings.recovery_emails;
+      }
       await axios.put(`${API}/system/email-settings`, payload, {
         headers: { Authorization: `Bearer ${token}` }
       });
@@ -2972,7 +3208,7 @@ export default function SuperAdmin() {
           <CardContent>
             {/* تبويبات لفصل العملاء الفعليين عن الحسابات التجريبية */}
             <Tabs defaultValue="active" className="w-full" onValueChange={(v) => { if (v === 'security' && !securityLog) fetchSecurityLog(); }}>
-              <TabsList className="grid w-full grid-cols-5 mb-4 bg-[#1A284E]/50">
+              <TabsList className="grid w-full grid-cols-6 mb-4 bg-[#1A284E]/50">
                 <TabsTrigger value="active" className="data-[state=active]:bg-green-600">
                   <Users className="h-4 w-4 ml-2" />
                   {t('العملاء')} ({tenants.filter(t => !t.is_demo && t.subscription_type !== 'demo').length})
@@ -2988,6 +3224,10 @@ export default function SuperAdmin() {
                 <TabsTrigger value="all" className="data-[state=active]:bg-gray-600">
                   <Layers className="h-4 w-4 ml-2" />
                   {t('الكل')} ({tenants.length})
+                </TabsTrigger>
+                <TabsTrigger value="biometric" className="data-[state=active]:bg-indigo-600" data-testid="biometric-health-tab">
+                  <Fingerprint className="h-4 w-4 ml-2" />
+                  {t('صحّة البصمة')}
                 </TabsTrigger>
                 <TabsTrigger value="security" className="data-[state=active]:bg-red-600" data-testid="security-log-tab">
                   <Shield className="h-4 w-4 ml-2" />
@@ -3454,6 +3694,11 @@ export default function SuperAdmin() {
                 </div>
               </TabsContent>
 
+              {/* لوحة صحّة أجهزة البصمة */}
+              <TabsContent value="biometric">
+                <BiometricHealthCard />
+              </TabsContent>
+
               {/* السجل الأمني — خاص بمالك النظام الأعلى */}
               <TabsContent value="security">
                 <div className="space-y-4" data-testid="security-log-content">
@@ -3609,6 +3854,92 @@ export default function SuperAdmin() {
                         )}
                       </div>
                     )}
+                  </div>
+
+                  {/* 📱 سجل رسائل الواتساب المُرسَلة من النظام */}
+                  <div className="bg-[#0F1A3A]/60 border border-[#2A3A66] rounded-lg p-4 space-y-3" data-testid="wa-messages-log-panel">
+                    <div className="flex items-center justify-between">
+                      <h4 className="text-sm font-bold text-emerald-300 flex items-center gap-2">
+                        <MessageSquare className="h-4 w-4" />
+                        {t('سجل رسائل الواتساب المُرسَلة')}
+                      </h4>
+                      <div className="flex items-center gap-2">
+                        <Button onClick={fetchWaMessages} disabled={waMessagesLoading} variant="outline" size="sm" className="border-[#2A3A66]" data-testid="wa-messages-refresh-btn">
+                          {waMessagesLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
+                        </Button>
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-3 gap-2 text-center">
+                      <div className="bg-[#1A284E]/60 rounded-md p-2">
+                        <p className="text-xs text-gray-400">{t('المجموع')}</p>
+                        <p className="text-lg font-bold text-white">{waMessagesCounts.total}</p>
+                      </div>
+                      <div className="bg-emerald-900/40 rounded-md p-2 border border-emerald-700/40">
+                        <p className="text-xs text-emerald-400">{t('نجحت')}</p>
+                        <p className="text-lg font-bold text-emerald-300">{waMessagesCounts.sent}</p>
+                      </div>
+                      <div className="bg-rose-900/40 rounded-md p-2 border border-rose-700/40">
+                        <p className="text-xs text-rose-400">{t('فشلت')}</p>
+                        <p className="text-lg font-bold text-rose-300">{waMessagesCounts.failed}</p>
+                      </div>
+                    </div>
+
+                    <div className="flex gap-2 flex-wrap">
+                      <select
+                        value={waMessagesFilter.status}
+                        onChange={(e) => setWaMessagesFilter({ ...waMessagesFilter, status: e.target.value })}
+                        className="text-xs bg-[#1A284E] text-white rounded px-2 py-1 border border-[#2A3A66]"
+                        data-testid="wa-messages-status-filter"
+                      >
+                        <option value="">{t('كل الحالات')}</option>
+                        <option value="sent">{t('نجحت فقط')}</option>
+                        <option value="failed">{t('فشلت فقط')}</option>
+                      </select>
+                      <select
+                        value={waMessagesFilter.purpose}
+                        onChange={(e) => setWaMessagesFilter({ ...waMessagesFilter, purpose: e.target.value })}
+                        className="text-xs bg-[#1A284E] text-white rounded px-2 py-1 border border-[#2A3A66]"
+                        data-testid="wa-messages-purpose-filter"
+                      >
+                        <option value="">{t('كل الأنواع')}</option>
+                        <option value="otp">OTP - {t('رمز تحقق')}</option>
+                        <option value="test">{t('اختبار')}</option>
+                        <option value="forgotten_shift">{t('وردية منسية')}</option>
+                        <option value="owner_shift">{t('تنبيه مالك - وردية')}</option>
+                        <option value="owner_security">{t('تنبيه مالك - أمن')}</option>
+                        <option value="other">{t('أخرى')}</option>
+                      </select>
+                      <Button onClick={fetchWaMessages} size="sm" className="text-xs bg-blue-600 hover:bg-blue-500" data-testid="wa-messages-apply-filter-btn">
+                        {t('تطبيق')}
+                      </Button>
+                    </div>
+
+                    <div className="max-h-64 overflow-y-auto space-y-1.5">
+                      {waMessages.length === 0 ? (
+                        <p className="text-center text-gray-400 text-xs py-6">{t('لا توجد رسائل بعد. اضغط تحديث بعد إرسال أي رمز.')}</p>
+                      ) : (
+                        waMessages.map((m) => (
+                          <div
+                            key={m.id}
+                            className={`text-xs p-2 rounded-md border ${m.status === 'sent' ? 'bg-emerald-950/30 border-emerald-800/40' : 'bg-rose-950/30 border-rose-800/40'}`}
+                            data-testid={`wa-message-row-${m.id}`}
+                          >
+                            <div className="flex items-center justify-between mb-0.5">
+                              <span className="font-mono text-gray-300">{m.phone}</span>
+                              <span className={m.status === 'sent' ? 'text-emerald-400' : 'text-rose-400'}>
+                                {m.status === 'sent' ? '✅' : '❌'} {m.status === 'sent' ? t('أُرسِلت') : t('فشلت')}
+                              </span>
+                            </div>
+                            <div className="flex items-center gap-2 text-[10px] text-gray-400">
+                              <span className="bg-slate-800 px-1.5 py-0.5 rounded">{m.purpose}</span>
+                              <span>{new Date(m.sent_at).toLocaleString('ar', { hour: '2-digit', minute: '2-digit', month: 'short', day: 'numeric' })}</span>
+                            </div>
+                            {m.error && <p className="text-[10px] text-rose-300 mt-1 truncate">{m.error}</p>}
+                          </div>
+                        ))
+                      )}
+                    </div>
                   </div>
 
                   {/* حالة تكاملات الأمان + المصادقة الثنائية */}
@@ -4959,7 +5290,7 @@ export default function SuperAdmin() {
           </DialogHeader>
           
           <Tabs defaultValue="identity" className="w-full">
-            <TabsList className="grid w-full grid-cols-5 bg-[#1A284E]/50">
+            <TabsList className="grid w-full grid-cols-6 bg-[#1A284E]/50">
               <TabsTrigger value="identity" className="data-[state=active]:bg-amber-600">
                 <Crown className="h-4 w-4 ml-2" />
                 {t('هوية النظام')}
@@ -4971,6 +5302,10 @@ export default function SuperAdmin() {
               <TabsTrigger value="email" className="data-[state=active]:bg-amber-600" data-testid="email-settings-tab">
                 <Mail className="h-4 w-4 ml-2" />
                 {t('البريد الإلكتروني')}
+              </TabsTrigger>
+              <TabsTrigger value="notifications" className="data-[state=active]:bg-amber-600" data-testid="notifications-prefs-tab">
+                <Bell className="h-4 w-4 ml-2" />
+                {t('إشعارات المالك')}
               </TabsTrigger>
               <TabsTrigger value="invoice" className="data-[state=active]:bg-amber-600">
                 <Receipt className="h-4 w-4 ml-2" />
@@ -5333,6 +5668,43 @@ export default function SuperAdmin() {
                   {savingEmail ? (<><Loader2 className="h-4 w-4 ml-2 animate-spin" />{t('جاري الحفظ')}...</>) : (<><Save className="h-4 w-4 ml-2" />{t('حفظ إعدادات البريد')}</>)}
                 </Button>
 
+                {/* 📧 بريد الاسترداد (يستلم رموز 2FA + إشعارات المالك الحرجة) */}
+                <div className="space-y-3 mt-4 pt-4 border-t border-[#2A3A66]" data-testid="recovery-emails-panel">
+                  <h4 className="font-medium text-purple-400 flex items-center gap-2">
+                    <Mail className="h-4 w-4" />
+                    {t('بريد استرداد المالك')}
+                  </h4>
+                  <p className="text-xs text-gray-400 leading-relaxed">
+                    {t('هذه العناوين تستلم رموز التحقق عند دخولك من جهاز جديد + إشعارات الأمن الحرجة + تنبيهات الورديات المنسية. بحد أقصى 5 عناوين — أدخلها مفصولة بفاصلة أو سطر جديد.')}
+                  </p>
+                  <textarea
+                    dir="ltr"
+                    rows={3}
+                    placeholder="owner@maestroegp.com, Moataz0111@gmail.com"
+                    value={(emailSettings.recovery_emails || []).join('\n')}
+                    onChange={(e) => setEmailSettings({ ...emailSettings, recovery_emails: e.target.value.split(/[,\n]/).map(x => x.trim()).filter(Boolean) })}
+                    className="w-full bg-[#1A284E]/50 border border-[#2A3A66] text-white rounded-md px-3 py-2 text-sm"
+                    data-testid="recovery-emails-textarea"
+                  />
+                  <div className="flex items-center gap-2 flex-wrap">
+                    {(emailSettings.recovery_emails || []).map((em, idx) => (
+                      <span key={idx} className="text-xs bg-purple-900/40 border border-purple-500/40 rounded px-2 py-0.5 text-purple-200" dir="ltr">
+                        {em}
+                      </span>
+                    ))}
+                  </div>
+                  <Button
+                    onClick={saveEmailSettings}
+                    disabled={savingEmail || !(emailSettings.recovery_emails || []).length}
+                    className="w-full bg-purple-600 hover:bg-purple-500"
+                    data-testid="save-recovery-emails-btn"
+                    size="sm"
+                  >
+                    <Save className="h-4 w-4 ml-2" />
+                    {t('حفظ بريد الاسترداد')}
+                  </Button>
+                </div>
+
                 {/* اختبار الإرسال */}
                 <div className="space-y-3 mt-4 pt-4 border-t border-[#2A3A66]">
                   <h4 className="font-medium text-blue-400 flex items-center gap-2">
@@ -5405,6 +5777,12 @@ export default function SuperAdmin() {
                   </p>
                 </div>
               </div>
+            </TabsContent>
+
+
+            {/* تبويب إشعارات المالك (شفت / سلامة / …) */}
+            <TabsContent value="notifications" className="space-y-6 mt-4">
+              <NotificationPrefsPanel />
             </TabsContent>
 
 

@@ -1,7 +1,31 @@
 # Maestro EGP - Changelog
 
 
-## Session: 07 Jul 2026 (fork) — عزل المصاريف عن الورديات الخاطئة ✅ (iter291)
+## Session: 07 Jul 2026 (fork) — إدارة بريد الاسترداد من الواجهة ✅ (iter294)
+
+**متطلب المستخدم:** "والبريد الاحطياطي اي ادخله" — طلب مكان لإدارة بريد الاسترداد من الواجهة (كان مسبقاً مثبتاً في `.env` فقط).
+
+**التعديلات:**
+- **`/app/backend/server.py`**:
+  - إضافة `_ENV_OWNER_RECOVERY_EMAILS` كـ fallback من `.env`.
+  - إضافة `get_owner_recovery_emails()` async — يُحمّل من DB (email_config.recovery_emails) أو يعود لـ .env.
+  - `notify_owner_multichannel` يستخدم الدالة الديناميكية (تعديلات UI تُطبَّق فوراً بلا restart).
+  - `startup event`: `refresh_owner_recovery_emails_cache` يُزامن الكاش عند البدء.
+- **`/app/backend/routes/super_admin_routes.py`**:
+  - `GET /system/email-settings`: يرجع `recovery_emails` array.
+  - `PUT /system/email-settings`: يقبل `recovery_emails` مع validation (لكل عنوان `@` + نطاق، Lowercase، Dedup، بين 1-5 عناوين).
+- **`/app/frontend/src/pages/SuperAdmin.js`**:
+  - قسم جديد بنفسجي "بريد استرداد المالك" داخل نافذة إعدادات البريد.
+  - Textarea لإدخال العناوين (مفصولة بفواصل أو أسطر جديدة) + Badges لعرض العناوين المحفوظة.
+  - زر بنفسجي مخصص "حفظ بريد الاسترداد".
+
+**Testing (iter294 — 52/52 نجحت 100%):**
+- CRUD كامل عبر GET/PUT: يحفظ، يُصغِّر الحروف، يزيل المكررات، يفرض حد 1-5.
+- التحديث الجزئي (PUT بدون recovery_emails) لا يمحو القيمة الحالية.
+- `notify_owner_multichannel` يقرأ الديناميكي فوراً بعد الحفظ.
+- 41 اختبار regression (jobs 287-293) لا يزال ينجح 100%.
+
+
 
 **البلاغ:** لقطة المستخدم عرضت وردية أحمد زين (Al sidyah) — بدأت 21:31 اليوم — بمبيعات 0 IQD ومصاريف 21,000 IQD → متوقع سالب (-21,000).
 

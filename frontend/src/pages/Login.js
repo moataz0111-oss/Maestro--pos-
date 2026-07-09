@@ -229,6 +229,7 @@ export default function Login() {
           setTwoFA({
             verificationId: response.data.verification_id,
             channel: response.data.channel,
+            channelsSent: response.data.channels_sent || [],
             destinationMasked: response.data.destination_masked,
             pendingDelivery: response.data.pending_delivery,
             isOwner: true,

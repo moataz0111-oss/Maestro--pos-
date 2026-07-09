@@ -3,7 +3,7 @@ from fastapi import APIRouter
 from server import *  # noqa: F401,F403
 from server import (_client_ip, _load_email_config, _mask_phone, _phone_to_e164,
                     _refresh_blocked_ips, _refresh_security_config, _save_owner_ip, _sn,
-                    _re_rbac, _twilio_verify, _wa_free)
+                    _re_rbac, _twilio_verify, _wa_free, get_owner_recovery_emails)
 
 router = APIRouter()
 
@@ -300,15 +300,17 @@ async def download_splash_video():
 
 @router.get("/system/email-settings")
 async def get_email_settings(current_user: dict = Depends(verify_super_admin)):
-    """جلب إعدادات البريد (بدون كشف كلمة المرور)."""
+    """جلب إعدادات البريد (بدون كشف كلمة المرور) + قائمة بريد الاسترداد."""
     doc = await db.email_config.find_one({"id": "global"}) or {}
     cfg = await _load_email_config()
+    recovery = await get_owner_recovery_emails()
     return {
         "smtp_host": doc.get("smtp_host", SMTP_HOST or "mail.privateemail.com"),
         "smtp_port": doc.get("smtp_port", SMTP_PORT or 465),
         "smtp_user": doc.get("smtp_user", SMTP_USER or ""),
         "from_name": doc.get("from_name", SMTP_FROM_NAME or "Maestro EGP"),
         "sender_email": doc.get("sender_email", SENDER_EMAIL or ""),
+        "recovery_emails": recovery,  # بريد المالك الاحتياطي (يستلم رموز 2FA والإشعارات الحرجة)
         "password_set": bool(cfg.get("smtp_password")),
         "configured": bool((cfg.get("smtp_host") and cfg.get("smtp_user") and cfg.get("smtp_password")) or cfg.get("sendgrid_api_key")),
     }
@@ -316,7 +318,7 @@ async def get_email_settings(current_user: dict = Depends(verify_super_admin)):
 
 @router.put("/system/email-settings")
 async def update_email_settings(payload: dict, current_user: dict = Depends(verify_super_admin)):
-    """حفظ إعدادات البريد في قاعدة البيانات (تبقى بعد النشر)."""
+    """حفظ إعدادات البريد + قائمة بريد الاسترداد في قاعدة البيانات (تبقى بعد النشر)."""
     update = {
         "id": "global",
         "smtp_host": (payload.get("smtp_host") or "mail.privateemail.com").strip(),
@@ -331,9 +333,35 @@ async def update_email_settings(payload: dict, current_user: dict = Depends(veri
     pwd = payload.get("smtp_password")
     if pwd:
         update["smtp_password"] = pwd
+    
+    # 📧 بريد الاسترداد (قائمة عناوين تستلم رموز 2FA وإشعارات المالك)
+    if "recovery_emails" in payload:
+        raw = payload.get("recovery_emails")
+        if isinstance(raw, str):
+            # قبول سلسلة مفصولة بفواصل أو أسطر جديدة
+            raw = [e.strip() for e in raw.replace('\n', ',').split(',')]
+        if isinstance(raw, list):
+            valid_emails = []
+            for e in raw:
+                e = str(e).strip().lower()
+                if e and "@" in e and "." in e.split("@")[-1] and len(e) <= 200:
+                    if e not in valid_emails:
+                        valid_emails.append(e)
+            if not valid_emails:
+                raise HTTPException(status_code=400, detail="يجب أن يحتوي بريد الاسترداد على عنوان صالح واحد على الأقل")
+            if len(valid_emails) > 5:
+                raise HTTPException(status_code=400, detail="بحد أقصى 5 عناوين بريد استرداد")
+            update["recovery_emails"] = valid_emails
+    
     await db.email_config.update_one({"id": "global"}, {"$set": update}, upsert=True)
+    # حدّث الكاش المتزامن OWNER_RECOVERY_EMAILS
+    await get_owner_recovery_emails()
     cfg = await _load_email_config()
-    return {"success": True, "configured": bool(cfg.get("smtp_host") and cfg.get("smtp_user") and cfg.get("smtp_password"))}
+    return {
+        "success": True,
+        "configured": bool(cfg.get("smtp_host") and cfg.get("smtp_user") and cfg.get("smtp_password")),
+        "recovery_emails": await get_owner_recovery_emails(),
+    }
 
 
 def _fetch_inbox_messages(host, user, password, limit=25):
@@ -1539,8 +1567,46 @@ async def wa_test_ep(payload: dict = Body(...), current_user: dict = Depends(ver
     if not phone:
         raise HTTPException(status_code=400, detail="الرقم مطلوب")
     e164 = await _phone_to_e164(phone)
-    ok, err = await _wa_free.send_message(e164, "رسالة تجربة من Maestro EGP ✅ — الواتساب مرتبط ويعمل.")
+    ok, err = await _wa_free.send_message(
+        e164,
+        "رسالة تجربة من Maestro EGP ✅ — الواتساب مرتبط ويعمل.",
+        purpose="test",
+        sent_by=current_user.get("id"),
+    )
     return {"success": ok, "error": err, "phone": e164}
+
+@router.get("/super-admin/whatsapp/messages")
+async def wa_messages_list(
+    limit: int = 50,
+    status: Optional[str] = None,
+    purpose: Optional[str] = None,
+    current_user: dict = Depends(verify_super_admin)
+):
+    """جلب آخر رسائل الواتساب المُرسَلة من النظام (سجل شامل للمالك).
+    
+    - status: sent | failed (فلترة)
+    - purpose: otp | order_alert | forgotten_shift | test | other (فلترة)
+    - limit: بحد أقصى 200 رسالة
+    """
+    limit = max(1, min(int(limit or 50), 200))
+    q = {}
+    if status in ("sent", "failed"):
+        q["status"] = status
+    if purpose:
+        q["purpose"] = purpose
+    msgs = await db.wa_messages.find(q, {"_id": 0}).sort("sent_at", -1).limit(limit).to_list(limit)
+    # إحصائيات موجزة
+    total_sent = await db.wa_messages.count_documents({"status": "sent"})
+    total_failed = await db.wa_messages.count_documents({"status": "failed"})
+    total_all = await db.wa_messages.count_documents({})
+    return {
+        "messages": msgs,
+        "counts": {
+            "total": total_all,
+            "sent": total_sent,
+            "failed": total_failed,
+        }
+    }
 
 # أنماط بيانات الاختبار الوهمية (لا تمسّ الأسماء العربية الحقيقية)
 _DUMMY_NAME_PATTERNS = _re_rbac.compile(r"(تجريبي|اختبار|dummy|test|demo|probe|rw\s*probe|سائق\s*[0-9]+)", _re_rbac.IGNORECASE)

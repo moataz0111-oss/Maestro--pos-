@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import axios from 'axios';
+import { localAgent } from '../utils/localAgent';
 import { useTranslation } from '../hooks/useTranslation';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
 import { Button } from '../components/ui/button';
@@ -47,7 +48,13 @@ export default function BiometricDevices({ branches = [], onDataRefresh }) {
     ip_address: '',
     port: 4370,
     branch_id: '',
-    device_type: 'fingerprint'
+    device_type: 'fingerprint',
+    model_name: '',
+    protocol: 'zk-standard',
+    timeout: 10,
+    communication_password: '',
+    force_udp: false,
+    firmware_version: ''
   });
 
   const AGENT_URL = 'http://localhost:9999';
@@ -79,7 +86,7 @@ export default function BiometricDevices({ branches = [], onDataRefresh }) {
     
     // الطريقة 2: اتصال مباشر بـ localhost (قد يحظره Chrome)
     try {
-      const res = await axios.get(`${AGENT_URL}/status`, { timeout: 3000 });
+      const res = await localAgent.get(`/status`, { timeout: 3000 });
       const isOnline = res.data?.status === 'running' && res.data?.zk_support === true;
       setAgentOnline(isOnline);
       setAgentVersion(res.data?.version || '');
@@ -125,7 +132,7 @@ export default function BiometricDevices({ branches = [], onDataRefresh }) {
         for (const device of devices) {
           try {
             // 1. جلب البيانات من الجهاز عبر الوكيل
-            const agentRes = await axios.post(`${AGENT_URL}/zk-sync`, {
+            const agentRes = await localAgent.post(`/zk-sync`, {
               ip: device.ip_address, port: device.port || 4370, timeout: 150000
             }, { timeout: 180000 });
             
@@ -203,7 +210,7 @@ export default function BiometricDevices({ branches = [], onDataRefresh }) {
       
       toast.success(t('تم إضافة الجهاز بنجاح'));
       setAddDialogOpen(false);
-      setDeviceForm({ name: '', ip_address: '', port: 4370, branch_id: '', device_type: 'fingerprint' });
+      setDeviceForm({ name: '', ip_address: '', port: 4370, branch_id: '', device_type: 'fingerprint', model_name: '', protocol: 'zk-standard', timeout: 10, communication_password: '', force_udp: false, firmware_version: '' });
       fetchDevices();
     } catch (error) {
       showApiError(error, t('فشل في إضافة الجهاز'));
@@ -670,6 +677,7 @@ export default function BiometricDevices({ branches = [], onDataRefresh }) {
                   onChange={(e) => setDeviceForm({ ...deviceForm, port: parseInt(e.target.value) || 4370 })}
                   className="mt-1"
                   dir="ltr"
+                  data-testid="device-port-input"
                 />
               </div>
               <div>
@@ -678,17 +686,102 @@ export default function BiometricDevices({ branches = [], onDataRefresh }) {
                   value={deviceForm.device_type}
                   onValueChange={(value) => setDeviceForm({ ...deviceForm, device_type: value })}
                 >
-                  <SelectTrigger className="mt-1">
+                  <SelectTrigger className="mt-1" data-testid="device-type-select">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="fingerprint">{t('بصمة')}</SelectItem>
+                    <SelectItem value="fingerprint">{t('بصمة إصبع')}</SelectItem>
                     <SelectItem value="face">{t('تعرف على الوجه')}</SelectItem>
-                    <SelectItem value="card">{t('بطاقة')}</SelectItem>
+                    <SelectItem value="palm">{t('بصمة راحة اليد')}</SelectItem>
+                    <SelectItem value="rfid">{t('بطاقة RFID')}</SelectItem>
+                    <SelectItem value="hybrid">{t('متعدد (وجه/بصمة/بطاقة)')}</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
             </div>
+
+            {/* خيارات متقدمة لدعم كل موديلات ZKTeco */}
+            <details className="border border-border rounded p-2">
+              <summary className="cursor-pointer text-sm text-primary" data-testid="advanced-zk-options-toggle">{t('خيارات ZKTeco المتقدمة (كل الموديلات والإصدارات)')}</summary>
+              <div className="space-y-3 mt-3">
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <Label className="text-foreground text-xs">{t('اسم الموديل')}</Label>
+                    <Select
+                      value={deviceForm.model_name || ''}
+                      onValueChange={(v) => setDeviceForm({ ...deviceForm, model_name: v })}
+                    >
+                      <SelectTrigger className="mt-1" data-testid="device-model-select">
+                        <SelectValue placeholder={t('اختياري — Auto')} />
+                      </SelectTrigger>
+                      <SelectContent className="max-h-60">
+                        {['K14','K20','K30','K40','K50','K60','K70','F18','F19','F22','TX628','MB160','MB360','MB460','MB560','iFace402','iFace702','iFace880','iFace990','G3','G4','G5','SpeedFace-V5L','ProFaceX','SF100','SF200','SF300','SF400','UA200','UA300','UA860'].map((m) => (
+                          <SelectItem key={m} value={m}>{m}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div>
+                    <Label className="text-foreground text-xs">{t('البروتوكول')}</Label>
+                    <Select
+                      value={deviceForm.protocol}
+                      onValueChange={(v) => setDeviceForm({ ...deviceForm, protocol: v })}
+                    >
+                      <SelectTrigger className="mt-1" data-testid="device-protocol-select">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="zk-standard">{t('ZK Standard (K/F/G/iFace/MB)')}</SelectItem>
+                        <SelectItem value="zk-push">{t('ZK Push (Cloud/PUSH)')}</SelectItem>
+                        <SelectItem value="pull-sdk">{t('Pull SDK (SF/UA)')}</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <Label className="text-foreground text-xs">{t('كلمة سر الاتصال')}</Label>
+                    <Input
+                      type="text"
+                      value={deviceForm.communication_password || ''}
+                      onChange={(e) => setDeviceForm({ ...deviceForm, communication_password: e.target.value })}
+                      placeholder={t('اتركها فارغة إن لم تكن مُفعّلة')}
+                      className="mt-1"
+                      dir="ltr"
+                      data-testid="device-comm-password"
+                    />
+                  </div>
+                  <div>
+                    <Label className="text-foreground text-xs">{t('مهلة الاتصال (ثانية)')}</Label>
+                    <Input
+                      type="number"
+                      min={5}
+                      max={120}
+                      value={deviceForm.timeout || 10}
+                      onChange={(e) => setDeviceForm({ ...deviceForm, timeout: parseInt(e.target.value) || 10 })}
+                      className="mt-1"
+                      dir="ltr"
+                      data-testid="device-timeout-input"
+                    />
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    id="force_udp_ck"
+                    checked={!!deviceForm.force_udp}
+                    onChange={(e) => setDeviceForm({ ...deviceForm, force_udp: e.target.checked })}
+                    data-testid="device-force-udp"
+                  />
+                  <Label htmlFor="force_udp_ck" className="text-xs text-foreground cursor-pointer">
+                    {t('فرض UDP (للأجهزة القديمة التي لا تدعم TCP)')}
+                  </Label>
+                </div>
+                <p className="text-[10px] text-muted-foreground">
+                  {t('اترك الحقول فارغة لاستخدام الافتراضيات — تعمل مع معظم موديلات ZKTeco الحديثة.')}
+                </p>
+              </div>
+            </details>
 
             <div>
               <Label className="text-foreground">{t('الفرع')} *</Label>

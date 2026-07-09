@@ -1,5 +1,6 @@
 import { useEffect, useRef, useCallback } from 'react';
 import axios from 'axios';
+import { localAgent } from '../utils/localAgent';
 import { toast } from 'sonner';
 import { t } from '../utils/translations';
 
@@ -39,7 +40,7 @@ export function useAutoSync() {
       // تحقق من الوكيل المحلي
       let agentOk = false;
       try {
-        const agentRes = await axios.get(`${AGENT_URL}/status`, { timeout: 3000 });
+        const agentRes = await localAgent.get(`/status`, { timeout: 3000 });
         agentOk = agentRes.data?.status === 'running' && agentRes.data?.zk_support === true;
       } catch { return; }
       if (!agentOk) return;
@@ -54,7 +55,7 @@ export function useAutoSync() {
       let totalNewRecords = 0;
       for (const device of devices) {
         try {
-          const agentRes = await axios.post(`${AGENT_URL}/zk-sync`, {
+          const agentRes = await localAgent.post(`/zk-sync`, {
             ip: device.ip_address, port: device.port || 4370, timeout: 150000
           }, { timeout: 180000 });
           if (!agentRes.data?.success || !agentRes.data?.records?.length) continue;
@@ -105,7 +106,7 @@ export function useAutoSync() {
       // تحقق من الوكيل المحلي
       let agentOk = false;
       try {
-        const agentRes = await axios.get(`${AGENT_URL}/status`, { timeout: 3000 });
+        const agentRes = await localAgent.get(`/status`, { timeout: 3000 });
         agentOk = agentRes.data?.status === 'running' && agentRes.data?.zk_support === true;
       } catch { return; }
       if (!agentOk) return;
@@ -129,7 +130,7 @@ export function useAutoSync() {
 
       for (const emp of employees.slice(0, 5)) { // حد أقصى 5 موظفين لكل دورة
         try {
-          const res = await axios.post(`${AGENT_URL}/zk-face-photo`, {
+          const res = await localAgent.post(`/zk-face-photo`, {
             ip: device.ip_address,
             port: device.port || 4370,
             timeout: 45000,

@@ -1,5 +1,46 @@
 # Maestro EGP - Multi-Tenant POS System PRD
 
+## تقرير الوردية اليومي + إعدادات الإشعارات + لوحة صحّة البصمة (9 يوليو 2026) — iter297 ✅
+- **P1 — تقرير الوردية اليومي على واتساب/بريد/جرس:** `_send_shift_close_report()` (routes/shifts_routes.py) يُستدعى تلقائياً بعد كل `close_cash_register` و`close_shift` عبر `notify_owner_multichannel`. المحتوى: الكاشير + الفرع + اليوم التشغيلي + عدد الطلبات + المبيعات (نقدي/بطاقة/آجل/تطبيقات + الإجمالي) + النقد المتوقع/الفعلي + المصاريف + الفرق (زيادة/نقص/مطابق). severity="critical" لو فرق النقد > 5% من المبيعات.
+- **P2 — تعطيل رسائل "فحص السلامة" على واتساب:** `_notify_integrity_mismatches` صار يحترم `notification_preferences`. القيم الافتراضية:
+  - shift_close_report_whatsapp = True ✓
+  - shift_close_report_email = True ✓
+  - shift_close_report_bell = True ✓
+  - integrity_check_whatsapp = **False** (مُعطَّل — كان السبب في الرسائل المُزعجة)
+  - integrity_check_email = False
+  - integrity_check_bell = True (يبقى للمراجعة الفنية داخل الجرس)
+- **إعدادات SuperAdmin:** تبويب جديد "إشعارات المالك" (data-testid `notifications-prefs-tab`) داخل نافذة "إعدادات النظام الرئيسي" فيه 6 مفاتيح Switch للتحكم بكل قناة/كل نوع.
+  - GET/PUT `/api/system/notification-preferences` (routes/notification_prefs_routes.py) — per-tenant، admin/manager فقط.
+- **P3 — HR.js يدعم كل موديلات ZK من الواجهة:** نموذج "إضافة جهاز" في `BiometricDevices.js` صار يقبل: `device_type` (fingerprint/face/palm/rfid/hybrid)، `model_name` (30+ موديل: K14-K70, F18-F22, iFace402-990, MB series, G3-5, SpeedFace-V5L, ProFaceX, SF/UA series)، `protocol` (zk-standard / zk-push / pull-sdk)، `communication_password`، `timeout`، `force_udp`. القيم داخل `<details>` قابلة للطي (`advanced-zk-options-toggle`) — تبقى بسيطة للمستخدم العادي مع دعم كامل للحالات المتقدمة.
+- **لوحة صحّة أجهزة البصمة (SuperAdmin):** تبويب جديد "صحّة البصمة" (data-testid `biometric-health-tab`) يعرض لكل فرع: إجمالي/نشط/offline (offline > 15 دقيقة بلا مزامنة)، آخر مزامنة، pending/processing/completed/failed jobs (آخر 24 ساعة)، قائمة الأجهزة بالكامل مع حالة كل جهاز. تحديث تلقائي كل 30 ثانية.
+  - GET `/api/biometric/health?branch_id=&offline_after_minutes=15` — admin/manager فقط.
+- **regression:** 25/25 pytest تمرّ (biometric_auto_sync 9 + biometric_iter295_extras 3 + biometric_zk_all_models 5 + expense_shift_isolation 4 + lazy_shift_and_daily_isolation 4).
+- **الملفات المُعدَّلة:** `routes/shifts_routes.py`, `routes/notification_prefs_routes.py` (جديد), `routes/hr_routes.py`, `routes/biometric_routes.py`, `frontend/src/pages/SuperAdmin.js`, `frontend/src/components/BiometricDevices.js`, `server.py` (توصيل الراوتر).
+
+
+
+## دعم شامل لكل موديلات ZKTeco (9 يوليو 2026) — iter296 ✅ (19/19 = 100%)
+- **الطلب:** "أنهي مشاكل المزامنة والاتصال والتصدير والاختبار والوكيل كلي يتمكن العميل من إضافة عدد لا نهائي من الأجهزة لجميع فروعه حسب الفروع" + "خلي ييربط مع جميع أجهزة ZK جميع الأنواع والإصدارات".
+- **إصلاح جذري لعُطل مزامنة الموظف الجديد:** `hr_routes.create_employee` كان يقرأ `biometric_id` (اسم غير موجود بالنموذج) → دائماً None → لا jobs. صار يستعمل `biometric_uid` (الحقل الصحيح بـ EmployeeCreate). `biometric_id` يبقى alias للتوافق مع الأجهزة القديمة.
+- **auto-push جديدة على كل نقطة تحوّل:**
+  - POST /api/employees ببصمة → push لكل أجهزة الفرع (reason=new_employee_auto_push).
+  - PUT /api/employees/{id} بتغيير biometric_uid → push لكل الأجهزة (reason=employee_update_push).
+  - DELETE /api/employees/{id} لموظف ببصمة → zk-delete-user لكل الأجهزة (reason=employee_delete_push).
+  - POST /api/biometric/devices (جهاز جديد) → push كل موظفي الفرع (reason=new_device_initial_sync).
+- **Endpoints جديدة:**
+  - `POST /api/biometric/branches/{branch_id}/sync-all-devices` — مزامنة كل أجهزة فرع دفعة واحدة (يعمل مع 100+ جهاز).
+  - `GET /api/biometric/queue/status?branch_id=` — عدادات pending/processing/completed/failed.
+  - `GET /api/biometric/devices/{id}/users` — تصدير قائمة الموظفين المرشحين لجهاز.
+  - `PUT /api/biometric/devices/{id}` — تحديث إعدادات (IP/port/password/protocol/timeout/…).
+  - `GET /api/biometric/devices/models` — كتالوج البروتوكولات (zk-standard/zk-push/pull-sdk) + أنواع الأجهزة (fingerprint/face/palm/rfid/hybrid) + قائمة الموديلات المدعومة (K14-K70, F18-F22, TX628, MB160-MB560, iFace402-iFace990, G3-G5, SpeedFace-V5L, ProFaceX, SF100-SF400, UA200-UA860).
+- **دعم كامل لكل موديلات ZK:** `BiometricDeviceCreate/Update` تقبل الآن `communication_password`, `force_udp`, `timeout`, `firmware_version`, `model_name`, `protocol`. تُخزَّن بالمستند وتنتشر ضمن `params` لكل jobs (push/delete/probe/sync). الوكيل المحلي يستقبل كل ما يحتاج للاتصال بأي موديل قديم/جديد.
+- **اختبار الاتصال يمرّ عبر الطابور:** POST /biometric/devices/{id}/test → zk-probe-device job ينفّذه الوكيل داخل شبكة الفرع (لأن الأجهزة على LAN داخلية غير قابلة للوصول من السحاب). يُرجع `{job_id, poll_url}` والفرونت يستفسر النتيجة.
+- **حذف الجهاز يلغي الجوبات المعلقة:** DELETE /biometric/devices/{id} يفشل كل jobs المعلقة لذلك الجهاز تلقائياً (error=device_deleted).
+- **Tenant + Branch isolation** محفوظ في كل job.
+- **الملفات:** `routes/biometric_routes.py`, `routes/hr_routes.py`, `tests/test_biometric_auto_sync.py` (9), `tests/test_biometric_iter295_extras.py` (3), `tests/test_biometric_zk_all_models.py` (5). Testing agent iter295+iter296 أكّد 19/19.
+
+
+
 ## إصلاح انحدار (6 يوليو 2026) — عودة أزرار التواصل في صفحة بيع النظام /contact ✅ (iter273 = 100%)
 - **العطل:** اختفت أزرار التواصل (اتصال/واتساب×2/بريد/موقع) من صفحة `/contact` العامة، وبقي زر "تعريف النظام" فقط.
 - **السبب الجذري:** إصلاح الأمان #7 السابق جعل `GET /api/system/invoice-settings` (أ) يتطلّب مصادقة و(ب) يُخفي phone/email/website لغير الإداريين. الصفحة عامة وتُستدعى **بلا توكن** → 403 → عرض القيم الافتراضية فقط بلا أزرار.

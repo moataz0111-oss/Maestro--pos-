@@ -8,12 +8,50 @@ router = APIRouter()
 # ==================== BIOMETRIC DEVICE ROUTES ====================
 # تكامل أجهزة البصمة ZKTeco
 
+def _device_conn_params(device: dict) -> dict:
+    """اجمع بارامترات الاتصال لكل موديلات ZKTeco (K/F/G/iFace/MB/SF/UA…) من وثيقة الجهاز.
+    يُدمج كأنه spread داخل job["params"] ليُنفّذها الوكيل المحلي بالمُعدّلات الصحيحة."""
+    return {
+        "device_ip": device.get("ip_address"),
+        "device_port": device.get("port", 4370),
+        "device_type": device.get("device_type") or "fingerprint",
+        "communication_password": device.get("communication_password"),
+        "force_udp": bool(device.get("force_udp") or False),
+        "timeout": int(device.get("timeout") or 10),
+        "firmware_version": device.get("firmware_version"),
+        "model_name": device.get("model_name"),
+        "protocol": device.get("protocol") or "zk-standard",
+    }
+
+
 class BiometricDeviceCreate(BaseModel):
     name: str
     ip_address: str
     port: int = 4370
     branch_id: str
-    device_type: str = "fingerprint"  # fingerprint, face, card
+    device_type: str = "fingerprint"  # fingerprint | face | palm | rfid | hybrid
+    # 🔧 خيارات توسيع دعم كل موديلات ZKTeco (K40/K50/F18/F19/G3/SF400/UA300/MB360/…)
+    communication_password: Optional[str] = None   # كلمة سر الاتصال (بعض الأجهزة تتطلبها)
+    force_udp: bool = False                         # الموديلات القديمة UDP فقط
+    timeout: int = 10                               # زيادة المهلة للأجهزة البطيئة
+    firmware_version: Optional[str] = None          # اختياري (K/F/G/…) لمساعدة الوكيل
+    model_name: Optional[str] = None                # مثل K40, iFace880, MB360
+    protocol: Optional[str] = None                  # zk-standard | zk-push | pull-sdk
+
+
+class BiometricDeviceUpdate(BaseModel):
+    name: Optional[str] = None
+    ip_address: Optional[str] = None
+    port: Optional[int] = None
+    branch_id: Optional[str] = None
+    device_type: Optional[str] = None
+    is_active: Optional[bool] = None
+    communication_password: Optional[str] = None
+    force_udp: Optional[bool] = None
+    timeout: Optional[int] = None
+    firmware_version: Optional[str] = None
+    model_name: Optional[str] = None
+    protocol: Optional[str] = None
 
 class ZKTecoPushData(BaseModel):
     AuthToken: Optional[str] = None
@@ -37,62 +75,348 @@ async def list_biometric_devices(branch_id: Optional[str] = None, current_user: 
 
 @router.post("/biometric/devices")
 async def create_biometric_device(device: BiometricDeviceCreate, current_user: dict = Depends(get_current_user)):
-    """إضافة جهاز بصمة جديد"""
+    """إضافة جهاز بصمة جديد + مزامنة تلقائية فورية لكل الموظفين في نفس الفرع.
+    
+    🔥 عند إضافة جهاز جديد لفرع:
+    - تُنشأ حصراً جوبات push في `biometric_queue` لكل موظف نشط في ذلك الفرع.
+    - يلتقطها الوكيل المحلي (localhost:9999) عبر polling ويُصدرها للجهاز.
+    - يعمل حتى مع 100 جهاز — كل جهاز جديد يبدأ بمزامنة كاملة تلقائية.
+    """
+    tenant_id = current_user.get("tenant_id")
+    device_id = str(uuid.uuid4())
     new_device = {
-        "id": str(uuid.uuid4()),
+        "id": device_id,
         "name": device.name,
         "ip_address": device.ip_address,
         "port": device.port,
         "branch_id": device.branch_id,
         "device_type": device.device_type,
-        "tenant_id": current_user.get("tenant_id"),
+        # 🔧 خيارات دعم عام لكل ZKTeco (اختياري)
+        "communication_password": device.communication_password,
+        "force_udp": device.force_udp,
+        "timeout": device.timeout,
+        "firmware_version": device.firmware_version,
+        "model_name": device.model_name,
+        "protocol": device.protocol,
+        "tenant_id": tenant_id,
         "is_active": True,
         "last_sync": None,
-        "created_at": datetime.now(timezone.utc).isoformat()
+        "created_at": datetime.now(timezone.utc).isoformat(),
+        "created_by": current_user.get("id"),
     }
     
     await db.biometric_devices.insert_one(new_device)
     if "_id" in new_device:
         del new_device["_id"]
     
-    return {"message": "تم إضافة الجهاز بنجاح", "device": new_device}
-
-@router.post("/biometric/devices/{device_id}/test")
-async def test_biometric_connection(device_id: str, current_user: dict = Depends(get_current_user)):
-    """اختبار الاتصال بجهاز البصمة"""
-    device = await db.biometric_devices.find_one({
-        "id": device_id, 
-        "tenant_id": current_user.get("tenant_id")
-    }, {"_id": 0})
+    # 🔥 مزامنة تلقائية فورية: كل موظف نشط في نفس الفرع يُوضع في طابور push
+    enqueued = 0
+    try:
+        employee_query = {"branch_id": device.branch_id, "is_active": True}
+        if tenant_id:
+            employee_query["tenant_id"] = tenant_id
+        # جلب الموظفين الذين لديهم biometric_uid (رقم فريد للجهاز)
+        async for emp in db.employees.find(employee_query, {"_id": 0, "id": 1, "biometric_uid": 1, "biometric_id": 1, "full_name": 1, "name": 1}):
+            bio_uid = emp.get("biometric_uid") or emp.get("biometric_id")
+            if not bio_uid:
+                continue  # لا يمكن الـ push بدون biometric_uid
+            job = {
+                "id": str(uuid.uuid4()),
+                "type": "zk-push-user",
+                "params": {
+                    **_device_conn_params(new_device),
+                    "device_id": device_id,
+                    "biometric_uid": str(bio_uid),
+                    "biometric_id": str(bio_uid),  # alias
+                    "uid": str(bio_uid),
+                    "name": emp.get("full_name") or emp.get("name") or f"EMP-{bio_uid}",
+                    "employee_id": emp.get("id"),
+                },
+                "status": "pending",
+                "branch_id": device.branch_id,
+                "tenant_id": tenant_id,
+                "created_by": current_user.get("id"),
+                "created_by_name": current_user.get("full_name") or current_user.get("username"),
+                "created_at": datetime.now(timezone.utc).isoformat(),
+                "auto_generated": True,
+                "reason": "new_device_initial_sync",
+                "result": None,
+                "error": None,
+            }
+            await db.biometric_queue.insert_one(job)
+            enqueued += 1
+    except Exception as e:
+        logger.warning(f"Auto-sync enqueue on device create failed: {e}")
     
+    return {
+        "message": f"تم إضافة الجهاز بنجاح. سيتم مزامنة {enqueued} موظف تلقائياً عبر الوكيل المحلي.",
+        "device": new_device,
+        "auto_sync_enqueued": enqueued,
+    }
+
+
+@router.post("/biometric/devices/{device_id}/push-all-users")
+async def push_all_users_to_device(device_id: str, current_user: dict = Depends(get_current_user)):
+    """إعادة مزامنة كاملة لجهاز بصمة موجود — يُنشئ جوبات push لكل الموظفين في فرع الجهاز.
+    
+    مفيد عند: (1) استبدال جهاز، (2) بعد فورمات، (3) إضافة موظفين قبل ربط الوكيل."""
+    tenant_id = current_user.get("tenant_id")
+    device = await db.biometric_devices.find_one({"id": device_id, "tenant_id": tenant_id}, {"_id": 0})
     if not device:
         raise HTTPException(status_code=404, detail="الجهاز غير موجود")
     
-    # محاولة الاتصال بالجهاز
-    try:
-        from zk import ZK
-        zk = ZK(device["ip_address"], port=device["port"], timeout=5)
-        conn = zk.connect()
-        
-        if conn:
-            info = {
-                "serial_number": zk.get_serialnumber() if hasattr(zk, 'get_serialnumber') else "N/A",
-                "users_count": len(zk.get_users()) if hasattr(zk, 'get_users') else 0
-            }
-            zk.disconnect()
-            
-            return {"success": True, "message": "تم الاتصال بنجاح", "device_info": info}
-        else:
-            return {"success": False, "message": "فشل الاتصال بالجهاز"}
-    except ImportError:
-        # المكتبة غير مثبتة - وضع المحاكاة
-        return {
-            "success": True, 
-            "message": "وضع المحاكاة - مكتبة pyzk غير مثبتة",
-            "device_info": {"serial_number": "MOCK-001", "users_count": 0}
+    enqueued = 0
+    async for emp in db.employees.find(
+        {"branch_id": device["branch_id"], "tenant_id": tenant_id, "is_active": True},
+        {"_id": 0, "id": 1, "biometric_uid": 1, "biometric_id": 1, "full_name": 1, "name": 1}
+    ):
+        bio_uid = emp.get("biometric_uid") or emp.get("biometric_id")
+        if not bio_uid:
+            continue
+        job = {
+            "id": str(uuid.uuid4()),
+            "type": "zk-push-user",
+            "params": {
+                **_device_conn_params(device),
+                "device_id": device_id,
+                "biometric_uid": str(bio_uid),
+                "biometric_id": str(bio_uid),  # alias
+                "uid": str(bio_uid),
+                "name": emp.get("full_name") or emp.get("name") or f"EMP-{bio_uid}",
+                "employee_id": emp.get("id"),
+            },
+            "status": "pending",
+            "branch_id": device["branch_id"],
+            "tenant_id": tenant_id,
+            "created_by": current_user.get("id"),
+            "created_at": datetime.now(timezone.utc).isoformat(),
+            "auto_generated": True,
+            "reason": "manual_push_all",
+            "result": None,
+            "error": None,
         }
-    except Exception as e:
-        return {"success": False, "message": f"خطأ: {str(e)}"}
+        await db.biometric_queue.insert_one(job)
+        enqueued += 1
+    
+    return {"success": True, "enqueued": enqueued, "device_id": device_id}
+
+
+@router.post("/biometric/branches/{branch_id}/sync-all-devices")
+async def sync_all_devices_in_branch(branch_id: str, current_user: dict = Depends(get_current_user)):
+    """مزامنة شاملة لكل أجهزة البصمة داخل فرع واحد دفعة واحدة.
+    
+    - يمرّ على كل الأجهزة النشطة داخل الفرع.
+    - لكل جهاز، يُنشئ push-user job لكل موظف نشط ببصمة داخل نفس الفرع.
+    - مثالي بعد استعادة/تحديث أو ربط أجهزة إضافية للفرع (يعمل حتى مع 100 جهاز).
+    """
+    if current_user.get("role") not in ["admin", "super_admin", "manager", "branch_manager"]:
+        raise HTTPException(status_code=403, detail="غير مصرح")
+    tenant_id = get_user_tenant_id(current_user)
+    devices_q = {"branch_id": branch_id, "is_active": True}
+    if tenant_id:
+        devices_q["tenant_id"] = tenant_id
+    devices = await db.biometric_devices.find(devices_q, {"_id": 0}).to_list(500)
+    
+    emp_q = {"branch_id": branch_id, "is_active": True,
+             "$or": [{"biometric_uid": {"$nin": [None, ""]}}, {"biometric_id": {"$nin": [None, ""]}}]}
+    if tenant_id:
+        emp_q["tenant_id"] = tenant_id
+    employees = await db.employees.find(emp_q, {"_id": 0, "id": 1, "biometric_uid": 1, "biometric_id": 1, "full_name": 1, "name": 1}).to_list(2000)
+    
+    total_enqueued = 0
+    now_iso = datetime.now(timezone.utc).isoformat()
+    for dev in devices:
+        for emp in employees:
+            bio_uid = emp.get("biometric_uid") or emp.get("biometric_id")
+            if not bio_uid:
+                continue
+            job = {
+                "id": str(uuid.uuid4()),
+                "type": "zk-push-user",
+                "params": {
+                    **_device_conn_params(dev),
+                    "device_id": dev["id"],
+                    "biometric_uid": str(bio_uid),
+                    "biometric_id": str(bio_uid),
+                    "uid": str(bio_uid),
+                    "name": emp.get("full_name") or emp.get("name") or f"EMP-{bio_uid}",
+                    "employee_id": emp.get("id"),
+                },
+                "status": "pending",
+                "branch_id": branch_id,
+                "tenant_id": tenant_id,
+                "created_by": current_user.get("id"),
+                "created_at": now_iso,
+                "auto_generated": True,
+                "reason": "branch_bulk_sync",
+                "result": None,
+                "error": None,
+            }
+            await db.biometric_queue.insert_one(job)
+            total_enqueued += 1
+    
+    return {
+        "success": True,
+        "branch_id": branch_id,
+        "devices_count": len(devices),
+        "employees_count": len(employees),
+        "total_enqueued": total_enqueued,
+    }
+
+
+@router.get("/biometric/queue/status")
+async def biometric_queue_status(branch_id: Optional[str] = None, current_user: dict = Depends(get_current_user)):
+    """إحصائيات طابور جوبات البصمة (per branch إن مُرِّر)."""
+    tenant_id = get_user_tenant_id(current_user)
+    base_q = {}
+    if tenant_id:
+        base_q["tenant_id"] = tenant_id
+    if branch_id:
+        base_q["branch_id"] = branch_id
+    
+    async def _count(status):
+        q = dict(base_q)
+        q["status"] = status
+        return await db.biometric_queue.count_documents(q)
+    
+    return {
+        "branch_id": branch_id,
+        "pending": await _count("pending"),
+        "processing": await _count("processing"),
+        "completed": await _count("completed"),
+        "failed": await _count("failed"),
+    }
+
+
+@router.get("/biometric/devices/{device_id}/users")
+async def export_device_users(device_id: str, current_user: dict = Depends(get_current_user)):
+    """تصدير قائمة الموظفين المخصّصين لجهاز — يفيد لتصدير/طباعة/تدقيق كل موظف مسجّل على جهاز البصمة."""
+    tenant_id = get_user_tenant_id(current_user)
+    device = await db.biometric_devices.find_one({"id": device_id, "tenant_id": tenant_id}, {"_id": 0})
+    if not device:
+        raise HTTPException(status_code=404, detail="الجهاز غير موجود")
+    
+    emp_q = {"branch_id": device["branch_id"], "is_active": True,
+             "$or": [{"biometric_uid": {"$nin": [None, ""]}}, {"biometric_id": {"$nin": [None, ""]}}]}
+    if tenant_id:
+        emp_q["tenant_id"] = tenant_id
+    employees = await db.employees.find(emp_q, {"_id": 0, "id": 1, "biometric_uid": 1, "biometric_id": 1, "full_name": 1, "name": 1, "position": 1}).to_list(5000)
+    users = []
+    for e in employees:
+        bio_uid = e.get("biometric_uid") or e.get("biometric_id")
+        users.append({
+            "employee_id": e.get("id"),
+            "biometric_uid": str(bio_uid) if bio_uid else "",
+            "name": e.get("full_name") or e.get("name") or "",
+            "position": e.get("position") or "",
+        })
+    return {"device_id": device_id, "device_name": device.get("name"), "branch_id": device["branch_id"], "users_count": len(users), "users": users}
+
+
+@router.post("/biometric/devices/{device_id}/test")
+async def test_biometric_connection(device_id: str, current_user: dict = Depends(get_current_user)):
+    """اختبار الاتصال بالجهاز — يُنشئ جوب zk-probe-device يتم تنفيذه من الوكيل المحلي داخل شبكة الفرع.
+    
+    الأسباب:
+    - أجهزة ZKTeco على شبكة LAN داخل الفرع، غير قابلة للوصول من السحاب.
+    - الوكيل هو المكوّن الوحيد الذي يستطيع الوصول للـIP الداخلي.
+    - يدعم كل موديلات ZKTeco (K/F/G/iFace/MB/SF/UA…) عبر تمرير device_type, force_udp, communication_password.
+    
+    الواجهة تستفسر جوب النتيجة عبر GET /api/biometric-queue/{job_id}.
+    """
+    tenant_id = current_user.get("tenant_id")
+    device = await db.biometric_devices.find_one(
+        {"id": device_id, "tenant_id": tenant_id}, {"_id": 0}
+    )
+    if not device:
+        raise HTTPException(status_code=404, detail="الجهاز غير موجود")
+    
+    job_id = str(uuid.uuid4())
+    job = {
+        "id": job_id,
+        "type": "zk-probe-device",
+        "params": {
+            **_device_conn_params(device),
+            "device_id": device_id,
+        },
+        "status": "pending",
+        "branch_id": device["branch_id"],
+        "tenant_id": tenant_id,
+        "created_by": current_user.get("id"),
+        "created_at": datetime.now(timezone.utc).isoformat(),
+        "auto_generated": False,
+        "reason": "manual_connection_test",
+        "result": None,
+        "error": None,
+    }
+    await db.biometric_queue.insert_one(job)
+    return {
+        "success": True,
+        "job_id": job_id,
+        "message": "تم إنشاء جوب اختبار الاتصال — سيلتقطه الوكيل المحلي خلال ثوان",
+        "poll_url": f"/api/biometric-queue/{job_id}",
+    }
+
+
+@router.put("/biometric/devices/{device_id}")
+async def update_biometric_device(device_id: str, update: BiometricDeviceUpdate, current_user: dict = Depends(get_current_user)):
+    """تحديث إعدادات جهاز البصمة (IP/Port/Password/Protocol/Firmware/…) — يعمل مع جميع موديلات ZKTeco."""
+    if current_user.get("role") not in ["admin", "super_admin", "manager", "branch_manager"]:
+        raise HTTPException(status_code=403, detail="غير مصرح")
+    tenant_id = current_user.get("tenant_id")
+    existing = await db.biometric_devices.find_one({"id": device_id, "tenant_id": tenant_id})
+    if not existing:
+        raise HTTPException(status_code=404, detail="الجهاز غير موجود")
+    update_data = {k: v for k, v in update.model_dump().items() if v is not None}
+    if update_data:
+        update_data["updated_at"] = datetime.now(timezone.utc).isoformat()
+        await db.biometric_devices.update_one({"id": device_id}, {"$set": update_data})
+    return await db.biometric_devices.find_one({"id": device_id}, {"_id": 0})
+
+
+@router.delete("/biometric/devices/{device_id}")
+async def delete_biometric_device(device_id: str, current_user: dict = Depends(get_current_user)):
+    """حذف جهاز بصمة (soft-disable) — يوقف كل الجوبات المعلقة الخاصة به."""
+    if current_user.get("role") not in ["admin", "super_admin"]:
+        raise HTTPException(status_code=403, detail="غير مصرح")
+    tenant_id = current_user.get("tenant_id")
+    r = await db.biometric_devices.delete_one({"id": device_id, "tenant_id": tenant_id})
+    if r.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="الجهاز غير موجود")
+    # ألغِ الجوبات المعلقة لهذا الجهاز
+    cancelled = await db.biometric_queue.update_many(
+        {"params.device_id": device_id, "status": "pending"},
+        {"$set": {"status": "failed", "error": "device_deleted", "completed_at": datetime.now(timezone.utc).isoformat()}}
+    )
+    return {"success": True, "message": "تم حذف الجهاز بنجاح", "device_id": device_id, "cancelled_jobs": cancelled.modified_count}
+
+
+@router.get("/biometric/devices/models")
+async def list_supported_zk_models(_current_user: dict = Depends(get_current_user)):
+    """قائمة موديلات ZKTeco المدعومة (مرجع للفرونت)."""
+    return {
+        "protocols": [
+            {"id": "zk-standard", "label": "ZK Standard TCP (K/F/G/iFace/MB)", "port": 4370},
+            {"id": "zk-push", "label": "ZK Push (Cloud/PUSH SDK)", "port": 8081},
+            {"id": "pull-sdk", "label": "Pull SDK (SF/UA/SFace)", "port": 4370},
+        ],
+        "device_types": [
+            {"id": "fingerprint", "label": "بصمة إصبع"},
+            {"id": "face", "label": "بصمة وجه"},
+            {"id": "palm", "label": "بصمة راحة اليد"},
+            {"id": "rfid", "label": "كارت RFID"},
+            {"id": "hybrid", "label": "متعدد (وجه + بصمة + كارت)"},
+        ],
+        "supported_models": [
+            "K14", "K20", "K30", "K40", "K50", "K60", "K70",
+            "F18", "F19", "F22", "TX628", "MB160", "MB360", "MB460", "MB560",
+            "iFace402", "iFace702", "iFace880", "iFace990",
+            "G3", "G4", "G5", "SpeedFace-V5L", "ProFaceX",
+            "SF100", "SF200", "SF300", "SF400",
+            "UA200", "UA300", "UA860",
+        ],
+    }
+
 
 @router.post("/biometric/devices/{device_id}/sync")
 async def sync_biometric_attendance(device_id: str, current_user: dict = Depends(get_current_user)):

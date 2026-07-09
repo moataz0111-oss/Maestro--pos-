@@ -2,7 +2,7 @@
 import os
 import requests
 
-API = os.environ.get("TEST_API_URL", "https://whatsapp-pos-system.preview.emergentagent.com") + "/api"
+API = os.environ.get("TEST_API_URL", "https://multi-cashier-vault.preview.emergentagent.com") + "/api"
 ADMIN = {"email": "admin@maestroegp.com", "password": "admin123"}
 
 

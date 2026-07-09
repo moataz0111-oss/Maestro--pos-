@@ -1,5 +1,5 @@
 {
-  "summary": "Frontend-only test of /delivery 'clickable order -> details dialog' feature. All 3 P1 scenarios PASSED on https://whatsapp-pos-system.preview.emergentagent.com.",
+  "summary": "Frontend-only test of /delivery 'clickable order -> details dialog' feature. All 3 P1 scenarios PASSED on https://multi-cashier-vault.preview.emergentagent.com.",
   "tests_executed": [
     {
       "name": "All Orders tab - clickable order card opens details dialog",

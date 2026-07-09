@@ -13,6 +13,17 @@ import { API_URL } from './api';
 const API = API_URL;
 const AGENT_URL = 'http://localhost:9999';
 
+// 🛡 إنستانس أكسيوس منفصل للاتصال بالوكيل المحلي:
+// - withCredentials: false → منع cookies جلسة السيرفر من الإرسال (كانت تُسبب CORS blocking)
+// - بدون Authorization header (الوكيل المحلي لا يفهم JWT العميل)
+const localAgentAxios = axios.create({
+  baseURL: AGENT_URL,
+  withCredentials: false,
+  headers: {
+    'Content-Type': 'application/json',
+  },
+});
+
 /**
  * تنفيذ عملية بصمة مع fallback تلقائي إلى Job Queue.
  *
@@ -24,7 +35,7 @@ const AGENT_URL = 'http://localhost:9999';
 export async function executeBiometricOp(jobType, params, options = {}) {
   const {
     branchId = null,
-    directTimeout = 10000,
+    directTimeout = 3500,  // ⏱ تقصير المهلة (كان 10000) لكشف CORS/Mixed Content بسرعة والتحوّل للـ Queue
     queueTimeout = 180000,
     pollInterval = 1500,
   } = options;
@@ -33,8 +44,9 @@ export async function executeBiometricOp(jobType, params, options = {}) {
   const authHeaders = { Authorization: `Bearer ${token}` };
 
   // 1) محاولة اتصال مباشر — يعمل لو الوكيل مفتوح من نفس الشبكة عبر HTTP
+  // نستخدم localAgentAxios (withCredentials:false) لتفادي حجب CORS
   try {
-    const res = await axios.post(`${AGENT_URL}/${jobType}`, params, { timeout: directTimeout });
+    const res = await localAgentAxios.post(`/${jobType}`, params, { timeout: directTimeout });
     if (res?.data && res.data.success !== false) {
       return res.data;
     }
@@ -43,9 +55,16 @@ export async function executeBiometricOp(jobType, params, options = {}) {
       throw new Error(res.data.message || res.data.error || 'فشل العملية على الوكيل');
     }
   } catch (err) {
-    const isNetworkErr = err?.code === 'ERR_NETWORK' || err?.message?.includes('Network');
+    // أخطاء الشبكة/CORS/Mixed Content/Timeout → fallback إلى Queue
+    const isNetworkErr = err?.code === 'ERR_NETWORK'
+      || err?.code === 'ECONNABORTED'
+      || err?.code === 'ECONNREFUSED'
+      || err?.message?.includes('Network')
+      || err?.message?.includes('CORS')
+      || err?.message?.includes('preflight')
+      || err?.message?.includes('timeout');
     if (!isNetworkErr) throw err;
-    // Network error → fallback to queue
+    // Network/CORS error → fallback to queue
   }
 
   // 2) Fallback: Job Queue

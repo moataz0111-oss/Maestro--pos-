@@ -90,6 +90,7 @@ import { toast, Toaster } from 'sonner';
 import BiometricDevices from '../components/BiometricDevices';
 import { useTranslation } from '../hooks/useTranslation';
 import { executeBiometricOp } from '../utils/biometricQueue';
+import { localAgent } from '../utils/localAgent';
 
 const API = API_URL;
 
@@ -316,7 +317,7 @@ export default function HR() {
       
       // الطريقة 2: اتصال مباشر بـ localhost (قد يحظره Chrome)
       try {
-        const res = await axios.get(`${AGENT_URL}/status`, { timeout: 3000 });
+        const res = await localAgent.get(`/status`, { timeout: 3000 });
         if (res.data?.status === 'running') {
           setAgentConnected(true);
           return;
@@ -861,9 +862,9 @@ export default function HR() {
       const uid = employeeForm.biometric_uid;
       if (uid && selectedDevice) {
         try {
-          const agentRes = await axios.get(`${AGENT_URL}/status`, { timeout: 3000 });
+          const agentRes = await localAgent.get(`/status`, { timeout: 3000 });
           if (agentRes.data?.status === 'running') {
-            await axios.post(`${AGENT_URL}/zk-push-user`, {
+            await localAgent.post(`/zk-push-user`, {
               ip: selectedDevice.ip_address,
               port: selectedDevice.port || 4370,
               timeout: 45000,
@@ -909,9 +910,9 @@ export default function HR() {
       const uid = employeeForm.biometric_uid || editingEmployee.biometric_uid;
       if (uid && selectedDevice) {
         try {
-          const agentRes = await axios.get(`${AGENT_URL}/status`, { timeout: 3000 });
+          const agentRes = await localAgent.get(`/status`, { timeout: 3000 });
           if (agentRes.data?.status === 'running') {
-            await axios.post(`${AGENT_URL}/zk-push-user`, {
+            await localAgent.post(`/zk-push-user`, {
               ip: selectedDevice.ip_address,
               port: selectedDevice.port || 4370,
               timeout: 45000,
@@ -946,7 +947,7 @@ export default function HR() {
       const biometricUid = res.data?.biometric_uid;
       if (biometricUid && selectedDevice) {
         try {
-          await axios.post(`${AGENT_URL}/zk-delete-user`, {
+          await localAgent.post(`/zk-delete-user`, {
             ip: selectedDevice.ip_address,
             port: selectedDevice.port || 4370,
             timeout: 5000,
@@ -1303,7 +1304,7 @@ export default function HR() {
       // فحص الوكيل: heartbeat أولاً، ثم localhost كـ fallback
       if (!agentConnected) {
         try {
-          const agentCheck = await axios.get(`${AGENT_URL}/status`, { timeout: 2000 });
+          const agentCheck = await localAgent.get(`/status`, { timeout: 2000 });
           if (agentCheck.data?.status !== 'running') {
             toast.error(t('الوكيل المحلي غير متصل'));
             setFacePhotoLoading(false);
@@ -1505,7 +1506,7 @@ export default function HR() {
     setProbeLoading(true);
     setProbeResult(null);
     try {
-      const res = await axios.post(`${AGENT_URL}/zk-probe-device`, {
+      const res = await localAgent.post(`/zk-probe-device`, {
         ip: device.ip_address
       }, { timeout: 90000 });
       setProbeResult(res.data);
@@ -2335,7 +2336,7 @@ export default function HR() {
   // Fetch users from device via agent
   const fetchDeviceUsersForPush = async (device) => {
     try {
-      const res = await axios.post(`${AGENT_URL}/zk-users`, {
+      const res = await localAgent.post(`/zk-users`, {
         ip: device.ip_address,
         port: device.port || 4370,
         timeout: 45000
@@ -2356,7 +2357,7 @@ export default function HR() {
       // اتصال localhost المباشر يحجبه المتصفح أحياناً (Mixed Content) لذا لا نعتمد عليه وحده.
       if (!agentConnected) {
         try {
-          await axios.get(`${AGENT_URL}/status`, { timeout: 2000 });
+          await localAgent.get(`/status`, { timeout: 2000 });
         } catch {
           toast.error(t('الوكيل المحلي غير متصل! شغّل print_server.ps1 v2.4'));
           return;
@@ -2364,7 +2365,7 @@ export default function HR() {
       }
       // Optional zk_support check — لا نوقف العملية إن لم نستطع الفحص
       try {
-        const agentRes = await axios.get(`${AGENT_URL}/status`, { timeout: 2000 });
+        const agentRes = await localAgent.get(`/status`, { timeout: 2000 });
         if (agentRes.data && agentRes.data.zk_support === false) {
           toast.error(t('الوكيل المحلي لا يدعم البصمة - حدّث إلى v2.4'));
           return;
@@ -2429,7 +2430,7 @@ export default function HR() {
     if (!agentConnected) {
       // محاولة fallback مباشرة على localhost
       try {
-        await axios.get(`${AGENT_URL}/status`, { timeout: 2000 });
+        await localAgent.get(`/status`, { timeout: 2000 });
       } catch {
         toast.error(t('الوكيل المحلي غير متصل!'));
         setPushingAll(false);

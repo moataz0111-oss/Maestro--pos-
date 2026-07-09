@@ -11,19 +11,76 @@ router = APIRouter()
 
 @router.post("/employees", response_model=EmployeeResponse)
 async def create_employee(employee: EmployeeCreate, current_user: dict = Depends(get_current_user)):
-    """إنشاء موظف جديد"""
+    """إنشاء موظف جديد + مزامنة تلقائية لكل أجهزة البصمة في فرعه.
+    
+    🔥 عند إنشاء موظف جديد بـ biometric_uid، تُنشأ جوبات push تلقائياً لكل أجهزة
+    البصمة النشطة في فرعه (حتى لو كان هناك 100 جهاز — كلها تستلم الموظف الجديد)."""
     if current_user["role"] not in [UserRole.ADMIN, UserRole.MANAGER, UserRole.SUPER_ADMIN]:
         raise HTTPException(status_code=403, detail="غير مصرح")
     
+    tenant_id = get_user_tenant_id(current_user)
+    # قبول biometric_id كـ alias لـ biometric_uid (backwards compat)
+    payload_dict = employee.model_dump()
+    extra_bio = getattr(employee, 'biometric_id', None) if hasattr(employee, 'biometric_id') else None
     employee_doc = {
         "id": str(uuid.uuid4()),
-        **employee.model_dump(),
-        "tenant_id": get_user_tenant_id(current_user),
+        **payload_dict,
+        "tenant_id": tenant_id,
         "is_active": True,
         "created_at": datetime.now(timezone.utc).isoformat()
     }
+    if extra_bio and not employee_doc.get("biometric_uid"):
+        employee_doc["biometric_uid"] = str(extra_bio)
     await db.employees.insert_one(employee_doc)
     del employee_doc["_id"]
+    
+    # 🔥 مزامنة تلقائية: كل جهاز نشط في فرع الموظف يحصل على جوب push
+    try:
+        bio_uid = employee_doc.get("biometric_uid") or employee_doc.get("biometric_id")
+        branch_id = employee_doc.get("branch_id")
+        if bio_uid and branch_id:
+            devices_q = {"branch_id": branch_id, "is_active": True}
+            if tenant_id:
+                devices_q["tenant_id"] = tenant_id
+            enqueued = 0
+            async for dev in db.biometric_devices.find(devices_q, {"_id": 0}):
+                job = {
+                    "id": str(uuid.uuid4()),
+                    "type": "zk-push-user",
+                    "params": {
+                        "device_id": dev["id"],
+                        "device_ip": dev.get("ip_address"),
+                        "device_port": dev.get("port", 4370),
+                        "device_type": dev.get("device_type") or "fingerprint",
+                        "communication_password": dev.get("communication_password"),
+                        "force_udp": bool(dev.get("force_udp") or False),
+                        "timeout": int(dev.get("timeout") or 10),
+                        "firmware_version": dev.get("firmware_version"),
+                        "model_name": dev.get("model_name"),
+                        "protocol": dev.get("protocol") or "zk-standard",
+                        "biometric_uid": str(bio_uid),
+                        "biometric_id": str(bio_uid),  # alias
+                        "uid": str(bio_uid),
+                        "name": employee_doc.get("full_name") or employee_doc.get("name") or f"EMP-{bio_uid}",
+                        "employee_id": employee_doc["id"],
+                    },
+                    "status": "pending",
+                    "branch_id": branch_id,
+                    "tenant_id": tenant_id,
+                    "created_by": current_user.get("id"),
+                    "created_at": datetime.now(timezone.utc).isoformat(),
+                    "auto_generated": True,
+                    "reason": "new_employee_auto_push",
+                    "result": None,
+                    "error": None,
+                }
+                await db.biometric_queue.insert_one(job)
+                enqueued += 1
+            if enqueued:
+                logger.info(f"🔒 موظف جديد ({employee_doc.get('full_name') or employee_doc.get('name')}) — تم إنشاء {enqueued} جوب push لأجهزة البصمة")
+    except Exception as _e:
+        logger.warning(f"auto biometric push on employee create failed: {_e}")
+    
     return employee_doc
 
 @router.get("/employees", response_model=List[EmployeeResponse])
@@ -70,7 +127,7 @@ async def get_employee(employee_id: str, current_user: dict = Depends(get_curren
 
 @router.put("/employees/{employee_id}")
 async def update_employee(employee_id: str, update: EmployeeUpdate, current_user: dict = Depends(get_current_user)):
-    """تحديث بيانات موظف"""
+    """تحديث بيانات موظف — عند تغيير biometric_uid يُنشأ push لكل أجهزة الفرع تلقائياً."""
     if current_user["role"] not in [UserRole.ADMIN, UserRole.MANAGER, UserRole.SUPER_ADMIN]:
         raise HTTPException(status_code=403, detail="غير مصرح")
     
@@ -83,11 +140,64 @@ async def update_employee(employee_id: str, update: EmployeeUpdate, current_user
     if update_data:
         await db.employees.update_one({"id": employee_id}, {"$set": update_data})
     
-    return await db.employees.find_one({"id": employee_id}, {"_id": 0})
+    updated = await db.employees.find_one({"id": employee_id}, {"_id": 0})
+    
+    # 🔥 auto-push عند تغيير biometric_uid أو تفعيل الموظف
+    try:
+        new_bio = (update_data.get("biometric_uid") or "").strip() if update_data.get("biometric_uid") else None
+        old_bio = (employee.get("biometric_uid") or employee.get("biometric_id") or "").strip() or None
+        bio_changed = new_bio and new_bio != old_bio
+        if bio_changed:
+            branch_id = updated.get("branch_id")
+            tenant_id = get_user_tenant_id(current_user)
+            if branch_id:
+                devices_q = {"branch_id": branch_id, "is_active": True}
+                if tenant_id:
+                    devices_q["tenant_id"] = tenant_id
+                enqueued = 0
+                async for dev in db.biometric_devices.find(devices_q, {"_id": 0}):
+                    job = {
+                        "id": str(uuid.uuid4()),
+                        "type": "zk-push-user",
+                        "params": {
+                            "device_id": dev["id"],
+                            "device_ip": dev.get("ip_address"),
+                            "device_port": dev.get("port", 4370),
+                            "device_type": dev.get("device_type") or "fingerprint",
+                            "communication_password": dev.get("communication_password"),
+                            "force_udp": bool(dev.get("force_udp") or False),
+                            "timeout": int(dev.get("timeout") or 10),
+                            "firmware_version": dev.get("firmware_version"),
+                            "model_name": dev.get("model_name"),
+                            "protocol": dev.get("protocol") or "zk-standard",
+                            "biometric_uid": str(new_bio),
+                            "biometric_id": str(new_bio),
+                            "uid": str(new_bio),
+                            "name": updated.get("full_name") or updated.get("name") or f"EMP-{new_bio}",
+                            "employee_id": employee_id,
+                        },
+                        "status": "pending",
+                        "branch_id": branch_id,
+                        "tenant_id": tenant_id,
+                        "created_by": current_user.get("id"),
+                        "created_at": datetime.now(timezone.utc).isoformat(),
+                        "auto_generated": True,
+                        "reason": "employee_update_push",
+                        "result": None,
+                        "error": None,
+                    }
+                    await db.biometric_queue.insert_one(job)
+                    enqueued += 1
+                if enqueued:
+                    logger.info(f"🔄 موظف محدَّث ({updated.get('name')}) — تم إنشاء {enqueued} جوب push")
+    except Exception as _e:
+        logger.warning(f"auto biometric push on employee update failed: {_e}")
+    
+    return updated
 
 @router.delete("/employees/{employee_id}")
 async def delete_employee(employee_id: str, current_user: dict = Depends(get_current_user)):
-    """حذف موظف نهائياً من النظام"""
+    """حذف موظف نهائياً — يُنشئ delete-user job لكل أجهزة البصمة في فرعه إن كان لديه biometric_uid."""
     if current_user["role"] not in [UserRole.ADMIN, UserRole.SUPER_ADMIN]:
         raise HTTPException(status_code=403, detail="غير مصرح")
     
@@ -96,12 +206,56 @@ async def delete_employee(employee_id: str, current_user: dict = Depends(get_cur
     if not employee:
         raise HTTPException(status_code=404, detail="الموظف غير موجود")
     
-    biometric_uid = employee.get("biometric_uid")
+    biometric_uid = employee.get("biometric_uid") or employee.get("biometric_id")
+    branch_id = employee.get("branch_id")
+    tenant_id = get_user_tenant_id(current_user)
     
-    # حذف نهائي من قاعدة البيانات
+    # حذف نهائي
     await db.employees.delete_one({"id": employee_id})
     
-    return {"message": "تم حذف الموظف نهائياً", "biometric_uid": biometric_uid}
+    # 🔥 delete-user jobs لكل أجهزة الفرع
+    enqueued = 0
+    try:
+        if biometric_uid and branch_id:
+            devices_q = {"branch_id": branch_id, "is_active": True}
+            if tenant_id:
+                devices_q["tenant_id"] = tenant_id
+            async for dev in db.biometric_devices.find(devices_q, {"_id": 0}):
+                job = {
+                    "id": str(uuid.uuid4()),
+                    "type": "zk-delete-user",
+                    "params": {
+                        "device_id": dev["id"],
+                        "device_ip": dev.get("ip_address"),
+                        "device_port": dev.get("port", 4370),
+                        "device_type": dev.get("device_type") or "fingerprint",
+                        "communication_password": dev.get("communication_password"),
+                        "force_udp": bool(dev.get("force_udp") or False),
+                        "timeout": int(dev.get("timeout") or 10),
+                        "firmware_version": dev.get("firmware_version"),
+                        "model_name": dev.get("model_name"),
+                        "protocol": dev.get("protocol") or "zk-standard",
+                        "biometric_uid": str(biometric_uid),
+                        "biometric_id": str(biometric_uid),
+                        "uid": str(biometric_uid),
+                        "employee_id": employee_id,
+                    },
+                    "status": "pending",
+                    "branch_id": branch_id,
+                    "tenant_id": tenant_id,
+                    "created_by": current_user.get("id"),
+                    "created_at": datetime.now(timezone.utc).isoformat(),
+                    "auto_generated": True,
+                    "reason": "employee_delete_push",
+                    "result": None,
+                    "error": None,
+                }
+                await db.biometric_queue.insert_one(job)
+                enqueued += 1
+    except Exception as _e:
+        logger.warning(f"auto biometric delete-user push failed: {_e}")
+    
+    return {"message": "تم حذف الموظف نهائياً", "biometric_uid": biometric_uid, "delete_jobs_enqueued": enqueued}
 
 @router.post("/employees/{employee_id}/face-photo")
 async def save_employee_face_photo(employee_id: str, request: Request, current_user: dict = Depends(get_current_user)):
