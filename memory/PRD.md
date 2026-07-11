@@ -1,5 +1,62 @@
 # Maestro EGP - Multi-Tenant POS System PRD
 
+## إصلاح حرِج للحضور + ضمان تفعيل 2FA (12 يوليو 2026) — iter302 ✅ 30/30
+- **البق الحرِج للحضور من فرع السايدية:** `submit_biometric_job_result` (server.py) كان يستقبل سجلات zk-sync من الوكيل ويحفظها في `biometric_queue.result` فقط — **لا يُدخلها في `biometric_attendance`** → صفحة الحضور صفر رغم أن المزامنة تظهر ناجحة.
+  - **الإصلاح:** فرع خاص لـ `job.type == "zk-sync"`: تطبيع الطوابع الزمنية، dedup، إدراج في `biometric_attendance`، ثم استدعاء `_auto_process_attendance_internal` لإنشاء صفوف في `db.attendance`. الاستجابة الآن `{inserted, auto_processed}`.
+  - **اختبار:** 4/4 pytest جديد + 30/30 regression.
+- **ضمان تفعيل 2FA بلا حبس أي مستخدم:**
+  - `GET /api/super-admin/security-2fa-readiness` (super_admin only): فحص وقائي قبل التفعيل — يُرجع القنوات المتاحة (واتساب/بريد/Twilio) + قائمة المستخدمين المعرَّضين للحبس (`at_risk_users`) + توصية.
+  - `POST /api/super-admin/security-2fa-backup-codes`: توليد 5 رموز طوارئ للسوبر أدمن (صيغة XXXX-XXXX) مُخزَّنة SHA256. النص الخام يُعرض مرة واحدة.
+  - `verify_2fa_code` (server.py): يقبل رمز طوارئ لجلسات `super_admin_login` كنجاة أخيرة — استهلاك مرة واحدة + علامة `used_backup_code`.
+- **الملفات:** `server.py` (submit_biometric_job_result + verify_2fa_code)، `routes/super_admin_routes.py` (readiness + backup codes)، `tests/test_bug302_zk_sync_attendance.py`، `tests/test_iter302_2fa_readiness_backup.py`.
+
+
+
+## سجل الرسائل المُوحّد + تحسينات notify (11 يوليو 2026) — iter301
+- **سجل رسائل موحّد (WhatsApp + Email + Bell):** endpoint جديد `GET /api/system/messages-log?channel=&days=&limit=` يجمع من 3 مصادر (db.wa_messages, db.system_email_logs, db.notifications) بترتيب زمني موحّد. يُرجع stats (by_channel/by_status/total).
+- **تسجيل تلقائي لكل الإيميلات:** `send_system_email` الآن يُخزّن في `db.system_email_logs` بحقول: to, subject, purpose, tenant_id, provider (smtp/sendgrid), status (sent/failed), error, sent_at — لكل رسالة مُرسَلة (نجحت أم لا).
+- **UI جديد في SuperAdmin:** تبويب "سجل الرسائل" (data-testid=messages-log-tab) داخل لوحة العملاء — فلترة حسب القناة (كل/واتساب/بريد/جرس) والمدة (يوم/3 أيام/أسبوع/شهر/3 أشهر) + عدادات نجاح/فشل/إجمالي + قائمة مفصّلة لكل رسالة (المستقبِل، الموضوع، الحالة، الوقت، الخطأ إن وُجد).
+- **تحسينات notify_owner_multichannel:**
+  - Upper cap 20 مستقبِل (يمنع إغراق تينانت لديه مديرون كثر).
+  - Dedup بعد تطبيع E.164 (يمنع نفس الرقم بصيغتين مختلفتين).
+  - Query filter `$type: "string"` لضمان قيم صحيحة فقط.
+  - تمرير `purpose` و `tenant_id` لـ `send_system_email` ليظهر في السجل بمعلومات كاملة.
+- **regression:** 19/19 pytest يمرّ (biometric_auto_sync 9 + biometric_zk_all_models 5 + biometric_iter295_extras 3 + notify_multichannel_iter299 2).
+
+
+
+## إصلاح "Connection Closed" في واتساب + ربط أي رقم بلا قيود + notify متعدد المستقبِلين (11 يوليو 2026) — iter299+300
+- **مشكلة "تعذّر توليد الرمز: Connection Closed":** الخدمة كانت تُعيد الاتصال كل 3 ثوان → طلبات pairing تفشل قبل استقرار الـsocket.
+- **الحل:**
+  - `wa_service/index.js`: exponential backoff (5s→10s→20s→40s→60s capped) بدل الـ3s الثابتة.
+  - إضافة `tearDownSock()` + `resetAuthDir()` للتنظيف الآمن.
+  - endpoint جديد `POST /reset` يُصفّر الجلسة بالكامل ويُعيد التشغيل.
+  - `/pair` يقبل `force: true` — يُصفّر الجلسة أولاً ثم ينتظر 2.5s لضمان استعداد الـsocket لطلب رمز الربط.
+  - رسائل خطأ ودّية بالعربية بدل "Connection Closed".
+  - عدم عرض 408 (timeout بلا مسح — طبيعي) كخطأ للمستخدم.
+- **ربط أي رقم بلا قيود:** الواجهة الآن ترسل `force: true` مع كل طلب pairing → يمكن للمالك تغيير رقم الواتساب متى شاء دون الحاجة لفك الربط يدوياً أولاً. زر جديد **"تغيير الرقم"** (data-testid=wa-reset-session-btn) يظهر في كل الأحوال ويصفّر الجلسة بضغطة واحدة.
+- **notify_owner_multichannel متعدد المستقبِلين:** يجمع الأرقام/الإيميلات من عدة مصادر (env + tenants.owner_phone/owner_email + كل حسابات admin/manager/owner/branch_manager في نفس التينانت) + dedup + يُرجع `whatsapp_recipients` / `email_recipients` counts. iter299 أكّد 32/32 اختبار.
+- **إعادة تسمية "مدير النظام" → "المالك":** في كل صفحات إدارة المستخدمين (badges + dropdowns + filter chips). iter299 أكّد الواجهة.
+
+
+
+## اكتمال ما قبل النشر: الوكيل + watchdog + E2E فرونت (11 يوليو 2026) — iter298 ✅ 100%
+- **1) تحديث الوكيل المحلي (print_server.ps1):** أصبح يقرأ حقول الاتصال من الأسماء الجديدة (`device_ip`, `device_port`, `device_type`, `model_name`, `protocol`) مع إبقاء التوافق مع الأسماء القديمة (`ip`, `port`). سجل الأحداث يوضّح نوع الجهاز والموديل والبروتوكول. الباك إند يُصدر الأسماء بصيغتين (aliases) لدعم أي إصدار وكيل قديم/جديد.
+- **2) watchdog TTL للجوبات المعلّقة:** `cleanup_stale_biometric_jobs` امتد ليشمل:
+  - `processing` > 5 دقائق → failed (الوكيل بدأ ثم انقطع).
+  - `pending zk-probe-device` > 5 دقائق → failed مع رسالة "الوكيل المحلي غير متصل — لم يلتقط جوب الاختبار خلال 5 دقائق" (منع تعليق زر "اختبار الاتصال" إلى الأبد لو الوكيل offline).
+  - `pending` أي نوع > 24 ساعة → failed (تراكم قديم).
+  - حذف completed/failed > 7 أيام.
+  - يعمل عبر مجدول جديد `start_biometric_watchdog_scheduler` كل 60 ثانية.
+- **3) اختبار الواجهة E2E (iter298):** testing_agent أكّد 100% نجاح:
+  - تبويب "صحّة البصمة" في SuperAdmin يعرض 7 عدادات + قائمة الفروع + زر تحديث يعمل.
+  - تبويب "إشعارات المالك" يعرض 6 مفاتيح Switch بالقيم الافتراضية الصحيحة، تغيير أي مفتاح يستدعي PUT /api/system/notification-preferences ويحفظ بشكل دائم.
+  - نموذج "إضافة جهاز" في HR/BiometricDevices يعرض `advanced-zk-options-toggle` بكل الحقول (protocol/timeout/password/force_udp/model_name).
+- **تحسينات ثانوية:** أضيف `data-testid="hr-biometric-tab"` لتبويب البصمة في HR (كان صعب الوصول عبر الأتمتة).
+- **الملفات المُعدَّلة:** `routes/biometric_routes.py`, `routes/hr_routes.py`, `server.py` (watchdog scheduler), `static/print_server.ps1`, `pages/HR.js`, PRD.md.
+
+
+
 ## تقرير الوردية اليومي + إعدادات الإشعارات + لوحة صحّة البصمة (9 يوليو 2026) — iter297 ✅
 - **P1 — تقرير الوردية اليومي على واتساب/بريد/جرس:** `_send_shift_close_report()` (routes/shifts_routes.py) يُستدعى تلقائياً بعد كل `close_cash_register` و`close_shift` عبر `notify_owner_multichannel`. المحتوى: الكاشير + الفرع + اليوم التشغيلي + عدد الطلبات + المبيعات (نقدي/بطاقة/آجل/تطبيقات + الإجمالي) + النقد المتوقع/الفعلي + المصاريف + الفرق (زيادة/نقص/مطابق). severity="critical" لو فرق النقد > 5% من المبيعات.
 - **P2 — تعطيل رسائل "فحص السلامة" على واتساب:** `_notify_integrity_mismatches` صار يحترم `notification_preferences`. القيم الافتراضية:

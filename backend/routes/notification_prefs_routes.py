@@ -2,6 +2,7 @@
 from fastapi import APIRouter, Depends, HTTPException, Body
 from typing import Optional
 from datetime import datetime, timezone, timedelta
+import uuid
 
 from server import (  # noqa: F401,F403
     db, get_current_user, get_user_tenant_id, UserRole
@@ -46,6 +47,114 @@ async def update_notification_preferences(body: dict = Body(...), current_user: 
     await db.notification_preferences.update_one(q, {"$set": {**q, **updates}}, upsert=True)
     prefs = await _get_notification_prefs(db, tenant_id)
     return {"success": True, "preferences": prefs}
+
+
+@router.get("/system/messages-log")
+async def unified_messages_log(
+    channel: Optional[str] = None,     # whatsapp | email | bell | all
+    category: Optional[str] = None,    # security | shift | expense | system | ...
+    status: Optional[str] = None,      # sent | failed | delivered
+    days: int = 7,
+    limit: int = 200,
+    current_user: dict = Depends(get_current_user),
+):
+    """سجل موحّد لكل الرسائل المُرسَلة (WhatsApp + Email + Bell) — للمالك.
+    
+    فلترة: channel/category/status/days.
+    يُرجع قائمة موحّدة مرتبة زمنياً + إحصائيات إجمالية.
+    """
+    _require_admin(current_user)
+    tenant_id = get_user_tenant_id(current_user)
+    since_iso = (datetime.now(timezone.utc) - timedelta(days=max(1, int(days)))).isoformat()
+    limit = max(1, min(int(limit), 500))
+    
+    items = []
+    
+    # === WhatsApp من db.wa_messages ===
+    if not channel or channel in ("whatsapp", "all"):
+        q = {"sent_at": {"$gte": since_iso}}
+        if tenant_id:
+            q["tenant_id"] = tenant_id
+        if status:
+            q["status"] = status
+        if category:
+            q["purpose"] = {"$regex": category, "$options": "i"}
+        async for m in db.wa_messages.find(q, {"_id": 0}).sort("sent_at", -1).limit(limit):
+            items.append({
+                "id": m.get("id") or m.get("message_id") or str(uuid.uuid4()),
+                "channel": "whatsapp",
+                "to": m.get("phone") or m.get("to"),
+                "subject": m.get("purpose") or "",
+                "message": (m.get("message") or "")[:300],
+                "status": m.get("status") or "sent",
+                "error": m.get("error"),
+                "sent_at": m.get("sent_at") or m.get("created_at"),
+                "provider": "baileys",
+                "purpose": m.get("purpose"),
+            })
+    
+    # === Email من db.system_email_logs ===
+    if not channel or channel in ("email", "all"):
+        q = {"sent_at": {"$gte": since_iso}}
+        if tenant_id:
+            q["tenant_id"] = tenant_id
+        if status:
+            q["status"] = status
+        if category:
+            q["purpose"] = {"$regex": category, "$options": "i"}
+        async for m in db.system_email_logs.find(q, {"_id": 0}).sort("sent_at", -1).limit(limit):
+            _to = m.get("to")
+            items.append({
+                "id": m.get("id") or str(uuid.uuid4()),
+                "channel": "email",
+                "to": ", ".join(_to) if isinstance(_to, list) else str(_to or ""),
+                "subject": m.get("subject") or "",
+                "message": m.get("subject") or "",
+                "status": m.get("status") or "sent",
+                "error": m.get("error"),
+                "sent_at": m.get("sent_at"),
+                "provider": m.get("provider") or "smtp",
+                "purpose": m.get("purpose"),
+            })
+    
+    # === Bell من db.notifications ===
+    if not channel or channel in ("bell", "all"):
+        q = {"created_at": {"$gte": since_iso}}
+        if tenant_id:
+            q["tenant_id"] = tenant_id
+        if category:
+            q["category"] = category
+        async for m in db.notifications.find(q, {"_id": 0}).sort("created_at", -1).limit(limit):
+            items.append({
+                "id": m.get("id") or str(uuid.uuid4()),
+                "channel": "bell",
+                "to": "الجرس",
+                "subject": m.get("title") or m.get("type") or "",
+                "message": (m.get("message") or "")[:300],
+                "status": "sent",
+                "error": None,
+                "sent_at": m.get("created_at"),
+                "provider": "internal",
+                "purpose": m.get("category") or m.get("type"),
+                "is_read": bool(m.get("is_read")),
+                "severity": m.get("severity"),
+            })
+    
+    # ترتيب موحد زمنياً (الأحدث أولاً) + قصّ لـ limit
+    items.sort(key=lambda x: x.get("sent_at") or "", reverse=True)
+    items = items[:limit]
+    
+    # الإحصائيات
+    stats = {
+        "total": len(items),
+        "by_channel": {"whatsapp": 0, "email": 0, "bell": 0},
+        "by_status": {"sent": 0, "failed": 0},
+    }
+    for it in items:
+        stats["by_channel"][it["channel"]] = stats["by_channel"].get(it["channel"], 0) + 1
+        stats["by_status"][it["status"]] = stats["by_status"].get(it["status"], 0) + 1
+    
+    return {"items": items, "stats": stats, "days": days, "limit": limit}
 
 
 # ==================== BIOMETRIC HEALTH DASHBOARD ====================

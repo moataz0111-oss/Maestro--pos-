@@ -259,35 +259,65 @@ def _smtp_send_sync(cfg: dict, to_emails, subject: str, html_content: str) -> bo
             pass
 
 
-async def send_system_email(to_emails, subject: str, html_content: str) -> bool:
+async def send_system_email(to_emails, subject: str, html_content: str, purpose: str = "system", tenant_id: Optional[str] = None) -> bool:
     """Unified email sender. Prefers SMTP (Namecheap Private Email); falls back to SendGrid.
-    Reads config from DB (owner control panel) or env. Returns True on success. Never raises."""
+    Reads config from DB (owner control panel) or env. Returns True on success. Never raises.
+    يُسجّل كل رسالة في db.system_email_logs مع status=sent|failed لسجل المتابعة."""
     cfg = await _load_email_config()
+    recipients = to_emails if isinstance(to_emails, list) else [to_emails]
+    log_base = {
+        "id": str(uuid.uuid4()),
+        "to": recipients,
+        "subject": subject,
+        "purpose": purpose,
+        "tenant_id": tenant_id,
+        "provider": None,
+        "status": "failed",
+        "error": None,
+        "sent_at": datetime.now(timezone.utc).isoformat(),
+    }
     # 1) SMTP (preferred)
     if cfg.get("smtp_host") and cfg.get("smtp_user") and cfg.get("smtp_password"):
         try:
             ok = await asyncio.to_thread(_smtp_send_sync, cfg, to_emails, subject, html_content)
             if ok:
                 logger.info(f"Email sent via SMTP to {to_emails}")
+                try:
+                    await db.system_email_logs.insert_one({**log_base, "provider": "smtp", "status": "sent"})
+                except Exception:
+                    pass
                 return True
+            log_base["error"] = "smtp_send_returned_false"
         except Exception as e:
+            log_base["error"] = f"smtp: {str(e)[:200]}"
             logger.error(f"SMTP send failed: {e}")
     # 2) SendGrid fallback
     if cfg.get("sendgrid_api_key"):
         try:
             message = Mail(
                 from_email=cfg.get("sender_email") or SENDER_EMAIL,
-                to_emails=to_emails if isinstance(to_emails, list) else [to_emails],
+                to_emails=recipients,
                 subject=subject,
                 html_content=html_content,
             )
             sg = SendGridAPIClient(cfg["sendgrid_api_key"])
             sg.send(message)
             logger.info(f"Email sent via SendGrid to {to_emails}")
+            try:
+                await db.system_email_logs.insert_one({**log_base, "provider": "sendgrid", "status": "sent", "error": None})
+            except Exception:
+                pass
             return True
         except Exception as e:
+            log_base["error"] = f"sendgrid: {str(e)[:200]}"
             logger.error(f"SendGrid send failed: {e}")
     logger.warning("No email transport configured (SMTP/SendGrid) — email not sent")
+    if not log_base["error"]:
+        log_base["error"] = "no_transport_configured"
+    try:
+        await db.system_email_logs.insert_one(log_base)
+    except Exception:
+        pass
     return False
 
 
@@ -339,30 +369,69 @@ async def notify_owner_multichannel(
     except Exception as e:
         logger.warning(f"notify_owner_multichannel bell failed: {e}")
     
-    # 2) الواتساب (لرقم المالك المرتبط بالخدمة)
+    # 2) الواتساب (لرقم المالك + المديرين المرتبطين بالمشروع — يستقبل الجميع الإشعار)
+    NOTIFY_MAX_RECIPIENTS = 20  # حماية: لا نُغرق تينانتاً بمئات الرسائل
     if send_whatsapp:
         try:
             if await _wa_free.is_connected():
-                # الرقم المستقبِل: من env أو من قاعدة البيانات
-                owner_phone = os.environ.get("OWNER_ALERT_PHONE", "")
-                if not owner_phone:
-                    _owner_user = await db.users.find_one(
-                        {"role": {"$in": ["super_admin", "admin", "owner"]}, "phone": {"$exists": True, "$ne": ""}},
-                        {"_id": 0, "phone": 1}
-                    )
-                    if _owner_user:
-                        owner_phone = _owner_user.get("phone") or ""
-                if owner_phone:
-                    e164 = await _phone_to_e164(owner_phone)
-                    wa_msg = f"🔔 Maestro EGP — {title}\n\n{message}"
-                    ok, _err = await _wa_free.send_message(
-                        e164, wa_msg, purpose=f"owner_{category}", tenant_id=tenant_id
-                    )
-                    result["whatsapp"] = bool(ok)
+                # اجمع كل الأرقام المستقبِلة: env → tenant.owner_phone → كل admin/manager للتينانت
+                phones = []
+                env_phone = os.environ.get("OWNER_ALERT_PHONE", "")
+                if env_phone:
+                    phones.append(env_phone)
+                # رقم المالك على مستند التينانت
+                if tenant_id:
+                    _tn = await db.tenants.find_one({"id": tenant_id}, {"_id": 0, "owner_phone": 1}) or {}
+                    if _tn.get("owner_phone"):
+                        phones.append(_tn["owner_phone"])
+                # كل حسابات admin + manager + owner ذات الهاتف داخل نفس التينانت (فقط string phones)
+                # 🔥 استبعاد super_admin عند وجود tenant_id — الرسائل الخاصة بالعملاء لا تُرسَل لمالك النظام
+                _owner_roles = ["admin", "owner", "manager", "branch_manager"]
+                if not tenant_id:
+                    _owner_roles.append("super_admin")  # فقط للتنبيهات النظامية العامة
+                user_q = {"role": {"$in": _owner_roles},
+                          "phone": {"$type": "string", "$ne": ""}}
+                if tenant_id:
+                    user_q["tenant_id"] = tenant_id
+                async for u in db.users.find(user_q, {"_id": 0, "phone": 1}):
+                    if u.get("phone"):
+                        phones.append(u["phone"])
+                # dedup على شكل E.164 القياسي (نمنع نفس الرقم بصيغتين مختلفتين)
+                seen_e164 = set()
+                normalized_pairs = []  # (e164, raw) لعرض السجل
+                for p in phones:
+                    raw = (p or "").strip()
+                    if not raw:
+                        continue
+                    try:
+                        e164 = await _phone_to_e164(raw)
+                    except Exception:
+                        continue
+                    if not e164 or e164 in seen_e164:
+                        continue
+                    seen_e164.add(e164)
+                    normalized_pairs.append((e164, raw))
+                    if len(normalized_pairs) >= NOTIFY_MAX_RECIPIENTS:
+                        logger.warning(f"notify_owner_multichannel: قصّرت المستقبِلين على {NOTIFY_MAX_RECIPIENTS} (كان هناك أكثر — تحقق من إعدادات التينانت)")
+                        break
+                # إرسال متزامن لكل الأرقام
+                sent_count = 0
+                for e164, _raw in normalized_pairs:
+                    try:
+                        wa_msg = f"🔔 Maestro EGP — {title}\n\n{message}"
+                        ok, _err = await _wa_free.send_message(
+                            e164, wa_msg, purpose=f"owner_{category}", tenant_id=tenant_id
+                        )
+                        if ok:
+                            sent_count += 1
+                    except Exception as _ee:
+                        logger.warning(f"whatsapp send to {e164} failed: {_ee}")
+                result["whatsapp"] = sent_count > 0
+                result["whatsapp_recipients"] = sent_count
         except Exception as e:
             logger.warning(f"notify_owner_multichannel whatsapp failed: {e}")
     
-    # 3) البريد الإلكتروني (لكل بريد استرداد)
+    # 3) البريد الإلكتروني (لمالك المشروع + المديرين + بريد الاسترداد — للجميع نسخة)
     if send_email:
         try:
             _sev_color = {"info": "#3B82F6", "warning": "#F59E0B", "critical": "#EF4444"}.get(severity, "#3B82F6")
@@ -376,13 +445,47 @@ async def notify_owner_multichannel(
                 f"<p style='font-size:12px;color:#6b7280;margin:0'>Maestro EGP — {now_iso}</p>"
                 f"</div></div>"
             )
-            recovery_emails = await get_owner_recovery_emails()
-            ok = await send_system_email(
-                list(recovery_emails),
-                f"[Maestro EGP] {title}",
-                html
-            )
-            result["email"] = bool(ok)
+            # 🔥 استبعاد super_admin عند وجود tenant_id — البريد الخاص بالعميل لا يُرسَل لمالك النظام
+            _owner_roles_email = ["admin", "owner", "manager", "branch_manager"]
+            if not tenant_id:
+                _owner_roles_email.append("super_admin")
+            user_q = {"role": {"$in": _owner_roles_email},
+                      "email": {"$exists": True, "$ne": ""}}
+            if tenant_id:
+                # بريد العميل فقط (owner_email على مستند التينانت + مستخدمو التينانت)
+                user_q["tenant_id"] = tenant_id
+                emails = []
+                _tn = await db.tenants.find_one({"id": tenant_id}, {"_id": 0, "owner_email": 1}) or {}
+                if _tn.get("owner_email"):
+                    emails.append(_tn["owner_email"])
+            else:
+                # تنبيهات نظامية عامة — تشمل بريد استرداد المالك الأعلى
+                emails = list(await get_owner_recovery_emails())
+            async for u in db.users.find(user_q, {"_id": 0, "email": 1}):
+                if u.get("email"):
+                    emails.append(u["email"])
+            # dedupe لطيف
+            seen_e = set()
+            unique_emails = []
+            for em in emails:
+                em = (em or "").strip().lower()
+                if em and "@" in em and em not in seen_e:
+                    seen_e.add(em)
+                    unique_emails.append(em)
+            if unique_emails:
+                # قصّ لـ NOTIFY_MAX_RECIPIENTS (نفس السقف مع الواتساب)
+                if len(unique_emails) > NOTIFY_MAX_RECIPIENTS:
+                    logger.warning(f"notify_owner_multichannel email: قصّرت المستقبِلين على {NOTIFY_MAX_RECIPIENTS} (كان هناك {len(unique_emails)})")
+                    unique_emails = unique_emails[:NOTIFY_MAX_RECIPIENTS]
+                ok = await send_system_email(
+                    unique_emails,
+                    f"[Maestro EGP] {title}",
+                    html,
+                    purpose=f"owner_{category}",
+                    tenant_id=tenant_id,
+                )
+                result["email"] = bool(ok)
+                result["email_recipients"] = len(unique_emails)
         except Exception as e:
             logger.warning(f"notify_owner_multichannel email failed: {e}")
     
@@ -3234,18 +3337,40 @@ async def verify_2fa_code(verification_id: str, code: str, ip: str = None):
 
     code = (code or "").strip()
     approved = False
+    used_backup = False
     if sess.get("method") == "twilio":
         ok, approved, err = await _twilio_verify.check_verification(sess["destination"], code)
         if not ok:
             approved = False
     else:
         approved = bool(sess.get("code_hash")) and _hash_otp(code, sess.get("salt", "")) == sess["code_hash"]
+    
+    # 🆘 نجاة أخيرة: قبول رمز طوارئ للسوبر أدمن إن فشل الرمز الأصلي (فقط لجلسات المالك)
+    if not approved and sess.get("purpose") in ("super_admin_login", "owner_login", "sa_login"):
+        try:
+            import hashlib
+            code_hash = hashlib.sha256(code.encode()).hexdigest()
+            sec_cfg = await db.security_config.find_one({"id": "global"}, {"_id": 0}) or {}
+            backup_hashes = sec_cfg.get("backup_codes") or []
+            if code_hash in backup_hashes:
+                approved = True
+                used_backup = True
+                # استهلاك الرمز — يُحذَف من القائمة (single-use)
+                new_hashes = [h for h in backup_hashes if h != code_hash]
+                await db.security_config.update_one(
+                    {"id": "global"},
+                    {"$set": {"backup_codes": new_hashes,
+                              "last_backup_code_used_at": datetime.now(timezone.utc).isoformat()}}
+                )
+                logger.warning(f"🆘 Backup code used for super_admin login (remaining: {len(new_hashes)})")
+        except Exception as _be:
+            logger.warning(f"backup code check failed: {_be}")
 
     if not approved:
         await db.verification_sessions.update_one({"id": verification_id}, {"$inc": {"attempts": 1}})
         return False, None, "رمز التحقق غير صحيح"
 
-    await db.verification_sessions.update_one({"id": verification_id}, {"$set": {"consumed": True}})
+    await db.verification_sessions.update_one({"id": verification_id}, {"$set": {"consumed": True, "used_backup_code": used_backup}})
     return True, sess, None
 
 def _choose_user_2fa_channel(user: dict, is_owner: bool):
@@ -11314,18 +11439,104 @@ async def list_pending_biometric_jobs(branch_id: Optional[str] = None, limit: in
 
 @api_router.post("/biometric-queue/{job_id}/result")
 async def submit_biometric_job_result(job_id: str, payload: dict, _auth: bool = Depends(verify_device_agent)):
-    """الوكيل يرسل نتيجة تنفيذ الجوب. payload: {success: bool, result?, error?}"""
+    """الوكيل يرسل نتيجة تنفيذ الجوب. payload: {success: bool, result?, error?}
+    
+    🔥 للجوبات من نوع zk-sync: نستخرج سجلات الحضور من result ونُدخلها في biometric_attendance
+    ثم نُشغّل المعالجة التلقائية (dedupe + shift split + upsert في db.attendance)."""
     success = bool(payload.get("success"))
+    result_data = payload.get("result")
+    
+    # اجلب الجوب لمعرفة نوعه وسياقه (device_id/tenant_id/branch_id)
+    job = await db.biometric_queue.find_one({"id": job_id}, {"_id": 0})
+    if not job:
+        raise HTTPException(status_code=404, detail="الجوب غير موجود")
+    
     update = {
         "status": "completed" if success else "failed",
-        "result": payload.get("result"),
+        "result": result_data,
         "error": payload.get("error"),
         "completed_at": datetime.now(timezone.utc).isoformat(),
     }
-    res = await db.biometric_queue.update_one({"id": job_id}, {"$set": update})
-    if res.matched_count == 0:
-        raise HTTPException(status_code=404, detail="الجوب غير موجود")
-    return {"ok": True, "job_id": job_id}
+    await db.biometric_queue.update_one({"id": job_id}, {"$set": update})
+    
+    # 🔥 معالجة نتائج zk-sync — إدراج السجلات في biometric_attendance + المعالجة التلقائية
+    inserted_count = 0
+    auto_processed = 0
+    if success and job.get("type") == "zk-sync":
+        try:
+            # نتيجة الوكيل قد تكون dict مباشرة {records: [...]}، أو string JSON من PowerShell
+            records = []
+            if isinstance(result_data, dict):
+                records = result_data.get("records") or []
+            elif isinstance(result_data, str):
+                try:
+                    parsed = json.loads(result_data)
+                    if isinstance(parsed, dict):
+                        records = parsed.get("records") or []
+                except Exception:
+                    pass
+            elif isinstance(result_data, list):
+                records = result_data
+            
+            device_id = (job.get("params") or {}).get("device_id")
+            tenant_id = job.get("tenant_id")
+            branch_id = job.get("branch_id")
+            
+            to_insert = []
+            for r in (records or []):
+                if not isinstance(r, dict):
+                    continue
+                uid = str(r.get("uid") or r.get("employee_code") or "").strip()
+                ts = (r.get("timestamp") or r.get("punch_time") or "").strip()
+                if not uid or not ts or uid == "0":
+                    continue
+                # تطبيع صيغة الوقت: "YYYY-MM-DD HH:MM:SS" → "YYYY-MM-DDTHH:MM:SS"
+                if " " in ts and "T" not in ts:
+                    ts = ts.replace(" ", "T", 1)
+                # dedup: نتحقق من عدم وجود سجل بنفس (device_id, uid, timestamp)
+                existing = await db.biometric_attendance.find_one(
+                    {"device_id": device_id, "employee_code": uid, "punch_time": ts, "tenant_id": tenant_id},
+                    {"_id": 0, "id": 1}
+                )
+                if existing:
+                    continue
+                to_insert.append({
+                    "id": str(uuid.uuid4()),
+                    "device_id": device_id,
+                    "branch_id": branch_id,
+                    "employee_code": uid,
+                    "punch_time": ts,
+                    "punch_type": r.get("punch_type") or ("in" if int(r.get("status") or 0) == 0 else "out"),
+                    "verify_type": r.get("verify_type") or "fingerprint",
+                    "tenant_id": tenant_id,
+                    "processed": False,
+                    "synced_at": datetime.now(timezone.utc).isoformat(),
+                })
+            
+            if to_insert:
+                await db.biometric_attendance.insert_many(to_insert)
+                inserted_count = len(to_insert)
+                # حدّث last_sync على الجهاز
+                if device_id:
+                    await db.biometric_devices.update_one(
+                        {"id": device_id},
+                        {"$set": {"last_sync": datetime.now(timezone.utc).isoformat()}}
+                    )
+                # المعالجة التلقائية: biometric_attendance → db.attendance
+                try:
+                    from routes.biometric_routes import _auto_process_attendance_internal
+                    fake_user = {"id": "system-agent", "tenant_id": tenant_id, "role": "system"}
+                    ap = await _auto_process_attendance_internal(fake_user)
+                    if isinstance(ap, dict):
+                        # الدالة تُرجع attendance_created أو processed (توافقاً)
+                        auto_processed = ap.get("attendance_created") or ap.get("processed") or ap.get("raw_records_processed") or 0
+                except Exception as _pe:
+                    import traceback
+                    logger.warning(f"auto-process after queue zk-sync failed: {_pe}\n{traceback.format_exc()[:500]}")
+        except Exception as _e:
+            logger.warning(f"queue zk-sync result parse failed: {_e}")
+    
+    return {"ok": True, "job_id": job_id, "inserted": inserted_count, "auto_processed": auto_processed}
 
 
 @api_router.get("/biometric-queue/{job_id}")
@@ -11355,15 +11566,34 @@ async def cancel_biometric_job(job_id: str, current_user: dict = Depends(get_cur
 
 
 async def cleanup_stale_biometric_jobs():
-    """تنظيف الجوبات العالقة (processing > 5 دقائق) عند الإقلاع."""
+    """تنظيف الجوبات العالقة + watchdog TTL للجوبات المعلّقة عند غياب الوكيل.
+    
+    - processing > 5 دقائق  → failed (الوكيل بدأ التنفيذ ثم انقطع)
+    - pending zk-probe-device > 5 دقائق → failed (الوكيل غير متصل — الاختبار لا يجب أن ينتظر طويلاً)
+    - pending أي نوع > 24 ساعة → failed (تراكم قديم — يعرقل الطابور)
+    - يحذف الجوبات المكتملة/الفاشلة الأقدم من 7 أيام."""
     try:
-        cutoff = (datetime.now(timezone.utc) - timedelta(minutes=5)).isoformat()
+        now_utc = datetime.now(timezone.utc)
+        # (1) processing عالقة أكثر من 5 دقائق
+        cutoff_processing = (now_utc - timedelta(minutes=5)).isoformat()
         await db.biometric_queue.update_many(
-            {"status": "processing", "claimed_at": {"$lt": cutoff}},
-            {"$set": {"status": "failed", "error": "Timeout - الوكيل لم يرد", "completed_at": datetime.now(timezone.utc).isoformat()}}
+            {"status": "processing", "claimed_at": {"$lt": cutoff_processing}},
+            {"$set": {"status": "failed", "error": "Timeout - الوكيل لم يرد", "completed_at": now_utc.isoformat()}}
         )
-        # حذف الجوبات الأقدم من 7 أيام
-        old_cutoff = (datetime.now(timezone.utc) - timedelta(days=7)).isoformat()
+        # (2) pending zk-probe-device أقدم من 5 دقائق → الوكيل offline (probe اختبار سريع)
+        cutoff_probe = (now_utc - timedelta(minutes=5)).isoformat()
+        await db.biometric_queue.update_many(
+            {"status": "pending", "type": "zk-probe-device", "created_at": {"$lt": cutoff_probe}},
+            {"$set": {"status": "failed", "error": "الوكيل المحلي غير متصل — لم يلتقط جوب الاختبار خلال 5 دقائق", "completed_at": now_utc.isoformat()}}
+        )
+        # (3) pending أي نوع أقدم من 24 ساعة → stale
+        cutoff_stale = (now_utc - timedelta(hours=24)).isoformat()
+        await db.biometric_queue.update_many(
+            {"status": "pending", "created_at": {"$lt": cutoff_stale}},
+            {"$set": {"status": "failed", "error": "stale_pending — بقي معلقاً أكثر من 24 ساعة", "completed_at": now_utc.isoformat()}}
+        )
+        # (4) حذف الجوبات المكتملة/الفاشلة الأقدم من 7 أيام
+        old_cutoff = (now_utc - timedelta(days=7)).isoformat()
         await db.biometric_queue.delete_many({"created_at": {"$lt": old_cutoff}})
     except Exception as e:
         logger.error(f"cleanup_stale_biometric_jobs failed: {e}")
@@ -13096,6 +13326,24 @@ async def start_forgotten_shifts_scheduler():
     
     asyncio.create_task(_loop())
     logger.info("🚨 Forgotten shifts alert scheduler started (every 30 min)")
+
+
+@app.on_event("startup")
+async def start_biometric_watchdog_scheduler():
+    """🔧 watchdog لجوبات البصمة — كل 60 ثانية:
+    - يفشل probe pending > 5 دقائق (وكيل offline)
+    - يفشل processing عالقة > 5 دقائق
+    - يفشل pending أقدم من 24 ساعة (تراكم قديم)."""
+    async def _loop():
+        await asyncio.sleep(30)
+        while True:
+            try:
+                await cleanup_stale_biometric_jobs()
+            except Exception as e:
+                logger.warning(f"biometric watchdog loop error: {e}")
+            await asyncio.sleep(60)  # كل دقيقة
+    asyncio.create_task(_loop())
+    logger.info("🔧 Biometric watchdog scheduler started (every 60s)")
 
 
 @app.on_event("startup")

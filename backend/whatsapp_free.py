@@ -105,11 +105,22 @@ async def reconnect():
         return {"ok": False, "error": str(e)}
 
 
-async def request_pairing_code(phone: str):
-    """يطلب رمز ربط برقم الهاتف (بديل مسح QR). يُرجع dict فيه ok/code/error."""
+async def request_pairing_code(phone: str, force: bool = False):
+    """يطلب رمز ربط برقم الهاتف (بديل مسح QR). يُرجع dict فيه ok/code/error.
+    force=True يُصفّر الجلسة قبل الطلب (يفيد إن كانت الجلسة تالفة)."""
     try:
-        async with httpx.AsyncClient(timeout=30) as c:
-            r = await c.post(f"{WA_URL}/pair", headers=_HEADERS, json={"phone": phone})
+        async with httpx.AsyncClient(timeout=45) as c:
+            r = await c.post(f"{WA_URL}/pair", headers=_HEADERS, json={"phone": phone, "force": bool(force)})
+            return r.json()
+    except Exception as e:
+        return {"ok": False, "error": str(e)}
+
+
+async def reset_session():
+    """يُصفّر جلسة الواتساب (auth dir) ويعيد التشغيل — يُستخدم إن علِقت الجلسة."""
+    try:
+        async with httpx.AsyncClient(timeout=15) as c:
+            r = await c.post(f"{WA_URL}/reset", headers=_HEADERS)
             return r.json()
     except Exception as e:
         return {"ok": False, "error": str(e)}

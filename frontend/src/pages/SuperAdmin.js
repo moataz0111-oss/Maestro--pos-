@@ -232,6 +232,139 @@ function NotificationPrefsPanel() {
   );
 }
 
+// ==================== سجل الرسائل المُرسَلة (WhatsApp + Email + Bell) ====================
+function MessagesLogCard() {
+  const { t } = useTranslation();
+  const [data, setData] = React.useState(null);
+  const [loading, setLoading] = React.useState(false);
+  const [error, setError] = React.useState('');
+  const [channel, setChannel] = React.useState('all');
+  const [days, setDays] = React.useState(7);
+
+  const load = async () => {
+    setLoading(true);
+    setError('');
+    try {
+      const token = localStorage.getItem('token');
+      const params = new URLSearchParams();
+      if (channel && channel !== 'all') params.set('channel', channel);
+      params.set('days', String(days));
+      params.set('limit', '200');
+      const res = await axios.get(`${API_URL}/system/messages-log?${params.toString()}`, {
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+        withCredentials: true,
+      });
+      setData(res.data);
+    } catch (e) {
+      setError(getErrorMessage(e?.response?.data?.detail || t('فشل تحميل السجل')));
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  React.useEffect(() => { load(); }, [channel, days]);
+
+  const channelBadge = (ch) => {
+    const map = {
+      whatsapp: { c: 'bg-green-500/20 text-green-400', l: 'واتساب', i: 'fa-brands fa-whatsapp' },
+      email: { c: 'bg-blue-500/20 text-blue-400', l: 'بريد', i: 'fa-solid fa-envelope' },
+      bell: { c: 'bg-amber-500/20 text-amber-400', l: 'جرس', i: 'fa-solid fa-bell' },
+    };
+    const m = map[ch] || { c: 'bg-gray-500/20 text-gray-400', l: ch, i: 'fa-solid fa-message' };
+    return (
+      <Badge className={`${m.c} text-xs`} data-testid={`msg-channel-${ch}`}>
+        <i className={`${m.i} ml-1`} /> {t(m.l)}
+      </Badge>
+    );
+  };
+
+  const statusBadge = (st) => {
+    const c = st === 'sent' ? 'bg-emerald-500/20 text-emerald-400'
+      : st === 'failed' ? 'bg-red-500/20 text-red-400'
+      : 'bg-gray-500/20 text-gray-400';
+    return <Badge className={`${c} text-xs`}>{t(st)}</Badge>;
+  };
+
+  return (
+    <Card className="bg-[#0F1A3A] border-[#2A3A66]" data-testid="messages-log-card">
+      <CardHeader className="flex flex-row items-center justify-between">
+        <div>
+          <CardTitle className="text-amber-400 flex items-center gap-2">
+            <i className="fa-solid fa-inbox" /> {t('سجل الرسائل المُرسَلة')}
+          </CardTitle>
+          <CardDescription className="text-gray-400 text-xs mt-1">
+            {t('كل رسائل الواتساب والبريد والجرس التي أُرسلت إليك — للاستعلام والمراجعة')}
+          </CardDescription>
+        </div>
+        <Button size="sm" variant="outline" onClick={load} disabled={loading} className="border-[#2A3A66]" data-testid="refresh-messages-log-btn">
+          <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
+        </Button>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        {/* الفلاتر */}
+        <div className="flex flex-wrap gap-2 items-center">
+          <Select value={channel} onValueChange={setChannel}>
+            <SelectTrigger className="w-40 bg-[#1A284E]/40 border-[#2A3A66] text-white" data-testid="msg-channel-filter">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">{t('كل القنوات')}</SelectItem>
+              <SelectItem value="whatsapp">{t('واتساب')}</SelectItem>
+              <SelectItem value="email">{t('بريد إلكتروني')}</SelectItem>
+              <SelectItem value="bell">{t('الجرس')}</SelectItem>
+            </SelectContent>
+          </Select>
+          <Select value={String(days)} onValueChange={(v) => setDays(parseInt(v))}>
+            <SelectTrigger className="w-40 bg-[#1A284E]/40 border-[#2A3A66] text-white" data-testid="msg-days-filter">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="1">{t('اليوم')}</SelectItem>
+              <SelectItem value="3">{t('آخر 3 أيام')}</SelectItem>
+              <SelectItem value="7">{t('آخر أسبوع')}</SelectItem>
+              <SelectItem value="30">{t('آخر شهر')}</SelectItem>
+              <SelectItem value="90">{t('آخر 3 أشهر')}</SelectItem>
+            </SelectContent>
+          </Select>
+          {data?.stats && (
+            <div className="ml-auto flex gap-2 text-xs">
+              <Badge className="bg-emerald-500/20 text-emerald-400" data-testid="msg-stat-sent">{t('نجحت')}: {data.stats.by_status?.sent || 0}</Badge>
+              <Badge className="bg-red-500/20 text-red-400" data-testid="msg-stat-failed">{t('فشلت')}: {data.stats.by_status?.failed || 0}</Badge>
+              <Badge className="bg-teal-500/20 text-teal-400" data-testid="msg-stat-total">{t('الإجمالي')}: {data.stats.total}</Badge>
+            </div>
+          )}
+        </div>
+
+        {error && <p className="text-red-400 text-sm p-2 bg-red-500/10 border border-red-500/30 rounded" data-testid="msg-log-error">{error}</p>}
+
+        {(!data?.items || data.items.length === 0) ? (
+          <p className="text-gray-400 text-sm text-center py-6" data-testid="msg-log-empty">
+            {loading ? t('جاري التحميل...') : t('لا توجد رسائل ضمن المعايير المحددة')}
+          </p>
+        ) : (
+          <div className="space-y-1 max-h-[520px] overflow-y-auto pr-1" data-testid="msg-log-list">
+            {data.items.map((m, i) => (
+              <div key={m.id || i} className="p-2 bg-[#1A284E]/30 rounded border border-[#2A3A66] text-sm" data-testid={`msg-item-${i}`}>
+                <div className="flex items-center justify-between mb-1 gap-2">
+                  <div className="flex items-center gap-2">
+                    {channelBadge(m.channel)}
+                    {statusBadge(m.status)}
+                    <span className="text-gray-400 text-xs">{m.sent_at ? new Date(m.sent_at).toLocaleString('ar-IQ') : ''}</span>
+                  </div>
+                  {m.purpose && <span className="text-xs text-gray-500">{m.purpose}</span>}
+                </div>
+                <p className="text-white text-sm font-medium truncate">{m.subject || m.message?.slice(0, 80) || ''}</p>
+                <p className="text-gray-400 text-xs mt-1">{t('إلى')}: <span dir="ltr">{m.to}</span></p>
+                {m.error && <p className="text-red-400 text-xs mt-1" data-testid={`msg-error-${i}`}><i className="fa-solid fa-triangle-exclamation ml-1" />{m.error}</p>}
+              </div>
+            ))}
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
 // ==================== لوحة صحّة أجهزة البصمة ====================
 function BiometricHealthCard() {
   const { t } = useTranslation();
@@ -1116,7 +1249,8 @@ export default function SuperAdmin() {
     setWaPairCode('');
     try {
       const token = localStorage.getItem('super_admin_token');
-      const r = await axios.post(`${API}/super-admin/whatsapp/pair`, { phone }, { headers: { Authorization: `Bearer ${token}` } });
+      // force=true يُصفّر الجلسة السابقة → يسمح بربط أي رقم جديد كل مرة (بلا تقييد)
+      const r = await axios.post(`${API}/super-admin/whatsapp/pair`, { phone, force: true }, { headers: { Authorization: `Bearer ${token}` } });
       if (r.data.ok && r.data.code) {
         setWaPairCode(r.data.code);
         toast.success(t('تم توليد رمز الربط ✅ أدخله في واتساب'));
@@ -1125,6 +1259,20 @@ export default function SuperAdmin() {
       }
     } catch (e) { toast.error(t('فشل توليد رمز الربط')); }
     finally { setWaPairBusy(false); }
+  };
+
+  const handleWaReset = async () => {
+    if (!window.confirm(t('سيتم تصفير جلسة الواتساب الحالية لتتمكن من ربط رقم جديد. متابعة؟'))) return;
+    setWaBusy(true);
+    try {
+      const token = localStorage.getItem('super_admin_token');
+      await axios.post(`${API}/super-admin/whatsapp/reset`, {}, { headers: { Authorization: `Bearer ${token}` } });
+      toast.success(t('تم تصفير الجلسة — أدخل الرقم الجديد وأنشئ رمز الربط'));
+      // اعطِ الخدمة وقتاً للتشغيل من جديد ثم تحديث الحالة
+      setTimeout(() => { fetchWaStatus(); }, 4000);
+    } catch (_) {
+      toast.error(t('فشل التصفير'));
+    } finally { setWaBusy(false); }
   };
 
   // تحديث حالة الواتساب تلقائياً كل 6 ثوانٍ أثناء انتظار الربط
@@ -3208,7 +3356,7 @@ export default function SuperAdmin() {
           <CardContent>
             {/* تبويبات لفصل العملاء الفعليين عن الحسابات التجريبية */}
             <Tabs defaultValue="active" className="w-full" onValueChange={(v) => { if (v === 'security' && !securityLog) fetchSecurityLog(); }}>
-              <TabsList className="grid w-full grid-cols-6 mb-4 bg-[#1A284E]/50">
+              <TabsList className="grid w-full grid-cols-7 mb-4 bg-[#1A284E]/50">
                 <TabsTrigger value="active" className="data-[state=active]:bg-green-600">
                   <Users className="h-4 w-4 ml-2" />
                   {t('العملاء')} ({tenants.filter(t => !t.is_demo && t.subscription_type !== 'demo').length})
@@ -3228,6 +3376,10 @@ export default function SuperAdmin() {
                 <TabsTrigger value="biometric" className="data-[state=active]:bg-indigo-600" data-testid="biometric-health-tab">
                   <Fingerprint className="h-4 w-4 ml-2" />
                   {t('صحّة البصمة')}
+                </TabsTrigger>
+                <TabsTrigger value="messages" className="data-[state=active]:bg-teal-600" data-testid="messages-log-tab">
+                  <Mail className="h-4 w-4 ml-2" />
+                  {t('سجل الرسائل')}
                 </TabsTrigger>
                 <TabsTrigger value="security" className="data-[state=active]:bg-red-600" data-testid="security-log-tab">
                   <Shield className="h-4 w-4 ml-2" />
@@ -3699,6 +3851,11 @@ export default function SuperAdmin() {
                 <BiometricHealthCard />
               </TabsContent>
 
+              {/* سجل الرسائل المُرسَلة (WhatsApp + Email + Bell) */}
+              <TabsContent value="messages">
+                <MessagesLogCard />
+              </TabsContent>
+
               {/* السجل الأمني — خاص بمالك النظام الأعلى */}
               <TabsContent value="security">
                 <div className="space-y-4" data-testid="security-log-content">
@@ -3787,6 +3944,18 @@ export default function SuperAdmin() {
                             {t('توليد رمز جديد')}
                           </Button>
                         )}
+                        <Button
+                          onClick={handleWaReset}
+                          disabled={waBusy}
+                          size="sm"
+                          variant="outline"
+                          className="border-orange-500 text-orange-400 hover:bg-orange-500/20 gap-1"
+                          data-testid="wa-reset-session-btn"
+                          title={t('تصفير الجلسة الحالية لتتمكن من ربط أي رقم جديد')}
+                        >
+                          {waBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : <i className="fa-solid fa-rotate-right" />}
+                          {t('تغيير الرقم')}
+                        </Button>
                         {waStatus?.connected && (
                           <>
                             <Button onClick={handleWaTest} disabled={waBusy} size="sm" className="bg-green-600 hover:bg-green-500 text-white" data-testid="wa-test-btn">

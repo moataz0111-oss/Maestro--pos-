@@ -1510,6 +1510,101 @@ async def two_fa_readiness(current_user: dict = Depends(verify_super_admin)):
         "drivers_without_phone": drivers_no_phone,       # حرِج: السائق يستلم عبر الهاتف فقط
     }
 
+@router.get("/super-admin/security-2fa-readiness")
+async def check_2fa_readiness(current_user: dict = Depends(verify_super_admin)):
+    """🛡 فحص وقائي قبل تفعيل 2FA — يمنع حبس أي مستخدم خارج النظام.
+    
+    يفحص كل المستخدمين النشطين + الحسابات الحساسة (admin/manager/cashier/…) ويعيد:
+    - المستخدمون الجاهزون (لديهم قناة صالحة: واتساب متصل + هاتف صحيح، أو بريد)
+    - المستخدمون المُعرَّضون للحبس (بلا هاتف صحيح + بلا بريد) → إن كان Twilio غير مُهيّأ، هؤلاء لن يدخلوا!
+    - إمكانيات القنوات الحالية (واتساب متصل، بريد مُهيّأ، Twilio مُهيّأ)
+    """
+    wa_connected = await _wa_free.is_connected()
+    # فحص إعداد البريد (env + DB): SMTP أو SendGrid
+    _email_cfg = await _load_email_config()
+    email_ready = bool(
+        (_email_cfg.get("smtp_host") and _email_cfg.get("smtp_user") and _email_cfg.get("smtp_password"))
+        or _email_cfg.get("sendgrid_api_key")
+    )
+    twilio_ready = _twilio_verify.is_configured()
+    
+    ready_users = []
+    at_risk_users = []
+    total = 0
+    async for u in db.users.find({"is_active": {"$ne": False}},
+                                 {"_id": 0, "id": 1, "email": 1, "phone": 1, "full_name": 1,
+                                  "username": 1, "role": 1, "tenant_id": 1}):
+        total += 1
+        phone_ok = bool((u.get("phone") or "").strip() and len((u.get("phone") or "").strip()) >= 8)
+        email_ok = bool("@" in (u.get("email") or "") and email_ready)
+        wa_ok = phone_ok and wa_connected
+        sms_ok = phone_ok and twilio_ready
+        has_channel = wa_ok or email_ok or sms_ok
+        entry = {
+            "id": u.get("id"),
+            "name": u.get("full_name") or u.get("username"),
+            "role": u.get("role"),
+            "tenant_id": u.get("tenant_id"),
+            "email": u.get("email"),
+            "phone_masked": _mask_phone(u.get("phone") or "") if phone_ok else None,
+            "channels": [c for c, ok in [("whatsapp", wa_ok), ("email", email_ok), ("sms", sms_ok)] if ok],
+        }
+        if has_channel:
+            ready_users.append(entry)
+        else:
+            at_risk_users.append(entry)
+    
+    return {
+        "channels_available": {
+            "whatsapp_connected": wa_connected,
+            "email_configured": email_ready,
+            "twilio_configured": twilio_ready,
+        },
+        "total_users": total,
+        "ready_count": len(ready_users),
+        "at_risk_count": len(at_risk_users),
+        "at_risk_users": at_risk_users,
+        "recommendation": (
+            "🟢 آمن للتفعيل — كل المستخدمين لديهم قناة استلام صحيحة" if not at_risk_users else
+            f"⚠️ لا تفعّل قبل حل هذا! {len(at_risk_users)} مستخدم بلا قناة استلام — سيُحبَسون خارج النظام."
+        )
+    }
+
+
+@router.post("/super-admin/security-2fa-backup-codes")
+async def generate_backup_codes(current_user: dict = Depends(verify_super_admin), request: Request = None):
+    """🆘 توليد 5 رموز طوارئ للسوبر أدمن — كنجاة أخيرة عند فشل كل قنوات الرمز.
+    
+    الرموز صالحة لمرة واحدة كل واحدة، تُخزَّن مُشفَّرة (SHA256).
+    يُعرَض النص الخام مرة واحدة فقط في هذا الرد — يجب على المالك حفظها في مكان آمن (ورقة/خزنة).
+    """
+    import secrets, hashlib
+    codes = []
+    hashed = []
+    for _ in range(5):
+        raw = secrets.token_hex(4).upper()  # 8 حروف/أرقام
+        formatted = f"{raw[:4]}-{raw[4:]}"
+        codes.append(formatted)
+        hashed.append(hashlib.sha256(formatted.encode()).hexdigest())
+    await db.security_config.update_one(
+        {"id": "global"},
+        {"$set": {
+            "backup_codes": hashed,
+            "backup_codes_generated_at": datetime.now(timezone.utc).isoformat(),
+            "backup_codes_generated_by": current_user.get("email"),
+        }},
+        upsert=True,
+    )
+    await record_audit("security.2fa_backup_codes_generated", request=request, user=current_user,
+                       details={"count": len(codes)})
+    return {
+        "success": True,
+        "codes": codes,
+        "warning": "احفظ هذه الرموز في مكان آمن الآن — لن يُعرَض النص الخام مرة أخرى. كل رمز صالح لمرة واحدة.",
+        "instructions": "لاستخدامها: عند شاشة رمز التحقق، اضغط 'استخدم رمز طوارئ' وأدخل أياً من هذه الرموز.",
+    }
+
+
 @router.post("/super-admin/security-2fa-toggle")
 async def toggle_two_fa(payload: dict = Body(...), request: Request = None, current_user: dict = Depends(verify_super_admin)):
     """تنشيط/إيقاف التحقق الإلزامي. عند التنشيط: يُخرج جميع المستخدمين والسائقين
@@ -1551,13 +1646,23 @@ async def wa_reconnect_ep(current_user: dict = Depends(verify_super_admin)):
 @router.post("/super-admin/whatsapp/pair")
 async def wa_pair_ep(payload: dict = Body(...), request: Request = None, current_user: dict = Depends(verify_super_admin)):
     """ربط الواتساب برقم الهاتف (Pairing Code) — بديل مسح QR.
-    المالك يُدخل رقم هاتفه، ونُرجع رمزاً يُدخله في: واتساب ← الأجهزة المرتبطة ← ربط جهاز ← ربط برقم الهاتف."""
+    المالك يُدخل رقم هاتفه، ونُرجع رمزاً يُدخله في: واتساب ← الأجهزة المرتبطة ← ربط جهاز ← ربط برقم الهاتف.
+    force=true يُصفّر جلسة الخدمة أولاً (يفيد إن كانت الجلسة عالقة على 'Connection Closed')."""
     phone = sanitize_text(payload.get("phone"), 32)
+    force = bool(payload.get("force"))
     if not phone:
         raise HTTPException(status_code=400, detail="رقم الهاتف مطلوب")
     e164 = await _phone_to_e164(phone)
-    res = await _wa_free.request_pairing_code(e164)
-    await record_audit("security.whatsapp_pair_request", request=request, user=current_user, details={"phone": _mask_phone(e164)})
+    res = await _wa_free.request_pairing_code(e164, force=force)
+    await record_audit("security.whatsapp_pair_request", request=request, user=current_user, details={"phone": _mask_phone(e164), "force": force})
+    return res
+
+
+@router.post("/super-admin/whatsapp/reset")
+async def wa_reset_ep(request: Request = None, current_user: dict = Depends(verify_super_admin)):
+    """تصفير كامل لجلسة الواتساب (auth dir) — يُستخدم عند العلوق على 'Connection Closed' لأكثر من دقيقة."""
+    res = await _wa_free.reset_session()
+    await record_audit("security.whatsapp_reset", request=request, user=current_user)
     return res
 
 @router.post("/super-admin/whatsapp/test")

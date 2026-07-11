@@ -1036,6 +1036,7 @@ const translationMap = {
   'مخزون واحد مركزي يوزع على جميع الفروع. الخصم يتم من المخزون المركزي عند البيع.': { en: 'Central inventory distributed to all branches', ku: '' },
   'مدير النظام': { en: 'System Admin', ku: '' },
   'مدير عام': { en: 'General Manager', ku: '' },
+  'المالك': { en: 'Owner', ku: 'خاوەن' },
   'مزود الخدمة': { en: 'Service Provider', ku: '' },
   'مستخدمي النظام': { en: 'System Users', ku: '' },
   'مستوى الصوت': { en: 'Volume Level', ku: '' },

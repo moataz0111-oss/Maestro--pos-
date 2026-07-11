@@ -1,0 +1,32 @@
+{
+  "summary": "iter300 WhatsApp pair/reset backend testing complete. All 9 targeted tests pass, plus biometric regression sample (5 passed / 11 env-skipped, no failures).",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_whatsapp_pair_reset_iter300.py",
+    "/app/test_reports/pytest/iter300_wa_pair.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "wa_service /pair: retries up to 5 times on 'Connection Closed' and translates the raw Baileys message into a friendly Arabic message ('الخدمة تُعيد الاتصال — انتظر 15 ثانية...') — verified.",
+    "force=true correctly tears down socket + wipes AUTH_DIR before re-issuing pairing code; sequential pair for two different phones both accepted without 'already_paired' block — verified.",
+    "GET /status suppresses raw 'Connection Closed' from `error` (only shows it if not equal to that literal). QR data URL returned within warmup window — verified.",
+    "Exponential backoff (5s→10s→20s→...→60s cap) implemented in connection.update close handler; log shows continuous reconnect activity, resetting on QR or open events.",
+    "All new endpoints (/pair, /reset) enforce verify_super_admin dependency — 401/403 without auth verified."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "100% (9/9)", "frontend": "n/a (skipped per request)"},
+  "test_credentials": "owner@maestroegp.com / owner123 / secret_key=271018 (2FA disabled in this env, direct token returned).",
+  "seed_data_creation": "None. Tests are HTTP-layer only; no DB writes required.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Backend WhatsApp endpoints (pair with force, reset, status) all verified via /app/backend/tests/test_whatsapp_pair_reset_iter300.py. Real WhatsApp WebSocket handshake cannot be completed in preview (Baileys returns 408 QR-refs-ended loops), but pair endpoint successfully returns an 8-char XXXX-XXXX code because Baileys allows requestPairingCode before full connection. If test flakes because socket is mid-reconnect, retry — friendly-error path is also asserted as acceptable. Run with: `REACT_APP_BACKEND_URL=<preview_url> pytest backend/tests/test_whatsapp_pair_reset_iter300.py -v`.",
+  "rca of the issue": "Original bug 'تعذّر توليد الرمز: Connection Closed' was caused by (1) requestPairingCode being called before the WA socket had time to complete its WebSocket handshake and (2) socket being torn down and restarted quickly during Baileys' 408 QR-timeout loop. Fix: /pair now (a) accepts force=true which tears down the socket + wipes AUTH_DIR for a clean pairing session, (b) waits up to 2.5s + polls for authState before requesting the code, (c) retries up to 5 times on transient close errors while restarting the socket in between, and (d) translates any remaining raw 'Connection Closed' into a user-friendly Arabic message. The new /reset endpoint gives the operator a manual escape hatch to purge auth files and restart from scratch. Exponential backoff (5→10→20→40→60s cap) prevents socket-thrash-driven CPU spikes on repeated 408s."
+}

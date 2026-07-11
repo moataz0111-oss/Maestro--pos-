@@ -10,17 +10,30 @@ router = APIRouter()
 
 def _device_conn_params(device: dict) -> dict:
     """اجمع بارامترات الاتصال لكل موديلات ZKTeco (K/F/G/iFace/MB/SF/UA…) من وثيقة الجهاز.
-    يُدمج كأنه spread داخل job["params"] ليُنفّذها الوكيل المحلي بالمُعدّلات الصحيحة."""
+    يُدمج كأنه spread داخل job["params"] ليُنفّذها الوكيل المحلي بالمُعدّلات الصحيحة.
+    
+    نُصدر الأسماء بصيغتين (device_ip/device_port والقديمتين ip/port) للتوافق التام
+    مع النسخ القديمة من الوكيل المحلي (print_server.ps1)."""
+    _ip = device.get("ip_address")
+    _port = device.get("port", 4370)
+    _timeout_sec = int(device.get("timeout") or 10)
+    _password = device.get("communication_password")
     return {
-        "device_ip": device.get("ip_address"),
-        "device_port": device.get("port", 4370),
+        # الحقول الجديدة (الاسم الصريح)
+        "device_ip": _ip,
+        "device_port": _port,
         "device_type": device.get("device_type") or "fingerprint",
-        "communication_password": device.get("communication_password"),
+        "communication_password": _password,
         "force_udp": bool(device.get("force_udp") or False),
-        "timeout": int(device.get("timeout") or 10),
+        "timeout": _timeout_sec,
         "firmware_version": device.get("firmware_version"),
         "model_name": device.get("model_name"),
         "protocol": device.get("protocol") or "zk-standard",
+        # aliases للنسخ القديمة من الوكيل المحلي (يقرأ body.ip / body.port / body.password)
+        "ip": _ip,
+        "port": _port,
+        "password": _password,
+        "timeout_ms": _timeout_sec * 1000,
     }
 
 

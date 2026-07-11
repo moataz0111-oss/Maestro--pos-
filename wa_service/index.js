@@ -6,6 +6,8 @@
 const express = require('express');
 const pino = require('pino');
 const QRCode = require('qrcode');
+const fs = require('fs');
+const path = require('path');
 const {
   default: makeWASocket,
   useMultiFileAuthState,
@@ -25,6 +27,26 @@ let connected = false;
 let currentQR = null; // dataURL
 let lastError = null;
 let starting = false;
+let reconnectDelay = 5000;  // backoff exponential (max 60s)
+let reconnectTimer = null;
+
+function resetAuthDir() {
+  try {
+    if (!fs.existsSync(AUTH_DIR)) return;
+    for (const f of fs.readdirSync(AUTH_DIR)) {
+      try { fs.unlinkSync(path.join(AUTH_DIR, f)); } catch (_) {}
+    }
+    console.log('WA auth dir reset for fresh pairing');
+  } catch (e) { console.error('resetAuthDir error:', e.message); }
+}
+
+async function tearDownSock() {
+  if (reconnectTimer) { clearTimeout(reconnectTimer); reconnectTimer = null; }
+  try { if (sock) { sock.end && sock.end(undefined); sock.ev && sock.ev.removeAllListeners && sock.ev.removeAllListeners(); } } catch (_) {}
+  sock = null;
+  connected = false;
+  currentQR = null;
+}
 
 async function startSock() {
   if (starting) return;
@@ -48,27 +70,35 @@ async function startSock() {
       if (qr) {
         try {
           currentQR = await QRCode.toDataURL(qr);
-          // مسح الخطأ القديم عند توليد رمز جديد صالح لتفادي رسائل مربكة في الواجهة
           lastError = null;
+          reconnectDelay = 5000;  // Reset on successful QR
         } catch (e) { currentQR = null; }
       }
       if (connection === 'open') {
         connected = true;
         currentQR = null;
         lastError = null;
+        reconnectDelay = 5000;
         console.log('WA connected ✅');
       }
       if (connection === 'close') {
         connected = false;
         const code = lastDisconnect?.error?.output?.statusCode;
-        lastError = lastDisconnect?.error?.message || null;
-        console.log('WA closed. code=', code);
+        const msg = lastDisconnect?.error?.message || null;
+        // 408 = timeout بلا مسح — طبيعي، لا نعرضه كخطأ للمستخدم
+        if (code !== 408 && msg !== 'Connection Closed') {
+          lastError = msg;
+        }
+        console.log('WA closed. code=', code, 'msg=', msg);
         if (code === DisconnectReason.loggedOut) {
-          // تم تسجيل الخروج/فك الربط — لا تُعد الاتصال حتى إعادة مسح QR
           currentQR = null;
+          lastError = 'تم تسجيل الخروج — أعد ربط الجهاز';
         } else {
           starting = false;
-          setTimeout(() => startSock().catch(() => {}), 3000);
+          // exponential backoff: 5s → 10s → 20s → 40s → 60s (capped)
+          const delay = reconnectDelay;
+          reconnectDelay = Math.min(reconnectDelay * 2, 60000);
+          reconnectTimer = setTimeout(() => startSock().catch(() => {}), delay);
           return;
         }
       }
@@ -141,21 +171,72 @@ app.post('/reconnect', auth, async (req, res) => {
 // ربط برقم الهاتف (Pairing Code) — بديل مسح QR: المالك يُدخل رقمه ويحصل على رمز يُدخله في واتساب
 app.post('/pair', auth, async (req, res) => {
   try {
-    const { phone } = req.body || {};
+    const { phone, force } = req.body || {};
     if (!phone) return res.status(400).json({ ok: false, error: 'phone_required' });
     if (connected) return res.status(400).json({ ok: false, error: 'already_connected' });
     const digits = String(phone).replace(/[^0-9]/g, '');
     if (digits.length < 8) return res.status(400).json({ ok: false, error: 'invalid_phone' });
-    if (!sock) { await startSock(); await new Promise((r) => setTimeout(r, 2000)); }
-    if (sock?.authState?.creds?.registered) return res.status(400).json({ ok: false, error: 'already_registered' });
-    let code = null, attempts = 0, lastErr = null;
-    while (!code && attempts < 3) {
-      try { code = await sock.requestPairingCode(digits); }
-      catch (e) { lastErr = e; attempts++; await new Promise((r) => setTimeout(r, 1500)); }
+    
+    // إعادة تهيئة كاملة (إن طلب المستخدم force أو الجلسة تالفة)
+    if (force || (sock && sock.authState?.creds?.registered)) {
+      await tearDownSock();
+      resetAuthDir();
     }
-    if (!code) throw lastErr || new Error('pairing_failed');
+    if (!sock) {
+      await startSock();
+      // انتظر حتى يستقر الـsocket ويسمح بطلب الرمز
+      for (let i = 0; i < 15 && !sock?.authState; i++) {
+        await new Promise((r) => setTimeout(r, 500));
+      }
+      // انتظر إضافي لضمان أن الـsocket جاهز لاستقبال طلب رمز الربط
+      await new Promise((r) => setTimeout(r, 2500));
+    }
+    if (sock?.authState?.creds?.registered) return res.status(400).json({ ok: false, error: 'already_registered' });
+    
+    // جرّب requestPairingCode مع إعادة محاولة عند فشل مؤقت
+    let code = null, attempts = 0, lastErr = null;
+    while (!code && attempts < 5) {
+      try {
+        code = await sock.requestPairingCode(digits);
+      } catch (e) {
+        lastErr = e;
+        attempts++;
+        console.log(`pair attempt ${attempts} failed:`, e.message);
+        // إذا الـsocket مغلق، ابدأ واحدة جديدة
+        if (e.message && (e.message.includes('Connection Closed') || e.message.includes('closed'))) {
+          starting = false;
+          await new Promise((r) => setTimeout(r, 1000));
+          try { await startSock(); } catch (_) {}
+          await new Promise((r) => setTimeout(r, 2000));
+        } else {
+          await new Promise((r) => setTimeout(r, 1500));
+        }
+      }
+    }
+    if (!code) {
+      const em = (lastErr && lastErr.message) ? lastErr.message : 'pairing_failed';
+      // ترجم رسالة Baileys المزعجة لرسالة عربية أوضح
+      const friendly = em.includes('Connection Closed')
+        ? 'الخدمة تُعيد الاتصال — انتظر 15 ثانية ثم اضغط "توليد الرمز" مرة أخرى.'
+        : em;
+      return res.status(500).json({ ok: false, error: friendly });
+    }
     const formatted = code.match(/.{1,4}/g)?.join('-') || code;
     res.json({ ok: true, code: formatted });
+  } catch (e) {
+    res.status(500).json({ ok: false, error: e.message });
+  }
+});
+
+// تصفير كامل للجلسة — يُطهّر مجلد auth ويُعيد التشغيل
+app.post('/reset', auth, async (req, res) => {
+  try {
+    await tearDownSock();
+    resetAuthDir();
+    lastError = null;
+    reconnectDelay = 5000;
+    startSock().catch(() => {});
+    res.json({ ok: true, message: 'reset scheduled' });
   } catch (e) {
     res.status(500).json({ ok: false, error: e.message });
   }

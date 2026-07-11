@@ -2495,14 +2495,17 @@ public class JobReceiptRenderer {
         elseif ($path -eq '/zk-push-user' -and $req.HttpMethod -eq 'POST') {
             $reader = New-Object System.IO.StreamReader($req.InputStream)
             $body = $reader.ReadToEnd() | ConvertFrom-Json
-            $zkIp = $body.ip
-            $zkPort = if ($body.port) { [int]$body.port } else { 4370 }
-            $zkTimeout = if ($body.timeout) { [int]$body.timeout } else { 5000 }
+            # حقول متعددة الأسماء (توافق مع الباك إند الجديد + النسخ القديمة)
+            $zkIp = if ($body.device_ip) { $body.device_ip } else { $body.ip }
+            $zkPort = if ($body.device_port) { [int]$body.device_port } elseif ($body.port) { [int]$body.port } else { 4370 }
+            $zkTimeout = if ($body.timeout_ms) { [int]$body.timeout_ms } elseif ($body.timeout) { [int]$body.timeout * 1000 } else { 5000 }
             $uid = [int]$body.uid
             $userId = if ($body.user_id) { [string]$body.user_id } else { [string]$uid }
             $userName = if ($body.name) { [string]$body.name } else { '' }
             $privilege = if ($body.privilege) { [int]$body.privilege } else { 0 }
-            "$(Get-Date) - ZK Push User: $zkIp`:$zkPort uid=$uid name=$userName" | Out-File $agentLog -Append
+            $devType = if ($body.device_type) { $body.device_type } else { 'fingerprint' }
+            $model = if ($body.model_name) { $body.model_name } else { 'auto' }
+            "$(Get-Date) - ZK Push User: $zkIp`:$zkPort uid=$uid name=$userName type=$devType model=$model" | Out-File $agentLog -Append
             try {
                 $jsonOut = [ZKHelper]::SetUser($zkIp, $zkPort, $zkTimeout, $uid, $userId, $userName, $privilege)
                 "$(Get-Date) - ZK Push User result: $jsonOut" | Out-File $agentLog -Append
@@ -2515,9 +2518,9 @@ public class JobReceiptRenderer {
         elseif ($path -eq '/zk-delete-user' -and $req.HttpMethod -eq 'POST') {
             $reader = New-Object System.IO.StreamReader($req.InputStream)
             $body = $reader.ReadToEnd() | ConvertFrom-Json
-            $zkIp = $body.ip
-            $zkPort = if ($body.port) { [int]$body.port } else { 4370 }
-            $zkTimeout = if ($body.timeout) { [int]$body.timeout } else { 5000 }
+            $zkIp = if ($body.device_ip) { $body.device_ip } else { $body.ip }
+            $zkPort = if ($body.device_port) { [int]$body.device_port } elseif ($body.port) { [int]$body.port } else { 4370 }
+            $zkTimeout = if ($body.timeout_ms) { [int]$body.timeout_ms } elseif ($body.timeout) { [int]$body.timeout * 1000 } else { 5000 }
             $uid = [int]$body.uid
             "$(Get-Date) - ZK Delete User: $zkIp`:$zkPort uid=$uid" | Out-File $agentLog -Append
             try {
@@ -2549,8 +2552,11 @@ public class JobReceiptRenderer {
         elseif ($path -eq '/zk-probe-device' -and $req.HttpMethod -eq 'POST') {
             $reader = New-Object System.IO.StreamReader($req.InputStream)
             $body = $reader.ReadToEnd() | ConvertFrom-Json
-            $zkIp = $body.ip
-            "$(Get-Date) - ZK Probe Device: $zkIp" | Out-File $agentLog -Append
+            $zkIp = if ($body.device_ip) { $body.device_ip } else { $body.ip }
+            $devType = if ($body.device_type) { $body.device_type } else { 'fingerprint' }
+            $model = if ($body.model_name) { $body.model_name } else { 'auto' }
+            $proto = if ($body.protocol) { $body.protocol } else { 'zk-standard' }
+            "$(Get-Date) - ZK Probe Device: $zkIp type=$devType model=$model protocol=$proto" | Out-File $agentLog -Append
             try {
                 $jsonOut = [ZKHelper]::ProbeDevice($zkIp)
                 "$(Get-Date) - ZK Probe result: $($jsonOut.Substring(0, [Math]::Min(300, $jsonOut.Length)))" | Out-File $agentLog -Append

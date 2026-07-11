@@ -2181,7 +2181,7 @@ export default function Settings() {
 
   const getRoleText = (role) => {
     const roles = {
-      admin: t('مدير النظام'),
+      admin: t('المالك'),
       manager: t('مدير'),
       supervisor: t('مشرف'),
       cashier: t('كاشير'),
@@ -3163,7 +3163,7 @@ export default function Settings() {
                                       <SelectItem value="manufacturer">{t('مصنّع')}</SelectItem>
                                       <SelectItem value="purchasing">{t('مسؤول مشتريات')}</SelectItem>
                                       <SelectItem value="manager">{t('مدير')}</SelectItem>
-                                      <SelectItem value="admin">{t('مدير عام')}</SelectItem>
+                                      <SelectItem value="admin">{t('المالك')}</SelectItem>
                                     </SelectContent>
                                   </Select>
                                 </div>
@@ -3410,7 +3410,7 @@ export default function Settings() {
                                     <SelectValue />
                                   </SelectTrigger>
                                   <SelectContent>
-                                    <SelectItem value="admin">{t('مدير عام')}</SelectItem>
+                                    <SelectItem value="admin">{t('المالك')}</SelectItem>
                                     <SelectItem value="manager">{t('مدير')}</SelectItem>
                                     <SelectItem value="cashier">{t('كاشير')}</SelectItem>
                                     <SelectItem value="captain">{t('كابتن')}</SelectItem>

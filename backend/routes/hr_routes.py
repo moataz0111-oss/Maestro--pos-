@@ -44,22 +44,26 @@ async def create_employee(employee: EmployeeCreate, current_user: dict = Depends
                 devices_q["tenant_id"] = tenant_id
             enqueued = 0
             async for dev in db.biometric_devices.find(devices_q, {"_id": 0}):
+                _ip = dev.get("ip_address")
+                _port = dev.get("port", 4370)
+                _tmo = int(dev.get("timeout") or 10)
+                _pw = dev.get("communication_password")
                 job = {
                     "id": str(uuid.uuid4()),
                     "type": "zk-push-user",
                     "params": {
                         "device_id": dev["id"],
-                        "device_ip": dev.get("ip_address"),
-                        "device_port": dev.get("port", 4370),
+                        "device_ip": _ip, "ip": _ip,
+                        "device_port": _port, "port": _port,
                         "device_type": dev.get("device_type") or "fingerprint",
-                        "communication_password": dev.get("communication_password"),
+                        "communication_password": _pw, "password": _pw,
                         "force_udp": bool(dev.get("force_udp") or False),
-                        "timeout": int(dev.get("timeout") or 10),
+                        "timeout": _tmo, "timeout_ms": _tmo * 1000,
                         "firmware_version": dev.get("firmware_version"),
                         "model_name": dev.get("model_name"),
                         "protocol": dev.get("protocol") or "zk-standard",
                         "biometric_uid": str(bio_uid),
-                        "biometric_id": str(bio_uid),  # alias
+                        "biometric_id": str(bio_uid),
                         "uid": str(bio_uid),
                         "name": employee_doc.get("full_name") or employee_doc.get("name") or f"EMP-{bio_uid}",
                         "employee_id": employee_doc["id"],
@@ -156,17 +160,21 @@ async def update_employee(employee_id: str, update: EmployeeUpdate, current_user
                     devices_q["tenant_id"] = tenant_id
                 enqueued = 0
                 async for dev in db.biometric_devices.find(devices_q, {"_id": 0}):
+                    _ip = dev.get("ip_address")
+                    _port = dev.get("port", 4370)
+                    _tmo = int(dev.get("timeout") or 10)
+                    _pw = dev.get("communication_password")
                     job = {
                         "id": str(uuid.uuid4()),
                         "type": "zk-push-user",
                         "params": {
                             "device_id": dev["id"],
-                            "device_ip": dev.get("ip_address"),
-                            "device_port": dev.get("port", 4370),
+                            "device_ip": _ip, "ip": _ip,
+                            "device_port": _port, "port": _port,
                             "device_type": dev.get("device_type") or "fingerprint",
-                            "communication_password": dev.get("communication_password"),
+                            "communication_password": _pw, "password": _pw,
                             "force_udp": bool(dev.get("force_udp") or False),
-                            "timeout": int(dev.get("timeout") or 10),
+                            "timeout": _tmo, "timeout_ms": _tmo * 1000,
                             "firmware_version": dev.get("firmware_version"),
                             "model_name": dev.get("model_name"),
                             "protocol": dev.get("protocol") or "zk-standard",
@@ -221,17 +229,21 @@ async def delete_employee(employee_id: str, current_user: dict = Depends(get_cur
             if tenant_id:
                 devices_q["tenant_id"] = tenant_id
             async for dev in db.biometric_devices.find(devices_q, {"_id": 0}):
+                _ip = dev.get("ip_address")
+                _port = dev.get("port", 4370)
+                _tmo = int(dev.get("timeout") or 10)
+                _pw = dev.get("communication_password")
                 job = {
                     "id": str(uuid.uuid4()),
                     "type": "zk-delete-user",
                     "params": {
                         "device_id": dev["id"],
-                        "device_ip": dev.get("ip_address"),
-                        "device_port": dev.get("port", 4370),
+                        "device_ip": _ip, "ip": _ip,
+                        "device_port": _port, "port": _port,
                         "device_type": dev.get("device_type") or "fingerprint",
-                        "communication_password": dev.get("communication_password"),
+                        "communication_password": _pw, "password": _pw,
                         "force_udp": bool(dev.get("force_udp") or False),
-                        "timeout": int(dev.get("timeout") or 10),
+                        "timeout": _tmo, "timeout_ms": _tmo * 1000,
                         "firmware_version": dev.get("firmware_version"),
                         "model_name": dev.get("model_name"),
                         "protocol": dev.get("protocol") or "zk-standard",

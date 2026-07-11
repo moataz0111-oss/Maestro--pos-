@@ -84,8 +84,16 @@ export default function BiometricDevices({ branches = [], onDataRefresh }) {
       }
     } catch {}
     
-    // الطريقة 2: اتصال مباشر بـ localhost (قد يحظره Chrome)
+    // الطريقة 2: اتصال مباشر بـ localhost (فقط إذا كنا محلياً — يمنع ضجيج ERR_CONNECTION_REFUSED في المعاينة)
     try {
+      // إذا الواجهة تعمل على دومين سحابي (ليس localhost)، لا نحاول localhost لأنه سيفشل حتماً
+      const host = (typeof window !== 'undefined' && window.location && window.location.hostname) || '';
+      const isLocalHost = host === 'localhost' || host === '127.0.0.1' || host.startsWith('192.168.') || host.endsWith('.local');
+      if (!isLocalHost) {
+        setAgentOnline(false);
+        setAgentVersion('');
+        return false;
+      }
       const res = await localAgent.get(`/status`, { timeout: 3000 });
       const isOnline = res.data?.status === 'running' && res.data?.zk_support === true;
       setAgentOnline(isOnline);

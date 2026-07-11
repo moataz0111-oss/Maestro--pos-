@@ -2804,7 +2804,7 @@ export default function HR() {
             <TabsTrigger value="ratings" className="flex items-center gap-2">
               <Award className="h-4 w-4" /> {t('تقييم الموظفين')}
             </TabsTrigger>
-            <TabsTrigger value="biometric" className="flex items-center gap-2">
+            <TabsTrigger value="biometric" className="flex items-center gap-2" data-testid="hr-biometric-tab">
               <Fingerprint className="h-4 w-4" /> {t('أجهزة البصمة')}
             </TabsTrigger>
           </TabsList>
