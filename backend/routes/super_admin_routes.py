@@ -197,6 +197,7 @@ async def create_tenant(tenant: TenantCreate, background_tasks: BackgroundTasks,
         "id": str(uuid.uuid4()),
         "username": f"{tenant.slug}_admin",
         "email": tenant.owner_email,
+        "phone": tenant.owner_phone,  # 🔄 يُنقَل تلقائياً من بيانات التينانت (طلب المالك)
         "password": hash_password(admin_password),
         "full_name": tenant.owner_name,
         "role": UserRole.ADMIN,
@@ -847,12 +848,14 @@ async def update_tenant(tenant_id: str, updates: dict, background_tasks: Backgro
             {"$set": {"is_active": updates["is_active"]}}
         )
     
-    # تحديث بيانات المستخدم الأدمن إذا تم تغيير البريد أو الاسم
+    # تحديث بيانات المستخدم الأدمن إذا تم تغيير البريد أو الاسم أو الهاتف
     admin_update = {}
     if new_email and email_changed:
         admin_update["email"] = new_email
     if updates.get("owner_name"):
         admin_update["full_name"] = updates.get("owner_name")
+    if updates.get("owner_phone"):
+        admin_update["phone"] = updates.get("owner_phone")  # 🔄 يُنقَل هاتف المالك من التينانت للـuser
     
     if admin_update:
         await db.users.update_one(

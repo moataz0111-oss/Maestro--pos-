@@ -1,5 +1,37 @@
 # Maestro EGP - Multi-Tenant POS System PRD
 
+## سياسة صلاحيات محكمة + مزامنة ثنائية (12 يوليو 2026) — iter304 ✅ 48/48 = 100%
+**السياسة المُصحّحة (طلب المالك):**
+- tenant admin يعدّل **حسابه فقط** (phone, email, full_name, password) — ممنوع من تغيير role/permissions/branch_id/is_active على نفسه.
+- tenant admin يعدّل/يحذف مستخدميه **الذين ليسوا admin** (كاشير/مدير/…).
+- tenant admin **ممنوع** من: (1) إنشاء admin آخر، (2) ترقية أي مستخدم إلى admin، (3) تعديل حساب admin آخر، (4) حذف نفسه، (5) حذف admin آخر.
+- **فقط super_admin** يستطيع: إنشاء/تعديل/حذف حسابات admin.
+
+**مزامنة ثنائية الاتجاه (طلب المالك):**
+- **user → tenant:** tenant admin يعدّل phone/email/full_name → tenant.owner_phone/owner_email/owner_name يُحدَّث تلقائياً (تظهر في لوحة تحكم مالك النظام فوراً).
+- **tenant → user:** super_admin يُنشئ/يُحدّث تينانت بـowner_phone → admin_user.phone يُنقَل تلقائياً.
+- `create_tenant`: `admin_doc["phone"] = tenant.owner_phone`.
+- `update_tenant`: `admin_update["phone"] = updates["owner_phone"]`.
+
+**الملفات:** `server.py` (update_user, create_user, delete_user)، `routes/super_admin_routes.py` (create_tenant, update_tenant)، اختبارات bug303 + bug304 (2 ملفات = 20 اختبار جديد).
+
+
+
+## إصلاح صلاحيات مالك المشروع (12 يوليو 2026) — iter303 ✅ 37/37 = 100%
+- **البق الحرِج المُبلَّغ:** هاني الدجيلي (tenant admin، مالك مطعم Graffiti Burger) لم يستطع تعديل رقم هاتفه أو أي بيانات مستخدم — كان الباك إند يُرجع "غير مصرح بمنح هذه الصلاحية" (server.py سطر 4067-4076).
+- **السبب:** القاعدة القديمة كانت "لا يجوز لغير super_admin تعديل حساب admin" — أي أن tenant admin ممنوع من تعديل نفسه لأن نفسه هو admin!
+- **الإصلاح — سياسة صلاحيات جديدة عادلة:**
+  - tenant admin يقدر يعدّل **نفسه** (الحقول: phone, email, full_name, password).
+  - tenant admin يقدر يعدّل/يُنشئ **أي مستخدم في تينانته**، بما فيهم admins آخرين (co-owners/شركاء).
+  - tenant admin يقدر يمنح دور admin لأي مستخدم في تينانته.
+  - tenant admin **ممنوع فقط** من: (1) ترقية أحد إلى super_admin، (2) تعديل حساب super_admin، (3) لمس مستخدمين خارج تينانته.
+  - manager دور محدود: لا يستطيع منح admin/super_admin ولا يُنشئ admin.
+- **إصلاح جانبي مهم:** `delete_user` كان يُقارن `current_user.get("user_id")` والصحيح `get("id")` → كان بإمكان أي مستخدم حذف نفسه بالخطأ. الآن يتحقق من كليهما (احتياطياً).
+- **إعادة تسمية تكميلية:** رسالة الخطأ "لا يمكن حذف مدير النظام" → "لا يمكن حذف حساب مالك المشروع" (متسقاً مع تسمية "المالك" الحديثة).
+- **الملفات:** `server.py` (update_user, create_user, delete_user)، `tests/test_bug303_tenant_admin_permissions.py` (7 اختبار)، `tests/test_bug303_extra_scenarios.py` (7 اختبار إضافية من testing_agent).
+
+
+
 ## إصلاح حرِج للحضور + ضمان تفعيل 2FA (12 يوليو 2026) — iter302 ✅ 30/30
 - **البق الحرِج للحضور من فرع السايدية:** `submit_biometric_job_result` (server.py) كان يستقبل سجلات zk-sync من الوكيل ويحفظها في `biometric_queue.result` فقط — **لا يُدخلها في `biometric_attendance`** → صفحة الحضور صفر رغم أن المزامنة تظهر ناجحة.
   - **الإصلاح:** فرع خاص لـ `job.type == "zk-sync"`: تطبيع الطوابع الزمنية، dedup، إدراج في `biometric_attendance`، ثم استدعاء `_auto_process_attendance_internal` لإنشاء صفوف في `db.attendance`. الاستجابة الآن `{inserted, auto_processed}`.

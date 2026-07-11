@@ -4063,17 +4063,40 @@ async def update_user(user_id: str, update: UserUpdate, current_user: dict = Dep
         raise HTTPException(status_code=404, detail="المستخدم غير موجود")
     
     update_data = {k: v for k, v in update.model_dump().items() if v is not None}
-
-    # منع تصعيد الصلاحيات عبر التعديل
+    
+    # 🛡️ سياسة صلاحيات المستخدمين (مُصححة حسب طلب المالك):
+    #   - super_admin: كل شيء (نظاماً كاملاً).
+    #   - tenant admin: يعدّل نفسه (self-edit) + يعدّل مستخدميه الذين ليسوا admin.
+    #   - manager: يعدّل الأدوار الأدنى فقط.
+    #   - لا يجوز لأي أحد ترقية إلى super_admin.
+    #   - لا يجوز لغير super_admin تعديل حساب admin/super_admin (بما فيه ترقية إلى admin).
+    is_self_edit = (user_id == current_user.get("id"))
+    is_super_admin = (current_user["role"] == UserRole.SUPER_ADMIN)
+    same_tenant = (user.get("tenant_id") == current_user.get("tenant_id"))
+    target_is_admin_tier = user.get("role") in [UserRole.ADMIN, UserRole.SUPER_ADMIN]
+    
     new_role = update_data.get("role")
     if new_role:
-        if new_role == UserRole.SUPER_ADMIN:
+        # (1) ترقية إلى super_admin ممنوعة لغير super_admin
+        if new_role == UserRole.SUPER_ADMIN and not is_super_admin:
             raise HTTPException(status_code=403, detail="غير مصرح بترقية حساب إلى مالك النظام")
-        if current_user["role"] != UserRole.SUPER_ADMIN and new_role == UserRole.ADMIN:
-            raise HTTPException(status_code=403, detail="غير مصرح بمنح هذه الصلاحية")
-    # لا يجوز لغير super_admin تعديل حساب admin/super_admin
-    if current_user["role"] != UserRole.SUPER_ADMIN and user.get("role") in [UserRole.ADMIN, UserRole.SUPER_ADMIN]:
-        raise HTTPException(status_code=403, detail="غير مصرح بتعديل هذا الحساب")
+        # (2) منح دور admin مسموح فقط لـsuper_admin (المالك المطعم يديره فقط، ما يخلق شركاء)
+        if new_role == UserRole.ADMIN and not is_super_admin:
+            raise HTTPException(status_code=403, detail="غير مصرح بمنح دور مالك المشروع — تواصل مع مالك النظام")
+    
+    # (3) حساب admin/super_admin لا يُعدَّل إلا بواسطة super_admin — إلا في حالة self-edit للحقول الشخصية
+    if target_is_admin_tier and not is_super_admin:
+        if not is_self_edit:
+            raise HTTPException(status_code=403, detail="غير مصرح بتعديل حساب مالك المشروع — فقط مالك النظام يستطيع ذلك")
+        # self-edit مسموح لكن مع حماية: منع تغيير الدور أو الفرع أو الصلاحيات لنفسه
+        forbidden_self_fields = {"role", "permissions", "branch_id", "is_active", "tenant_id"}
+        illegal = set(update_data.keys()) & forbidden_self_fields
+        if illegal:
+            raise HTTPException(status_code=403, detail=f"لا يمكنك تعديل حقول: {', '.join(illegal)} على حسابك الشخصي")
+    
+    # (4) لا يمكن تعديل حسابات خارج التينانت (للجميع باستثناء super_admin)
+    if not is_super_admin and not same_tenant:
+        raise HTTPException(status_code=403, detail="غير مصرح — لا يمكن تعديل حسابات خارج مشروعك")
     
     # التحقق من عدم تكرار البريد الإلكتروني أو اسم المستخدم
     if update_data.get("email"):
@@ -4088,6 +4111,24 @@ async def update_user(user_id: str, update: UserUpdate, current_user: dict = Dep
     
     if update_data:
         await db.users.update_one({"id": user_id}, {"$set": update_data})
+    
+    # 🔄 مزامنة تلقائية: عند تعديل tenant admin بياناته الشخصية، تنعكس على مستند تينانته
+    # (owner_phone / owner_email / owner_name) — يظهر التحديث فوراً في لوحة تحكم مالك النظام.
+    try:
+        if is_self_edit and user.get("role") == UserRole.ADMIN and user.get("tenant_id"):
+            tenant_sync = {}
+            if update_data.get("phone"):
+                tenant_sync["owner_phone"] = update_data["phone"]
+            if update_data.get("email"):
+                tenant_sync["owner_email"] = update_data["email"]
+            if update_data.get("full_name"):
+                tenant_sync["owner_name"] = update_data["full_name"]
+            if tenant_sync:
+                tenant_sync["updated_at"] = datetime.now(timezone.utc).isoformat()
+                await db.tenants.update_one({"id": user["tenant_id"]}, {"$set": tenant_sync})
+                logger.info(f"🔄 Tenant admin {user_id} synced to tenant doc: {list(tenant_sync.keys())}")
+    except Exception as _sync_err:
+        logger.warning(f"tenant owner sync failed: {_sync_err}")
     
     user = await db.users.find_one({"id": user_id}, {"_id": 0, "password": 0})
     return user
@@ -4111,17 +4152,13 @@ async def delete_user(user_id: str, current_user: dict = Depends(get_current_use
     if not user:
         raise HTTPException(status_code=404, detail="المستخدم غير موجود")
     
-    # لا يمكن حذف نفسك
-    if user_id == current_user.get("user_id"):
+    # لا يمكن حذف نفسك مطلقاً (bug fix: كان current_user.get('user_id') والصحيح 'id')
+    if user_id == current_user.get("id") or user_id == current_user.get("user_id"):
         raise HTTPException(status_code=400, detail="لا يمكنك حذف حسابك الخاص")
     
-    # لا يمكن حذف Admin (صاحب العميل)
-    if user.get("role") == UserRole.ADMIN:
-        raise HTTPException(status_code=403, detail="لا يمكن حذف مدير النظام - تواصل مع المالك")
-    
-    # لا يمكن حذف Super Admin
-    if user.get("role") == UserRole.SUPER_ADMIN:
-        raise HTTPException(status_code=403, detail="لا يمكن حذف Super Admin")
+    # حسابات admin/super_admin لا تُحذف إلا بواسطة super_admin (المالك ما يحذف نفسه ولا شريكه)
+    if user.get("role") in [UserRole.ADMIN, UserRole.SUPER_ADMIN] and current_user["role"] != UserRole.SUPER_ADMIN:
+        raise HTTPException(status_code=403, detail="غير مصرح — فقط مالك النظام يستطيع حذف حساب مالك مشروع")
     
     # حذف المستخدم نهائياً
     result = await db.users.delete_one({"id": user_id})
@@ -4189,9 +4226,9 @@ async def create_user(user: UserCreate, current_user: dict = Depends(get_current
     # منع تصعيد الصلاحيات: لا يُسمح بإنشاء super_admin إطلاقاً عبر هذا المسار
     if user.role == UserRole.SUPER_ADMIN:
         raise HTTPException(status_code=403, detail="غير مصرح بإنشاء حساب مالك النظام")
-    # المدير العادي لا يستطيع إنشاء حساب admin (مالك متجر)
+    # إنشاء حساب admin (شريك/مالك) مسموح فقط لـsuper_admin — المالك يديره ولا يُنشئ شركاء
     if current_user["role"] != UserRole.SUPER_ADMIN and user.role == UserRole.ADMIN:
-        raise HTTPException(status_code=403, detail="غير مصرح بإنشاء حساب بهذه الصلاحية")
+        raise HTTPException(status_code=403, detail="غير مصرح بإنشاء حساب مالك مشروع — تواصل مع مالك النظام")
     
     # التحقق من عدم وجود المستخدم
     existing = await db.users.find_one({"$or": [{"email": user.email}, {"username": user.username}]})
