@@ -1733,12 +1733,12 @@ export default function Settings() {
       toast.error(t('لا يوجد بريد ولا رقم لهذا المستخدم — أضفهما أولاً'));
       return;
     }
-    const msg = `${t('سيتم إرسال بيانات الدخول الجديدة إلى:')}\n\n${contactInfo}\n\n${t('كلمة المرور لن تتغيّر إلا عند نجاح قناة واحدة على الأقل. متابعة؟')}`;
-    if (!confirm(msg)) return;
+    if (!confirm(t('سيتم إرسال بيانات الدخول الحالية إلى:') + `\n${u.full_name || u.username}\n${contactInfo}\n\n` + t('متابعة؟'))) return;
     try {
       toast.loading(t('جاري الإرسال...'), { id: `wc-${u.id}` });
       const token = localStorage.getItem('token');
       const headers = { Authorization: `Bearer ${token}` };
+      // ✨ إرسال تلقائي — الخزنة تحمل كلمة المرور الحالية من آخر تعديل
       const res = await axios.post(`${API}/users/${u.id}/send-welcome`, {}, { headers });
       toast.dismiss(`wc-${u.id}`);
       const r = res.data?.result || {};
@@ -1750,7 +1750,7 @@ export default function Settings() {
       if (r.sms_sent) parts.push(`✅ SMS: ${r.phone} (${t('احتياطي')})`);
       else if (r.sms_error && r.sms_error !== 'sms_not_configured') parts.push(`❌ SMS: ${r.sms_error}`);
       if (r.ok) toast.success(`${t('تم الإرسال إلى')} ${u.full_name || u.username}\n${parts.join('\n')}`, { duration: 10000 });
-      else toast.error(t('فشل الإرسال — كلمة المرور القديمة لا تزال صالحة') + '\n' + parts.join('\n'), { duration: 15000 });
+      else toast.error(t('فشل الإرسال') + '\n' + parts.join('\n'), { duration: 15000 });
     } catch (e) {
       toast.dismiss(`wc-${u.id}`);
       toast.error(e.response?.data?.detail || t('فشل الإرسال'));

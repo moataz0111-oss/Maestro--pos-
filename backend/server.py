@@ -4166,34 +4166,44 @@ async def get_users(current_user: dict = Depends(get_current_user)):
     return users
 
 @api_router.post("/users/{user_id}/send-welcome")
-async def send_welcome_to_single_user(user_id: str, current_user: dict = Depends(get_current_user)):
-    """إرسال ترحيب + بيانات دخول جديدة لمستخدم واحد (بريد + واتساب + SMS احتياطي).
+async def send_welcome_to_single_user(user_id: str, payload: dict = None, current_user: dict = Depends(get_current_user)):
+    """إرسال ترحيب + بيانات دخول لمستخدم واحد (بريد + واتساب + SMS احتياطي).
+    
+    payload اختياري: {"custom_password": "..."} — لو مُرسَلة، تُستخدم بالضبط
+    وتُحدَّث في DB (bcrypt + vault). هذا يضمن أن ما يُرسَل = ما يريده المشرف.
     
     الصلاحيات:
     - super_admin: يستطيع لأي مستخدم
     - tenant admin: يستطيع فقط لمستخدمي تينانته
     - manager: يستطيع فقط للأدوار الأدنى ضمن تينانته
-    - غير ذلك: ممنوع
-    
-    عزل صارم: لا يمكن لأي admin إرسال ترحيب لمستخدم في تينانت آخر.
     """
     if current_user["role"] not in [UserRole.ADMIN, UserRole.MANAGER, UserRole.SUPER_ADMIN]:
         raise HTTPException(status_code=403, detail="غير مصرح")
     
-    # اجلب المستخدم مع فحص التينانت
     query = build_tenant_query(current_user, {"id": user_id})
     user = await db.users.find_one(query, {"_id": 0})
     if not user:
         raise HTTPException(status_code=404, detail="المستخدم غير موجود أو خارج مشروعك")
     
-    # manager لا يستطيع لـ admin/super_admin
     if current_user["role"] == UserRole.MANAGER and user.get("role") in [UserRole.ADMIN, UserRole.SUPER_ADMIN]:
         raise HTTPException(status_code=403, detail="غير مصرح — لا يمكن للمدير إرسال ترحيب لمالك المشروع")
-    # tenant admin لا يستطيع لـ super_admin
     if current_user["role"] == UserRole.ADMIN and user.get("role") == UserRole.SUPER_ADMIN:
         raise HTTPException(status_code=403, detail="غير مصرح")
     
-    # اجلب التينانت المرتبط
+    # ✨ استخدم custom_password إن أُرسلَت — تُحفَظ فوراً وتُرسَل بالضبط
+    custom_pw = None
+    if payload and isinstance(payload, dict):
+        custom_pw = (payload.get("custom_password") or "").strip() or None
+    if custom_pw:
+        await db.users.update_one(
+            {"id": user_id},
+            {"$set": {
+                "password": hash_password(custom_pw),
+                "password_vault": encrypt_plain_password(custom_pw),
+            }}
+        )
+        user["password_vault"] = encrypt_plain_password(custom_pw)
+    
     tenant = await db.tenants.find_one({"id": user.get("tenant_id")}, {"_id": 0}) or {
         "id": user.get("tenant_id") or "default",
         "name": "Maestro EGP",
@@ -4205,6 +4215,7 @@ async def send_welcome_to_single_user(user_id: str, current_user: dict = Depends
     try:
         await record_audit("user.send_welcome", user=current_user, details={
             "target_user_id": user.get("id"), "tenant_id": user.get("tenant_id"),
+            "used_custom_password": bool(custom_pw),
             "email_sent": result.get("email_sent"),
             "whatsapp_sent": result.get("whatsapp_sent"),
             "sms_sent": result.get("sms_sent"),

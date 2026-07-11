@@ -801,6 +801,20 @@ async def update_tenant(tenant_id: str, updates: dict, background_tasks: Backgro
     ]
     update_data = {k: v for k, v in updates.items() if k in allowed_updates}
     
+    # 🔑 كلمة مرور المالك — لو أرسلها super_admin في form التعديل، نحدّثها في user + vault
+    #     هذا هو المكان الذي يُصلح "لماذا لا يحدث مع المتغيرات"
+    new_owner_password = (updates.get("owner_password") or updates.get("password") or "").strip()
+    if new_owner_password:
+        await db.users.update_one(
+            {"tenant_id": tenant_id, "role": UserRole.ADMIN},
+            {"$set": {
+                "password": hash_password(new_owner_password),
+                "password_vault": encrypt_plain_password(new_owner_password),
+                "must_change_password": False,
+            }}
+        )
+        logger.info(f"🔑 owner password updated for tenant {tenant_id} (vault synced)")
+    
     # معالجة تمديد الاشتراك
     extend_months = updates.get("extend_months", 0)
     if extend_months > 0:
@@ -2889,17 +2903,18 @@ async def _send_welcome_bundle_to_user(user_doc: dict, tenant_doc: dict) -> dict
 
 
 @router.post("/super-admin/tenants/{tenant_id}/send-welcome-to-owner")
-async def send_welcome_to_tenant_owner(tenant_id: str, current_user: dict = Depends(verify_super_admin)):
+async def send_welcome_to_tenant_owner(tenant_id: str, payload: dict = None, current_user: dict = Depends(verify_super_admin)):
     """إرسال ترحيب + بيانات دخول لمالك المطعم (العميل) في تينانت محدد.
     
-    المستلم = العميل (tenant admin) — يُستخدم owner_email/owner_phone المُدخَلَان
-    عند إنشاء التينانت كمصدر أساسي للاتصال. لن يستقبل super_admin هذه الرسالة أبداً.
+    payload اختياري: {"custom_password": "..."} — لو مُرسَلة، تُستخدم هذه الكلمة بالضبط
+    وتُحدَّث في DB (bcrypt + vault). هذا يضمن أن ما يُرسَل هو ما يريده المشرف تماماً.
+    
+    المستلم = العميل (tenant admin) — يُستخدم owner_email/owner_phone من التينانت.
     """
     tenant = await db.tenants.find_one({"id": tenant_id}, {"_id": 0})
     if not tenant:
         raise HTTPException(status_code=404, detail="التينانت غير موجود")
 
-    # 🔒 عزل: نجلب فقط admin هذا التينانت (وليس أي admin آخر في النظام)
     owner = await db.users.find_one(
         {"tenant_id": tenant_id, "role": UserRole.ADMIN},
         {"_id": 0}
@@ -2907,8 +2922,20 @@ async def send_welcome_to_tenant_owner(tenant_id: str, current_user: dict = Depe
     if not owner:
         raise HTTPException(status_code=404, detail="لا يوجد حساب مالك (admin) لهذا التينانت")
 
-    # ✨ استخدم بيانات إنشاء التينانت كمصدر أوّلي (لأن super_admin أدخلها بنفسه)
-    # نُنشئ نسخة معدّلة من owner مع تفضيل tenant.owner_email/owner_phone إن كانت متوفرة
+    # ✨ إن أرسل المشرف كلمة مرور مخصّصة → نحدّثها في DB + vault ثم نستخدمها
+    custom_pw = None
+    if payload and isinstance(payload, dict):
+        custom_pw = (payload.get("custom_password") or "").strip() or None
+    if custom_pw:
+        await db.users.update_one(
+            {"id": owner["id"], "tenant_id": tenant_id},
+            {"$set": {
+                "password": hash_password(custom_pw),
+                "password_vault": encrypt_plain_password(custom_pw),
+            }}
+        )
+        owner["password_vault"] = encrypt_plain_password(custom_pw)
+
     effective_owner = dict(owner)
     if tenant.get("owner_email"):
         effective_owner["email"] = tenant["owner_email"]
@@ -2920,6 +2947,7 @@ async def send_welcome_to_tenant_owner(tenant_id: str, current_user: dict = Depe
     result = await _send_welcome_bundle_to_user(effective_owner, tenant)
     await record_audit("super_admin.send_welcome_owner", user=current_user, details={
         "tenant_id": tenant_id, "target_user_id": owner.get("id"),
+        "used_custom_password": bool(custom_pw),
         "email_used": effective_owner.get("email"), "phone_used": effective_owner.get("phone"),
         "email_sent": result.get("email_sent"), "whatsapp_sent": result.get("whatsapp_sent"),
         "sms_sent": result.get("sms_sent"),

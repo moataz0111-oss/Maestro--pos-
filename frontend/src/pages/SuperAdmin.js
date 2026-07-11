@@ -1816,6 +1816,8 @@ export default function SuperAdmin() {
         max_users: editTenantForm.max_users,
         send_welcome_email: editTenantForm.send_welcome_email,
         temp_password: editTenantForm.temp_password,
+        // 🔑 كلمة مرور المالك — تُحفَظ في حساب admin + vault لضمان أن زر الترحيب يرسلها بالضبط
+        owner_password: (editTenantForm.owner_password || editTenantForm.temp_password || '').trim() || undefined,
         logo_url: logoUrl
       };
       
@@ -2833,9 +2835,10 @@ export default function SuperAdmin() {
         return;
       }
     } catch (_) { /* استمر إذا فشل الفحص */ }
-    if (!window.confirm(t('سيتم إرسال ترحيب + بيانات دخول جديدة إلى مالك المشروع') + `\n(${tenant.owner_email || t('بلا بريد')} / ${tenant.owner_phone || t('بلا هاتف')}).\n\n${t('سيتم إعادة تعيين كلمة المرور فقط عند نجاح قناة واحدة على الأقل. متابعة؟')}`)) return;
+    if (!window.confirm(t('سيتم إرسال بيانات الدخول الحالية إلى:') + `\n${tenant.owner_email || t('بلا بريد')}\n${tenant.owner_phone || t('بلا هاتف')}\n\n` + t('متابعة؟'))) return;
     try {
       toast.loading(t('جاري الإرسال...'), { id: 'welcome-owner' });
+      // ✨ إرسال تلقائي — النظام يقرأ كلمة المرور من الخزنة تلقائياً (لا تدخّل يدوي)
       const res = await axios.post(`${API}/super-admin/tenants/${tenant.id}/send-welcome-to-owner`, {}, { withCredentials: true });
       const o = res.data?.owner || {};
       toast.dismiss('welcome-owner');
@@ -2847,7 +2850,7 @@ export default function SuperAdmin() {
       if (o.sms_sent) parts.push(`✅ SMS: ${o.phone} (${t('احتياطي')})`);
       else if (o.sms_error && o.sms_error !== 'sms_not_configured') parts.push(`❌ SMS: ${o.sms_error}`);
       if (o.ok) toast.success((t('تم إرسال الترحيب لمالك') + ` ${tenant.name || tenant.slug}\n`) + parts.join('\n'), { duration: 10000 });
-      else toast.error(t('فشل الإرسال — كلمة المرور لم تتغيّر (المستخدم يستطيع الدخول بكلمته القديمة)') + '\n' + parts.join('\n'), { duration: 15000 });
+      else toast.error(t('فشل الإرسال') + '\n' + parts.join('\n'), { duration: 15000 });
     } catch (e) {
       toast.dismiss('welcome-owner');
       toast.error(e.response?.data?.detail || t('فشل إرسال الترحيب'));
