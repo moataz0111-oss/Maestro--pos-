@@ -59,7 +59,8 @@ async def super_admin_login(request: SuperAdminLoginRequest, http_request: Reque
                            http_request.headers.get("user-agent", ""), user.get("tenant_id"))
 
     await record_audit("superadmin.login.success", http_request, user=user, status=200)
-    token = create_token(user["id"], user["role"], user.get("branch_id"), user.get("tenant_id"))
+    _sid = await issue_user_session(user["id"], user.get("role"))
+    token = create_token(user["id"], user["role"], user.get("branch_id"), user.get("tenant_id"), session_id=_sid)
     
     return {
         "token": token,
@@ -110,7 +111,8 @@ async def register_super_admin(request: SuperAdminRegisterRequest):
     
     await db.users.insert_one(user_doc)
     
-    token = create_token(user_doc["id"], user_doc["role"], user_doc.get("branch_id"), user_doc.get("tenant_id"))
+    _sid = await issue_user_session(user_doc["id"], user_doc.get("role"))
+    token = create_token(user_doc["id"], user_doc["role"], user_doc.get("branch_id"), user_doc.get("tenant_id"), session_id=_sid)
     
     return {
         "message": "تم إنشاء حساب Super Admin بنجاح",
@@ -802,18 +804,34 @@ async def update_tenant(tenant_id: str, updates: dict, background_tasks: Backgro
     update_data = {k: v for k, v in updates.items() if k in allowed_updates}
     
     # 🔑 كلمة مرور المالك — لو أرسلها super_admin في form التعديل، نحدّثها في user + vault
-    #     هذا هو المكان الذي يُصلح "لماذا لا يحدث مع المتغيرات"
+    #     نستهدف المالك الفعلي (المطابق لـ tenant.owner_email أو أقدم admin) — ليس أي admin آخر
     new_owner_password = (updates.get("owner_password") or updates.get("password") or "").strip()
     if new_owner_password:
-        await db.users.update_one(
-            {"tenant_id": tenant_id, "role": UserRole.ADMIN},
-            {"$set": {
-                "password": hash_password(new_owner_password),
-                "password_vault": encrypt_plain_password(new_owner_password),
-                "must_change_password": False,
-            }}
-        )
-        logger.info(f"🔑 owner password updated for tenant {tenant_id} (vault synced)")
+        # اعثر على المالك الحقيقي بنفس منطق زر الترحيب
+        tenant_doc = await db.tenants.find_one({"id": tenant_id}, {"_id": 0, "owner_email": 1})
+        _owner_email = (tenant_doc or {}).get("owner_email") or updates.get("owner_email")
+        owner_query = {"tenant_id": tenant_id, "role": UserRole.ADMIN}
+        if _owner_email:
+            owner_query["email"] = _owner_email
+        target_admin = await db.users.find_one(owner_query, {"_id": 0, "id": 1})
+        if not target_admin:
+            # fallback: أقدم admin في التينانت
+            _cursor = db.users.find(
+                {"tenant_id": tenant_id, "role": UserRole.ADMIN},
+                {"_id": 0, "id": 1}
+            ).sort("created_at", 1).limit(1)
+            _list = [u async for u in _cursor]
+            target_admin = _list[0] if _list else None
+        if target_admin:
+            await db.users.update_one(
+                {"id": target_admin["id"]},
+                {"$set": {
+                    "password": hash_password(new_owner_password),
+                    "password_vault": encrypt_plain_password(new_owner_password),
+                    "must_change_password": False,
+                }}
+            )
+            logger.info(f"🔑 owner password updated for tenant={tenant_id} user={target_admin['id']}")
     
     # معالجة تمديد الاشتراك
     extend_months = updates.get("extend_months", 0)
@@ -2084,8 +2102,9 @@ async def impersonate_tenant(tenant_id: str, current_user: dict = Depends(verify
         if not admin:
             raise HTTPException(status_code=404, detail="مدير النظام الرئيسي غير موجود")
         
-        # إنشاء token للدخول
-        token = create_token(admin["id"], admin["role"], admin.get("branch_id"), admin.get("tenant_id"))
+        # إنشاء token للدخول (جلسة نشطة واحدة)
+        _sid = await issue_user_session(admin["id"], admin.get("role"))
+        token = create_token(admin["id"], admin["role"], admin.get("branch_id"), admin.get("tenant_id"), session_id=_sid)
         
         # إضافة علامات الـ impersonation للمستخدم
         admin["impersonated"] = True
@@ -2114,8 +2133,9 @@ async def impersonate_tenant(tenant_id: str, current_user: dict = Depends(verify
     if not admin:
         raise HTTPException(status_code=404, detail="مدير العميل غير موجود")
     
-    # إنشاء token للدخول كالعميل مع علامة impersonation
-    token = create_token(admin["id"], admin["role"], admin.get("branch_id"), admin.get("tenant_id"))
+    # إنشاء token للدخول كالعميل مع علامة impersonation (جلسة نشطة واحدة)
+    _sid = await issue_user_session(admin["id"], admin.get("role"))
+    token = create_token(admin["id"], admin["role"], admin.get("branch_id"), admin.get("tenant_id"), session_id=_sid)
     
     # إضافة علامات الـ impersonation للمستخدم
     admin["impersonated"] = True
@@ -2915,10 +2935,22 @@ async def send_welcome_to_tenant_owner(tenant_id: str, payload: dict = None, cur
     if not tenant:
         raise HTTPException(status_code=404, detail="التينانت غير موجود")
 
-    owner = await db.users.find_one(
-        {"tenant_id": tenant_id, "role": UserRole.ADMIN},
-        {"_id": 0}
-    )
+    # 🎯 نجلب المالك الفعلي — الذي أُنشئ عند إنشاء التينانت (email مطابق لـ tenant.owner_email)
+    # هذا يضمن أن نُرسل لهاني (المالك الحقيقي) وليس لأي admin آخر (مثل معتز — مدير عام بصلاحية admin)
+    owner = None
+    if tenant.get("owner_email"):
+        owner = await db.users.find_one(
+            {"tenant_id": tenant_id, "role": UserRole.ADMIN, "email": tenant["owner_email"]},
+            {"_id": 0}
+        )
+    # fallback: لو ما وجدنا مطابقة بالبريد → أقدم admin في التينانت (المالك الأصلي)
+    if not owner:
+        owner_cursor = db.users.find(
+            {"tenant_id": tenant_id, "role": UserRole.ADMIN},
+            {"_id": 0}
+        ).sort("created_at", 1).limit(1)
+        _admins = [u async for u in owner_cursor]
+        owner = _admins[0] if _admins else None
     if not owner:
         raise HTTPException(status_code=404, detail="لا يوجد حساب مالك (admin) لهذا التينانت")
 

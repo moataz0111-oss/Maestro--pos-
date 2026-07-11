@@ -92,6 +92,7 @@ const ExternalBranchesManagement = lazy(() => import("./pages/ExternalBranchesMa
 import IncomingCallPopup from "./components/IncomingCallPopup";
 import { IncomingOrderCall } from "./components/IncomingOrderCall";
 import { ManagementOrderAlerts } from "./components/ManagementOrderAlerts";
+import SingleTabGuard from "./components/SingleTabGuard";
 
 // Check if initial auth check is done (stored in sessionStorage)
 const isAuthChecked = () => sessionStorage.getItem('auth_checked') === 'true';
@@ -703,6 +704,8 @@ function App() {
                       <ManagementOrderAlerts />
                       {/* PWA Install Prompt */}
                       <InstallPWA />
+                      {/* حارس التبويب الواحد — يمنع فتح النظام في أكثر من نافذة/تبويب */}
+                      <SingleTabGuard />
                     </BrowserRouter>
                   </div>
                 </OfflineProvider>

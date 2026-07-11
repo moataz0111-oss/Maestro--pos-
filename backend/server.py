@@ -3081,7 +3081,7 @@ def decrypt_plain_password(token: str) -> Optional[str]:
 
 
 
-def create_token(user_id: str, role: str, branch_id: Optional[str] = None, tenant_id: Optional[str] = None) -> str:
+def create_token(user_id: str, role: str, branch_id: Optional[str] = None, tenant_id: Optional[str] = None, session_id: Optional[str] = None) -> str:
     # تحديد مدة الجلسة بناءً على نوع المستخدم
     # المالك (super_admin) والعملاء (admin) = لا يسجلون خروج أبداً (100 سنة)
     # الموظفين (cashier, warehouse_keeper, manufacturer, branch_manager) = 24 ساعة
@@ -3098,7 +3098,32 @@ def create_token(user_id: str, role: str, branch_id: Optional[str] = None, tenan
         "iat": datetime.now(timezone.utc),
         "exp": expiration
     }
+    # sid: معرّف الجلسة النشطة الوحيدة — يُطابق users.active_session_id ليضمن جلسة واحدة لكل مستخدم
+    if session_id:
+        payload["sid"] = session_id
     return jwt.encode(payload, JWT_SECRET, algorithm=JWT_ALGORITHM)
+
+
+async def issue_user_session(user_id: str, role: Optional[str] = None) -> Optional[str]:
+    """يولّد session_id جديد ويخزّنه في users.active_session_id — يُبطل الجلسات القديمة.
+    استدعِها في كل نقطة إصدار توكن (login / 2FA verify / register / impersonate).
+    
+    ⚠️ استثناء: مالك المشروع (admin) ومالك النظام (super_admin) — يستطيعان الدخول من عدة أجهزة،
+    فلا نُلزمهم بجلسة واحدة (نُرجع None وامسح أي active_session_id قديم لضمان الاتساق).
+    """
+    if role in (UserRole.ADMIN, UserRole.SUPER_ADMIN):
+        # لا نطبّق قيد الجلسة الواحدة على المالكَين — نمسح الحقل ليعمل بلا قيود.
+        try:
+            await db.users.update_one({"id": user_id}, {"$unset": {"active_session_id": ""}})
+        except Exception:
+            pass
+        return None
+    sid = str(uuid.uuid4())
+    await db.users.update_one(
+        {"id": user_id},
+        {"$set": {"active_session_id": sid, "session_issued_at": datetime.now(timezone.utc).isoformat()}}
+    )
+    return sid
 
 async def get_current_user(request: Request, credentials: HTTPAuthorizationCredentials = Depends(security)):
     try:
@@ -3119,6 +3144,16 @@ async def get_current_user(request: Request, credentials: HTTPAuthorizationCrede
         user = await db.users.find_one({"id": payload["user_id"]}, {"_id": 0})
         if not user:
             raise HTTPException(status_code=401, detail="المستخدم غير موجود")
+        # ✅ جلسة نشطة واحدة لكل مستخدم:
+        # لو الحساب لديه active_session_id، يجب أن يطابق sid داخل التوكن.
+        # لو دخل شخص من جهاز آخر، active_session_id يتغيّر → التوكن القديم يصبح 401.
+        active_sid = user.get("active_session_id")
+        token_sid = payload.get("sid")
+        if active_sid and token_sid and active_sid != token_sid:
+            raise HTTPException(
+                status_code=401,
+                detail="تم تسجيل الدخول من جهاز آخر — تم إنهاء هذه الجلسة",
+            )
         return user
     except jwt.ExpiredSignatureError:
         raise HTTPException(status_code=401, detail="انتهت صلاحية الجلسة")
@@ -3909,7 +3944,9 @@ async def login(credentials: UserLogin, request: Request, response: Response):
         await trust_device("user", user["id"], credentials.device_id, _ip,
                            request.headers.get("user-agent", ""), user.get("tenant_id"))
 
-    token = create_token(user["id"], user["role"], user.get("branch_id"), user.get("tenant_id"))
+    # ✅ جلسة نشطة واحدة لكل مستخدم — يُبطل التوكنات السابقة تلقائياً
+    _sid = await issue_user_session(user["id"], user.get("role"))
+    token = create_token(user["id"], user["role"], user.get("branch_id"), user.get("tenant_id"), session_id=_sid)
     
     # تسجيل حدث الدخول في سجل المراقبة
     user_name = user.get("full_name") or user.get("username") or user.get("email")
@@ -3947,7 +3984,9 @@ async def verify_staff_2fa(payload: Verify2FARequest, request: Request, response
         del user["password"]
     if "password_hash" in user:
         del user["password_hash"]
-    token = create_token(user["id"], user["role"], user.get("branch_id"), user.get("tenant_id"))
+    # ✅ جلسة نشطة واحدة (بعد التحقق الثنائي)
+    _sid = await issue_user_session(user["id"], user.get("role"))
+    token = create_token(user["id"], user["role"], user.get("branch_id"), user.get("tenant_id"), session_id=_sid)
     await record_audit("auth.2fa.success", request, user=user, status=200)
     _set_auth_cookie(response, token, user.get("role"))
     return {"user": user, "token": token, "device_id": device_id}
@@ -4070,8 +4109,9 @@ async def impersonate_user(user_id: str, current_user: dict = Depends(get_curren
         "created_at": datetime.now(timezone.utc).isoformat()
     })
     
-    # إنشاء توكن للمستخدم المنتحل
-    token = create_token(target_user["id"], target_user["role"], target_user.get("branch_id"), target_user.get("tenant_id"))
+    # إنشاء توكن للمستخدم المنتحل (جلسة نشطة واحدة)
+    _sid = await issue_user_session(target_user["id"], target_user.get("role"))
+    token = create_token(target_user["id"], target_user["role"], target_user.get("branch_id"), target_user.get("tenant_id"), session_id=_sid)
     
     return {
         "user": target_user,
@@ -4274,7 +4314,23 @@ async def update_user(user_id: str, update: UserUpdate, current_user: dict = Dep
     if not is_super_admin and not same_tenant:
         raise HTTPException(status_code=403, detail="غير مصرح — لا يمكن تعديل حسابات خارج مشروعك")
     
-    # (4) حماية self-edit: مالك المشروع لا يستطيع إلغاء تفعيل نفسه أو تحويل دوره (يمنع قفل نفسه خارج النظام)
+    # (4) قاعدة الترتيب الهرمي (طلب المالك):
+    #     لا يستطيع أحد تعديل حساب دوره أعلى.
+    #     ترتيب: super_admin > admin > manager > cashier/user
+    #     مثال: هاني (admin) يعدّل معتز (manager). معتز (manager) لا يعدّل هاني (admin).
+    #     الاستثناء الوحيد: كل شخص يعدّل نفسه.
+    _role_rank = {UserRole.SUPER_ADMIN: 4, UserRole.ADMIN: 3, UserRole.MANAGER: 2,
+                  UserRole.CASHIER: 1, UserRole.WAITER: 1}
+    if not is_self_edit and not is_super_admin:
+        my_rank = _role_rank.get(current_user["role"], 0)
+        target_rank = _role_rank.get(current_role, 0)
+        if target_rank >= my_rank:
+            raise HTTPException(
+                status_code=403,
+                detail="غير مصرح — لا يمكنك تعديل حساب دوره مساوٍ أو أعلى من دورك"
+            )
+    
+    # (5) حماية self-edit: مالك المشروع لا يستطيع إلغاء تفعيل نفسه أو تحويل دوره (يمنع قفل نفسه خارج النظام)
     if is_self_edit and is_tenant_admin:
         if update_data.get("is_active") is False:
             raise HTTPException(status_code=403, detail="لا يمكنك إلغاء تفعيل حسابك — يجب أن يتم ذلك بواسطة مالك النظام")
@@ -15420,6 +15476,11 @@ async def assign_driver_to_order(
 
 async def _issue_driver_token(driver: dict) -> str:
     import secrets as _secrets
+    # ✅ جلسة واحدة لكل سائق: احذف كل التوكنات السابقة قبل إصدار الجديدة.
+    try:
+        await db.driver_tokens.delete_many({"driver_id": driver["id"]})
+    except Exception:
+        pass
     driver_token = _secrets.token_urlsafe(32)
     await db.driver_tokens.insert_one({
         "token": driver_token,

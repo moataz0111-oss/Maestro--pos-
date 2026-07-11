@@ -4627,6 +4627,26 @@ export default function SuperAdmin() {
                 />
               </div>
             </div>
+            {/* 🔑 حقل كلمة مرور المالك — تُحفَظ في vault + hash عند الحفظ */}
+            <div className="grid grid-cols-1 gap-4 mt-2">
+              <div className="space-y-2 p-3 bg-emerald-600/10 border border-emerald-500/30 rounded-lg">
+                <Label className="text-emerald-300 font-semibold">
+                  🔑 {t('كلمة مرور المالك (اختياري — اتركها فارغة للإبقاء على الحالية)')}
+                </Label>
+                <Input
+                  type="text"
+                  placeholder={t('اكتب كلمة المرور الجديدة إن أردت تغييرها')}
+                  value={editTenantForm.owner_password || ''}
+                  onChange={(e) => setEditTenantForm({...editTenantForm, owner_password: e.target.value})}
+                  className="bg-[#1A284E]/50 border-emerald-500/40 text-white font-mono"
+                  dir="ltr"
+                  data-testid="edit-tenant-owner-password"
+                />
+                <p className="text-xs text-emerald-200/70">
+                  {t('عند الحفظ: تُحدَّث كلمة الدخول للمالك + تُحفَظ في الخزنة لإرسالها عبر زر الترحيب')}
+                </p>
+              </div>
+            </div>
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label>{t('رقم الهاتف')}</Label>
