@@ -347,6 +347,43 @@ def _get_maestro_logo_b64() -> str:
     return _MAESTRO_LOGO_B64_CACHE
 
 
+def build_branded_email_html(title: str, body_html: str, severity: str = "info",
+                              show_footer_note: bool = True) -> str:
+    """يبني HTML موحّد لجميع رسائل البريد الخارجة من النظام.
+
+    - severity: info(أزرق) | warning(أصفر) | critical(أحمر) | success(أخضر)
+    - يُدرج شعار Maestro EGP الموحّد تحت الشريط الملوّن مباشرة (خلفية بيضاء + ظل 3D)
+    - يُستخدم لكل: تقارير الوردية، OTP، رسائل الترحيب، تنبيهات النظام، والاسترداد.
+    """
+    _sev_color = {
+        "info": "#3B82F6", "warning": "#F59E0B",
+        "critical": "#EF4444", "success": "#10B981",
+    }.get(severity, "#3B82F6")
+    _logo_src = _get_maestro_logo_b64()
+    _logo_block = (
+        f"<div style='background:#ffffff;padding:16px 0;text-align:center'>"
+        f"<img src='{_logo_src}' alt='Maestro EGP' "
+        f"style='width:64px;height:64px;display:inline-block;border-radius:50%;object-fit:cover;"
+        f"box-shadow:0 6px 16px rgba(11,26,58,0.35), 0 2px 4px rgba(0,0,0,0.15)' />"
+        f"</div>"
+    ) if _logo_src else ""
+    now_iso = datetime.now(timezone.utc).isoformat()
+    _footer = (
+        f"<hr style='margin:16px 0;border:none;border-top:1px solid #e5e7eb'/>"
+        f"<p style='font-size:12px;color:#6b7280;margin:0'>Maestro EGP — {now_iso}</p>"
+    ) if show_footer_note else ""
+    return (
+        f"<div style='font-family:Tahoma,Arial,sans-serif;direction:rtl;text-align:right;max-width:640px;margin:0 auto'>"
+        f"<div style='background:{_sev_color};color:#fff;padding:12px 16px;border-radius:8px 8px 0 0'>"
+        f"<h2 style='margin:0'>{title}</h2></div>"
+        f"{_logo_block}"
+        f"<div style='background:#f9fafb;padding:16px;border-radius:0 0 8px 8px;border:1px solid #e5e7eb;border-top:none;color:#111'>"
+        f"{body_html}"
+        f"{_footer}"
+        f"</div></div>"
+    )
+
+
 async def notify_owner_multichannel(
     title: str,
     message: str,
@@ -443,14 +480,14 @@ async def notify_owner_multichannel(
                     if len(normalized_pairs) >= NOTIFY_MAX_RECIPIENTS:
                         logger.warning(f"notify_owner_multichannel: قصّرت المستقبِلين على {NOTIFY_MAX_RECIPIENTS} (كان هناك أكثر — تحقق من إعدادات التينانت)")
                         break
-                # إرسال متزامن لكل الأرقام
+                # إرسال متزامن لكل الأرقام (بهوية Maestro EGP الموحّدة: شعار + قالب)
                 sent_count = 0
                 _wa_errors = []
                 for e164, _raw in normalized_pairs:
                     try:
-                        wa_msg = f"🔔 Maestro EGP — {title}\n\n{message}"
                         ok, _err = await _wa_free.send_message(
-                            e164, wa_msg, purpose=f"owner_{category}", tenant_id=tenant_id
+                            e164, message, purpose=f"owner_{category}",
+                            tenant_id=tenant_id, title=title, with_logo=True,
                         )
                         if ok:
                             sent_count += 1
@@ -477,26 +514,8 @@ async def notify_owner_multichannel(
     # 3) البريد الإلكتروني (لمالك المشروع + المديرين + بريد الاسترداد — للجميع نسخة)
     if send_email:
         try:
-            _sev_color = {"info": "#3B82F6", "warning": "#F59E0B", "critical": "#EF4444"}.get(severity, "#3B82F6")
-            _logo_src = _get_maestro_logo_b64()
-            _logo_block = (
-                f"<div style='background:#ffffff;padding:16px 0;text-align:center'>"
-                f"<img src='{_logo_src}' alt='Maestro EGP' "
-                f"style='width:64px;height:64px;display:inline-block;border-radius:50%;object-fit:cover;"
-                f"box-shadow:0 6px 16px rgba(11,26,58,0.35), 0 2px 4px rgba(0,0,0,0.15)' />"
-                f"</div>"
-            ) if _logo_src else ""
-            html = (
-                f"<div style='font-family:Arial,sans-serif;direction:rtl;text-align:right;max-width:640px;margin:0 auto'>"
-                f"<div style='background:{_sev_color};color:#fff;padding:12px 16px;border-radius:8px 8px 0 0'>"
-                f"<h2 style='margin:0'>{title}</h2></div>"
-                f"{_logo_block}"
-                f"<div style='background:#f9fafb;padding:16px;border-radius:0 0 8px 8px;border:1px solid #e5e7eb;border-top:none'>"
-                f"<pre style='white-space:pre-wrap;font-family:Arial,sans-serif;font-size:14px;color:#111'>{message}</pre>"
-                f"<hr style='margin:16px 0;border:none;border-top:1px solid #e5e7eb'/>"
-                f"<p style='font-size:12px;color:#6b7280;margin:0'>Maestro EGP — {now_iso}</p>"
-                f"</div></div>"
-            )
+            body_html = f"<pre style='white-space:pre-wrap;font-family:Tahoma,Arial,sans-serif;font-size:14px;color:#111;margin:0'>{message}</pre>"
+            html = build_branded_email_html(title=title, body_html=body_html, severity=severity)
             # 🔥 استبعاد super_admin عند وجود tenant_id — البريد الخاص بالعميل لا يُرسَل لمالك النظام
             _owner_roles_email = ["admin", "owner", "manager", "branch_manager"]
             if not tenant_id:
@@ -3165,7 +3184,7 @@ async def clear_login_attempts(key: str):
 import hashlib as _hashlib
 import secrets as _secrets_2fa
 
-_OTP_TTL_MINUTES = 10
+_OTP_TTL_MINUTES = 1
 _OTP_MAX_ATTEMPTS = 5
 
 def _new_device_id() -> str:
@@ -3257,15 +3276,17 @@ async def start_2fa_verification(subject_type, subject_id, subject_name, tenant_
     channels_sent = []  # جميع القنوات التي نجح فيها إرسال الرمز — يُرجَع للواجهة
 
     def _otp_email_html(code, name):
-        return f"""
-        <div style='font-family:Tahoma,Arial,sans-serif;direction:rtl;text-align:right;background:#0f0f1e;color:#fff;padding:24px;border-radius:12px'>
-          <h2 style='color:#ffd166'>رمز تحقق الدخول</h2>
-          <p>مرحباً {name or ''}،</p>
-          <p>تم طلب تسجيل الدخول من جهاز جديد. استخدم الرمز التالي (صالح {_OTP_TTL_MINUTES} دقائق):</p>
-          <div style='font-size:34px;font-weight:900;letter-spacing:8px;color:#ffd166;background:#1a1a2e;padding:16px;border-radius:10px;text-align:center;margin:16px 0'>{code}</div>
-          <p style='color:#94a3b8;font-size:13px'>إن لم تكن أنت، تجاهل الرسالة وغيّر كلمة المرور.</p>
-          <p style='color:#475569;font-size:12px'>Maestro EGP — نظام محمي</p>
-        </div>"""
+        body_html = f"""
+            <p style='margin:0 0 8px 0'>مرحباً {name or ''}،</p>
+            <p style='margin:0 0 12px 0'>تم طلب تسجيل الدخول من جهاز جديد. استخدم الرمز التالي (صالح لدقيقة واحدة فقط):</p>
+            <div style='font-size:34px;font-weight:900;letter-spacing:8px;color:#1e40af;background:#eff6ff;padding:16px;border-radius:10px;text-align:center;margin:16px 0;border:1px dashed #3B82F6'>{code}</div>
+            <p style='color:#64748b;font-size:13px;margin:0'>⚠️ إن لم تكن أنت، تجاهل الرسالة وغيّر كلمة المرور.</p>
+        """
+        return build_branded_email_html(
+            title="🔐 رمز تحقق الدخول",
+            body_html=body_html,
+            severity="info",
+        )
 
     if channel in ("sms", "whatsapp"):
         e164 = await _phone_to_e164(destination)
@@ -3273,14 +3294,15 @@ async def start_2fa_verification(subject_type, subject_id, subject_name, tenant_
         masked = _mask_phone(e164)
         code = _gen_otp_code()
         code_hash = _hash_otp(code, salt)
-        wa_msg = f"رمز الدخول إلى Maestro EGP: {code}\nصالح {_OTP_TTL_MINUTES} دقائق. لا تُشاركه مع أحد."
+        # نص واضح للـ OTP — القالب الموحّد سيضيف *🔔 Maestro EGP* + الفواصل + الطابع الزمني تلقائياً
+        wa_msg = f"رمز الدخول: *{code}*\n\nصالح لدقيقة واحدة فقط.\n⚠️ لا تُشاركه مع أحد."
         sent = False
         channels_sent = []  # قائمة القنوات التي نجح فيها الإرسال (لعرضها للمستخدم)
         
         # 🔥 إرسال ثنائي: واتساب + بريد (بشكل متزامن) — يضمن وصول الرمز حتى لو تعطلت قناة
-        # 1) واتساب مجاني (رقم المالك المرتبط)
+        # 1) واتساب مجاني (رقم المالك المرتبط) — بهوية Maestro EGP الموحّدة (شعار + قالب)
         if await _wa_free.is_connected():
-            ok, err = await _wa_free.send_message(e164, wa_msg, purpose="otp")
+            ok, err = await _wa_free.send_message(e164, wa_msg, purpose="otp", title="🔐 رمز التحقق")
             if ok:
                 sent = True
                 channels_sent.append("whatsapp")
@@ -3543,147 +3565,93 @@ async def send_shift_report_email(shift_data: dict, recipient_emails: List[str])
         logger.warning("Email transport not configured or no recipients")
         return
     
-    html_content = f"""
-    <html dir="rtl" style="font-family: 'Cairo', Arial, sans-serif;">
-    <body style="background: #f5f5f5; padding: 20px;">
-        <div style="max-width: 600px; margin: 0 auto; background: white; border-radius: 10px; padding: 30px;">
-            <h1 style="color: #D4AF37; text-align: center;">تقرير إغلاق الصندوق</h1>
-            <h2 style="color: #333;">Maestro EGP</h2>
-            <hr style="border: 1px solid #D4AF37;">
-            
-            <table style="width: 100%; border-collapse: collapse;">
-                <tr><td style="padding: 10px; border-bottom: 1px solid #eee;"><strong>أمين الصندوق:</strong></td><td>{shift_data.get('cashier_name', 'N/A')}</td></tr>
-                <tr><td style="padding: 10px; border-bottom: 1px solid #eee;"><strong>تاريخ البدء:</strong></td><td>{shift_data.get('started_at', 'N/A')}</td></tr>
-                <tr><td style="padding: 10px; border-bottom: 1px solid #eee;"><strong>تاريخ الإنتهاء:</strong></td><td>{shift_data.get('ended_at', 'N/A')}</td></tr>
-                <tr><td style="padding: 10px; border-bottom: 1px solid #eee;"><strong>إجمالي المبيعات:</strong></td><td style="color: #10B981; font-weight: bold;">{shift_data.get('total_sales', 0):,.0f} د.ع</td></tr>
-                <tr><td style="padding: 10px; border-bottom: 1px solid #eee;"><strong>إجمالي التكاليف:</strong></td><td>{shift_data.get('total_cost', 0):,.0f} د.ع</td></tr>
-                <tr><td style="padding: 10px; border-bottom: 1px solid #eee;"><strong>الربح الإجمالي:</strong></td><td style="color: #10B981;">{shift_data.get('gross_profit', 0):,.0f} د.ع</td></tr>
-                <tr><td style="padding: 10px; border-bottom: 1px solid #eee;"><strong>المصاريف:</strong></td><td style="color: #EF4444;">{shift_data.get('total_expenses', 0):,.0f} د.ع</td></tr>
-                <tr><td style="padding: 10px; border-bottom: 1px solid #eee;"><strong>صافي الربح:</strong></td><td style="color: {'#10B981' if shift_data.get('net_profit', 0) >= 0 else '#EF4444'}; font-weight: bold;">{shift_data.get('net_profit', 0):,.0f} د.ع</td></tr>
-                <tr><td style="padding: 10px; border-bottom: 1px solid #eee;"><strong>عدد الطلبات:</strong></td><td>{shift_data.get('total_orders', 0)}</td></tr>
-                <tr><td style="padding: 10px; border-bottom: 1px solid #eee;"><strong>النقد المتوقع:</strong></td><td>{shift_data.get('expected_cash', 0):,.0f} د.ع</td></tr>
-                <tr><td style="padding: 10px; border-bottom: 1px solid #eee;"><strong>النقد الفعلي:</strong></td><td>{shift_data.get('closing_cash', 0):,.0f} د.ع</td></tr>
-                <tr><td style="padding: 10px;"><strong>الفرق:</strong></td><td style="color: {'#EF4444' if shift_data.get('cash_difference', 0) < 0 else '#10B981'}; font-weight: bold;">{shift_data.get('cash_difference', 0):,.0f} د.ع</td></tr>
-            </table>
-            
-            <p style="color: #666; font-size: 12px; margin-top: 30px; text-align: center;">
-                تم إرسال هذا التقرير تلقائياً من نظام Maestro EGP
-            </p>
-        </div>
-    </body>
-    </html>
+    _diff = shift_data.get('cash_difference', 0)
+    _diff_color = '#EF4444' if _diff < 0 else '#10B981'
+    _net = shift_data.get('net_profit', 0)
+    _net_color = '#10B981' if _net >= 0 else '#EF4444'
+    body_html = f"""
+        <table style="width: 100%; border-collapse: collapse; font-size:14px">
+            <tr><td style="padding: 8px; border-bottom: 1px solid #eee;"><strong>أمين الصندوق:</strong></td><td>{shift_data.get('cashier_name', 'N/A')}</td></tr>
+            <tr><td style="padding: 8px; border-bottom: 1px solid #eee;"><strong>تاريخ البدء:</strong></td><td>{shift_data.get('started_at', 'N/A')}</td></tr>
+            <tr><td style="padding: 8px; border-bottom: 1px solid #eee;"><strong>تاريخ الإنتهاء:</strong></td><td>{shift_data.get('ended_at', 'N/A')}</td></tr>
+            <tr><td style="padding: 8px; border-bottom: 1px solid #eee;"><strong>إجمالي المبيعات:</strong></td><td style="color: #10B981; font-weight: bold;">{shift_data.get('total_sales', 0):,.0f} د.ع</td></tr>
+            <tr><td style="padding: 8px; border-bottom: 1px solid #eee;"><strong>إجمالي التكاليف:</strong></td><td>{shift_data.get('total_cost', 0):,.0f} د.ع</td></tr>
+            <tr><td style="padding: 8px; border-bottom: 1px solid #eee;"><strong>الربح الإجمالي:</strong></td><td style="color: #10B981;">{shift_data.get('gross_profit', 0):,.0f} د.ع</td></tr>
+            <tr><td style="padding: 8px; border-bottom: 1px solid #eee;"><strong>المصاريف:</strong></td><td style="color: #EF4444;">{shift_data.get('total_expenses', 0):,.0f} د.ع</td></tr>
+            <tr><td style="padding: 8px; border-bottom: 1px solid #eee;"><strong>صافي الربح:</strong></td><td style="color: {_net_color}; font-weight: bold;">{_net:,.0f} د.ع</td></tr>
+            <tr><td style="padding: 8px; border-bottom: 1px solid #eee;"><strong>عدد الطلبات:</strong></td><td>{shift_data.get('total_orders', 0)}</td></tr>
+            <tr><td style="padding: 8px; border-bottom: 1px solid #eee;"><strong>النقد المتوقع:</strong></td><td>{shift_data.get('expected_cash', 0):,.0f} د.ع</td></tr>
+            <tr><td style="padding: 8px; border-bottom: 1px solid #eee;"><strong>النقد الفعلي:</strong></td><td>{shift_data.get('closing_cash', 0):,.0f} د.ع</td></tr>
+            <tr><td style="padding: 8px;"><strong>الفرق:</strong></td><td style="color: {_diff_color}; font-weight: bold;">{_diff:,.0f} د.ع</td></tr>
+        </table>
     """
+    html_content = build_branded_email_html(
+        title=f"📊 تقرير إغلاق الصندوق — {shift_data.get('cashier_name', '')}",
+        body_html=body_html,
+        severity="info",
+    )
     
     try:
         await send_system_email(
             recipient_emails,
             f"تقرير إغلاق الصندوق - {shift_data.get('cashier_name', '')} - {datetime.now().strftime('%Y-%m-%d')}",
             html_content,
+            purpose="shift_report",
         )
     except Exception as e:
         logger.error(f"Failed to send email: {e}")
 
 async def send_welcome_email(recipient_email: str, tenant_name: str, owner_name: str, username: str, password: str):
-    """إرسال بريد ترحيبي للعميل الجديد مع بيانات الدخول"""
+    """إرسال بريد ترحيبي للعميل الجديد مع بيانات الدخول (بهوية Maestro EGP الموحّدة)."""
     if not recipient_email or not await email_transport_configured():
         logger.warning("Email transport not configured or no recipient")
         return
     
     frontend_url = os.environ.get('FRONTEND_URL', 'https://maestroegp.com')
-    
-    html_content = f"""
-    <html dir="rtl" style="font-family: 'Cairo', Arial, sans-serif;">
-    <body style="background: #1a1a2e; padding: 40px 20px;">
-        <div style="max-width: 600px; margin: 0 auto; background: linear-gradient(145deg, #16213e, #1a1a2e); border-radius: 20px; padding: 40px; box-shadow: 0 20px 60px rgba(0,0,0,0.3); border: 1px solid rgba(212, 175, 55, 0.2);">
-            
-            <!-- Header -->
-            <div style="text-align: center; margin-bottom: 30px;">
-                <img src="{frontend_url}/maestro-logo.png" alt="Maestro EGP" width="120" style="width:120px;height:120px;border-radius:22px;display:inline-block;box-shadow:0 8px 30px rgba(212,175,55,0.25);" />
-                <p style="color: #9ca3af; font-size: 14px; margin-top: 14px;">نظام محاسبي وإداري متكامل للمؤسسات والمطاعم والمشاريع الكبرى</p>
-            </div>
-            
-            <!-- Welcome Message -->
-            <div style="background: rgba(212, 175, 55, 0.1); border-radius: 15px; padding: 25px; margin-bottom: 25px; border: 1px solid rgba(212, 175, 55, 0.2);">
-                <h2 style="color: #ffffff; margin: 0 0 15px 0; font-size: 22px;">مرحباً {owner_name}! 🎉</h2>
-                <p style="color: #d1d5db; margin: 0; line-height: 1.8;">
-                    تم إنشاء حسابك في <strong style="color: #D4AF37;">{tenant_name}</strong> بنجاح على منصة Maestro EGP.
-                    يمكنك الآن البدء في إدارة مطعمك/الكافيه الخاص بك بكل سهولة.
-                </p>
-            </div>
-            
-            <!-- Credentials Box -->
-            <div style="background: #0f172a; border-radius: 15px; padding: 25px; margin-bottom: 25px; border: 1px solid #334155;">
-                <h3 style="color: #D4AF37; margin: 0 0 20px 0; font-size: 18px;">🔐 بيانات تسجيل الدخول</h3>
-                
-                <div style="margin-bottom: 15px;">
-                    <p style="color: #9ca3af; margin: 0 0 5px 0; font-size: 12px;">البريد الإلكتروني / اسم المستخدم:</p>
-                    <p style="color: #ffffff; background: #1e293b; padding: 12px 15px; border-radius: 8px; margin: 0; font-family: monospace; font-size: 14px;">{username}</p>
-                </div>
-                
-                <div>
-                    <p style="color: #9ca3af; margin: 0 0 5px 0; font-size: 12px;">كلمة المرور:</p>
-                    <p style="color: #ffffff; background: #1e293b; padding: 12px 15px; border-radius: 8px; margin: 0; font-family: monospace; font-size: 14px;">{password}</p>
-                </div>
-            </div>
-            
-            <!-- Login Button -->
-            <div style="text-align: center; margin-bottom: 30px;">
-                <a href="{frontend_url}/login" style="display: inline-block; background: linear-gradient(145deg, #D4AF37, #B8860B); color: #000000; text-decoration: none; padding: 15px 40px; border-radius: 10px; font-weight: bold; font-size: 16px; box-shadow: 0 4px 15px rgba(212, 175, 55, 0.3);">
-                    🚀 تسجيل الدخول الآن
-                </a>
-            </div>
-            
-            <!-- Features Section -->
-            <div style="background: rgba(16, 185, 129, 0.1); border-radius: 15px; padding: 20px; margin-bottom: 25px; border: 1px solid rgba(16, 185, 129, 0.2);">
-                <h3 style="color: #10B981; margin: 0 0 15px 0; font-size: 16px;">✨ ماذا يمكنك أن تفعل؟</h3>
-                <ul style="color: #d1d5db; margin: 0; padding-right: 20px; line-height: 2;">
-                    <li>إدارة الطلبات (محلي، سفري، توصيل)</li>
-                    <li>تتبع السائقين على الخريطة</li>
-                    <li>إدارة المخزون والمنتجات</li>
-                    <li>تقارير المبيعات والأرباح</li>
-                    <li>إدارة الموظفين والرواتب</li>
-                    <li>نظام الكول سنتر</li>
-                </ul>
-            </div>
-            
-            <!-- Instructions -->
-            <div style="background: rgba(59, 130, 246, 0.1); border-radius: 15px; padding: 20px; margin-bottom: 25px; border: 1px solid rgba(59, 130, 246, 0.2);">
-                <h3 style="color: #3B82F6; margin: 0 0 15px 0; font-size: 16px;">📋 خطوات البدء</h3>
-                <ol style="color: #d1d5db; margin: 0; padding-right: 20px; line-height: 2;">
-                    <li>سجل دخولك باستخدام البيانات أعلاه</li>
-                    <li>قم بتغيير كلمة المرور من الإعدادات</li>
-                    <li>أضف الفروع والموظفين</li>
-                    <li>أضف التصنيفات والمنتجات</li>
-                    <li>ابدأ استقبال الطلبات! 🎯</li>
-                </ol>
-            </div>
-            
-            <!-- Warning -->
-            <div style="background: rgba(239, 68, 68, 0.1); border-radius: 10px; padding: 15px; margin-bottom: 25px; border: 1px solid rgba(239, 68, 68, 0.2);">
-                <p style="color: #EF4444; margin: 0; font-size: 13px;">
-                    ⚠️ <strong>هام:</strong> يرجى تغيير كلمة المرور فور تسجيل الدخول للحفاظ على أمان حسابك.
-                </p>
-            </div>
-            
-            <!-- Footer -->
-            <div style="text-align: center; border-top: 1px solid #334155; padding-top: 20px;">
-                <p style="color: #6b7280; font-size: 12px; margin: 0;">
-                    للدعم الفني: support@maestroegp.com
-                </p>
-                <p style="color: #6b7280; font-size: 11px; margin: 10px 0 0 0;">
-                    © {datetime.now().year} Maestro EGP - جميع الحقوق محفوظة
-                </p>
-            </div>
+    body_html = f"""
+        <div style="background:#eff6ff;border:1px solid #3B82F6;border-radius:12px;padding:20px;margin-bottom:16px">
+            <h2 style="margin:0 0 12px 0;color:#1e40af">مرحباً {owner_name}! 🎉</h2>
+            <p style="margin:0;line-height:1.8;color:#334155">
+                تم إنشاء حسابك في <strong style="color:#1e40af">{tenant_name}</strong> بنجاح على منصة Maestro EGP.
+                يمكنك الآن البدء في إدارة مطعمك/الكافيه بكل سهولة.
+            </p>
         </div>
-    </body>
-    </html>
+        <div style="background:#fff;border:1px solid #e5e7eb;border-radius:12px;padding:20px;margin-bottom:16px">
+            <h3 style="margin:0 0 16px 0;color:#111;font-size:16px">🔐 بيانات تسجيل الدخول</h3>
+            <p style="color:#6b7280;margin:0 0 4px 0;font-size:12px">البريد الإلكتروني / اسم المستخدم:</p>
+            <p style="background:#f3f4f6;padding:10px 12px;border-radius:8px;margin:0 0 12px 0;font-family:monospace;font-size:14px;color:#111">{username}</p>
+            <p style="color:#6b7280;margin:0 0 4px 0;font-size:12px">كلمة المرور:</p>
+            <p style="background:#f3f4f6;padding:10px 12px;border-radius:8px;margin:0;font-family:monospace;font-size:14px;color:#111">{password}</p>
+        </div>
+        <div style="text-align:center;margin:24px 0">
+            <a href="{frontend_url}/login" style="display:inline-block;background:#3B82F6;color:#fff;text-decoration:none;padding:12px 32px;border-radius:8px;font-weight:bold">🚀 تسجيل الدخول الآن</a>
+        </div>
+        <div style="background:#f0fdf4;border:1px solid #10B981;border-radius:12px;padding:16px;margin-bottom:16px">
+            <h3 style="margin:0 0 8px 0;color:#065f46;font-size:14px">✨ ماذا يمكنك أن تفعل؟</h3>
+            <ul style="margin:0;padding-right:20px;line-height:1.9;color:#334155;font-size:13px">
+                <li>إدارة الطلبات (محلي، سفري، توصيل)</li>
+                <li>تتبع السائقين على الخريطة</li>
+                <li>إدارة المخزون والمنتجات والتصنيع</li>
+                <li>تقارير المبيعات والأرباح والحسابات</li>
+                <li>إدارة الموظفين والرواتب والبصمة</li>
+                <li>نظام الكول سنتر والولاء</li>
+            </ul>
+        </div>
+        <div style="background:#fef2f2;border:1px solid #EF4444;border-radius:10px;padding:12px;color:#991b1b;font-size:13px">
+            ⚠️ <strong>هام:</strong> يرجى تغيير كلمة المرور فور تسجيل الدخول للحفاظ على أمان حسابك.
+        </div>
     """
-    
+    html_content = build_branded_email_html(
+        title=f"🎉 مرحباً في {tenant_name}",
+        body_html=body_html,
+        severity="success",
+    )
     try:
         await send_system_email(
             [recipient_email],
             f"🎉 مرحباً في {tenant_name} - بيانات الدخول",
             html_content,
+            purpose="welcome",
         )
         logger.info(f"Welcome email dispatched to {recipient_email}")
     except Exception as e:
@@ -6099,7 +6067,10 @@ async def grant_welcome_discount(customer_id: str, payload: dict = Body(default=
         f"نتشرف بخدمتك دائماً 🌟\n{restaurant}"
     )
 
-    wa_ok, wa_err = await _wa_free.send_message(customer.get("phone", ""), message)
+    wa_ok, wa_err = await _wa_free.send_message(
+        customer.get("phone", ""), message,
+        purpose="welcome_coupon", title="🎁 كوبون ترحيبي — Maestro EGP",
+    )
 
     # تعليم إشعار الموافقة المرتبط بهذا الزبون كمُعالج
     await db.notifications.update_many(

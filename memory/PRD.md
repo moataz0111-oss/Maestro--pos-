@@ -1,4 +1,56 @@
 # Maestro EGP - Multi-Tenant POS System PRD
+## هوية Maestro EGP الموحّدة على كل قنوات الإشعار (13 يوليو 2026) — iter305+ ✅
+
+**المطلب:** كل ما يخرج من النظام لأي عميل — بريد أو واتساب — يجب أن يحمل نفس الهوية (شعار + قالب موحّد).
+
+### التنفيذ
+1. **helper موحّد `build_branded_email_html(title, body_html, severity)`** في server.py:
+   - شريط ملوّن حسب severity (info/warning/critical/success)
+   - شعار Maestro EGP 64×64px تحت الشريط (خلفية بيضاء + ظل 3D)
+   - جسم مخصّص + تذييل بختم الوقت
+2. **wa_service** — endpoint جديد `/send-media` يرسل صورة الشعار + caption
+3. **whatsapp_free.py**:
+   - `send_message(...)` الآن ترسل بالشعار افتراضياً (`with_logo=True`)
+   - fallback نص إن فشل send-media
+   - قالب موحّد `_build_branded_text` مع header/separator/timestamp
+4. **قنوات مطبَّق عليها:**
+   - `notify_owner_multichannel` (تقرير الوردية، فحص السلامة، تنبيهات المصاريف، الاشتراك…)
+   - `send_shift_report_email` (تقرير إغلاق الوردية)
+   - `send_welcome_email` (بريد ترحيب العميل الجديد)
+   - `_otp_email_html` (رمز التحقق)
+   - `send_message` OTP على الواتساب (title="🔐 رمز التحقق")
+   - كوبون الترحيب للزبون (`send_message` بـ title)
+   - إشعار زبون جديد لمالك المطعم
+   - بريد الاختبار (`super_admin_routes`)
+   - رسالة اختبار الواتساب (`super_admin_routes`)
+
+### OTP: تقليل الصلاحية إلى 60 ثانية
+- `_OTP_TTL_MINUTES = 1` (كان 10)
+- نص جديد: "صالح لدقيقة واحدة فقط"
+- **عدّاد تنازلي حي** في Login.js — أزرق → أصفر → أحمر نابض عند اقتراب الانتهاء
+
+### سياسة صلاحيات مالك المشروع الموسّعة
+- **تحكّم كامل** بحسابه ومستخدميه (دور/صلاحيات/فرع/تفعيل/حذف)
+- القيود الوحيدة:
+  - لا يقدر يعطّل نفسه (`is_active=false` على حسابه)
+  - لا يقدر يغيّر دور نفسه
+  - لا يقدر يلمس حساب مالك النظام (super_admin)
+  - لا يقدر يعدّل حسابات خارج تينانته
+- **إصلاح باق:** فحص "منح دور admin" يعمل فقط عند **تغيير الدور فعلياً** — لم يعد يظهر خطأ "غير مصرح" عند تعديل صلاحيات مستخدم دوره admin أصلاً
+
+### تشخيص عدم وصول الواتساب
+`whatsapp_skip_reason` في logs + response:
+- `wa_not_connected` — الواتساب غير مربوط
+- `no_recipients` — لا يوجد رقم owner_phone/phone
+- `all_sends_failed` — الأرقام موجودة والإرسال فشل
+
+### الاختبارات
+- 11/11 اختبارات جديدة نجحت 100%:
+  - `test_email_logo_shift_report.py` (2): الشعار تحت الشريط الأزرق + تشخيص واتساب
+  - `test_wa_unified_branding.py` (5): قالب موحّد + fallback + logo b64
+  - `test_unified_branding_all_channels.py` (4): welcome/shift_report/multi-severity
+
+
 
 ## سياسة صلاحيات محكمة + مزامنة ثنائية (12 يوليو 2026) — iter304 ✅ 48/48 = 100%
 **السياسة المُصحّحة (طلب المالك):**

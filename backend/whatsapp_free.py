@@ -59,32 +59,106 @@ async def is_connected() -> bool:
     return bool(st.get("connected"))
 
 
-async def send_message(phone: str, message: str, purpose: str = "other", tenant_id=None, sent_by=None):
-    """يرسل رسالة نصية عبر واتساب. يُرجع (ok: bool, error: str|None).
-    
-    يسجّل تلقائياً في wa_messages للعرض في لوحة المالك.
-    - purpose: نوع الرسالة (otp, order_alert, forgotten_shift, test, other)
-    - tenant_id: معرّف المستأجر (اختياري)
-    - sent_by: معرّف المستخدم الذي أطلق الإرسال (اختياري)
+async def send_message(phone: str, message: str, purpose: str = "other", tenant_id=None, sent_by=None,
+                        with_logo: bool = True, title: str | None = None):
+    """يرسل رسالة واتساب بهوية Maestro EGP الموحّدة (شعار + قالب).
+
+    - with_logo=True (افتراضياً): يُرسل صورة الشعار مع الرسالة كـ caption.
+    - إن فشل إرسال الوسائط أو الواتساب لا يدعمه: يعود تلقائياً لنص فقط.
+    - يسجّل تلقائياً في wa_messages.
     """
     ok, err = False, None
+    # 1) القالب الموحّد: header + separator + content + footer
+    branded_text = _build_branded_text(message, title=title)
     try:
-        async with httpx.AsyncClient(timeout=25) as c:
-            r = await c.post(f"{WA_URL}/send", headers=_HEADERS,
-                             json={"phone": phone, "message": message})
-            if r.status_code == 200 and r.json().get("ok"):
-                ok, err = True, None
-            else:
-                try:
-                    err = r.json().get("error") or f"http_{r.status_code}"
-                except Exception:
-                    err = f"http_{r.status_code}"
-                ok = False
+        async with httpx.AsyncClient(timeout=30) as c:
+            if with_logo:
+                logo_b64 = _get_logo_b64()
+                if logo_b64:
+                    try:
+                        r = await c.post(
+                            f"{WA_URL}/send-media", headers=_HEADERS,
+                            json={"phone": phone, "caption": branded_text, "image_b64": logo_b64},
+                        )
+                        if r.status_code == 200 and r.json().get("ok"):
+                            ok, err = True, None
+                        elif r.status_code in (404, 400):
+                            # wa_service قديم لا يدعم /send-media → fallback نص
+                            with_logo = False
+                        else:
+                            try:
+                                err = r.json().get("error") or f"http_{r.status_code}"
+                            except Exception:
+                                err = f"http_{r.status_code}"
+                    except Exception as _me:
+                        # فشل إرسال الوسائط — fallback نص
+                        logger.warning(f"wa send-media failed, falling back to text: {_me}")
+                        with_logo = False
+                else:
+                    with_logo = False
+            if not ok and not with_logo:
+                # fallback: رسالة نصية بالقالب الموحّد
+                r = await c.post(f"{WA_URL}/send", headers=_HEADERS,
+                                 json={"phone": phone, "message": branded_text})
+                if r.status_code == 200 and r.json().get("ok"):
+                    ok, err = True, None
+                else:
+                    try:
+                        err = r.json().get("error") or f"http_{r.status_code}"
+                    except Exception:
+                        err = f"http_{r.status_code}"
+                    ok = False
     except Exception as e:
         ok, err = False, str(e)
     # سجّل المحاولة بصمت — الفشل في التسجيل لا يمنع إرجاع النتيجة الفعلية
     await _log_message(phone, message, purpose, ok, err, tenant_id=tenant_id, sent_by=sent_by)
     return ok, err
+
+
+# ==================== الشعار والقالب الموحّد ====================
+_LOGO_B64_CACHE: str | None = None
+
+
+def _get_logo_b64() -> str:
+    """يقرأ شعار Maestro EGP كـ base64 (مرة واحدة) للإرسال عبر واتساب."""
+    global _LOGO_B64_CACHE
+    if _LOGO_B64_CACHE is not None:
+        return _LOGO_B64_CACHE
+    try:
+        _here = os.path.dirname(os.path.abspath(__file__))
+        # نسخة الواتساب أصغر (128×128) لتظهر بحجم مقارب لشعار البريد
+        _p = os.path.join(_here, "static", "branding", "maestro-logo-wa.b64")
+        with open(_p, "r", encoding="utf-8") as f:
+            _LOGO_B64_CACHE = f.read().strip()
+    except Exception as _e:
+        logger.warning(f"whatsapp logo load failed: {_e}")
+        _LOGO_B64_CACHE = ""
+    return _LOGO_B64_CACHE
+
+
+def _build_branded_text(message: str, title: str | None = None) -> str:
+    """يبني نص موحّد للواتساب بهوية Maestro EGP.
+
+    القالب:
+      *🔔 Maestro EGP*
+      ━━━━━━━━━━━━━━━━━
+      {title إن وُجد}
+
+      {content}
+      ━━━━━━━━━━━━━━━━━
+      _2026-XX-XX HH:MM_
+    """
+    from datetime import datetime, timezone, timedelta
+    _iraq_tz = timezone(timedelta(hours=3))
+    _now = datetime.now(_iraq_tz).strftime("%Y-%m-%d %H:%M")
+    parts = ["*🔔 Maestro EGP*", "━━━━━━━━━━━━━━━━━"]
+    if title:
+        parts.append(f"*{title}*")
+        parts.append("")
+    parts.append(message or "")
+    parts.append("━━━━━━━━━━━━━━━━━")
+    parts.append(f"_{_now} (بغداد)_")
+    return "\n".join(parts)
 
 
 async def logout():

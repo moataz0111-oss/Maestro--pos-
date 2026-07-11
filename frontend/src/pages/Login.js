@@ -120,6 +120,25 @@ export default function Login() {
   const [twoFALoading, setTwoFALoading] = useState(false);
   const [twoFAError, setTwoFAError] = useState('');
   const [twoFAResent, setTwoFAResent] = useState(false);
+  // عدّاد تنازلي 60 ثانية للرمز — يبدأ عند إنشاء 2FA وعند إعادة الإرسال
+  const [otpSecondsLeft, setOtpSecondsLeft] = useState(0);
+
+  // شغّل العدّاد عند وجود جلسة 2FA أو عند إعادة الإرسال
+  useEffect(() => {
+    if (twoFA?.verificationId) {
+      setOtpSecondsLeft(60);
+    }
+  }, [twoFA?.verificationId]);
+  useEffect(() => {
+    if (twoFAResent) {
+      setOtpSecondsLeft(60);
+    }
+  }, [twoFAResent]);
+  useEffect(() => {
+    if (otpSecondsLeft <= 0) return;
+    const t = setTimeout(() => setOtpSecondsLeft((s) => Math.max(0, s - 1)), 1000);
+    return () => clearTimeout(t);
+  }, [otpSecondsLeft]);
 
   const { login, completeTwoFactor, resendTwoFactor } = useAuth();
   const navigate = useNavigate();
@@ -660,6 +679,23 @@ export default function Login() {
                   {t('تم إعادة إرسال الرمز')}
                 </div>
               )}
+
+              {/* عدّاد تنازلي 60 ثانية — يوضّح متى ينتهي الرمز */}
+              <div className="mb-3 text-center" data-testid="otp-countdown">
+                {otpSecondsLeft > 0 ? (
+                  <div className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-mono ${
+                    otpSecondsLeft > 15 ? 'bg-blue-500/15 text-blue-300 border border-blue-500/30' :
+                    otpSecondsLeft > 5 ? 'bg-amber-500/15 text-amber-300 border border-amber-500/30' :
+                    'bg-red-500/15 text-red-300 border border-red-500/30 animate-pulse'
+                  }`}>
+                    ⏱️ {t('الرمز صالح لـ')} <span className="font-bold text-base">{otpSecondsLeft}</span> {t('ثانية')}
+                  </div>
+                ) : (
+                  <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-xs bg-red-500/20 text-red-300 border border-red-500/40">
+                    ⚠️ {t('انتهت صلاحية الرمز — اضغط «إعادة إرسال الرمز»')}
+                  </div>
+                )}
+              </div>
 
               <form onSubmit={handleVerifyOtp} className="space-y-4">
                 {twoFAError && (

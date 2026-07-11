@@ -555,14 +555,17 @@ async def create_customer_order(
                     _tn = await db.tenants.find_one({"id": tenant_id}, {"_id": 0, "owner_phone": 1, "name": 1}) or {}
                     if _tn.get("owner_phone"):
                         _owner_msg = (
-                            f"🔔 إشعار من نظام {_tn.get('name', 'مطعمك')}\n\n"
                             f"زبون جديد أكمل أول طلب له:\n"
                             f"👤 الاسم: {_cname}\n"
                             f"📱 الهاتف: {_phone}\n"
                             f"💰 قيمة الطلب: {order_doc['total']:,.0f} د.ع\n\n"
                             f"ادخل إلى لوحة التحكم للموافقة على منح كوبون الترحيب باسمه وتحديد عدد مرات الاستخدام والفروع 🎁"
                         )
-                        asyncio.create_task(_wa_free.send_message(_tn["owner_phone"], _owner_msg))
+                        asyncio.create_task(_wa_free.send_message(
+                            _tn["owner_phone"], _owner_msg,
+                            purpose="welcome_approval", tenant_id=tenant_id,
+                            title=f"🎁 زبون جديد — {_tn.get('name', 'مطعمك')}",
+                        ))
             except Exception as _we:
                 logger.warning(f"welcome approval notify failed: {_we}")
     order_doc["is_first_order"] = is_first_order

@@ -2238,7 +2238,11 @@ async def _notify_integrity_mismatches(db, tenant_id, rows) -> int:
                 f"راجع: التقارير ← إغلاق الصندوق ← فحص السلامة."
             )
             try:
-                asyncio.create_task(_wa_free.send_message(tn["owner_phone"], msg))
+                asyncio.create_task(_wa_free.send_message(
+                    tn["owner_phone"], msg,
+                    purpose="integrity_check", tenant_id=tenant_id,
+                    title="⚠️ فحص السلامة",
+                ))
             except Exception:
                 pass
     return sent

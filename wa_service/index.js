@@ -147,6 +147,29 @@ app.post('/send', auth, async (req, res) => {
   }
 });
 
+// إرسال رسالة مع صورة (لهوية موحّدة: شعار + محتوى caption)
+// body: { phone, caption, image_b64 } — image_b64 = base64 بلا prefix
+app.post('/send-media', auth, async (req, res) => {
+  try {
+    const { phone, caption, image_b64 } = req.body || {};
+    if (!phone || !image_b64) return res.status(400).json({ ok: false, error: 'phone_and_image_required' });
+    if (!connected || !sock) return res.status(503).json({ ok: false, error: 'not_connected' });
+    const digits = String(phone).replace(/[^0-9]/g, '');
+    const jid = `${digits}@s.whatsapp.net`;
+    let exists = true;
+    try {
+      const r = await sock.onWhatsApp(jid);
+      exists = Array.isArray(r) && r.length > 0 && r[0]?.exists;
+    } catch (e) { /* ignore */ }
+    if (!exists) return res.status(422).json({ ok: false, error: 'not_on_whatsapp' });
+    const imgBuffer = Buffer.from(image_b64, 'base64');
+    await sock.sendMessage(jid, { image: imgBuffer, caption: caption || '' });
+    res.json({ ok: true });
+  } catch (e) {
+    res.status(500).json({ ok: false, error: e.message });
+  }
+});
+
 app.post('/logout', auth, async (req, res) => {
   try {
     if (sock) { try { await sock.logout(); } catch (e) {} }

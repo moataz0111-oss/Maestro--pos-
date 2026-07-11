@@ -555,21 +555,17 @@ async def send_test_email(payload: dict, current_user: dict = Depends(verify_sup
     transport = "SMTP" if (cfg.get("smtp_host") and cfg.get("smtp_user") and cfg.get("smtp_password")) else ("SendGrid" if cfg.get("sendgrid_api_key") else None)
     if not transport:
         raise HTTPException(status_code=400, detail="لم يتم إعداد أي خدمة بريد (SMTP/SendGrid)")
-    html = f"""
-    <html dir="rtl" style="font-family: Arial, sans-serif;">
-    <body style="background:#1a1a2e;padding:30px;">
-      <div style="max-width:520px;margin:0 auto;background:#16213e;border-radius:16px;padding:30px;border:1px solid rgba(212,175,55,.25);">
-        <h1 style="color:#D4AF37;text-align:center;margin:0;">👑 Maestro EGP</h1>
-        <p style="color:#10B981;text-align:center;font-size:18px;margin-top:20px;">✅ تم إعداد البريد بنجاح!</p>
-        <p style="color:#d1d5db;text-align:center;line-height:1.8;">
-          هذه رسالة اختبارية للتأكد من أن نظامك يستطيع إرسال الإيميلات تلقائياً.
-          عند إنشاء أي عميل جديد، ستُرسَل بيانات الدخول إليه تلقائياً.
-        </p>
-        <p style="color:#6b7280;text-align:center;font-size:12px;margin-top:25px;">عبر {transport} — {datetime.now().strftime('%Y-%m-%d %H:%M')}</p>
-      </div>
-    </body></html>
-    """
-    ok = await send_system_email([to], "✅ اختبار بريد Maestro EGP", html)
+    html = build_branded_email_html(
+        title="✅ اختبار بريد Maestro EGP",
+        body_html=(
+            f"<p style='margin:0 0 8px 0;color:#10B981;font-weight:bold;font-size:16px'>✅ تم إعداد البريد بنجاح!</p>"
+            f"<p style='margin:0 0 8px 0;line-height:1.8'>هذه رسالة اختبارية للتأكد من أن نظامك يستطيع إرسال الإيميلات تلقائياً.</p>"
+            f"<p style='margin:0;line-height:1.8'>عند إنشاء أي عميل جديد، ستُرسَل بيانات الدخول إليه تلقائياً.</p>"
+            f"<p style='color:#6b7280;font-size:12px;margin-top:16px'>عبر {transport} — {datetime.now().strftime('%Y-%m-%d %H:%M')}</p>"
+        ),
+        severity="success",
+    )
+    ok = await send_system_email([to], "✅ اختبار بريد Maestro EGP", html, purpose="test")
     if not ok:
         raise HTTPException(status_code=502, detail="فشل إرسال البريد — تحقق من كلمة المرور وإعدادات الخادم")
     return {"success": ok, "transport": transport, "to": to}
@@ -1677,9 +1673,10 @@ async def wa_test_ep(payload: dict = Body(...), current_user: dict = Depends(ver
     e164 = await _phone_to_e164(phone)
     ok, err = await _wa_free.send_message(
         e164,
-        "رسالة تجربة من Maestro EGP ✅ — الواتساب مرتبط ويعمل.",
+        "الواتساب مرتبط ويعمل بنجاح ✅",
         purpose="test",
         sent_by=current_user.get("id"),
+        title="🧪 اختبار الاتصال",
     )
     return {"success": ok, "error": err, "phone": e164}
 
