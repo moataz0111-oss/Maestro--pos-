@@ -9685,6 +9685,7 @@ async def create_staff_member(staff: StaffCreate, current_user: dict = Depends(g
         "email": staff.email,
         "phone": staff.phone,
         "password": hash_password(staff.password),
+        "password_vault": encrypt_plain_password(staff.password),
         "role": staff.role,
         "branch_id": staff.branch_id,
         "job_title": staff.job_title or STAFF_ROLES.get(staff.role, staff.role),

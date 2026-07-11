@@ -11,6 +11,7 @@ from .shared import (
     hash_password, verify_password, create_token,
     build_tenant_query, UserRole, logger
 )
+from server import encrypt_plain_password  # للحفاظ على الكلمة الأصلية في vault
 from ..models import (
     UserCreate, UserLogin, UserResponse, UserUpdate, PasswordReset
 )
@@ -32,6 +33,7 @@ async def register(user: UserCreate):
         "username": user.username,
         "email": user.email,
         "password": hash_password(user.password),
+        "password_vault": encrypt_plain_password(user.password),
         "full_name": user.full_name,
         "full_name_en": user.full_name_en,
         "role": user.role,
