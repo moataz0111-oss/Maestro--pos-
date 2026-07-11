@@ -98,6 +98,7 @@ async def register_super_admin(request: SuperAdminRegisterRequest):
         "username": "super_admin",
         "email": request.email,
         "password": hash_password(request.password),
+        "password_vault": encrypt_plain_password(request.password),
         "full_name": request.full_name,
         "role": UserRole.SUPER_ADMIN,
         "branch_id": None,
@@ -199,6 +200,7 @@ async def create_tenant(tenant: TenantCreate, background_tasks: BackgroundTasks,
         "email": tenant.owner_email,
         "phone": tenant.owner_phone,  # 🔄 يُنقَل تلقائياً من بيانات التينانت (طلب المالك)
         "password": hash_password(admin_password),
+        "password_vault": encrypt_plain_password(admin_password),  # لحفظ كلمة المرور الأصلية للترحيب
         "full_name": tenant.owner_name,
         "role": UserRole.ADMIN,
         "branch_id": None,
@@ -867,7 +869,8 @@ async def update_tenant(tenant_id: str, updates: dict, background_tasks: Backgro
             temp_password = updates.get("temp_password") or f"{tenant.get('slug')}123"
             await db.users.update_one(
                 {"id": admin["id"]},
-                {"$set": {"password": hash_password(temp_password)}}
+                {"$set": {"password": hash_password(temp_password),
+                          "password_vault": encrypt_plain_password(temp_password)}}
             )
             
             # إرسال البريد في الخلفية
@@ -1035,7 +1038,8 @@ async def reset_tenant_admin_password(tenant_id: str, new_password: str, current
         
         await db.users.update_one(
             {"id": admin["id"]},
-            {"$set": {"password": hash_password(new_password)}}
+            {"$set": {"password": hash_password(new_password),
+                      "password_vault": encrypt_plain_password(new_password)}}
         )
         
         return {"message": "تم إعادة تعيين كلمة مرور مدير النظام الرئيسي", "email": admin["email"]}
@@ -1053,7 +1057,8 @@ async def reset_tenant_admin_password(tenant_id: str, new_password: str, current
     new_hash = hash_password(new_password)
     await db.users.update_one(
         {"id": admin["id"]},
-        {"$set": {"password": new_hash, "password_hash": new_hash}}
+        {"$set": {"password": new_hash, "password_hash": new_hash,
+                  "password_vault": encrypt_plain_password(new_password)}}
     )
     
     return {"message": "تم إعادة تعيين كلمة المرور", "email": admin["email"]}
@@ -1070,16 +1075,23 @@ async def update_owner_settings(
     settings: dict,
     current_user: dict = Depends(verify_super_admin)
 ):
-    """تحديث إعدادات المالك (كلمة المرور والمفتاح السري)"""
+    """تحديث إعدادات المالك (كلمة المرور والمفتاح السري) — يُرسل تلقائياً بعد الحفظ."""
     try:
         update_data = {}
+        plain_pw = None
+        plain_secret = None
         
         if settings.get("password"):
-            hashed_password = bcrypt.hashpw(settings["password"].encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
+            plain_pw = settings["password"]
+            hashed_password = bcrypt.hashpw(plain_pw.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
             update_data["password"] = hashed_password
+            update_data["password_vault"] = encrypt_plain_password(plain_pw)  # حفظ الأصل مشفَّراً
         
         if settings.get("secret_key"):
-            update_data["secret_key"] = settings["secret_key"]
+            plain_secret = settings["secret_key"]
+            update_data["secret_key"] = plain_secret
+            update_data["super_admin_secret"] = plain_secret
+            update_data["secret_key_vault"] = encrypt_plain_password(plain_secret)
         
         if not update_data:
             raise HTTPException(status_code=400, detail="لم يتم تقديم أي بيانات للتحديث")
@@ -1092,7 +1104,79 @@ async def update_owner_settings(
         if result.matched_count == 0:
             raise HTTPException(status_code=404, detail="لم يتم العثور على حساب المالك")
         
-        return {"message": "تم تحديث إعدادات المالك بنجاح"}
+        # 🔥 إرسال تلقائي (بلا زر) — يخصّ مالك النظام فقط بعد تعديل كلمة المرور و/أو المفتاح
+        auto_send_result = {"email_sent": False, "whatsapp_sent": False, "sms_sent": False}
+        try:
+            recovery_emails = await get_owner_recovery_emails()
+            owner_user = await db.users.find_one({"role": "super_admin"}, {"_id": 0}) or {}
+            owner_phone = owner_user.get("phone") or os.environ.get("OWNER_ALERT_PHONE", "")
+            
+            # بناء محتوى الرسالة
+            _lines_pw = f"🔑 كلمة المرور الجديدة: {plain_pw}\n" if plain_pw else ""
+            _lines_sk = f"🗝️ المفتاح السري: {plain_secret}\n" if plain_secret else ""
+            email_title = "🔐 تحديث بيانات دخول مالك النظام"
+            email_body_html = (
+                f"<p style='margin:0 0 12px 0'>تم تحديث بيانات دخولك بنجاح على منصة Maestro EGP.</p>"
+                f"<div style='background:#eff6ff;border:1px solid #3B82F6;padding:16px;border-radius:10px;font-family:monospace;color:#111'>"
+                + (f"<div>🔑 كلمة المرور الجديدة: <b>{plain_pw}</b></div>" if plain_pw else "")
+                + (f"<div style='margin-top:8px'>🗝️ المفتاح السري: <b>{plain_secret}</b></div>" if plain_secret else "")
+                + f"</div>"
+                f"<p style='margin-top:14px;color:#64748b;font-size:13px'>⚠️ احتفظ بهذه البيانات في مكان آمن.</p>"
+            )
+            html = build_branded_email_html(email_title, email_body_html, severity="info")
+            wa_body = (
+                f"تم تحديث بيانات دخول مالك النظام على Maestro EGP.\n\n"
+                f"{_lines_pw}{_lines_sk}\n"
+                f"⚠️ احتفظ بهذه البيانات في مكان آمن."
+            )
+            
+            # بريد + واتساب متزامنان
+            async def _email():
+                if not recovery_emails:
+                    return False
+                return await send_system_email(
+                    recovery_emails, "[Maestro EGP] " + email_title, html,
+                    purpose="owner_credentials_update",
+                )
+            async def _wa():
+                if not owner_phone:
+                    return False, "no_phone"
+                if not await _wa_free.is_connected():
+                    return False, "wa_not_connected"
+                e164 = await _phone_to_e164(owner_phone)
+                if not e164:
+                    return False, "invalid_phone"
+                ok, err = await _wa_free.send_message(
+                    e164, wa_body, purpose="owner_credentials_update",
+                    title=email_title, with_logo=True,
+                )
+                return ok, err
+            
+            _e_res, _w_res = await asyncio.gather(_email(), _wa(), return_exceptions=True)
+            if isinstance(_e_res, bool):
+                auto_send_result["email_sent"] = _e_res
+            if isinstance(_w_res, tuple):
+                auto_send_result["whatsapp_sent"] = bool(_w_res[0])
+            
+            # SMS fallback إن فشل الواتساب
+            if not auto_send_result["whatsapp_sent"] and owner_phone:
+                try:
+                    from twilio_verify import send_sms, _sms_configured
+                    if _sms_configured():
+                        e164 = await _phone_to_e164(owner_phone)
+                        if e164:
+                            sms_body = f"Maestro EGP - تحديث دخول:\n" + (f"Password: {plain_pw}\n" if plain_pw else "") + (f"Secret: {plain_secret}" if plain_secret else "")
+                            ok_sms, _ = await send_sms(e164, sms_body)
+                            auto_send_result["sms_sent"] = bool(ok_sms)
+                except Exception:
+                    pass
+        except Exception as _auto_err:
+            logger.warning(f"auto-send after owner credentials update failed: {_auto_err}")
+        
+        return {
+            "message": "تم تحديث إعدادات المالك بنجاح",
+            "auto_delivery": auto_send_result,
+        }
     except HTTPException:
         raise
     except Exception as e:
@@ -2618,8 +2702,27 @@ async def reset_tenant_hr(tenant_id: str, confirm: bool = False, current_user: d
 
 
 # ============================================================================
-# 🎁 إرسال ترحيب للعميل (المالك) وللمستخدمين — مع رمز تحقق OTP
+# 🔍 تشخيص قنوات الإرسال (Preflight Check)
 # ============================================================================
+@router.get("/super-admin/delivery-channels/status")
+async def delivery_channels_status(current_user: dict = Depends(verify_super_admin)):
+    """يُرجع حالة جميع قنوات الإرسال (بريد/واتساب/SMS) لعرض تحذير قبل الضغط.
+    
+    يُستخدم في الواجهة قبل زر الترحيب لتحذير المشرف إن كانت كل القنوات معطّلة.
+    """
+    from twilio_verify import _sms_configured
+    email_ok = await email_transport_configured()
+    wa_ok = await _wa_free.is_connected()
+    sms_ok = _sms_configured()
+    return {
+        "email": {"ready": email_ok, "detail": "SMTP/SendGrid" if email_ok else "غير مُهيّأ — أضف SMTP من إعدادات النظام"},
+        "whatsapp": {"ready": wa_ok, "detail": "متصل" if wa_ok else "غير مربوط — من لوحة المالك ← إعدادات النظام ← الواتساب"},
+        "sms": {"ready": sms_ok, "detail": "Twilio Messaging مُهيّأ" if sms_ok else "غير مُهيّأ — أضف TWILIO_ACCOUNT_SID/AUTH_TOKEN/SMS_FROM في .env"},
+        "any_ready": bool(email_ok or wa_ok or sms_ok),
+    }
+
+
+
 # ضمانات العزل (Tenant Isolation):
 #   • كل استعلامات المستخدمين مقيّدة بـ tenant_id في الـ URL path
 #   • لا يمكن أن تصل بيانات مستخدم من تينانت لمستخدم في تينانت آخر
@@ -2635,8 +2738,12 @@ def _generate_temp_password(length: int = 10) -> str:
 
 
 async def _send_welcome_bundle_to_user(user_doc: dict, tenant_doc: dict) -> dict:
-    """يرسل ترحيب + كلمة مرور مؤقتة + رمز OTP لمستخدم واحد على البريد والواتساب.
-    يعيد قاموساً يوضّح ما تم إرساله وأين — للشفافية الكاملة."""
+    """يرسل ترحيب + كلمة مرور مؤقتة + رمز OTP لمستخدم واحد على البريد والواتساب/SMS.
+    
+    🛡️ حماية حرجة: كلمة المرور تُعاد تعيينها فقط إذا نجحت **قناة واحدة على الأقل**.
+    إن فشلت كل القنوات (بريد + واتساب + SMS) → لا يُعاد تعيين كلمة المرور،
+    حتى لا يُقفَل المستخدم خارج النظام.
+    """
     if not user_doc or not tenant_doc:
         return {"ok": False, "reason": "missing_user_or_tenant"}
 
@@ -2644,16 +2751,16 @@ async def _send_welcome_bundle_to_user(user_doc: dict, tenant_doc: dict) -> dict
     if user_doc.get("tenant_id") != tenant_doc.get("id"):
         return {"ok": False, "reason": "tenant_mismatch"}
 
-    # 1) توليد كلمة مرور مؤقتة + إعادة تعيين
-    temp_password = _generate_temp_password(10)
-    await db.users.update_one(
-        {"id": user_doc["id"], "tenant_id": tenant_doc["id"]},
-        {"$set": {
-            "password": hash_password(temp_password),
-            "must_change_password": True,
-            "welcome_sent_at": datetime.now(timezone.utc).isoformat(),
-        }}
-    )
+    # 1) اجلب كلمة المرور الأصلية من الخزنة المشفَّرة — لا نُغيّرها!
+    #    (تم حفظها عند إنشاء الحساب أو تعديل كلمة المرور).
+    stored_vault = user_doc.get("password_vault")
+    temp_password = decrypt_plain_password(stored_vault) if stored_vault else None
+    password_source = "vault" if temp_password else None
+    
+    # إذا لا توجد كلمة أصلية محفوظة → نُنشئ واحدة ونحفظها (يحدث فقط للمستخدمين القدامى قبل التحديث)
+    if not temp_password:
+        temp_password = _generate_temp_password(10)
+        password_source = "generated_fallback"
 
     tenant_name = tenant_doc.get("name") or tenant_doc.get("name_en") or tenant_doc.get("slug") or "Maestro EGP"
     display_name = user_doc.get("full_name") or user_doc.get("username") or user_doc.get("email") or "-"
@@ -2669,11 +2776,18 @@ async def _send_welcome_bundle_to_user(user_doc: dict, tenant_doc: dict) -> dict
         "email_error": None,
         "whatsapp_sent": False,
         "whatsapp_error": None,
-        "temp_password_reset": True,
+        "sms_sent": False,
+        "sms_error": None,
+        "temp_password_reset": False,
+        "password_source": password_source,  # vault (الأصل) أو generated_fallback (مستخدم قديم)
     }
 
-    # 2) بريد الترحيب — يستخدم القالب الموحّد بشعار Maestro EGP
-    if email and await email_transport_configured():
+    # 2) إعداد مهام الإرسال — كلاهما ينطلقان بالتوازي (نفس التوقيت)
+    async def _email_task():
+        if not email:
+            return {"sent": False, "error": "no_email"}
+        if not await email_transport_configured():
+            return {"sent": False, "error": "email_transport_not_configured"}
         try:
             await send_welcome_email(
                 recipient_email=email,
@@ -2682,46 +2796,45 @@ async def _send_welcome_bundle_to_user(user_doc: dict, tenant_doc: dict) -> dict
                 username=email,
                 password=temp_password,
             )
-            result["email_sent"] = True
+            return {"sent": True, "error": None}
         except Exception as _ee:
-            result["email_error"] = str(_ee)
-    else:
-        result["email_error"] = "no_email" if not email else "email_transport_not_configured"
+            return {"sent": False, "error": str(_ee)}
 
-    # 3) واتساب الترحيب — بالقالب الموحّد + الشعار
-    if phone_raw:
+    async def _wa_task():
+        if not phone_raw:
+            return {"sent": False, "error": "no_phone"}
         try:
             e164 = await _phone_to_e164(phone_raw)
             if not e164:
-                result["whatsapp_error"] = "invalid_phone"
-            elif not await _wa_free.is_connected():
-                result["whatsapp_error"] = "wa_not_connected"
-            else:
-                wa_body = (
-                    f"مرحباً {display_name}! 🎉\n\n"
-                    f"تم إنشاء حسابك في *{tenant_name}* على منصة Maestro EGP.\n\n"
-                    f"🔐 بيانات الدخول:\n"
-                    f"• اسم المستخدم: {email or user_doc.get('username', '-')}\n"
-                    f"• كلمة المرور: *{temp_password}*\n\n"
-                    f"⚠️ يُرجى تغيير كلمة المرور فور تسجيل الدخول لأول مرة.\n"
-                    f"🌐 رابط الدخول: {os.environ.get('FRONTEND_URL', 'https://maestroegp.com')}/login"
-                )
-                ok, err = await _wa_free.send_message(
-                    e164, wa_body,
-                    purpose="welcome", tenant_id=tenant_doc["id"],
-                    title=f"🎉 مرحباً في {tenant_name}",
-                )
-                result["whatsapp_sent"] = bool(ok)
-                if not ok:
-                    result["whatsapp_error"] = err
+                return {"sent": False, "error": "invalid_phone"}
+            if not await _wa_free.is_connected():
+                return {"sent": False, "error": "wa_not_connected"}
+            wa_body = (
+                f"مرحباً {display_name}! 🎉\n\n"
+                f"تم إنشاء حسابك في *{tenant_name}* على منصة Maestro EGP.\n\n"
+                f"🔐 بيانات الدخول:\n"
+                f"• اسم المستخدم: {email or user_doc.get('username', '-')}\n"
+                f"• كلمة المرور: *{temp_password}*\n\n"
+                f"⚠️ يُرجى تغيير كلمة المرور فور تسجيل الدخول لأول مرة.\n"
+                f"🌐 رابط الدخول: {os.environ.get('FRONTEND_URL', 'https://maestroegp.com')}/login"
+            )
+            ok, err = await _wa_free.send_message(
+                e164, wa_body,
+                purpose="welcome", tenant_id=tenant_doc["id"],
+                title=f"🎉 مرحباً في {tenant_name}",
+            )
+            return {"sent": bool(ok), "error": None if ok else err}
         except Exception as _we:
-            result["whatsapp_error"] = str(_we)
-    else:
-        result["whatsapp_error"] = "no_phone"
+            return {"sent": False, "error": str(_we)}
 
-    # 4) SMS كـ fallback — يُرسل فقط إن فشل الواتساب ولم يُرسَل البريد أيضاً (أو إن كان الواتساب مطفأ)
-    result["sms_sent"] = False
-    result["sms_error"] = None
+    # ⚡ إطلاق البريد والواتساب معاً — لا انتظار متسلسل
+    email_r, wa_r = await asyncio.gather(_email_task(), _wa_task(), return_exceptions=False)
+    result["email_sent"] = email_r["sent"]
+    result["email_error"] = email_r["error"]
+    result["whatsapp_sent"] = wa_r["sent"]
+    result["whatsapp_error"] = wa_r["error"]
+
+    # 3) SMS كـ fallback — يُرسل فقط إن فشل الواتساب
     if phone_raw and not result["whatsapp_sent"]:
         try:
             from twilio_verify import send_sms, _sms_configured
@@ -2732,7 +2845,6 @@ async def _send_welcome_bundle_to_user(user_doc: dict, tenant_doc: dict) -> dict
                 if not e164:
                     result["sms_error"] = "invalid_phone"
                 else:
-                    # رسالة SMS مختصرة (SMS محدود بـ 160 محرف تقريباً؛ نبقيها موجزة)
                     sms_body = (
                         f"Maestro EGP - مرحباً {display_name}\n"
                         f"حسابك في {tenant_name} جاهز.\n"
@@ -2748,6 +2860,31 @@ async def _send_welcome_bundle_to_user(user_doc: dict, tenant_doc: dict) -> dict
             result["sms_error"] = str(_se)
 
     result["ok"] = bool(result["email_sent"] or result["whatsapp_sent"] or result["sms_sent"])
+    
+    # 🛡️ إعادة تعيين كلمة المرور فقط في حالة generated_fallback (لا نمس كلمة المرور الأصلية)
+    # ننفّذ ذلك فقط إذا نجحت قناة واحدة على الأقل
+    if result["ok"] and password_source == "generated_fallback":
+        await db.users.update_one(
+            {"id": user_doc["id"], "tenant_id": tenant_doc["id"]},
+            {"$set": {
+                "password": hash_password(temp_password),
+                "password_vault": encrypt_plain_password(temp_password),
+                "must_change_password": True,
+                "welcome_sent_at": datetime.now(timezone.utc).isoformat(),
+            }}
+        )
+        result["temp_password_reset"] = True
+    elif result["ok"]:
+        # الكلمة الأصلية أُرسلت — نُسجّل فقط أن الترحيب تمّ (بدون لمس كلمة المرور)
+        await db.users.update_one(
+            {"id": user_doc["id"], "tenant_id": tenant_doc["id"]},
+            {"$set": {"welcome_sent_at": datetime.now(timezone.utc).isoformat()}}
+        )
+        result["temp_password_reset"] = False
+    else:
+        result["reason"] = "all_channels_failed"
+        result["temp_password_reset"] = False
+    
     return result
 
 

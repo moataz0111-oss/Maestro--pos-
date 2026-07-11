@@ -2820,43 +2820,36 @@ export default function SuperAdmin() {
 
   // مكون بطاقة العميل
   const sendWelcomeToOwner = async (tenant) => {
-    if (!window.confirm(t('سيتم إرسال ترحيب + بيانات دخول جديدة إلى مالك المشروع') + `\n(${tenant.owner_email || t('بلا بريد')} / ${tenant.owner_phone || t('بلا هاتف')}).\n\n${t('سيتم إعادة تعيين كلمة المرور الحالية إلى كلمة مؤقتة. متابعة؟')}`)) return;
+    // Preflight: تحقق أن قناة واحدة على الأقل متاحة
+    try {
+      const st = await axios.get(`${API}/super-admin/delivery-channels/status`, { withCredentials: true });
+      if (!st.data?.any_ready) {
+        const msg = t('لا توجد قناة إرسال مُتاحة حالياً!') + '\n\n' +
+          `📧 ${t('البريد')}: ${st.data?.email?.detail}\n` +
+          `💬 ${t('واتساب')}: ${st.data?.whatsapp?.detail}\n` +
+          `📱 SMS: ${st.data?.sms?.detail}\n\n` +
+          t('يجب تفعيل قناة واحدة على الأقل قبل الإرسال.');
+        toast.error(msg, { duration: 12000 });
+        return;
+      }
+    } catch (_) { /* استمر إذا فشل الفحص */ }
+    if (!window.confirm(t('سيتم إرسال ترحيب + بيانات دخول جديدة إلى مالك المشروع') + `\n(${tenant.owner_email || t('بلا بريد')} / ${tenant.owner_phone || t('بلا هاتف')}).\n\n${t('سيتم إعادة تعيين كلمة المرور فقط عند نجاح قناة واحدة على الأقل. متابعة؟')}`)) return;
     try {
       toast.loading(t('جاري الإرسال...'), { id: 'welcome-owner' });
       const res = await axios.post(`${API}/super-admin/tenants/${tenant.id}/send-welcome-to-owner`, {}, { withCredentials: true });
       const o = res.data?.owner || {};
       toast.dismiss('welcome-owner');
       const parts = [];
-      if (o.email_sent) parts.push(`📧 ${t('البريد')}: ${o.email}`);
+      if (o.email_sent) parts.push(`✅ ${t('البريد')}: ${o.email}`);
       else if (o.email) parts.push(`❌ ${t('البريد')}: ${o.email} (${o.email_error})`);
-      if (o.whatsapp_sent) parts.push(`💬 ${t('واتساب')}: ${o.phone}`);
-      else if (o.phone) parts.push(`❌ ${t('واتساب')}: ${o.phone} (${o.whatsapp_error})`);
-      if (o.ok) toast.success((t('تم إرسال الترحيب لمالك') + ` ${tenant.name || tenant.slug}\n`) + parts.join('\n'), { duration: 8000 });
-      else toast.error(t('فشل إرسال الترحيب') + '\n' + parts.join('\n'), { duration: 10000 });
+      if (o.whatsapp_sent) parts.push(`✅ ${t('واتساب')}: ${o.phone}`);
+      else if (o.phone && o.whatsapp_error) parts.push(`⚠️ ${t('واتساب')}: ${o.whatsapp_error}`);
+      if (o.sms_sent) parts.push(`✅ SMS: ${o.phone} (${t('احتياطي')})`);
+      else if (o.sms_error && o.sms_error !== 'sms_not_configured') parts.push(`❌ SMS: ${o.sms_error}`);
+      if (o.ok) toast.success((t('تم إرسال الترحيب لمالك') + ` ${tenant.name || tenant.slug}\n`) + parts.join('\n'), { duration: 10000 });
+      else toast.error(t('فشل الإرسال — كلمة المرور لم تتغيّر (المستخدم يستطيع الدخول بكلمته القديمة)') + '\n' + parts.join('\n'), { duration: 15000 });
     } catch (e) {
       toast.dismiss('welcome-owner');
-      toast.error(e.response?.data?.detail || t('فشل إرسال الترحيب'));
-    }
-  };
-
-  const sendWelcomeToAllUsers = async (tenant) => {
-    const cnt = tenant.users_count || t('كل');
-    if (!window.confirm(t('سيتم إرسال ترحيب + بيانات دخول جديدة إلى') + ` ${cnt} ${t('مستخدم في')} ${tenant.name || tenant.slug}.\n\n${t('سيتم إعادة تعيين كلمات المرور. متابعة؟')}`)) return;
-    try {
-      toast.loading(t('جاري الإرسال لكل المستخدمين...'), { id: 'welcome-users' });
-      const res = await axios.post(`${API}/super-admin/tenants/${tenant.id}/send-welcome-to-users`, {}, { withCredentials: true });
-      const d = res.data || {};
-      toast.dismiss('welcome-users');
-      if ((d.total || 0) === 0) {
-        toast.warning(t('لا يوجد مستخدمون في هذا التينانت'));
-        return;
-      }
-      const msg = `${t('التينانت')}: ${d.tenant_name}\n📊 ${t('الإجمالي')}: ${d.total}\n📧 ${t('بريد')}: ${d.email_sent}/${d.total}\n💬 ${t('واتساب')}: ${d.whatsapp_sent}/${d.total}`;
-      toast.success(msg, { duration: 10000 });
-      // اعرض التفاصيل في console للمراجعة
-      console.log('Welcome sent details:', d.users);
-    } catch (e) {
-      toast.dismiss('welcome-users');
       toast.error(e.response?.data?.detail || t('فشل إرسال الترحيب'));
     }
   };

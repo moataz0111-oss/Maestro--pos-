@@ -56,18 +56,18 @@ async def test_email_html_contains_logo_below_blue_bar():
     assert "html" in captured_html, "لم يُلتقط HTML البريد"
     html = captured_html["html"]
 
-    # 1) الشعار موجود
-    assert "data:image/png;base64," in html, "الشعار غير موجود في HTML"
+    # 1) الشعار موجود عبر CID inline (يعمل في Gmail/Apple/Outlook بلا حجب)
+    assert "cid:maestrologo" in html, "الشعار غير موجود في HTML (cid:maestrologo مفقود)"
 
     # 2) الشعار بعد <h2> (تحت الشريط الأزرق)
     idx_h2 = html.find("</h2></div>")
-    idx_logo = html.find("data:image/png;base64,")
-    assert idx_h2 > 0 and idx_logo > idx_h2, \
+    idx_logo_img = html.find("<img")
+    assert idx_h2 > 0 and idx_logo_img > idx_h2, \
         "الشعار يجب أن يكون بعد الشريط الأزرق (</h2></div>)"
 
     # 3) الشعار قبل محتوى الرسالة (pre)
     idx_pre = html.find("<pre")
-    assert idx_pre > idx_logo, "الشعار يجب أن يكون قبل محتوى الرسالة"
+    assert idx_pre > idx_logo_img, "الشعار يجب أن يكون قبل محتوى الرسالة"
 
     # 4) تشخيص واتساب: لأن الاتصال False
     assert result.get("whatsapp") is False

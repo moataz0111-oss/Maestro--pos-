@@ -220,10 +220,15 @@ async def _load_email_config() -> dict:
 
 
 def _smtp_send_sync(cfg: dict, to_emails, subject: str, html_content: str) -> bool:
-    """Send an HTML email synchronously via SMTP (SSL 465 or STARTTLS 587)."""
+    """Send an HTML email synchronously via SMTP (SSL 465 or STARTTLS 587).
+    
+    🎯 يُرفق شعار Maestro EGP كصورة داخلية (CID inline) تلقائياً إن كان HTML
+    يحتوي على `cid:maestrologo` — يضمن ظهور الشعار في Gmail/Apple/Outlook.
+    """
     import smtplib
     from email.mime.text import MIMEText
     from email.mime.multipart import MIMEMultipart
+    from email.mime.image import MIMEImage
     from email.utils import formataddr
 
     if isinstance(to_emails, str):
@@ -234,14 +239,33 @@ def _smtp_send_sync(cfg: dict, to_emails, subject: str, html_content: str) -> bo
     password = cfg["smtp_password"]
     sender = user or cfg.get("sender_email")
 
-    msg = MIMEMultipart('alternative')
+    # إن كان HTML يشير إلى cid:maestrologo → نستخدم multipart/related
+    has_logo_cid = "cid:maestrologo" in html_content
+    if has_logo_cid:
+        msg = MIMEMultipart('related')
+        alt = MIMEMultipart('alternative')
+        alt.attach(MIMEText(html_content, 'html', 'utf-8'))
+        msg.attach(alt)
+        # أرفق الشعار كصورة داخلية
+        try:
+            _logo_path = ROOT_DIR / "static" / "branding" / "maestro-logo-email.png"
+            with open(_logo_path, "rb") as _lf:
+                _img = MIMEImage(_lf.read(), _subtype='png')
+            _img.add_header('Content-ID', '<maestrologo>')
+            _img.add_header('Content-Disposition', 'inline', filename='maestro-logo.png')
+            msg.attach(_img)
+        except Exception as _le:
+            logger.warning(f"Could not attach logo CID: {_le}")
+    else:
+        msg = MIMEMultipart('alternative')
+        msg.attach(MIMEText(html_content, 'html', 'utf-8'))
+
     msg['Subject'] = subject
     from_name = (cfg.get("from_name") or "Maestro EGP").strip()
     msg['From'] = formataddr((from_name, sender))
     msg['To'] = ', '.join(to_emails)
     # ترويسة Reply-To بعنوان نظيف (بدون اسم العرض) لضمان نجاح الرد من عميل البريد
     msg['Reply-To'] = sender
-    msg.attach(MIMEText(html_content, 'html', 'utf-8'))
 
     if port == 465:
         server = smtplib.SMTP_SSL(host, port, timeout=20)
@@ -352,21 +376,22 @@ def build_branded_email_html(title: str, body_html: str, severity: str = "info",
     """يبني HTML موحّد لجميع رسائل البريد الخارجة من النظام.
 
     - severity: info(أزرق) | warning(أصفر) | critical(أحمر) | success(أخضر)
-    - يُدرج شعار Maestro EGP الموحّد تحت الشريط الملوّن مباشرة (خلفية بيضاء + ظل 3D)
+    - يُدرج شعار Maestro EGP الموحّد كصورة عبر رابط عام (Gmail يحجب data URIs)
     - يُستخدم لكل: تقارير الوردية، OTP، رسائل الترحيب، تنبيهات النظام، والاسترداد.
     """
     _sev_color = {
         "info": "#3B82F6", "warning": "#F59E0B",
         "critical": "#EF4444", "success": "#10B981",
     }.get(severity, "#3B82F6")
-    _logo_src = _get_maestro_logo_b64()
+    # ⚡ نستخدم CID inline attachment — يظهر الشعار في Gmail/Apple/Outlook بلا حجب
+    #    ملف الشعار يُرفق تلقائياً في _smtp_send_sync حين يوجد cid:maestrologo في HTML
     _logo_block = (
-        f"<div style='background:#ffffff;padding:16px 0;text-align:center'>"
-        f"<img src='{_logo_src}' alt='Maestro EGP' "
-        f"style='width:64px;height:64px;display:inline-block;border-radius:50%;object-fit:cover;"
+        f"<div style='background:#ffffff;padding:20px 0;text-align:center'>"
+        f"<img src='cid:maestrologo' alt='Maestro EGP' width='72' height='72' "
+        f"style='width:72px;height:72px;display:inline-block;border-radius:50%;object-fit:cover;"
         f"box-shadow:0 6px 16px rgba(11,26,58,0.35), 0 2px 4px rgba(0,0,0,0.15)' />"
         f"</div>"
-    ) if _logo_src else ""
+    )
     now_iso = datetime.now(timezone.utc).isoformat()
     _footer = (
         f"<hr style='margin:16px 0;border:none;border-top:1px solid #e5e7eb'/>"
@@ -3003,6 +3028,59 @@ def verify_password(password: str, hashed: str) -> bool:
     except Exception:
         return False
 
+# ==================== PASSWORD VAULT (تشفير كلمة المرور الأصلية لإعادة إرسالها) ====================
+# الفكرة: نحفظ كلمة المرور بصيغة مشفَّرة (Fernet AES-128 + HMAC) لنتمكن من إرسالها
+# للمستخدم عند الضغط على زر الترحيب. لا يمكن استرجاعها إلا من الخادم بمفتاح الـ VAULT.
+_password_vault_cipher = None
+
+def _get_password_vault():
+    """يُهيّئ Fernet مرة واحدة من PASSWORD_VAULT_KEY في .env."""
+    global _password_vault_cipher
+    if _password_vault_cipher is None:
+        _key = os.environ.get("PASSWORD_VAULT_KEY")
+        if not _key:
+            logger.warning("PASSWORD_VAULT_KEY غير مُهيّأ — كلمة المرور الأصلية لن تُحفَظ")
+            return None
+        try:
+            from cryptography.fernet import Fernet
+            _password_vault_cipher = Fernet(_key.encode() if isinstance(_key, str) else _key)
+        except Exception as _e:
+            logger.error(f"PASSWORD_VAULT_KEY غير صالح: {_e}")
+            return None
+    return _password_vault_cipher
+
+
+def encrypt_plain_password(plain: str) -> Optional[str]:
+    """يشفّر كلمة المرور الأصلية لحفظها في users.password_vault.
+    عند الحاجة (زر الترحيب) نفكّها ونرسلها للمستخدم كما هي."""
+    if not plain:
+        return None
+    cipher = _get_password_vault()
+    if not cipher:
+        return None
+    try:
+        return cipher.encrypt(plain.encode('utf-8')).decode('utf-8')
+    except Exception as _e:
+        logger.error(f"encrypt_plain_password failed: {_e}")
+        return None
+
+
+def decrypt_plain_password(token: str) -> Optional[str]:
+    """يفكّ تشفير كلمة المرور الأصلية — تُستخدم فقط داخل زر الترحيب."""
+    if not token:
+        return None
+    cipher = _get_password_vault()
+    if not cipher:
+        return None
+    try:
+        return cipher.decrypt(token.encode('utf-8')).decode('utf-8')
+    except Exception as _e:
+        logger.warning(f"decrypt_plain_password failed: {_e}")
+        return None
+
+
+
+
 def create_token(user_id: str, role: str, branch_id: Optional[str] = None, tenant_id: Optional[str] = None) -> str:
     # تحديد مدة الجلسة بناءً على نوع المستخدم
     # المالك (super_admin) والعملاء (admin) = لا يسجلون خروج أبداً (100 سنة)
@@ -3243,8 +3321,13 @@ async def trust_device(subject_type: str, subject_id: str, device_id: str, ip: s
         upsert=True,
     )
 
-async def _phone_to_e164(phone: str) -> str:
-    """تحويل رقم عراقي محلي إلى صيغة E.164 (+964) إن لزم."""
+async def _phone_to_e164(phone: str, default_country: str = "IQ") -> str:
+    """تحويل رقم محلي إلى صيغة E.164 حسب رمز الدولة (IQ افتراضياً، SA/AE/EG/... مدعومة).
+    
+    Prefix map (رمز الدولة → رمز الاتصال):
+    IQ:+964, SA:+966, AE:+971, EG:+20, KW:+965, QA:+974, BH:+973, OM:+968,
+    JO:+962, LB:+961, SY:+963, TR:+90, US:+1, GB:+44
+    """
     p = "".join(ch for ch in str(phone or "") if ch.isdigit() or ch == "+")
     if not p:
         return p
@@ -3252,9 +3335,19 @@ async def _phone_to_e164(phone: str) -> str:
         return p
     if p.startswith("00"):
         return "+" + p[2:]
+    _prefix_map = {
+        "IQ": "+964", "SA": "+966", "AE": "+971", "EG": "+20",
+        "KW": "+965", "QA": "+974", "BH": "+973", "OM": "+968",
+        "JO": "+962", "LB": "+961", "SY": "+963", "TR": "+90",
+        "US": "+1", "GB": "+44",
+    }
+    country_prefix = _prefix_map.get((default_country or "IQ").upper(), "+964")
+    # لو الرقم يبدأ بـ 0 → استبدل بـ رمز الدولة
     if p.startswith("0"):
-        return "+964" + p[1:]
-    if p.startswith("964"):
+        return country_prefix + p[1:]
+    # لو يبدأ برمز الدولة (بدون +) → أضف +
+    prefix_digits = country_prefix.lstrip("+")
+    if p.startswith(prefix_digits):
         return "+" + p
     return "+" + p
 
@@ -3708,6 +3801,7 @@ async def register(user: UserCreate, current_user: dict = Depends(get_current_us
         "username": user.username,
         "email": user.email,
         "password": hash_password(user.password),
+        "password_vault": encrypt_plain_password(user.password),
         "full_name": user.full_name,
         "full_name_en": user.full_name_en,  # الاسم بالإنجليزية
         "role": requested_role,
@@ -4188,6 +4282,11 @@ async def update_user(user_id: str, update: UserUpdate, current_user: dict = Dep
             raise HTTPException(status_code=400, detail="اسم المستخدم مستخدم بالفعل")
     
     if update_data:
+        # 🔑 لو password ضمن التعديل → حدّث password_vault معه (لضمان أن زر الترحيب يُرسل آخر تحديث)
+        if "password" in update_data and update_data["password"]:
+            plain_pw = update_data["password"]
+            update_data["password"] = hash_password(plain_pw)
+            update_data["password_vault"] = encrypt_plain_password(plain_pw)
         await db.users.update_one({"id": user_id}, {"$set": update_data})
     
     # 🔄 مزامنة تلقائية: عند تعديل tenant admin بياناته الشخصية، تنعكس على مستند تينانته
@@ -4334,6 +4433,7 @@ async def create_user(user: UserCreate, current_user: dict = Depends(get_current
         "username": user.username,
         "email": user.email,
         "password": hash_password(user.password),
+        "password_vault": encrypt_plain_password(user.password),
         "full_name": user.full_name,
         "role": user.role,
         "branch_id": user.branch_id,
@@ -4366,7 +4466,11 @@ async def reset_user_password(user_id: str, data: PasswordReset, current_user: d
     
     validate_password_strength(data.new_password)
     hashed = hash_password(data.new_password)
-    await db.users.update_one({"id": user_id}, {"$set": {"password": hashed}})
+    # 🔑 نحدّث password_vault معاً — زر الترحيب سيُرسل آخر كلمة مرور محفوظة
+    await db.users.update_one({"id": user_id}, {"$set": {
+        "password": hashed,
+        "password_vault": encrypt_plain_password(data.new_password),
+    }})
     
     return {"message": "تم تغيير كلمة المرور بنجاح"}
 
@@ -9715,7 +9819,11 @@ async def reset_staff_password(staff_id: str, new_password: str = Body(..., embe
         raise HTTPException(status_code=403, detail="لا يمكن تعديل هذا المستخدم")
     
     validate_password_strength(new_password)
-    await db.users.update_one(query, {"$set": {"password": hash_password(new_password), "updated_at": datetime.now(timezone.utc).isoformat()}})
+    await db.users.update_one(query, {"$set": {
+        "password": hash_password(new_password),
+        "password_vault": encrypt_plain_password(new_password),  # 🔑 لتشغيل زر الترحيب مع آخر كلمة محدَّثة
+        "updated_at": datetime.now(timezone.utc).isoformat(),
+    }})
     
     return {"message": "تم تغيير كلمة المرور"}
 
@@ -14999,6 +15107,7 @@ class DriverCreateRequest(BaseModel):
     email: Optional[str] = None
     branch_id: Optional[str] = None
     pin: str = "1234"
+    country_code: Optional[str] = "IQ"  # رمز الدولة لضبط رقم الهاتف E.164 (IQ / SA / AE / EG / ...)
 
 @api_router.post("/drivers")
 async def create_driver(
@@ -15020,8 +15129,10 @@ async def create_driver(
         "branch_id": driver_data.branch_id,
         "name": driver_data.name,
         "phone": driver_data.phone,
+        "country_code": (driver_data.country_code or "IQ").upper(),
         "email": driver_data.email,
-        "pin": driver_data.pin,  # الرمز السري للسائق
+        "pin": driver_data.pin,  # الرمز السري للسائق (كمرجع سريع)
+        "pin_vault": encrypt_plain_password(driver_data.pin),  # مشفَّر لإعادة الإرسال في زر الترحيب
         "is_active": True,
         "is_available": True,
         "current_location": None,
@@ -15034,6 +15145,7 @@ async def create_driver(
     await db.drivers.insert_one(driver)
     driver.pop("_id", None)
     driver.pop("pin", None)  # لا ترجع PIN في الاستجابة
+    driver.pop("pin_vault", None)
     
     return {"message": "تم إضافة السائق", "driver": driver}
 
@@ -15042,6 +15154,7 @@ class DriverUpdateRequest(BaseModel):
     phone: Optional[str] = None
     email: Optional[str] = None
     pin: Optional[str] = None
+    country_code: Optional[str] = None
     is_active: Optional[bool] = None
     is_available: Optional[bool] = None
     branch_id: Optional[str] = None
@@ -15062,7 +15175,10 @@ async def update_driver(
     if driver_data.name: update_data["name"] = driver_data.name
     if driver_data.phone: update_data["phone"] = driver_data.phone
     if driver_data.email is not None: update_data["email"] = driver_data.email
-    if driver_data.pin: update_data["pin"] = driver_data.pin  # تحديث الرمز السري
+    if driver_data.pin:
+        update_data["pin"] = driver_data.pin
+        update_data["pin_vault"] = encrypt_plain_password(driver_data.pin)
+    if driver_data.country_code: update_data["country_code"] = driver_data.country_code.upper()
     if driver_data.is_active is not None: update_data["is_active"] = driver_data.is_active
     if driver_data.is_available is not None: update_data["is_available"] = driver_data.is_available
     if driver_data.branch_id: update_data["branch_id"] = driver_data.branch_id
@@ -15076,6 +15192,100 @@ async def update_driver(
         raise HTTPException(status_code=404, detail="السائق غير موجود")
     
     return {"message": "تم تحديث بيانات السائق"}
+
+
+@api_router.post("/drivers/{driver_id}/send-welcome")
+async def send_welcome_to_driver(driver_id: str, current_user: dict = Depends(get_current_user)):
+    """إرسال بيانات دخول السائق (PIN + رقم) على الواتساب — بهوية Maestro EGP الموحّدة.
+    - يُستخدم PIN الأصلي من pin_vault (لا يُغيَّر)
+    - يستخدم country_code لتنسيق الرقم بشكل صحيح
+    - عزل: لا يمكن إرسال ترحيب لسائق خارج تينانت الطالب
+    """
+    if current_user["role"] not in [UserRole.ADMIN, UserRole.MANAGER]:
+        raise HTTPException(status_code=403, detail="غير مصرح")
+    tenant_id = get_user_tenant_id(current_user)
+    
+    driver = await db.drivers.find_one({"id": driver_id, "tenant_id": tenant_id}, {"_id": 0})
+    if not driver:
+        raise HTTPException(status_code=404, detail="السائق غير موجود")
+    
+    phone_raw = (driver.get("phone") or "").strip()
+    if not phone_raw:
+        raise HTTPException(status_code=400, detail="لا يوجد رقم هاتف مسجّل لهذا السائق")
+    
+    # اجلب PIN الأصلي من الخزنة
+    pin = decrypt_plain_password(driver.get("pin_vault") or "") or driver.get("pin", "1234")
+    country_code = (driver.get("country_code") or "IQ").upper()
+    
+    result = {
+        "driver_id": driver_id,
+        "name": driver.get("name"),
+        "phone": phone_raw,
+        "country_code": country_code,
+        "whatsapp_sent": False,
+        "whatsapp_error": None,
+        "sms_sent": False,
+        "sms_error": None,
+    }
+    
+    # 1) واتساب — بهوية Maestro EGP الموحّدة + الشعار
+    try:
+        e164 = await _phone_to_e164(phone_raw, default_country=country_code)
+        if not e164:
+            result["whatsapp_error"] = "invalid_phone"
+        elif not await _wa_free.is_connected():
+            result["whatsapp_error"] = "wa_not_connected"
+        else:
+            tenant = await db.tenants.find_one({"id": tenant_id}, {"_id": 0, "name": 1}) or {}
+            tname = tenant.get("name") or "Maestro EGP"
+            wa_body = (
+                f"مرحباً {driver.get('name', 'السائق')}! 🚗\n\n"
+                f"تم تفعيل حسابك كسائق في *{tname}*.\n\n"
+                f"🔐 بيانات الدخول:\n"
+                f"• الرقم المسجّل: {phone_raw}\n"
+                f"• الرمز السري (PIN): *{pin}*\n\n"
+                f"📱 استخدم تطبيق السائق لاستقبال الطلبات.\n"
+                f"🌐 رابط التطبيق: {os.environ.get('FRONTEND_URL', 'https://maestroegp.com')}/driver"
+            )
+            ok, err = await _wa_free.send_message(
+                e164, wa_body,
+                purpose="driver_welcome", tenant_id=tenant_id,
+                title=f"🚗 مرحباً في {tname}",
+            )
+            result["whatsapp_sent"] = bool(ok)
+            if not ok:
+                result["whatsapp_error"] = err
+    except Exception as _we:
+        result["whatsapp_error"] = str(_we)
+    
+    # 2) SMS كـ fallback إن فشل الواتساب
+    if not result["whatsapp_sent"]:
+        try:
+            from twilio_verify import send_sms, _sms_configured
+            if not _sms_configured():
+                result["sms_error"] = "sms_not_configured"
+            else:
+                e164 = await _phone_to_e164(phone_raw, default_country=country_code)
+                if not e164:
+                    result["sms_error"] = "invalid_phone"
+                else:
+                    sms_body = (
+                        f"Maestro EGP - {driver.get('name', 'السائق')}\n"
+                        f"الرمز السري (PIN): {pin}\n"
+                        f"استخدم تطبيق السائق."
+                    )
+                    ok_sms, sms_ret = await send_sms(e164, sms_body)
+                    result["sms_sent"] = bool(ok_sms)
+                    if not ok_sms:
+                        result["sms_error"] = sms_ret
+        except Exception as _se:
+            result["sms_error"] = str(_se)
+    
+    result["ok"] = bool(result["whatsapp_sent"] or result["sms_sent"])
+    if result["ok"]:
+        await db.drivers.update_one({"id": driver_id, "tenant_id": tenant_id},
+                                     {"$set": {"welcome_sent_at": datetime.now(timezone.utc).isoformat()}})
+    return {"success": result["ok"], "result": result}
 
 @api_router.delete("/drivers/{driver_id}")
 async def delete_driver(driver_id: str, current_user: dict = Depends(get_current_user)):

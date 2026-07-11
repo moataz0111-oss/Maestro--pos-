@@ -1726,13 +1726,14 @@ export default function Settings() {
 
   // إرسال ترحيب + بيانات دخول جديدة لمستخدم واحد (بريد + واتساب + SMS احتياطي)
   // المستلم = هذا المستخدم فقط (ببريده ورقمه). مالك النظام لا يستلم شيئاً.
+  // 🛡️ حماية: كلمة المرور لا تتغيّر إلا عند نجاح قناة واحدة على الأقل.
   const handleSendWelcomeToUser = async (u) => {
     const contactInfo = [u.email ? `📧 ${u.email}` : null, u.phone ? `📱 ${u.phone}` : null].filter(Boolean).join('\n');
     if (!contactInfo) {
       toast.error(t('لا يوجد بريد ولا رقم لهذا المستخدم — أضفهما أولاً'));
       return;
     }
-    const msg = `${t('سيتم إعادة تعيين كلمة المرور وإرسال بيانات الدخول الجديدة إلى:')}\n\n${contactInfo}\n\n${t('متابعة؟')}`;
+    const msg = `${t('سيتم إرسال بيانات الدخول الجديدة إلى:')}\n\n${contactInfo}\n\n${t('كلمة المرور لن تتغيّر إلا عند نجاح قناة واحدة على الأقل. متابعة؟')}`;
     if (!confirm(msg)) return;
     try {
       toast.loading(t('جاري الإرسال...'), { id: `wc-${u.id}` });
@@ -1748,8 +1749,8 @@ export default function Settings() {
       else if (r.phone && r.whatsapp_error) parts.push(`⚠️ ${t('واتساب')}: ${r.whatsapp_error}`);
       if (r.sms_sent) parts.push(`✅ SMS: ${r.phone} (${t('احتياطي')})`);
       else if (r.sms_error && r.sms_error !== 'sms_not_configured') parts.push(`❌ SMS: ${r.sms_error}`);
-      if (r.ok) toast.success(`${t('تم الإرسال إلى')} ${u.full_name || u.username}\n${parts.join('\n')}`, { duration: 8000 });
-      else toast.error(`${t('فشل الإرسال')}\n${parts.join('\n')}`, { duration: 10000 });
+      if (r.ok) toast.success(`${t('تم الإرسال إلى')} ${u.full_name || u.username}\n${parts.join('\n')}`, { duration: 10000 });
+      else toast.error(t('فشل الإرسال — كلمة المرور القديمة لا تزال صالحة') + '\n' + parts.join('\n'), { duration: 15000 });
     } catch (e) {
       toast.dismiss(`wc-${u.id}`);
       toast.error(e.response?.data?.detail || t('فشل الإرسال'));
