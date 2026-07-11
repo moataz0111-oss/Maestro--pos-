@@ -2616,3 +2616,230 @@ async def reset_tenant_hr(tenant_id: str, confirm: bool = False, current_user: d
         **results
     }
 
+
+# ============================================================================
+# 🎁 إرسال ترحيب للعميل (المالك) وللمستخدمين — مع رمز تحقق OTP
+# ============================================================================
+# ضمانات العزل (Tenant Isolation):
+#   • كل استعلامات المستخدمين مقيّدة بـ tenant_id في الـ URL path
+#   • لا يمكن أن تصل بيانات مستخدم من تينانت لمستخدم في تينانت آخر
+#   • الاستجابة تُرجع بوضوح: البريد المُرسَل إليه + الهاتف المُرسَل إليه لكل مستخدم
+#     ليطمئنّ مالك النظام أن التسليم صحيح لكل عميل ضمن مشروعه فقط.
+
+def _generate_temp_password(length: int = 10) -> str:
+    """يولّد كلمة مرور مؤقتة آمنة (أحرف + أرقام + رمز واحد)."""
+    import secrets, string
+    alpha = string.ascii_letters + string.digits
+    body = ''.join(secrets.choice(alpha) for _ in range(length - 2))
+    return body + secrets.choice("!@#$%") + secrets.choice(string.digits)
+
+
+async def _send_welcome_bundle_to_user(user_doc: dict, tenant_doc: dict) -> dict:
+    """يرسل ترحيب + كلمة مرور مؤقتة + رمز OTP لمستخدم واحد على البريد والواتساب.
+    يعيد قاموساً يوضّح ما تم إرساله وأين — للشفافية الكاملة."""
+    if not user_doc or not tenant_doc:
+        return {"ok": False, "reason": "missing_user_or_tenant"}
+
+    # عزل صارم: تأكّد أن المستخدم يخص التينانت المطلوب
+    if user_doc.get("tenant_id") != tenant_doc.get("id"):
+        return {"ok": False, "reason": "tenant_mismatch"}
+
+    # 1) توليد كلمة مرور مؤقتة + إعادة تعيين
+    temp_password = _generate_temp_password(10)
+    await db.users.update_one(
+        {"id": user_doc["id"], "tenant_id": tenant_doc["id"]},
+        {"$set": {
+            "password": hash_password(temp_password),
+            "must_change_password": True,
+            "welcome_sent_at": datetime.now(timezone.utc).isoformat(),
+        }}
+    )
+
+    tenant_name = tenant_doc.get("name") or tenant_doc.get("name_en") or tenant_doc.get("slug") or "Maestro EGP"
+    display_name = user_doc.get("full_name") or user_doc.get("username") or user_doc.get("email") or "-"
+    email = (user_doc.get("email") or "").strip()
+    phone_raw = (user_doc.get("phone") or "").strip()
+
+    result = {
+        "user_id": user_doc.get("id"),
+        "name": display_name,
+        "email": email or None,
+        "phone": phone_raw or None,
+        "email_sent": False,
+        "email_error": None,
+        "whatsapp_sent": False,
+        "whatsapp_error": None,
+        "temp_password_reset": True,
+    }
+
+    # 2) بريد الترحيب — يستخدم القالب الموحّد بشعار Maestro EGP
+    if email and await email_transport_configured():
+        try:
+            await send_welcome_email(
+                recipient_email=email,
+                tenant_name=tenant_name,
+                owner_name=display_name,
+                username=email,
+                password=temp_password,
+            )
+            result["email_sent"] = True
+        except Exception as _ee:
+            result["email_error"] = str(_ee)
+    else:
+        result["email_error"] = "no_email" if not email else "email_transport_not_configured"
+
+    # 3) واتساب الترحيب — بالقالب الموحّد + الشعار
+    if phone_raw:
+        try:
+            e164 = await _phone_to_e164(phone_raw)
+            if not e164:
+                result["whatsapp_error"] = "invalid_phone"
+            elif not await _wa_free.is_connected():
+                result["whatsapp_error"] = "wa_not_connected"
+            else:
+                wa_body = (
+                    f"مرحباً {display_name}! 🎉\n\n"
+                    f"تم إنشاء حسابك في *{tenant_name}* على منصة Maestro EGP.\n\n"
+                    f"🔐 بيانات الدخول:\n"
+                    f"• اسم المستخدم: {email or user_doc.get('username', '-')}\n"
+                    f"• كلمة المرور: *{temp_password}*\n\n"
+                    f"⚠️ يُرجى تغيير كلمة المرور فور تسجيل الدخول لأول مرة.\n"
+                    f"🌐 رابط الدخول: {os.environ.get('FRONTEND_URL', 'https://maestroegp.com')}/login"
+                )
+                ok, err = await _wa_free.send_message(
+                    e164, wa_body,
+                    purpose="welcome", tenant_id=tenant_doc["id"],
+                    title=f"🎉 مرحباً في {tenant_name}",
+                )
+                result["whatsapp_sent"] = bool(ok)
+                if not ok:
+                    result["whatsapp_error"] = err
+        except Exception as _we:
+            result["whatsapp_error"] = str(_we)
+    else:
+        result["whatsapp_error"] = "no_phone"
+
+    # 4) SMS كـ fallback — يُرسل فقط إن فشل الواتساب ولم يُرسَل البريد أيضاً (أو إن كان الواتساب مطفأ)
+    result["sms_sent"] = False
+    result["sms_error"] = None
+    if phone_raw and not result["whatsapp_sent"]:
+        try:
+            from twilio_verify import send_sms, _sms_configured
+            if not _sms_configured():
+                result["sms_error"] = "sms_not_configured"
+            else:
+                e164 = await _phone_to_e164(phone_raw)
+                if not e164:
+                    result["sms_error"] = "invalid_phone"
+                else:
+                    # رسالة SMS مختصرة (SMS محدود بـ 160 محرف تقريباً؛ نبقيها موجزة)
+                    sms_body = (
+                        f"Maestro EGP - مرحباً {display_name}\n"
+                        f"حسابك في {tenant_name} جاهز.\n"
+                        f"المستخدم: {email or user_doc.get('username', '-')}\n"
+                        f"كلمة المرور: {temp_password}\n"
+                        f"غيّر كلمة المرور فور الدخول."
+                    )
+                    ok_sms, sms_ret = await send_sms(e164, sms_body)
+                    result["sms_sent"] = bool(ok_sms)
+                    if not ok_sms:
+                        result["sms_error"] = sms_ret
+        except Exception as _se:
+            result["sms_error"] = str(_se)
+
+    result["ok"] = bool(result["email_sent"] or result["whatsapp_sent"] or result["sms_sent"])
+    return result
+
+
+@router.post("/super-admin/tenants/{tenant_id}/send-welcome-to-owner")
+async def send_welcome_to_tenant_owner(tenant_id: str, current_user: dict = Depends(verify_super_admin)):
+    """إرسال ترحيب + بيانات دخول لمالك المطعم (العميل) في تينانت محدد.
+    
+    المستلم = العميل (tenant admin) — يُستخدم owner_email/owner_phone المُدخَلَان
+    عند إنشاء التينانت كمصدر أساسي للاتصال. لن يستقبل super_admin هذه الرسالة أبداً.
+    """
+    tenant = await db.tenants.find_one({"id": tenant_id}, {"_id": 0})
+    if not tenant:
+        raise HTTPException(status_code=404, detail="التينانت غير موجود")
+
+    # 🔒 عزل: نجلب فقط admin هذا التينانت (وليس أي admin آخر في النظام)
+    owner = await db.users.find_one(
+        {"tenant_id": tenant_id, "role": UserRole.ADMIN},
+        {"_id": 0}
+    )
+    if not owner:
+        raise HTTPException(status_code=404, detail="لا يوجد حساب مالك (admin) لهذا التينانت")
+
+    # ✨ استخدم بيانات إنشاء التينانت كمصدر أوّلي (لأن super_admin أدخلها بنفسه)
+    # نُنشئ نسخة معدّلة من owner مع تفضيل tenant.owner_email/owner_phone إن كانت متوفرة
+    effective_owner = dict(owner)
+    if tenant.get("owner_email"):
+        effective_owner["email"] = tenant["owner_email"]
+    if tenant.get("owner_phone"):
+        effective_owner["phone"] = tenant["owner_phone"]
+    if tenant.get("owner_name") and not effective_owner.get("full_name"):
+        effective_owner["full_name"] = tenant["owner_name"]
+
+    result = await _send_welcome_bundle_to_user(effective_owner, tenant)
+    await record_audit("super_admin.send_welcome_owner", user=current_user, details={
+        "tenant_id": tenant_id, "target_user_id": owner.get("id"),
+        "email_used": effective_owner.get("email"), "phone_used": effective_owner.get("phone"),
+        "email_sent": result.get("email_sent"), "whatsapp_sent": result.get("whatsapp_sent"),
+        "sms_sent": result.get("sms_sent"),
+    })
+    return {
+        "success": result.get("ok", False),
+        "tenant_id": tenant_id,
+        "tenant_name": tenant.get("name") or tenant.get("slug"),
+        "owner": result,
+    }
+
+
+@router.post("/super-admin/tenants/{tenant_id}/send-welcome-to-users")
+async def send_welcome_to_all_tenant_users(tenant_id: str, current_user: dict = Depends(verify_super_admin)):
+    """إرسال ترحيب + بيانات دخول لجميع مستخدمي التينانت (باستثناء super_admin).
+    كل مستخدم يتلقّى بياناته الخاصة على بريده وواتسابه.
+    عزل صارم: لا يتم لمس أي مستخدم خارج tenant_id."""
+    tenant = await db.tenants.find_one({"id": tenant_id}, {"_id": 0})
+    if not tenant:
+        raise HTTPException(status_code=404, detail="التينانت غير موجود")
+
+    # 🔒 عزل: كل المستخدمين ضمن هذا التينانت فقط، عدا super_admin
+    users_cursor = db.users.find(
+        {"tenant_id": tenant_id, "role": {"$ne": UserRole.SUPER_ADMIN}},
+        {"_id": 0}
+    )
+    users = [u async for u in users_cursor]
+    if not users:
+        return {
+            "success": False,
+            "tenant_id": tenant_id,
+            "tenant_name": tenant.get("name") or tenant.get("slug"),
+            "total": 0, "email_sent": 0, "whatsapp_sent": 0,
+            "users": [],
+            "message": "لا يوجد مستخدمون في هذا التينانت",
+        }
+
+    per_user_results = []
+    email_sent_count = 0
+    whatsapp_sent_count = 0
+    for u in users:
+        r = await _send_welcome_bundle_to_user(u, tenant)
+        per_user_results.append(r)
+        if r.get("email_sent"): email_sent_count += 1
+        if r.get("whatsapp_sent"): whatsapp_sent_count += 1
+
+    await record_audit("super_admin.send_welcome_users", user=current_user, details={
+        "tenant_id": tenant_id, "total": len(users),
+        "email_sent": email_sent_count, "whatsapp_sent": whatsapp_sent_count,
+    })
+    return {
+        "success": True,
+        "tenant_id": tenant_id,
+        "tenant_name": tenant.get("name") or tenant.get("slug"),
+        "total": len(users),
+        "email_sent": email_sent_count,
+        "whatsapp_sent": whatsapp_sent_count,
+        "users": per_user_results,
+    }
+

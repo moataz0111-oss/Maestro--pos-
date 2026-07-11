@@ -2819,6 +2819,48 @@ export default function SuperAdmin() {
   }
 
   // مكون بطاقة العميل
+  const sendWelcomeToOwner = async (tenant) => {
+    if (!window.confirm(t('سيتم إرسال ترحيب + بيانات دخول جديدة إلى مالك المشروع') + `\n(${tenant.owner_email || t('بلا بريد')} / ${tenant.owner_phone || t('بلا هاتف')}).\n\n${t('سيتم إعادة تعيين كلمة المرور الحالية إلى كلمة مؤقتة. متابعة؟')}`)) return;
+    try {
+      toast.loading(t('جاري الإرسال...'), { id: 'welcome-owner' });
+      const res = await axios.post(`${API}/super-admin/tenants/${tenant.id}/send-welcome-to-owner`, {}, { withCredentials: true });
+      const o = res.data?.owner || {};
+      toast.dismiss('welcome-owner');
+      const parts = [];
+      if (o.email_sent) parts.push(`📧 ${t('البريد')}: ${o.email}`);
+      else if (o.email) parts.push(`❌ ${t('البريد')}: ${o.email} (${o.email_error})`);
+      if (o.whatsapp_sent) parts.push(`💬 ${t('واتساب')}: ${o.phone}`);
+      else if (o.phone) parts.push(`❌ ${t('واتساب')}: ${o.phone} (${o.whatsapp_error})`);
+      if (o.ok) toast.success((t('تم إرسال الترحيب لمالك') + ` ${tenant.name || tenant.slug}\n`) + parts.join('\n'), { duration: 8000 });
+      else toast.error(t('فشل إرسال الترحيب') + '\n' + parts.join('\n'), { duration: 10000 });
+    } catch (e) {
+      toast.dismiss('welcome-owner');
+      toast.error(e.response?.data?.detail || t('فشل إرسال الترحيب'));
+    }
+  };
+
+  const sendWelcomeToAllUsers = async (tenant) => {
+    const cnt = tenant.users_count || t('كل');
+    if (!window.confirm(t('سيتم إرسال ترحيب + بيانات دخول جديدة إلى') + ` ${cnt} ${t('مستخدم في')} ${tenant.name || tenant.slug}.\n\n${t('سيتم إعادة تعيين كلمات المرور. متابعة؟')}`)) return;
+    try {
+      toast.loading(t('جاري الإرسال لكل المستخدمين...'), { id: 'welcome-users' });
+      const res = await axios.post(`${API}/super-admin/tenants/${tenant.id}/send-welcome-to-users`, {}, { withCredentials: true });
+      const d = res.data || {};
+      toast.dismiss('welcome-users');
+      if ((d.total || 0) === 0) {
+        toast.warning(t('لا يوجد مستخدمون في هذا التينانت'));
+        return;
+      }
+      const msg = `${t('التينانت')}: ${d.tenant_name}\n📊 ${t('الإجمالي')}: ${d.total}\n📧 ${t('بريد')}: ${d.email_sent}/${d.total}\n💬 ${t('واتساب')}: ${d.whatsapp_sent}/${d.total}`;
+      toast.success(msg, { duration: 10000 });
+      // اعرض التفاصيل في console للمراجعة
+      console.log('Welcome sent details:', d.users);
+    } catch (e) {
+      toast.dismiss('welcome-users');
+      toast.error(e.response?.data?.detail || t('فشل إرسال الترحيب'));
+    }
+  };
+
   const TenantCard = ({ tenant, isDemo = false }) => (
     <div 
       className={`flex items-center justify-between p-4 rounded-lg hover:bg-[#1A284E]/50 transition-colors ${
@@ -2878,6 +2920,16 @@ export default function SuperAdmin() {
           {/* تعديل */}
           <Button variant="ghost" size="icon" onClick={() => openEditTenant(tenant)} className="hover:bg-gray-600" title={t('تعديل')}>
             <Edit className="h-4 w-4 text-yellow-400" />
+          </Button>
+          {/* ترحيب للمالك — يرسل بيانات الدخول عبر البريد + الواتساب (وSMS كـ fallback) */}
+          <Button
+            variant="ghost" size="icon"
+            onClick={() => sendWelcomeToOwner(tenant)}
+            className="hover:bg-emerald-600/30 border border-emerald-500/20"
+            title={t('إرسال ترحيب للعميل — بيانات دخول + رمز تحقق (بريد + واتساب + SMS احتياطي)')}
+            data-testid={`welcome-owner-${tenant.id}`}
+          >
+            <Send className="h-4 w-4 text-emerald-400" />
           </Button>
           {/* الميزات والصلاحيات */}
           <Button variant="ghost" size="icon" onClick={() => openFeaturesModal(tenant)} className="hover:bg-gray-600" title={t('الميزات والصلاحيات')}>

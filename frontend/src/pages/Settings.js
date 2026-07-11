@@ -107,7 +107,8 @@ import {
   LogIn,
   LogOut,
   ChevronDown,
-  Languages
+  Languages,
+  Send
 } from 'lucide-react';
 import { toast } from 'sonner';
 import {
@@ -1723,6 +1724,39 @@ export default function Settings() {
     }
   };
 
+  // إرسال ترحيب + بيانات دخول جديدة لمستخدم واحد (بريد + واتساب + SMS احتياطي)
+  // المستلم = هذا المستخدم فقط (ببريده ورقمه). مالك النظام لا يستلم شيئاً.
+  const handleSendWelcomeToUser = async (u) => {
+    const contactInfo = [u.email ? `📧 ${u.email}` : null, u.phone ? `📱 ${u.phone}` : null].filter(Boolean).join('\n');
+    if (!contactInfo) {
+      toast.error(t('لا يوجد بريد ولا رقم لهذا المستخدم — أضفهما أولاً'));
+      return;
+    }
+    const msg = `${t('سيتم إعادة تعيين كلمة المرور وإرسال بيانات الدخول الجديدة إلى:')}\n\n${contactInfo}\n\n${t('متابعة؟')}`;
+    if (!confirm(msg)) return;
+    try {
+      toast.loading(t('جاري الإرسال...'), { id: `wc-${u.id}` });
+      const token = localStorage.getItem('token');
+      const headers = { Authorization: `Bearer ${token}` };
+      const res = await axios.post(`${API}/users/${u.id}/send-welcome`, {}, { headers });
+      toast.dismiss(`wc-${u.id}`);
+      const r = res.data?.result || {};
+      const parts = [];
+      if (r.email_sent) parts.push(`✅ ${t('البريد')}: ${r.email}`);
+      else if (r.email) parts.push(`❌ ${t('البريد')}: ${r.email_error}`);
+      if (r.whatsapp_sent) parts.push(`✅ ${t('واتساب')}: ${r.phone}`);
+      else if (r.phone && r.whatsapp_error) parts.push(`⚠️ ${t('واتساب')}: ${r.whatsapp_error}`);
+      if (r.sms_sent) parts.push(`✅ SMS: ${r.phone} (${t('احتياطي')})`);
+      else if (r.sms_error && r.sms_error !== 'sms_not_configured') parts.push(`❌ SMS: ${r.sms_error}`);
+      if (r.ok) toast.success(`${t('تم الإرسال إلى')} ${u.full_name || u.username}\n${parts.join('\n')}`, { duration: 8000 });
+      else toast.error(`${t('فشل الإرسال')}\n${parts.join('\n')}`, { duration: 10000 });
+    } catch (e) {
+      toast.dismiss(`wc-${u.id}`);
+      toast.error(e.response?.data?.detail || t('فشل الإرسال'));
+    }
+  };
+
+
   const handleEditUser = (u) => {
     setEditUserForm({
       id: u.id,
@@ -3326,6 +3360,15 @@ export default function Settings() {
                                   <div className="flex gap-1">
                                     <Button variant="ghost" size="sm" onClick={() => handleEditUser(u)} data-testid={`edit-user-btn-${u.id}`}>
                                       <Edit className="h-4 w-4" />
+                                    </Button>
+                                    <Button
+                                      variant="ghost" size="sm"
+                                      className="text-emerald-500 hover:bg-emerald-600/20"
+                                      title={t('إرسال ترحيب — بيانات دخول للمستخدم (بريد + واتساب + SMS احتياطي)')}
+                                      onClick={() => handleSendWelcomeToUser(u)}
+                                      data-testid={`send-welcome-user-${u.id}`}
+                                    >
+                                      <Send className="h-4 w-4" />
                                     </Button>
                                     <Button variant="ghost" size="sm" className="text-blue-500" onClick={() => handlePreviewUser(u)}>
                                       <Eye className="h-4 w-4" />

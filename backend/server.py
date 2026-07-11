@@ -4071,6 +4071,62 @@ async def get_users(current_user: dict = Depends(get_current_user)):
     users = await db.users.find(query, {"_id": 0, "password": 0}).to_list(1000)
     return users
 
+@api_router.post("/users/{user_id}/send-welcome")
+async def send_welcome_to_single_user(user_id: str, current_user: dict = Depends(get_current_user)):
+    """إرسال ترحيب + بيانات دخول جديدة لمستخدم واحد (بريد + واتساب + SMS احتياطي).
+    
+    الصلاحيات:
+    - super_admin: يستطيع لأي مستخدم
+    - tenant admin: يستطيع فقط لمستخدمي تينانته
+    - manager: يستطيع فقط للأدوار الأدنى ضمن تينانته
+    - غير ذلك: ممنوع
+    
+    عزل صارم: لا يمكن لأي admin إرسال ترحيب لمستخدم في تينانت آخر.
+    """
+    if current_user["role"] not in [UserRole.ADMIN, UserRole.MANAGER, UserRole.SUPER_ADMIN]:
+        raise HTTPException(status_code=403, detail="غير مصرح")
+    
+    # اجلب المستخدم مع فحص التينانت
+    query = build_tenant_query(current_user, {"id": user_id})
+    user = await db.users.find_one(query, {"_id": 0})
+    if not user:
+        raise HTTPException(status_code=404, detail="المستخدم غير موجود أو خارج مشروعك")
+    
+    # manager لا يستطيع لـ admin/super_admin
+    if current_user["role"] == UserRole.MANAGER and user.get("role") in [UserRole.ADMIN, UserRole.SUPER_ADMIN]:
+        raise HTTPException(status_code=403, detail="غير مصرح — لا يمكن للمدير إرسال ترحيب لمالك المشروع")
+    # tenant admin لا يستطيع لـ super_admin
+    if current_user["role"] == UserRole.ADMIN and user.get("role") == UserRole.SUPER_ADMIN:
+        raise HTTPException(status_code=403, detail="غير مصرح")
+    
+    # اجلب التينانت المرتبط
+    tenant = await db.tenants.find_one({"id": user.get("tenant_id")}, {"_id": 0}) or {
+        "id": user.get("tenant_id") or "default",
+        "name": "Maestro EGP",
+    }
+    
+    from routes.super_admin_routes import _send_welcome_bundle_to_user
+    result = await _send_welcome_bundle_to_user(user, tenant)
+    
+    try:
+        await record_audit("user.send_welcome", user=current_user, details={
+            "target_user_id": user.get("id"), "tenant_id": user.get("tenant_id"),
+            "email_sent": result.get("email_sent"),
+            "whatsapp_sent": result.get("whatsapp_sent"),
+            "sms_sent": result.get("sms_sent"),
+        })
+    except Exception:
+        pass
+    
+    return {
+        "success": result.get("ok", False),
+        "user_id": user_id,
+        "tenant_id": user.get("tenant_id"),
+        "result": result,
+    }
+
+
+
 @api_router.put("/users/{user_id}")
 async def update_user(user_id: str, update: UserUpdate, current_user: dict = Depends(get_current_user)):
     if current_user["role"] not in [UserRole.ADMIN, UserRole.MANAGER, UserRole.SUPER_ADMIN]:

@@ -72,3 +72,35 @@ async def check_verification(to_phone: str, code: str):
     except Exception as e:
         logger.error(f"Twilio check_verification failed to {to_phone}: {e}")
         return False, False, str(e)
+
+
+
+# ==================== SMS عام (Fallback عند فشل الواتساب) ====================
+def _sms_configured() -> bool:
+    """Twilio Messaging جاهز إذا كان لدينا SID/Token + رقم مُرسِل (TWILIO_SMS_FROM أو Messaging Service)."""
+    sid, token, _ = _creds()
+    from_num = os.environ.get("TWILIO_SMS_FROM") or ""
+    msg_svc = os.environ.get("TWILIO_MESSAGING_SERVICE_SID") or ""
+    return bool(sid and token and (from_num or msg_svc))
+
+
+def _send_sms_sync(to_phone: str, body: str):
+    from_num = os.environ.get("TWILIO_SMS_FROM") or ""
+    msg_svc = os.environ.get("TWILIO_MESSAGING_SERVICE_SID") or ""
+    client = _client()
+    if msg_svc:
+        return client.messages.create(messaging_service_sid=msg_svc, to=to_phone, body=body).sid
+    return client.messages.create(from_=from_num, to=to_phone, body=body).sid
+
+
+async def send_sms(to_phone: str, body: str):
+    """يرسل SMS عام (غير OTP) — يُستخدم كـ fallback عند تعذّر الواتساب.
+    Returns (ok: bool, sid_or_error: str)."""
+    if not _sms_configured():
+        return False, "sms_not_configured"
+    try:
+        sid = await asyncio.to_thread(_send_sms_sync, to_phone, body)
+        return True, sid
+    except Exception as e:
+        logger.error(f"Twilio send_sms failed to {to_phone}: {e}")
+        return False, str(e)
