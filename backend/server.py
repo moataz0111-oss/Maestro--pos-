@@ -327,6 +327,26 @@ async def email_transport_configured() -> bool:
 
 
 # ============ إشعار المالك بثلاث قنوات: الجرس + الواتساب + البريد ============
+# ==================== شعار Maestro EGP في بريد الإشعارات ====================
+# نُضمّن الشعار كصورة base64 داخل HTML البريد (يعمل في كل تطبيقات البريد بلا CORS)
+_MAESTRO_LOGO_B64_CACHE = None
+
+def _get_maestro_logo_b64() -> str:
+    """يُرجع شعار Maestro EGP بصيغة data:image/png;base64,... (مُحمَّل مرة واحدة).
+    يُستخدم داخل قوالب البريد لضمان ظهور الشعار في كل تطبيقات البريد (Apple Mail / Gmail / …)."""
+    global _MAESTRO_LOGO_B64_CACHE
+    if _MAESTRO_LOGO_B64_CACHE is not None:
+        return _MAESTRO_LOGO_B64_CACHE
+    try:
+        _logo_path = ROOT_DIR / "static" / "branding" / "maestro-logo-email.b64"
+        with open(_logo_path, "r", encoding="utf-8") as _f:
+            _MAESTRO_LOGO_B64_CACHE = "data:image/png;base64," + _f.read().strip()
+    except Exception as _e:
+        logger.warning(f"maestro logo load failed: {_e}")
+        _MAESTRO_LOGO_B64_CACHE = ""
+    return _MAESTRO_LOGO_B64_CACHE
+
+
 async def notify_owner_multichannel(
     title: str,
     message: str,
@@ -373,7 +393,16 @@ async def notify_owner_multichannel(
     NOTIFY_MAX_RECIPIENTS = 20  # حماية: لا نُغرق تينانتاً بمئات الرسائل
     if send_whatsapp:
         try:
-            if await _wa_free.is_connected():
+            _wa_connected = await _wa_free.is_connected()
+            if not _wa_connected:
+                # سجّل السبب بوضوح للمشرف — الرسالة لم تُرسَل لأن الواتساب غير مربوط
+                logger.warning(
+                    f"notify_owner_multichannel: skip whatsapp — WA_NOT_CONNECTED "
+                    f"(tenant={tenant_id}, category={category}). "
+                    f"اربط رقم الواتساب من لوحة المالك → إعدادات النظام الرئيسي → الواتساب."
+                )
+                result["whatsapp_skip_reason"] = "wa_not_connected"
+            else:
                 # اجمع كل الأرقام المستقبِلة: env → tenant.owner_phone → كل admin/manager للتينانت
                 phones = []
                 env_phone = os.environ.get("OWNER_ALERT_PHONE", "")
@@ -416,6 +445,7 @@ async def notify_owner_multichannel(
                         break
                 # إرسال متزامن لكل الأرقام
                 sent_count = 0
+                _wa_errors = []
                 for e164, _raw in normalized_pairs:
                     try:
                         wa_msg = f"🔔 Maestro EGP — {title}\n\n{message}"
@@ -424,10 +454,23 @@ async def notify_owner_multichannel(
                         )
                         if ok:
                             sent_count += 1
+                        else:
+                            _wa_errors.append(f"{e164}: {_err}")
                     except Exception as _ee:
                         logger.warning(f"whatsapp send to {e164} failed: {_ee}")
+                        _wa_errors.append(f"{e164}: {_ee}")
                 result["whatsapp"] = sent_count > 0
                 result["whatsapp_recipients"] = sent_count
+                if not normalized_pairs:
+                    logger.warning(
+                        f"notify_owner_multichannel: skip whatsapp — NO_PHONES "
+                        f"(tenant={tenant_id}, category={category}). "
+                        f"أضف رقم واتساب لمالك المطعم (owner_phone) أو لأي مستخدم admin/manager بحقل phone."
+                    )
+                    result["whatsapp_skip_reason"] = "no_recipients"
+                elif sent_count == 0 and _wa_errors:
+                    logger.warning(f"notify_owner_multichannel: whatsapp all sends failed — {_wa_errors[:3]}")
+                    result["whatsapp_skip_reason"] = "all_sends_failed"
         except Exception as e:
             logger.warning(f"notify_owner_multichannel whatsapp failed: {e}")
     
@@ -435,11 +478,20 @@ async def notify_owner_multichannel(
     if send_email:
         try:
             _sev_color = {"info": "#3B82F6", "warning": "#F59E0B", "critical": "#EF4444"}.get(severity, "#3B82F6")
+            _logo_src = _get_maestro_logo_b64()
+            _logo_block = (
+                f"<div style='background:#ffffff;padding:16px 0;text-align:center'>"
+                f"<img src='{_logo_src}' alt='Maestro EGP' "
+                f"style='width:64px;height:64px;display:inline-block;border-radius:50%;object-fit:cover;"
+                f"box-shadow:0 6px 16px rgba(11,26,58,0.35), 0 2px 4px rgba(0,0,0,0.15)' />"
+                f"</div>"
+            ) if _logo_src else ""
             html = (
-                f"<div style='font-family:Arial,sans-serif;direction:rtl;text-align:right'>"
+                f"<div style='font-family:Arial,sans-serif;direction:rtl;text-align:right;max-width:640px;margin:0 auto'>"
                 f"<div style='background:{_sev_color};color:#fff;padding:12px 16px;border-radius:8px 8px 0 0'>"
                 f"<h2 style='margin:0'>{title}</h2></div>"
-                f"<div style='background:#f9fafb;padding:16px;border-radius:0 0 8px 8px;border:1px solid #e5e7eb'>"
+                f"{_logo_block}"
+                f"<div style='background:#f9fafb;padding:16px;border-radius:0 0 8px 8px;border:1px solid #e5e7eb;border-top:none'>"
                 f"<pre style='white-space:pre-wrap;font-family:Arial,sans-serif;font-size:14px;color:#111'>{message}</pre>"
                 f"<hr style='margin:16px 0;border:none;border-top:1px solid #e5e7eb'/>"
                 f"<p style='font-size:12px;color:#6b7280;margin:0'>Maestro EGP — {now_iso}</p>"
@@ -4064,39 +4116,41 @@ async def update_user(user_id: str, update: UserUpdate, current_user: dict = Dep
     
     update_data = {k: v for k, v in update.model_dump().items() if v is not None}
     
-    # 🛡️ سياسة صلاحيات المستخدمين (مُصححة حسب طلب المالك):
+    # 🛡️ سياسة صلاحيات المستخدمين (طلب المالك — تحكّم كامل لمالك المشروع):
     #   - super_admin: كل شيء (نظاماً كاملاً).
-    #   - tenant admin: يعدّل نفسه (self-edit) + يعدّل مستخدميه الذين ليسوا admin.
+    #   - tenant admin (مالك المشروع): تحكّم كامل بحسابه وحسابات مستخدميه (تعديل/إنشاء/دور/صلاحيات/فرع/تفعيل).
+    #     القيد الوحيد: لا يقدر يحذف نفسه (يُطبَّق في delete_user).
     #   - manager: يعدّل الأدوار الأدنى فقط.
     #   - لا يجوز لأي أحد ترقية إلى super_admin.
-    #   - لا يجوز لغير super_admin تعديل حساب admin/super_admin (بما فيه ترقية إلى admin).
+    #   - لا يجوز لأي أحد لمس حسابات خارج تينانته.
     is_self_edit = (user_id == current_user.get("id"))
     is_super_admin = (current_user["role"] == UserRole.SUPER_ADMIN)
+    is_tenant_admin = (current_user["role"] == UserRole.ADMIN)
     same_tenant = (user.get("tenant_id") == current_user.get("tenant_id"))
-    target_is_admin_tier = user.get("role") in [UserRole.ADMIN, UserRole.SUPER_ADMIN]
     
     new_role = update_data.get("role")
-    if new_role:
-        # (1) ترقية إلى super_admin ممنوعة لغير super_admin
+    current_role = user.get("role")
+    # الفحص يعمل فقط عند تغيير الدور فعلياً (idempotent no-op مسموح)
+    role_is_changing = bool(new_role) and (new_role != current_role)
+    if role_is_changing:
+        # (1) ترقية إلى super_admin ممنوعة لغير super_admin (حماية نظامية)
         if new_role == UserRole.SUPER_ADMIN and not is_super_admin:
             raise HTTPException(status_code=403, detail="غير مصرح بترقية حساب إلى مالك النظام")
-        # (2) منح دور admin مسموح فقط لـsuper_admin (المالك المطعم يديره فقط، ما يخلق شركاء)
-        if new_role == UserRole.ADMIN and not is_super_admin:
-            raise HTTPException(status_code=403, detail="غير مصرح بمنح دور مالك المشروع — تواصل مع مالك النظام")
     
-    # (3) حساب admin/super_admin لا يُعدَّل إلا بواسطة super_admin — إلا في حالة self-edit للحقول الشخصية
-    if target_is_admin_tier and not is_super_admin:
-        if not is_self_edit:
-            raise HTTPException(status_code=403, detail="غير مصرح بتعديل حساب مالك المشروع — فقط مالك النظام يستطيع ذلك")
-        # self-edit مسموح لكن مع حماية: منع تغيير الدور أو الفرع أو الصلاحيات لنفسه
-        forbidden_self_fields = {"role", "permissions", "branch_id", "is_active", "tenant_id"}
-        illegal = set(update_data.keys()) & forbidden_self_fields
-        if illegal:
-            raise HTTPException(status_code=403, detail=f"لا يمكنك تعديل حقول: {', '.join(illegal)} على حسابك الشخصي")
+    # (2) حساب super_admin لا يُعدَّل إلا بواسطة super_admin (tenant admin ممنوع من لمس حساب مالك النظام)
+    if current_role == UserRole.SUPER_ADMIN and not is_super_admin:
+        raise HTTPException(status_code=403, detail="غير مصرح بتعديل حساب مالك النظام")
     
-    # (4) لا يمكن تعديل حسابات خارج التينانت (للجميع باستثناء super_admin)
+    # (3) لا يمكن تعديل حسابات خارج التينانت (للجميع باستثناء super_admin)
     if not is_super_admin and not same_tenant:
         raise HTTPException(status_code=403, detail="غير مصرح — لا يمكن تعديل حسابات خارج مشروعك")
+    
+    # (4) حماية self-edit: مالك المشروع لا يستطيع إلغاء تفعيل نفسه أو تحويل دوره (يمنع قفل نفسه خارج النظام)
+    if is_self_edit and is_tenant_admin:
+        if update_data.get("is_active") is False:
+            raise HTTPException(status_code=403, detail="لا يمكنك إلغاء تفعيل حسابك — يجب أن يتم ذلك بواسطة مالك النظام")
+        if role_is_changing:
+            raise HTTPException(status_code=403, detail="لا يمكنك تغيير دورك — يجب أن يتم ذلك بواسطة مالك النظام")
     
     # التحقق من عدم تكرار البريد الإلكتروني أو اسم المستخدم
     if update_data.get("email"):
