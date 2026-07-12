@@ -96,19 +96,26 @@ def _prep():
     from passlib.hash import bcrypt
     async def _restore():
         c, db = await _db()
+        _admin_h = bcrypt.hash("admin123")
+        _owner_h = bcrypt.hash("owner123")
         await db.users.update_one(
             {"email": "admin@maestroegp.com"},
-            {"$set": {"password": bcrypt.hash("admin123")},
+            {"$set": {"password": _admin_h, "password_hash": _admin_h},
              "$unset": {"password_changed_at": ""}}
         )
         await db.users.update_one(
             {"email": "owner@maestroegp.com"},
-            {"$set": {"password": bcrypt.hash("owner123"),
+            {"$set": {"password": _owner_h, "password_hash": _owner_h,
                       "secret_key": "271018", "super_admin_secret": "271018"},
              "$unset": {"password_changed_at": ""}}
         )
         c.close()
     _run(_restore())
+
+
+def _retrust(subject_id, device_id):
+    """إعادة توثيق الجهاز بعد تغيير كلمة المرور (لأن الفكس الجديد يُبطل الأجهزة الموثوقة)."""
+    _run(_trust_device(subject_id, device_id))
 
 
 def _do_pw_change(user_id, new_pw, admin_tok, extra=None):
@@ -148,6 +155,8 @@ def test_admin_old_token_401_after_password_change():
 
     # Old password login fails, new works
     assert _login("admin@maestroegp.com", "admin123", "dev-iter309-admin").status_code == 401
+    # 🔄 إعادة توثيق الجهاز لأن تغيير كلمة المرور يُبطل الأجهزة الموثوقة (الآن يجب OTP)
+    _retrust(pytest.admin_id, "dev-iter309-admin")
     r2 = _login("admin@maestroegp.com", "AdminIter309!", "dev-iter309-admin")
     assert r2.status_code == 200, r2.text
     # New token works for /auth/me and other endpoint
@@ -178,6 +187,8 @@ def test_super_admin_password_and_secret_key_change_invalidates_old_token():
     assert _sa_login(secret="271018", pw="OwnerIter309!").status_code in (401, 403)
     # OLD password rejected
     assert _sa_login(secret="654321", pw="owner123").status_code in (401, 403)
+    # 🔄 إعادة توثيق الجهاز — تغيير كلمة المرور أبطل الأجهزة الموثوقة
+    _retrust(pytest.sa_id, "dev-iter309-sa")
     # NEW + NEW works
     r6 = _sa_login(secret="654321", pw="OwnerIter309!")
     assert r6.status_code == 200, r6.text
@@ -241,6 +252,8 @@ def test_put_users_password_field_still_works():
         c.close()
     _run(_seed())
     # Login admin (may have new pw)
+    # 🔄 إعادة توثيق (تغيير كلمة المرور السابق أبطل الجهاز)
+    _retrust(pytest.admin_id, "dev-iter309-admin")
     a = _login("admin@maestroegp.com", getattr(pytest, "admin_current_pw", "admin123"), "dev-iter309-admin")
     assert a.status_code == 200, a.text
     a_tok = a.json()["token"]
@@ -284,6 +297,7 @@ def test_single_session_manager_invalidation_after_pw_change():
     old_tok = r.json()["token"]
     assert requests.get(f"{BASE}/auth/me", headers={"Authorization": f"Bearer {old_tok}"}, timeout=10).status_code == 200
     # admin resets its password
+    _retrust(pytest.admin_id, "dev-iter309-admin")
     a = _login("admin@maestroegp.com", getattr(pytest, "admin_current_pw", "admin123"), "dev-iter309-admin")
     assert a.status_code == 200
     _do_pw_change(uid, "MgrNew789!", a.json()["token"])
@@ -300,6 +314,8 @@ def test_single_session_manager_invalidation_after_pw_change():
 
 # ---------- Test 6: tenant creation with owner_password still works ----------
 def test_tenant_creation_with_owner_password():
+    _retrust(pytest.admin_id, "dev-iter309-admin")
+    _retrust(pytest.sa_id, "dev-iter309-sa")
     a = _login("admin@maestroegp.com", getattr(pytest, "admin_current_pw", "admin123"), "dev-iter309-admin")
     # Fall back to SA if admin creation of tenants not allowed
     tok = None

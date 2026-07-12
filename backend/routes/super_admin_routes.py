@@ -1108,6 +1108,14 @@ async def reset_tenant_admin_password(tenant_id: str, new_password: str, current
             "active_session_id": f"invalidated-{_uuid_ta.uuid4()}",  # ✅ خروج قسري
         }}
     )
+    # 🔐 إبطال الأجهزة الموثوقة → OTP إجباري في المرة القادمة
+    try:
+        await db.trusted_devices.update_many(
+            {"subject_type": "user", "subject_id": str(admin["id"])},
+            {"$set": {"revoked": True, "revoked_at": datetime.now(timezone.utc).isoformat(), "revoke_reason": "tenant_admin_password_reset"}}
+        )
+    except Exception:
+        pass
     
     return {"message": "تم إعادة تعيين كلمة المرور", "email": admin["email"], "force_logout": True}
 
@@ -1206,6 +1214,15 @@ async def update_owner_settings(
         
         if result.matched_count == 0:
             raise HTTPException(status_code=404, detail="لم يتم العثور على حساب المالك")
+        
+        # 🔐 إبطال جميع الأجهزة الموثوقة → إجبار OTP في الدخول القادم
+        try:
+            await db.trusted_devices.update_many(
+                {"subject_type": "user", "subject_id": str(current_user["id"])},
+                {"$set": {"revoked": True, "revoked_at": datetime.now(timezone.utc).isoformat(), "revoke_reason": "password_or_secret_changed"}}
+            )
+        except Exception as _rev_err:
+            logger.warning(f"failed revoking trusted devices for owner {current_user.get('id')}: {_rev_err}")
         
         # 🔥 إرسال تلقائي (بلا زر) — يخصّ مالك النظام فقط بعد تعديل كلمة المرور و/أو المفتاح
         auto_send_result = {"email_sent": False, "whatsapp_sent": False, "sms_sent": False}

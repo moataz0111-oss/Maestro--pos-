@@ -490,6 +490,11 @@ export default function SuperAdmin() {
   // Login/Register states
   const [showRegister, setShowRegister] = useState(false);
   const [loginForm, setLoginForm] = useState({ email: '', password: '', secret_key: '' });
+  // ✅ حالة تحقق ثنائي OTP لتدفق /super-admin/login
+  const [otpChallenge, setOtpChallenge] = useState(null); // {verification_id, channel, destination_masked}
+  const [otpCode, setOtpCode] = useState('');
+  const [verifyingOtp, setVerifyingOtp] = useState(false);
+  const [otpResending, setOtpResending] = useState(false);
   const [registerForm, setRegisterForm] = useState({ email: '', password: '', full_name: '', secret_key: '' });
   const [loading, setLoading] = useState(false);
   
@@ -961,12 +966,32 @@ export default function SuperAdmin() {
     setLoading(true);
     
     try {
+      const deviceId = localStorage.getItem('device_id') || (crypto?.randomUUID?.() || Math.random().toString(36).slice(2));
+      localStorage.setItem('device_id', deviceId);
       const res = await axios.post(`${API}/super-admin/login`, {
         email: loginForm.email,
         password: loginForm.password,
-        secret_key: loginForm.secret_key
+        secret_key: loginForm.secret_key,
+        device_id: deviceId,
       });
       
+      // ✅ التحقق الثنائي مطلوب — لا نُعلن نجاح الدخول، بل نُظهر شاشة إدخال رمز التحقق
+      if (res.data?.requires_2fa) {
+        setOtpChallenge({
+          verification_id: res.data.verification_id,
+          channel: res.data.channel,
+          destination_masked: res.data.destination_masked,
+        });
+        setOtpCode('');
+        toast.info(t('تم إرسال رمز التحقق إلى ') + (res.data.destination_masked || t('بريدك المسجّل')));
+        return; // لا نضبط isAuthenticated هنا
+      }
+      
+      // ✅ حالة عدم وجود 2FA (يجب أن يوجد token)
+      if (!res.data?.token) {
+        toast.error(t('استجابة غير متوقعة من الخادم'));
+        return;
+      }
       localStorage.setItem('super_admin_token', res.data.token);
       axios.defaults.headers.common['Authorization'] = `Bearer ${res.data.token}`;
       setToken(res.data.token);
@@ -978,6 +1003,59 @@ export default function SuperAdmin() {
     } finally {
       setLoading(false);
     }
+  };
+  
+  // ✅ التحقق من رمز OTP وإصدار توكن السوبر أدمن
+  const verifyOtpAndLogin = async (e) => {
+    e.preventDefault();
+    if (!otpChallenge?.verification_id) return;
+    if (!otpCode || otpCode.trim().length < 4) {
+      toast.error(t('أدخل رمز التحقق'));
+      return;
+    }
+    setVerifyingOtp(true);
+    try {
+      const res = await axios.post(`${API}/auth/login/verify-2fa`, {
+        verification_id: otpChallenge.verification_id,
+        code: otpCode.trim(),
+      });
+      if (!res.data?.token) {
+        toast.error(t('فشل التحقق — لم يتم إصدار توكن'));
+        return;
+      }
+      localStorage.setItem('super_admin_token', res.data.token);
+      axios.defaults.headers.common['Authorization'] = `Bearer ${res.data.token}`;
+      setToken(res.data.token);
+      setUser(res.data.user);
+      setIsAuthenticated(true);
+      setOtpChallenge(null);
+      setOtpCode('');
+      toast.success(t('تم تسجيل الدخول بنجاح'));
+    } catch (error) {
+      toast.error(getErrorMessage(error) || t('رمز التحقق غير صحيح'));
+    } finally {
+      setVerifyingOtp(false);
+    }
+  };
+  
+  const resendOtp = async () => {
+    if (!otpChallenge?.verification_id) return;
+    setOtpResending(true);
+    try {
+      await axios.post(`${API}/auth/2fa/resend`, {
+        verification_id: otpChallenge.verification_id,
+      });
+      toast.success(t('تم إعادة إرسال الرمز'));
+    } catch (error) {
+      toast.error(getErrorMessage(error) || t('فشل إعادة الإرسال'));
+    } finally {
+      setOtpResending(false);
+    }
+  };
+  
+  const cancelOtp = () => {
+    setOtpChallenge(null);
+    setOtpCode('');
   };
 
   const handleRegister = async (e) => {
@@ -1007,10 +1085,13 @@ export default function SuperAdmin() {
 
   const logout = () => {
     localStorage.removeItem('super_admin_token');
+    localStorage.removeItem('super_admin_user');
     delete axios.defaults.headers.common['Authorization'];
     setToken(null);
     setUser(null);
     setIsAuthenticated(false);
+    // ✅ إعادة توجيه المستخدم إلى صفحة تسجيل الدخول الرئيسية بعد الخروج
+    try { navigate('/login', { replace: true }); } catch (_) { window.location.href = '/login'; }
   };
 
   // ==================== دوال الإشعارات ====================
@@ -2696,141 +2777,21 @@ export default function SuperAdmin() {
     return () => clearInterval(interval);
   }, [showLiveView, selectedTenant]);
 
-  // Login/Register Screen
+  // Login/Register Screen — تم إلغاؤها. الدخول يتم فقط من الصفحة الرئيسية /login
+  // إذا لم يكن المستخدم مسجّل الدخول → أعِد توجيهه للصفحة الرئيسية
+  useEffect(() => {
+    if (!isAuthenticated) {
+      try { navigate('/login', { replace: true }); } catch (_) { window.location.href = '/login'; }
+    }
+  }, [isAuthenticated, navigate]);
+  
   if (!isAuthenticated) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-[#070E22] via-[#13245C] to-[#070E22] flex items-center justify-center p-4" dir="rtl">
-        <Toaster position="top-center" richColors />
-        
-        <Card className="w-full max-w-md bg-[#0F1A3A]/50 border-[#2A3A66] backdrop-blur">
-          <CardHeader className="text-center">
-            <div className="w-16 h-16 bg-amber-500/20 rounded-2xl flex items-center justify-center mx-auto mb-4">
-              <Crown className="h-8 w-8 text-amber-400" />
-            </div>
-            <CardTitle className="text-2xl text-white">Maestro EGP</CardTitle>
-            <CardDescription className="text-gray-400">
-              {showRegister ? t('إنشاء حساب المالك') : t('لوحة تحكم المالك')}
-            </CardDescription>
-          </CardHeader>
-          
-          <CardContent>
-            {!showRegister ? (
-              <form onSubmit={handleLogin} className="space-y-4">
-                <div className="space-y-2">
-                  <Label className="text-gray-300">{t('البريد الإلكتروني')}</Label>
-                  <Input
-                    type="email"
-                    value={loginForm.email}
-                    onChange={(e) => setLoginForm({...loginForm, email: e.target.value})}
-                    className="bg-[#1A284E]/50 border-[#2A3A66] text-white"
-                    placeholder="owner@maestroegp.com"
-                    required
-                  />
-                </div>
-                
-                <div className="space-y-2">
-                  <Label className="text-gray-300">{t('كلمة المرور')}</Label>
-                  <Input
-                    type="password"
-                    value={loginForm.password}
-                    onChange={(e) => setLoginForm({...loginForm, password: e.target.value})}
-                    className="bg-[#1A284E]/50 border-[#2A3A66] text-white"
-                    required
-                  />
-                </div>
-                
-                <div className="space-y-2">
-                  <Label className="text-gray-300">{t('مفتاح السر')}</Label>
-                  <Input
-                    type="password"
-                    value={loginForm.secret_key}
-                    onChange={(e) => setLoginForm({...loginForm, secret_key: e.target.value})}
-                    className="bg-[#1A284E]/50 border-[#2A3A66] text-white"
-                    placeholder="••••••••••••"
-                    required
-                  />
-                </div>
-                
-                <Button type="submit" className="w-full bg-amber-600 hover:bg-amber-700" disabled={loading}>
-                  {loading ? t('جاري الدخول...') : t('تسجيل الدخول')}
-                </Button>
-                
-                <p className="text-center text-sm text-gray-400">
-                  {t('ليس لديك حساب؟')}{' '}
-                  <button 
-                    type="button"
-                    onClick={() => setShowRegister(true)}
-                    className="text-amber-400 hover:underline"
-                  >
-                    {t('إنشاء حساب')}
-                  </button>
-                </p>
-              </form>
-            ) : (
-              <form onSubmit={handleRegister} className="space-y-4">
-                <div className="space-y-2">
-                  <Label className="text-gray-300">{t('الاسم الكامل')}</Label>
-                  <Input
-                    type="text"
-                    value={registerForm.full_name}
-                    onChange={(e) => setRegisterForm({...registerForm, full_name: e.target.value})}
-                    className="bg-[#1A284E]/50 border-[#2A3A66] text-white"
-                    required
-                  />
-                </div>
-                
-                <div className="space-y-2">
-                  <Label className="text-gray-300">{t('البريد الإلكتروني')}</Label>
-                  <Input
-                    type="email"
-                    value={registerForm.email}
-                    onChange={(e) => setRegisterForm({...registerForm, email: e.target.value})}
-                    className="bg-[#1A284E]/50 border-[#2A3A66] text-white"
-                    required
-                  />
-                </div>
-                
-                <div className="space-y-2">
-                  <Label className="text-gray-300">{t('كلمة المرور')}</Label>
-                  <Input
-                    type="password"
-                    value={registerForm.password}
-                    onChange={(e) => setRegisterForm({...registerForm, password: e.target.value})}
-                    className="bg-[#1A284E]/50 border-[#2A3A66] text-white"
-                    required
-                  />
-                </div>
-                
-                <div className="space-y-2">
-                  <Label className="text-gray-300">{t('مفتاح السر')}</Label>
-                  <Input
-                    type="password"
-                    value={registerForm.secret_key}
-                    onChange={(e) => setRegisterForm({...registerForm, secret_key: e.target.value})}
-                    className="bg-[#1A284E]/50 border-[#2A3A66] text-white"
-                    placeholder={t('مفتاح السر للتسجيل')}
-                    required
-                  />
-                </div>
-                
-                <Button type="submit" className="w-full bg-amber-600 hover:bg-amber-700" disabled={loading}>
-                  {loading ? t('جاري الإنشاء...') : t('إنشاء الحساب')}
-                </Button>
-                
-                <p className="text-center text-sm text-gray-400">
-                  {t('لديك حساب؟')}{' '}
-                  <button 
-                    type="button"
-                    onClick={() => setShowRegister(false)}
-                    className="text-amber-400 hover:underline"
-                  >
-                    {t('تسجيل الدخول')}
-                  </button>
-                </p>
-              </form>
-            )}
-          </CardContent>
-        </Card>
+      <div className="min-h-screen bg-[#070E22] flex items-center justify-center" dir="rtl" data-testid="sa-redirect-loading">
+        <div className="text-center text-gray-400">
+          <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-amber-400 mx-auto mb-3"></div>
+          <p>{t('جاري التحويل إلى صفحة تسجيل الدخول...')}</p>
+        </div>
       </div>
     );
   }

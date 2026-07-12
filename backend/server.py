@@ -4683,6 +4683,16 @@ async def reset_user_password(user_id: str, data: PasswordReset, request: Reques
         update_fields["secret_key"] = data.new_secret_key.strip()
         update_fields["super_admin_secret"] = data.new_secret_key.strip()
     await db.users.update_one({"id": user_id}, {"$set": update_fields})
+    
+    # 🔐 إبطال جميع الأجهزة الموثوقة للمستخدم → يُجبر OTP في الدخول القادم
+    try:
+        await db.trusted_devices.update_many(
+            {"subject_type": "user", "subject_id": str(user_id)},
+            {"$set": {"revoked": True, "revoked_at": datetime.now(timezone.utc).isoformat(), "revoke_reason": "password_reset"}}
+        )
+    except Exception as _rev_err:
+        logger.warning(f"failed revoking trusted devices for user {user_id}: {_rev_err}")
+    
     return {"message": "تم تغيير كلمة المرور بنجاح", "secret_key_changed": bool(update_fields.get("secret_key")), "force_logout": True}
 
 # ==================== BRANCH ROUTES ====================
