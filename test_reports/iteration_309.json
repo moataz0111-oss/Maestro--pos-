@@ -1,0 +1,47 @@
+{
+  "summary": "Regression retest of iter308 findings. Old-token invalidation via password_changed_at + iat check now works for ALL user types including admin & super_admin (who don't carry sid). All 14 tests pass (8 iter308 + 6 iter309). Original credentials restored.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {
+        "endpoint": "PUT /api/users/{id}/reset-password",
+        "issue": "GM→ADMIN role hierarchy: spec requested 403 with 'مالك المشروع' in detail, but code checks generic higher-rank guard first (server.py:4627) and returns 'لا يمكنك تغيير كلمة مرور دور أعلى من دورك'. The specific مالك المشروع branch (4629-4630) is unreachable for GM→admin. Reorder checks to hit specific message first."
+      },
+      {
+        "endpoint": "POST /api/super-admin/login",
+        "issue": "Wrong secret_key returns 403 (bad password returns 401). Consider standardizing to 401 for auth consistency."
+      },
+      {
+        "endpoint": "PUT /api/users/{id}/reset-password",
+        "issue": "No audit-log entry on password change. Add record_audit call for security compliance."
+      }
+    ]
+  },
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": [
+    "/app/backend/tests/test_password_change_otp_iter308.py",
+    "/app/backend/tests/test_password_change_invalidation_iter309.py",
+    "/app/test_reports/pytest/iter309_results.xml",
+    "/app/test_reports/pytest/iter309_regression.xml"
+  ],
+  "action_items": [
+    "(minor) Reorder role-hierarchy checks in reset_user_password so GM→admin returns 'مالك المشروع' message (currently unreachable).",
+    "(minor) Standardize super-admin login to 401 for wrong secret_key.",
+    "(minor) Add audit_log on password reset."
+  ],
+  "critical_code_review_comments": [
+    "server.py is ~17,988 lines — should continue splitting into routes/ modules (PasswordReset, 2FA, user CRUD).",
+    "verify_2fa_code returns Tuple[bool, Optional[dict], Optional[str]] — add explicit type annotation to prevent tuple-unpacking regressions like iter308.",
+    "Old-token invalidation now correctly uses (a) poisoned active_session_id for regular users AND (b) password_changed_at vs iat check for admin/super_admin — good defense-in-depth."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_password_change_invalidation_iter309.py (new)"
+  ],
+  "success_rate": {"backend": "100% (14/14)", "frontend": "not tested (backend-only requested)"},
+  "test_credentials": "admin@maestroegp.com/admin123 (restored), owner@maestroegp.com/owner123 secret 271018 (restored). Verified by post-run login curls.",
+  "seed_data_creation": "Ephemeral GM, manager, cashier test users created & cleaned up per test. One test tenant created via /super-admin/tenants and deleted afterwards.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "iter308 critical bug (old token remains valid after PW change) is FULLY FIXED. Both mechanisms verified: (1) admin/super_admin PW change → old token 401 via password_changed_at vs iat check in get_current_user (server.py L3164-3177); (2) regular users → active_session_id set to 'invalidated-<uuid>'. OTP flow works. Note: OTP hashing formula is sha256(f'{salt}:{code}:{JWT_SECRET}') — used to brute-force codes in tests. All prior iter308 tests still pass.",
+  "rca_of_the_issue": "iter308 fix in server.py: reset_user_password (~L4676) now sets active_session_id='invalidated-<uuid>' (was None) AND password_changed_at=timestamp. get_current_user (~L3164) checks payload.iat < password_changed_at → 401 for ALL user types (admin/super_admin don't carry sid but the iat check catches them). Verified end-to-end for admin, super_admin (with secret_key co-change), manager."
+}

@@ -3159,6 +3159,22 @@ async def get_current_user(request: Request, credentials: HTTPAuthorizationCrede
                 status_code=401,
                 detail="تم تسجيل الدخول من جهاز آخر — تم إنهاء هذه الجلسة",
             )
+        # 🔒 إبطال جميع التوكنات المُصدَرة قبل آخر تغيير كلمة مرور — يفرض إعادة الدخول
+        # (يشمل admin/super_admin الذين لا يستعملون sid).
+        _pw_changed = user.get("password_changed_at")
+        if _pw_changed and payload.get("iat"):
+            try:
+                _iat = payload["iat"]
+                _iat_ts = _iat if isinstance(_iat, (int, float)) else datetime.fromisoformat(str(_iat)).timestamp()
+                if _iat_ts < float(_pw_changed) - 1:  # ثانية سماح لفارق الوقت
+                    raise HTTPException(
+                        status_code=401,
+                        detail="تم تغيير كلمة المرور — يرجى تسجيل الدخول من جديد",
+                    )
+            except HTTPException:
+                raise
+            except Exception:
+                pass
         return user
     except jwt.ExpiredSignatureError:
         raise HTTPException(status_code=401, detail="انتهت صلاحية الجلسة")
@@ -4575,28 +4591,98 @@ async def create_user(user: UserCreate, current_user: dict = Depends(get_current
 
 class PasswordReset(BaseModel):
     new_password: str
+    # ⚡ OTP إلزامي على تغيير كلمة المرور — يُطلب من المُنفِّذ (current_user) لتأكيد هويته
+    otp_challenge_id: Optional[str] = None
+    otp_code: Optional[str] = None
+    # 🔐 super_admin يستطيع تغيير مفتاحه السري بجانب كلمة مروره في نفس الطلب
+    new_secret_key: Optional[str] = None
 
 @api_router.put("/users/{user_id}/reset-password")
-async def reset_user_password(user_id: str, data: PasswordReset, current_user: dict = Depends(get_current_user)):
-    """إعادة تعيين كلمة مرور المستخدم"""
+async def reset_user_password(user_id: str, data: PasswordReset, request: Request, current_user: dict = Depends(get_current_user)):
+    from fastapi.responses import JSONResponse as _JsonRes
+    """إعادة تعيين كلمة مرور المستخدم (يعمل لكل الأدوار بلا استثناء بما فيهم super_admin ومالك المشروع).
+    
+    🔐 يتطلب OTP على المُنفِّذ (current_user) عند كل تغيير — حتى الأجهزة الموثوقة.
+    التدفق:
+      1) استدعاء بلا otp_code → يُرسَل رمز إلى بريد/واتساب current_user، ويعود 202 مع challenge_id.
+      2) استدعاء مع otp_challenge_id + otp_code → يتم التحقق ثم تغيير كلمة المرور.
+    """
     if current_user["role"] not in [UserRole.ADMIN, UserRole.GENERAL_MANAGER, UserRole.MANAGER, UserRole.SUPER_ADMIN]:
         raise HTTPException(status_code=403, detail="غير مصرح")
     
-    # التحقق من أن المستخدم ينتمي لنفس الـ tenant
-    query = build_tenant_query(current_user, {"id": user_id})
-    user = await db.users.find_one(query)
+    # 🛡️ super_admin (بلا tenant_id) — يعدّل أي حساب. الآخرون مقيّدون بتينانتهم.
+    if current_user["role"] == UserRole.SUPER_ADMIN and not current_user.get("tenant_id"):
+        user = await db.users.find_one({"id": user_id})
+    else:
+        query = build_tenant_query(current_user, {"id": user_id})
+        user = await db.users.find_one(query)
     if not user:
         raise HTTPException(status_code=404, detail="المستخدم غير موجود")
     
+    # 🔒 الترتيب الهرمي
+    is_self = (user_id == current_user.get("id"))
+    _rank = {UserRole.SUPER_ADMIN: 5, UserRole.ADMIN: 4, UserRole.GENERAL_MANAGER: 3,
+             UserRole.MANAGER: 2, UserRole.CASHIER: 1}
+    if not is_self and current_user["role"] != UserRole.SUPER_ADMIN:
+        # المدير العام لا يستطيع تغيير كلمة مرور مالك المشروع (فحص أولي أوضح)
+        if current_user["role"] == UserRole.GENERAL_MANAGER and user.get("role") == UserRole.ADMIN:
+            raise HTTPException(status_code=403, detail="غير مصرح — المدير العام لا يستطيع تغيير كلمة مرور مالك المشروع")
+        if _rank.get(user.get("role"), 0) > _rank.get(current_user["role"], 0):
+            raise HTTPException(status_code=403, detail="غير مصرح — لا يمكنك تغيير كلمة مرور دور أعلى من دورك")
+    
     validate_password_strength(data.new_password)
+    
+    # 🔐 OTP على المُنفِّذ: أرسل رمزاً إن لم يُقدَّم واحد. اعمل بدون OTP فقط إذا 2FA معطّل تماماً.
+    if await two_fa_enabled():
+        if not data.otp_code or not data.otp_challenge_id:
+            # أرسل رمز إلى قنوات المُنفِّذ (بريد/واتساب) — نستخدم الهاتف أو البريد المسجَّل
+            dest_phone = current_user.get("phone") or ""
+            dest_email = current_user.get("email") or ""
+            channel = "whatsapp" if dest_phone else "email"
+            dest = dest_phone or dest_email
+            if not dest:
+                raise HTTPException(status_code=400, detail="لا يوجد بريد أو رقم مسجل لإرسال رمز التحقق للمُنفِّذ")
+            challenge = await start_2fa_verification(
+                subject_type="user_pw_change",
+                subject_id=current_user["id"],
+                subject_name=current_user.get("full_name") or current_user.get("username"),
+                tenant_id=current_user.get("tenant_id"),
+                channel=channel, destination=dest,
+                device_id=request.headers.get("x-device-id") or "pw-change",
+                ip=_client_ip(request), request=request,
+                fallback_email=dest_email if dest_email != dest else None,
+            )
+            return _JsonRes(
+                status_code=202,
+                content={
+                    "otp_required": True,
+                    "otp_challenge_id": challenge.get("verification_id"),
+                    "channels_sent": challenge.get("channels_sent", []),
+                    "detail": "أدخل رمز التحقق المُرسَل إليك لتأكيد تغيير كلمة المرور"
+                }
+            )
+        # تحقق من الرمز
+        ok, _sess, err = await verify_2fa_code(data.otp_challenge_id, data.otp_code, ip=_client_ip(request))
+        if not ok:
+            raise HTTPException(status_code=401, detail=err or "رمز التحقق غير صحيح")
+    
     hashed = hash_password(data.new_password)
-    # 🔑 نحدّث password_vault معاً — زر الترحيب سيُرسل آخر كلمة مرور محفوظة
-    await db.users.update_one({"id": user_id}, {"$set": {
+    _now_ts = datetime.now(timezone.utc).timestamp()
+    # 🔒 نُبطل الجلسات القديمة:
+    # 1) للمستخدمين العاديين — نضع sid مسموم (يمنع مطابقة أي توكن قديم).
+    # 2) للأدمن/سوبر — نستعمل password_changed_at + فحص iat في get_current_user لإبطالهم.
+    update_fields = {
         "password": hashed,
         "password_vault": encrypt_plain_password(data.new_password),
-    }})
-    
-    return {"message": "تم تغيير كلمة المرور بنجاح"}
+        "active_session_id": f"invalidated-{uuid.uuid4()}",
+        "password_changed_at": _now_ts,
+    }
+    # 🔐 super_admin يستطيع تغيير مفتاح السري بجانب كلمة المرور في نفس الطلب
+    if data.new_secret_key and user.get("role") == UserRole.SUPER_ADMIN and current_user["role"] == UserRole.SUPER_ADMIN:
+        update_fields["secret_key"] = data.new_secret_key.strip()
+        update_fields["super_admin_secret"] = data.new_secret_key.strip()
+    await db.users.update_one({"id": user_id}, {"$set": update_fields})
+    return {"message": "تم تغيير كلمة المرور بنجاح", "secret_key_changed": bool(update_fields.get("secret_key")), "force_logout": True}
 
 # ==================== BRANCH ROUTES ====================
 

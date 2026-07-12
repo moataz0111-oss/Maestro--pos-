@@ -44,10 +44,22 @@ def _trust_devices(subject_type, subject_id, device_ids):
 
 
 def _users_ensure_password(admin_token, user_id, password):
-    r = requests.put(f"{BASE}/users/{user_id}/reset-password",
-                     headers={"Authorization": f"Bearer {admin_token}"},
-                     json={"new_password": password}, timeout=10)
-    assert r.status_code == 200, r.text
+    """يكتب كلمة المرور مباشرة في DB (يتجاوز OTP لبيئة الاختبار فقط)."""
+    import asyncio, os, sys
+    sys.path.insert(0, "/app/backend")
+    from motor.motor_asyncio import AsyncIOMotorClient
+    from server import hash_password, encrypt_plain_password
+    async def _do():
+        c = AsyncIOMotorClient(os.environ["MONGO_URL"])
+        db = c[os.environ["DB_NAME"]]
+        await db.users.update_one(
+            {"id": user_id},
+            {"$set": {"password": hash_password(password),
+                      "password_vault": encrypt_plain_password(password),
+                      "active_session_id": None}},
+        )
+        c.close()
+    asyncio.get_event_loop().run_until_complete(_do())
 
 
 @pytest.fixture(scope="module")
