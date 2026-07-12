@@ -57,6 +57,7 @@ def extract_token(request: Request, credentials) -> str:
 class UserRole:
     SUPER_ADMIN = "super_admin"
     ADMIN = "admin"
+    GENERAL_MANAGER = "general_manager"  # مدير عام — نفس صلاحيات المالك بالكامل
     MANAGER = "manager"
     SUPERVISOR = "supervisor"
     CASHIER = "cashier"

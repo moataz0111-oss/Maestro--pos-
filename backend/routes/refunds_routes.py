@@ -56,7 +56,7 @@ async def create_refund(refund: RefundCreate, current_user: dict = Depends(get_c
     user_role = current_user.get("role", "")
     
     # المدير والمالك لديهم صلاحية كاملة، أو المستخدم لديه صلاحية can_refund
-    if user_role not in [UserRole.ADMIN, UserRole.SUPER_ADMIN, UserRole.MANAGER] and "can_refund" not in user_permissions:
+    if user_role not in [UserRole.ADMIN, UserRole.GENERAL_MANAGER, UserRole.SUPER_ADMIN, UserRole.MANAGER] and "can_refund" not in user_permissions:
         raise HTTPException(status_code=403, detail="ليس لديك صلاحية إرجاع الطلبات")
     
     # التحقق من وجود سبب الإرجاع (شرط إلزامي)

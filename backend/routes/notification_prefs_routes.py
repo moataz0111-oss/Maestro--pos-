@@ -13,7 +13,7 @@ router = APIRouter(tags=["Notifications & Biometric Health"])
 
 
 def _require_admin(current_user: dict):
-    if current_user.get("role") not in [UserRole.ADMIN, UserRole.SUPER_ADMIN, UserRole.MANAGER, "branch_manager"]:
+    if current_user.get("role") not in [UserRole.ADMIN, UserRole.GENERAL_MANAGER, UserRole.SUPER_ADMIN, UserRole.MANAGER, "branch_manager"]:
         raise HTTPException(status_code=403, detail="غير مصرح")
 
 

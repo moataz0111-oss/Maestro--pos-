@@ -5023,7 +5023,7 @@ async def delete_product(product_id: str, current_user: dict = Depends(get_curre
 
 @api_router.post("/inventory", response_model=InventoryResponse)
 async def create_inventory_item(item: InventoryItemCreate, current_user: dict = Depends(get_current_user)):
-    if current_user["role"] not in [UserRole.ADMIN, UserRole.MANAGER, UserRole.SUPERVISOR]:
+    if current_user["role"] not in [UserRole.ADMIN, UserRole.GENERAL_MANAGER, UserRole.MANAGER, UserRole.SUPERVISOR]:
         raise HTTPException(status_code=403, detail="غير مصرح")
     
     inv_doc = {
@@ -5090,7 +5090,7 @@ async def inventory_transaction(transaction: InventoryTransaction, current_user:
 
 @api_router.post("/purchases")
 async def create_purchase(purchase: PurchaseCreate, current_user: dict = Depends(get_current_user)):
-    if current_user["role"] not in [UserRole.ADMIN, UserRole.MANAGER, UserRole.SUPERVISOR]:
+    if current_user["role"] not in [UserRole.ADMIN, UserRole.GENERAL_MANAGER, UserRole.MANAGER, UserRole.SUPERVISOR]:
         raise HTTPException(status_code=403, detail="غير مصرح")
     
     purchase_doc = {
@@ -5140,7 +5140,7 @@ async def get_purchases(
 @api_router.post("/expenses")
 async def create_expense(expense: ExpenseCreate, current_user: dict = Depends(get_current_user)):
     user_permissions = current_user.get("permissions", [])
-    if current_user["role"] not in [UserRole.ADMIN, UserRole.MANAGER, UserRole.SUPERVISOR, UserRole.SUPER_ADMIN] and "expenses" not in user_permissions:
+    if current_user["role"] not in [UserRole.ADMIN, UserRole.GENERAL_MANAGER, UserRole.MANAGER, UserRole.SUPERVISOR, UserRole.SUPER_ADMIN] and "expenses" not in user_permissions:
         raise HTTPException(status_code=403, detail="غير مصرح")
     
     tenant_id_for_biz = get_user_tenant_id(current_user)
@@ -5733,7 +5733,7 @@ async def get_next_transfer_number() -> int:
 @api_router.post("/inventory-transfers", response_model=InventoryTransferResponse)
 async def create_inventory_transfer(transfer: InventoryTransferCreate, current_user: dict = Depends(get_current_user)):
     """إنشاء طلب تحويل مخزون"""
-    if current_user["role"] not in [UserRole.ADMIN, UserRole.MANAGER, UserRole.SUPERVISOR, UserRole.SUPER_ADMIN]:
+    if current_user["role"] not in [UserRole.ADMIN, UserRole.GENERAL_MANAGER, UserRole.MANAGER, UserRole.SUPERVISOR, UserRole.SUPER_ADMIN]:
         raise HTTPException(status_code=403, detail="غير مصرح")
     
     transfer_number = await get_next_transfer_number()
@@ -5813,7 +5813,7 @@ async def approve_inventory_transfer(transfer_id: str, current_user: dict = Depe
 @api_router.put("/inventory-transfers/{transfer_id}/ship")
 async def ship_inventory_transfer(transfer_id: str, current_user: dict = Depends(get_current_user)):
     """شحن التحويل (خصم من المخزن المرسل)"""
-    if current_user["role"] not in [UserRole.ADMIN, UserRole.MANAGER, UserRole.SUPERVISOR, UserRole.SUPER_ADMIN]:
+    if current_user["role"] not in [UserRole.ADMIN, UserRole.GENERAL_MANAGER, UserRole.MANAGER, UserRole.SUPERVISOR, UserRole.SUPER_ADMIN]:
         raise HTTPException(status_code=403, detail="غير مصرح")
     
     query = build_tenant_query(current_user, {"id": transfer_id})
@@ -5844,7 +5844,7 @@ async def ship_inventory_transfer(transfer_id: str, current_user: dict = Depends
 @api_router.put("/inventory-transfers/{transfer_id}/receive")
 async def receive_inventory_transfer(transfer_id: str, current_user: dict = Depends(get_current_user)):
     """استلام التحويل (إضافة للمخزن المستلم)"""
-    if current_user["role"] not in [UserRole.ADMIN, UserRole.MANAGER, UserRole.SUPERVISOR, UserRole.SUPER_ADMIN]:
+    if current_user["role"] not in [UserRole.ADMIN, UserRole.GENERAL_MANAGER, UserRole.MANAGER, UserRole.SUPERVISOR, UserRole.SUPER_ADMIN]:
         raise HTTPException(status_code=403, detail="غير مصرح")
     
     query = build_tenant_query(current_user, {"id": transfer_id})
@@ -6050,7 +6050,7 @@ async def transfer_table_order(
 @api_router.delete("/tables/{table_id}")
 async def delete_table(table_id: str, current_user: dict = Depends(get_current_user)):
     """حذف طاولة - فقط للمالك أو المدير"""
-    if current_user.get("role") not in [UserRole.SUPER_ADMIN, UserRole.ADMIN, UserRole.MANAGER, "super_admin", "admin", "manager"]:
+    if current_user.get("role") not in [UserRole.SUPER_ADMIN, UserRole.ADMIN, UserRole.GENERAL_MANAGER, UserRole.MANAGER, "super_admin", "admin", "manager"]:
         raise HTTPException(status_code=403, detail="ليس لديك صلاحية حذف الطاولات")
     
     # Super Admin يحذف أي طاولة
@@ -6196,7 +6196,7 @@ async def get_welcome_discount_config(current_user: dict = Depends(get_current_u
 
 @api_router.put("/welcome-discount/config")
 async def update_welcome_discount_config(payload: dict = Body(...), current_user: dict = Depends(get_current_user)):
-    if current_user.get("role") not in [UserRole.ADMIN, UserRole.MANAGER, UserRole.SUPER_ADMIN, "branch_manager"]:
+    if current_user.get("role") not in [UserRole.ADMIN, UserRole.GENERAL_MANAGER, UserRole.MANAGER, UserRole.SUPER_ADMIN, "branch_manager"]:
         raise HTTPException(status_code=403, detail="غير مصرح")
     tenant_id = get_user_tenant_id(current_user)
     allowed = {"enabled", "discount_type", "discount_value", "min_order_amount", "valid_days", "message_template"}
@@ -6212,7 +6212,7 @@ async def update_welcome_discount_config(payload: dict = Body(...), current_user
 @api_router.get("/welcome-approvals")
 async def get_welcome_approvals(current_user: dict = Depends(get_current_user)):
     """قائمة الزبائن الجدد بانتظار موافقة خصم الترحيب (إشعار داخل النظام بزر موافقة)."""
-    if current_user.get("role") not in [UserRole.ADMIN, UserRole.MANAGER, UserRole.SUPER_ADMIN, "branch_manager"]:
+    if current_user.get("role") not in [UserRole.ADMIN, UserRole.GENERAL_MANAGER, UserRole.MANAGER, UserRole.SUPER_ADMIN, "branch_manager"]:
         raise HTTPException(status_code=403, detail="غير مصرح")
     query = build_tenant_query(current_user, {"welcome_status": "pending"})
     customers = await db.customers.find(query, {"_id": 0}).sort("created_at", -1).to_list(100)
@@ -6221,7 +6221,7 @@ async def get_welcome_approvals(current_user: dict = Depends(get_current_user)):
 @api_router.get("/welcome-discount/stats")
 async def welcome_discount_stats(current_user: dict = Depends(get_current_user)):
     """إحصائيات كوبونات الترحيب: الحالة، الاستخدام، وقيمة الخصومات الممنوحة."""
-    if current_user["role"] not in [UserRole.ADMIN, UserRole.MANAGER, UserRole.SUPER_ADMIN, "branch_manager"]:
+    if current_user["role"] not in [UserRole.ADMIN, UserRole.GENERAL_MANAGER, UserRole.MANAGER, UserRole.SUPER_ADMIN, "branch_manager"]:
         raise HTTPException(status_code=403, detail="غير مصرح")
     pending = await db.customers.count_documents(build_tenant_query(current_user, {"welcome_status": "pending"}))
     granted = await db.customers.count_documents(build_tenant_query(current_user, {"welcome_status": "granted"}))
@@ -6249,7 +6249,7 @@ async def welcome_discount_stats(current_user: dict = Depends(get_current_user))
 @api_router.post("/customers/{customer_id}/grant-welcome-discount")
 async def grant_welcome_discount(customer_id: str, payload: dict = Body(default={}), current_user: dict = Depends(get_current_user)):
     """موافقة صاحب المطعم/المدير → كوبون شخصي باسم الزبون بعدد مرات وفروع يحددها المالك + واتساب احترافي."""
-    if current_user.get("role") not in [UserRole.ADMIN, UserRole.MANAGER, UserRole.SUPER_ADMIN, "branch_manager"]:
+    if current_user.get("role") not in [UserRole.ADMIN, UserRole.GENERAL_MANAGER, UserRole.MANAGER, UserRole.SUPER_ADMIN, "branch_manager"]:
         raise HTTPException(status_code=403, detail="يتطلب موافقة صاحب المطعم أو المدير")
     tenant_id = get_user_tenant_id(current_user)
     customer = await db.customers.find_one(build_tenant_query(current_user, {"id": customer_id}), {"_id": 0})
@@ -7303,7 +7303,7 @@ async def find_duplicate_orders(
     (السيناريو الناتج عن تكرار الأوفلاين). الطلبات المعلّقة العادية لا تُعتبر تكراراً
     لأنها بلا طلب مدفوع مطابق.
     """
-    if current_user.get("role") not in [UserRole.ADMIN, UserRole.SUPER_ADMIN, UserRole.MANAGER]:
+    if current_user.get("role") not in [UserRole.ADMIN, UserRole.GENERAL_MANAGER, UserRole.SUPER_ADMIN, UserRole.MANAGER]:
         raise HTTPException(status_code=403, detail="هذه الأداة متاحة للمالك/المدير العام فقط")
 
     tenant_id = get_user_tenant_id(current_user)
@@ -7569,7 +7569,7 @@ async def update_order_status(order_id: str, status: str, current_user: dict = D
     # التحقق من صلاحية الإلغاء
     if status == OrderStatus.CANCELLED:
         # فقط المالك أو المدير يمكنهم الإلغاء
-        if current_user.get("role") not in ["admin", "manager"]:
+        if current_user.get("role") not in ["admin", "general_manager", "manager"]:
             raise HTTPException(status_code=403, detail="ليس لديك صلاحية إلغاء الطلبات")
     
     await db.orders.update_one(
@@ -7760,7 +7760,7 @@ async def cancel_order(order_id: str, current_user: dict = Depends(get_current_u
     
     is_within_minute = time_diff < 60  # أقل من دقيقة
     is_within_two_minutes = time_diff < 120  # أقل من دقيقتين
-    is_admin_or_manager = current_user.get("role") in ["admin", "manager"]
+    is_admin_or_manager = current_user.get("role") in ["admin", "general_manager", "manager"]
     
     # التحقق من الصلاحيات
     if not is_within_minute and not is_admin_or_manager:
@@ -7807,7 +7807,7 @@ async def reject_order(order_id: str, reason: Optional[str] = None, current_user
     """رفض طلب وارد من قبل الكاشير: يُسجَّل الطلب كمرفوض (ملغي مع سبب) ويظهر في تقرير الطلبات،
     ويُشعَر الزبون بالرفض. لا يُحذف نهائياً (بخلاف الإلغاء السريع) كي يبقى مُتتبَّعاً.
     """
-    allowed = [UserRole.ADMIN, UserRole.MANAGER, UserRole.SUPERVISOR, UserRole.CASHIER, UserRole.SUPER_ADMIN, "owner"]
+    allowed = [UserRole.ADMIN, UserRole.GENERAL_MANAGER, UserRole.MANAGER, UserRole.SUPERVISOR, UserRole.CASHIER, UserRole.SUPER_ADMIN, "owner"]
     if current_user.get("role") not in allowed:
         raise HTTPException(status_code=403, detail="غير مصرح")
     query = build_tenant_query(current_user, {"id": order_id})
@@ -11741,7 +11741,7 @@ ALLOWED_BIO_JOB_TYPES = {
 @api_router.post("/biometric-queue")
 async def create_biometric_job(payload: dict, current_user: dict = Depends(get_current_user)):
     """إنشاء جوب بصمة لتنفيذه عبر الوكيل المحلي."""
-    if current_user.get("role") not in ["admin", "super_admin", "manager"]:
+    if current_user.get("role") not in ["admin", "general_manager", "super_admin", "manager"]:
         raise HTTPException(status_code=403, detail="غير مسموح — للمالك/المدير فقط")
 
     tenant_id = get_user_tenant_id(current_user)
@@ -15511,7 +15511,7 @@ async def assign_driver_to_order(
     current_user: dict = Depends(get_current_user)
 ):
     """تخصيص سائق للطلب"""
-    if current_user["role"] not in [UserRole.ADMIN, UserRole.MANAGER, UserRole.SUPERVISOR, UserRole.CASHIER]:
+    if current_user["role"] not in [UserRole.ADMIN, UserRole.GENERAL_MANAGER, UserRole.MANAGER, UserRole.SUPERVISOR, UserRole.CASHIER]:
         raise HTTPException(status_code=403, detail="غير مصرح")
     
     tenant_id = get_user_tenant_id(current_user)
@@ -17403,7 +17403,7 @@ async def migrate_business_dates(force: bool = False, current_user: dict = Depen
     force=True: إعادة احتساب business_date لجميع السجلات حتى التي تملكه سابقاً (مفيد لتصحيح ترحيل سابق خاطئ).
     """
     # صلاحية المالك فقط
-    if current_user.get("role") not in ["admin", "super_admin", "manager"]:
+    if current_user.get("role") not in ["admin", "general_manager", "super_admin", "manager"]:
         raise HTTPException(status_code=403, detail="غير مصرح - المالك فقط")
     
     tenant_id = get_user_tenant_id(current_user)

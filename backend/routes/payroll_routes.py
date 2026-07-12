@@ -100,7 +100,7 @@ class PayrollResponse(BaseModel):
 async def create_deduction(deduction: DeductionCreate, current_user: dict = Depends(get_current_user)):
     """إنشاء خصم"""
     db = get_database()
-    if current_user["role"] not in [UserRole.ADMIN, UserRole.MANAGER, UserRole.SUPERVISOR, UserRole.SUPER_ADMIN]:
+    if current_user["role"] not in [UserRole.ADMIN, UserRole.GENERAL_MANAGER, UserRole.MANAGER, UserRole.SUPERVISOR, UserRole.SUPER_ADMIN]:
         raise HTTPException(status_code=403, detail="غير مصرح")
     
     employee = await db.employees.find_one({"id": deduction.employee_id}, {"_id": 0})
@@ -919,7 +919,7 @@ async def terminate_payout(employee_id: str, payload: Optional[SettlementPayout]
 async def get_settlement_receipt(employee_id: str, current_user: dict = Depends(get_current_user)):
     """بيانات إيصال المخالصة النهائية (لإعادة الطباعة) — يعمل للموظف المنتهي/المصروف."""
     db = get_database()
-    if current_user["role"] not in [UserRole.ADMIN, UserRole.SUPER_ADMIN, UserRole.MANAGER]:
+    if current_user["role"] not in [UserRole.ADMIN, UserRole.GENERAL_MANAGER, UserRole.SUPER_ADMIN, UserRole.MANAGER]:
         raise HTTPException(status_code=403, detail="غير مصرح")
     emp = await db.employees.find_one({"id": employee_id}, {"_id": 0})
     if not emp:
@@ -1231,7 +1231,7 @@ async def get_employee_account_statement(
 # يُدخلها المدير → بانتظار موافقة المالك → عند الموافقة تُحتسب للموظف (مدفوعة، بلا خصم)
 # مع سجل/أرشيف كامل وإشعار للمالك.
 
-LEAVE_GRANT_ROLES = [UserRole.ADMIN, UserRole.SUPER_ADMIN, UserRole.MANAGER, UserRole.SUPERVISOR]
+LEAVE_GRANT_ROLES = [UserRole.ADMIN, UserRole.GENERAL_MANAGER, UserRole.SUPER_ADMIN, UserRole.MANAGER, UserRole.SUPERVISOR]
 LEAVE_APPROVE_ROLES = [UserRole.ADMIN, UserRole.SUPER_ADMIN]  # المالك فقط
 DEFAULT_ANNUAL_LEAVE = 21  # رصيد الإجازة السنوية الافتراضي (أيام)
 

@@ -375,7 +375,7 @@ async def create_salary_payment(
     تُسجَّل في `salary_payments` (سلفة على الراتب) + تُسحَب تلقائياً من **خزينة المالك**
     (`owner_withdrawals` بفئة `salary_payment`) لأن المالك يدفعها من ماله الخاص.
     لا تؤثر على الشفت، المصاريف، أو نقدي المبيعات."""
-    if current_user.get("role") not in ["admin", "super_admin", "manager"]:
+    if current_user.get("role") not in ["admin", "general_manager", "super_admin", "manager"]:
         raise HTTPException(status_code=403, detail="غير مسموح — للمالك/المدير فقط")
 
     if payload.amount is None or payload.amount <= 0:

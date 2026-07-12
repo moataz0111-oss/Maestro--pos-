@@ -321,7 +321,7 @@ def _calc_worked_hours_hhmm(check_in, check_out, break_out=None, break_in=None):
 @router.post("/attendance", response_model=AttendanceResponse)
 async def create_attendance(attendance: AttendanceCreate, current_user: dict = Depends(get_current_user)):
     """تسجيل حضور/انصراف"""
-    if current_user["role"] not in [UserRole.ADMIN, UserRole.MANAGER, UserRole.SUPERVISOR, UserRole.SUPER_ADMIN]:
+    if current_user["role"] not in [UserRole.ADMIN, UserRole.GENERAL_MANAGER, UserRole.MANAGER, UserRole.SUPERVISOR, UserRole.SUPER_ADMIN]:
         raise HTTPException(status_code=403, detail="غير مصرح")
     
     # التحقق من وجود الموظف
@@ -392,7 +392,7 @@ async def get_attendance(
 @router.put("/attendance/{attendance_id}")
 async def update_attendance(attendance_id: str, update: dict, current_user: dict = Depends(get_current_user)):
     """تحديث سجل حضور"""
-    if current_user["role"] not in [UserRole.ADMIN, UserRole.MANAGER, UserRole.SUPERVISOR, UserRole.SUPER_ADMIN]:
+    if current_user["role"] not in [UserRole.ADMIN, UserRole.GENERAL_MANAGER, UserRole.MANAGER, UserRole.SUPERVISOR, UserRole.SUPER_ADMIN]:
         raise HTTPException(status_code=403, detail="غير مصرح")
     
     query = build_tenant_query(current_user, {"id": attendance_id})

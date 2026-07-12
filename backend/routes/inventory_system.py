@@ -1284,7 +1284,7 @@ class PurchasePayment(BaseModel):
 async def pay_purchase_invoice(purchase_id: str, payload: PurchasePayment, current_user: dict = Depends(get_current_user)):
     """تسديد فاتورة مورد (كامل/جزئي) — يُخصم من إجمالي رصيد خزينة المالك."""
     db = get_db()
-    if current_user["role"] not in [UserRole.ADMIN, UserRole.SUPER_ADMIN, UserRole.MANAGER]:
+    if current_user["role"] not in [UserRole.ADMIN, UserRole.GENERAL_MANAGER, UserRole.SUPER_ADMIN, UserRole.MANAGER]:
         raise HTTPException(status_code=403, detail="غير مصرح — التسديد للمالك/المدير فقط")
     tenant_id = get_user_tenant_id(current_user)
 
@@ -1378,7 +1378,7 @@ async def correct_purchase_item(purchase_id: str, payload: CorrectPurchaseItem, 
     يعكس الأثر بالكامل: إجمالي الفاتورة + مخزون المادة الخام (الكمية + متوسط التكلفة) +
     رصيد المورد + استرجاع أي مبلغ مدفوع زائد إلى خزينة المالك، مع تسجيل في سجل التدقيق."""
     db = get_db()
-    if current_user["role"] not in [UserRole.ADMIN, UserRole.SUPER_ADMIN, UserRole.MANAGER]:
+    if current_user["role"] not in [UserRole.ADMIN, UserRole.GENERAL_MANAGER, UserRole.SUPER_ADMIN, UserRole.MANAGER]:
         raise HTTPException(status_code=403, detail="غير مصرح — التصحيح للمالك/المدير فقط")
     tenant_id = get_user_tenant_id(current_user)
     now = datetime.now(timezone.utc).isoformat()
@@ -1560,7 +1560,7 @@ async def _supplier_open_invoices(db, supplier_id, tenant_id):
 async def pay_supplier_account(supplier_id: str, payload: SupplierPayment, current_user: dict = Depends(get_current_user)):
     """تسديد دفعة/مبلغ كامل لمورد — يُوزَّع على فواتيره الأقدم أولاً ويُخصم من إجمالي خزينة المالك."""
     db = get_db()
-    if current_user["role"] not in [UserRole.ADMIN, UserRole.SUPER_ADMIN, UserRole.MANAGER]:
+    if current_user["role"] not in [UserRole.ADMIN, UserRole.GENERAL_MANAGER, UserRole.SUPER_ADMIN, UserRole.MANAGER]:
         raise HTTPException(status_code=403, detail="غير مصرح — التسديد للمالك/المدير فقط")
     tenant_id = get_user_tenant_id(current_user)
     supplier = await db.suppliers.find_one({"id": supplier_id}, {"_id": 0})
@@ -8250,7 +8250,7 @@ async def stockout_predictions(
     متاح للمالك/المدير/أمين المخزن.
     """
     role = (current_user or {}).get("role", "")
-    allowed_roles = ("admin", "super_admin", "manager", "branch_manager",
+    allowed_roles = ("admin", "general_manager", "super_admin", "manager", "branch_manager",
                      "warehouse", "warehouse_keeper", "stock_keeper")
     if role not in allowed_roles:
         raise HTTPException(status_code=403, detail="هذه الميزة متاحة للمالك/المدير/أمين المخزن")

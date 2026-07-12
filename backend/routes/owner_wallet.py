@@ -199,7 +199,7 @@ async def get_wallet_summary(current_user: dict = Depends(get_current_user)):
 @router.get("/shift-deposit-branch-status")
 async def shift_deposit_branch_status(current_user: dict = Depends(get_current_user)):
     """تقرير توزيع إيداعات نقد الشفت على الفروع + كم بقي 'غير محدد' (للتحقق بعد الإصلاح)."""
-    if current_user.get("role") not in ["super_admin", "admin", "manager"]:
+    if current_user.get("role") not in ["super_admin", "admin", "general_manager", "manager"]:
         raise HTTPException(status_code=403, detail="غير مصرح")
     db = get_database()
     tenant_id = get_user_tenant_id(current_user)

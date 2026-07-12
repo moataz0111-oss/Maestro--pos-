@@ -568,7 +568,7 @@ async def fix_order_routing(
     """تصحيح مسار الطلب (للمالك/المدير) — مفيد للطلبات الأوفلاين التي ظهرت بمسار خاطئ
     مثل: طلب لشركة توصيل ظهر كـ dine_in/cash. يحتفظ بـ order_number كما هو.
     """
-    if current_user.get("role") not in ["admin", "super_admin", "manager"]:
+    if current_user.get("role") not in ["admin", "general_manager", "super_admin", "manager"]:
         raise HTTPException(status_code=403, detail="غير مسموح — للمالك/المدير فقط")
 
     tenant_id = get_user_tenant_id(current_user)
@@ -684,7 +684,7 @@ async def assign_delivery_company(
 
     صلاحية: المالك / المدير العام / المدير فقط.
     """
-    if current_user.get("role") not in ["admin", "super_admin", "manager"]:
+    if current_user.get("role") not in ["admin", "general_manager", "super_admin", "manager"]:
         raise HTTPException(status_code=403, detail="غير مسموح — للمالك/المدير فقط")
 
     tenant_id = get_user_tenant_id(current_user)

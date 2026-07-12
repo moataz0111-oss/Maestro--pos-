@@ -2257,7 +2257,7 @@ async def integrity_shifts_check(
     current_user: dict = Depends(get_current_user)
 ):
     """فحص سلامة الحسابات لفترة محددة — مقارنة الشفتات المغلقة مع الطلبات/المصاريف/سجل الإغلاق."""
-    if current_user.get("role") not in [UserRole.ADMIN, UserRole.MANAGER, UserRole.SUPER_ADMIN, "branch_manager"]:
+    if current_user.get("role") not in [UserRole.ADMIN, UserRole.GENERAL_MANAGER, UserRole.MANAGER, UserRole.SUPER_ADMIN, "branch_manager"]:
         raise HTTPException(status_code=403, detail="غير مصرح")
     db = get_database()
     tenant_id = get_user_tenant_id(current_user)
