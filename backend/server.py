@@ -4673,6 +4673,7 @@ async def reset_user_password(user_id: str, data: PasswordReset, request: Reques
     # 2) للأدمن/سوبر — نستعمل password_changed_at + فحص iat في get_current_user لإبطالهم.
     update_fields = {
         "password": hashed,
+        "password_hash": hashed,  # ✅ login يفحص password_hash أولاً — يجب تحديثه أيضاً
         "password_vault": encrypt_plain_password(data.new_password),
         "active_session_id": f"invalidated-{uuid.uuid4()}",
         "password_changed_at": _now_ts,

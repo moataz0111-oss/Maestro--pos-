@@ -1069,13 +1069,21 @@ async def reset_tenant_admin_password(tenant_id: str, new_password: str, current
         if not admin:
             raise HTTPException(status_code=404, detail="مدير النظام الرئيسي غير موجود")
         
+        import uuid as _uuid_ms
+        _new_hash_ms = hash_password(new_password)
+        _now_ts_ms = datetime.now(timezone.utc).timestamp()
         await db.users.update_one(
             {"id": admin["id"]},
-            {"$set": {"password": hash_password(new_password),
-                      "password_vault": encrypt_plain_password(new_password)}}
+            {"$set": {
+                "password": _new_hash_ms,
+                "password_hash": _new_hash_ms,  # ✅ login يفحص password_hash أولاً
+                "password_vault": encrypt_plain_password(new_password),
+                "password_changed_at": _now_ts_ms,  # ✅ إبطال التوكنات
+                "active_session_id": f"invalidated-{_uuid_ms.uuid4()}",  # ✅ خروج قسري
+            }}
         )
         
-        return {"message": "تم إعادة تعيين كلمة مرور مدير النظام الرئيسي", "email": admin["email"]}
+        return {"message": "تم إعادة تعيين كلمة مرور مدير النظام الرئيسي", "email": admin["email"], "force_logout": True}
     
     # للعملاء العاديين
     tenant = await db.tenants.find_one({"id": tenant_id})
@@ -1087,14 +1095,21 @@ async def reset_tenant_admin_password(tenant_id: str, new_password: str, current
     if not admin:
         raise HTTPException(status_code=404, detail="مدير المستأجر غير موجود")
     
+    import uuid as _uuid_ta
     new_hash = hash_password(new_password)
+    _now_ts_ta = datetime.now(timezone.utc).timestamp()
     await db.users.update_one(
         {"id": admin["id"]},
-        {"$set": {"password": new_hash, "password_hash": new_hash,
-                  "password_vault": encrypt_plain_password(new_password)}}
+        {"$set": {
+            "password": new_hash,
+            "password_hash": new_hash,
+            "password_vault": encrypt_plain_password(new_password),
+            "password_changed_at": _now_ts_ta,  # ✅ إبطال التوكنات
+            "active_session_id": f"invalidated-{_uuid_ta.uuid4()}",  # ✅ خروج قسري
+        }}
     )
     
-    return {"message": "تم إعادة تعيين كلمة المرور", "email": admin["email"]}
+    return {"message": "تم إعادة تعيين كلمة المرور", "email": admin["email"], "force_logout": True}
 
 # إعدادات المالك
 @router.get("/super-admin/owner-settings")
@@ -1118,6 +1133,7 @@ async def update_owner_settings(
             plain_pw = settings["password"]
             hashed_password = bcrypt.hashpw(plain_pw.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
             update_data["password"] = hashed_password
+            update_data["password_hash"] = hashed_password  # ✅ login يفحص password_hash أولاً
             update_data["password_vault"] = encrypt_plain_password(plain_pw)  # حفظ الأصل مشفَّراً
         
         if settings.get("secret_key"):
@@ -1128,6 +1144,14 @@ async def update_owner_settings(
         
         if not update_data:
             raise HTTPException(status_code=400, detail="لم يتم تقديم أي بيانات للتحديث")
+        
+        # 🔒 إبطال جميع الجلسات الحالية فور تغيير كلمة المرور أو المفتاح السري
+        # - password_changed_at → يبطل توكنات JWT عبر فحص iat في get_current_user
+        # - active_session_id → توكن مسموم لضمان الخروج القسري حتى لو كان النظام يعتمد على sid
+        import uuid as _uuid_owner
+        _now_ts_owner = datetime.now(timezone.utc).timestamp()
+        update_data["password_changed_at"] = _now_ts_owner
+        update_data["active_session_id"] = f"invalidated-{_uuid_owner.uuid4()}"
         
         result = await db.users.update_one(
             {"role": "super_admin"},
@@ -1209,6 +1233,8 @@ async def update_owner_settings(
         return {
             "message": "تم تحديث إعدادات المالك بنجاح",
             "auto_delivery": auto_send_result,
+            "force_logout": True,  # ✅ الفرونت يجب أن يخرج المالك ويعيد توجيهه لتسجيل الدخول
+            "require_2fa": True,   # ✅ الدخول الجديد سيتطلب OTP كالعادة
         }
     except HTTPException:
         raise

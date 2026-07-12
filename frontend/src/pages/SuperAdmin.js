@@ -2049,14 +2049,27 @@ export default function SuperAdmin() {
         return;
       }
       
-      await axios.put(`${API}/super-admin/owner-settings`, updateData, {
+      const res = await axios.put(`${API}/super-admin/owner-settings`, updateData, {
         headers: { Authorization: `Bearer ${token}` }
       });
+      
+      // ✅ إذا طلب الباك-إند الخروج القسري بعد تحديث كلمة المرور/المفتاح السري
+      const forceLogout = res?.data?.force_logout;
       
       toast.success(t('تم تحديث إعدادات المالك بنجاح'));
       setNewOwnerPassword('');
       setConfirmOwnerPassword('');
       setNewOwnerSecretKey('');
+      
+      if (forceLogout) {
+        // إظهار رسالة للمالك ثم تسجيل خروجه لإجباره على الدخول ببياناته الجديدة والتحقق OTP
+        toast.info(t('سيتم إخراجك الآن — الرجاء الدخول ببيانات الاعتماد الجديدة'));
+        setTimeout(() => {
+          logout();
+          // إعادة تحميل الصفحة لضمان إعادة التوجيه لشاشة تسجيل الدخول
+          window.location.reload();
+        }, 1500);
+      }
     } catch (error) {
       console.error('Error updating owner settings:', error);
       const errorMsg = getErrorMessage(error) || t('فشل في تحديث إعدادات المالك');
