@@ -2772,12 +2772,15 @@ def _generate_temp_password(length: int = 10) -> str:
     return body + secrets.choice("!@#$%") + secrets.choice(string.digits)
 
 
-async def _send_welcome_bundle_to_user(user_doc: dict, tenant_doc: dict) -> dict:
+async def _send_welcome_bundle_to_user(user_doc: dict, tenant_doc: dict, plain_password: Optional[str] = None) -> dict:
     """يرسل ترحيب + كلمة مرور مؤقتة + رمز OTP لمستخدم واحد على البريد والواتساب/SMS.
     
     🛡️ حماية حرجة: كلمة المرور تُعاد تعيينها فقط إذا نجحت **قناة واحدة على الأقل**.
     إن فشلت كل القنوات (بريد + واتساب + SMS) → لا يُعاد تعيين كلمة المرور،
     حتى لا يُقفَل المستخدم خارج النظام.
+    
+    plain_password (اختياري): لو مُرِّرَت (من زر الترحيب مع custom_password)، تُستخدم مباشرة
+    بلا فكّ vault — يحمي من فشل الفك بسبب اختلاف مفاتيح Fernet بين البيئات.
     """
     if not user_doc or not tenant_doc:
         return {"ok": False, "reason": "missing_user_or_tenant"}
@@ -2786,11 +2789,17 @@ async def _send_welcome_bundle_to_user(user_doc: dict, tenant_doc: dict) -> dict
     if user_doc.get("tenant_id") != tenant_doc.get("id"):
         return {"ok": False, "reason": "tenant_mismatch"}
 
-    # 1) اجلب كلمة المرور الأصلية من الخزنة المشفَّرة — لا نُغيّرها!
-    #    (تم حفظها عند إنشاء الحساب أو تعديل كلمة المرور).
-    stored_vault = user_doc.get("password_vault")
-    temp_password = decrypt_plain_password(stored_vault) if stored_vault else None
-    password_source = "vault" if temp_password else None
+    # 1) الأولوية للنص الصريح (plain_password) — يمرَّر عندما custom_password مُرسَلة.
+    #    هذا يتجاوز أي مشكلة في فكّ vault ويضمن أن ما يُرسَل = ما كتبه المشرف بالحرف.
+    temp_password = None
+    password_source = None
+    if plain_password:
+        temp_password = plain_password
+        password_source = "explicit_plain"
+    else:
+        stored_vault = user_doc.get("password_vault")
+        temp_password = decrypt_plain_password(stored_vault) if stored_vault else None
+        password_source = "vault" if temp_password else None
     
     # إذا لا توجد كلمة أصلية محفوظة → نُنشئ واحدة ونحفظها (يحدث فقط للمستخدمين القدامى قبل التحديث)
     if not temp_password:
@@ -2977,7 +2986,7 @@ async def send_welcome_to_tenant_owner(tenant_id: str, payload: dict = None, cur
     if tenant.get("owner_name") and not effective_owner.get("full_name"):
         effective_owner["full_name"] = tenant["owner_name"]
 
-    result = await _send_welcome_bundle_to_user(effective_owner, tenant)
+    result = await _send_welcome_bundle_to_user(effective_owner, tenant, plain_password=custom_pw)
     await record_audit("super_admin.send_welcome_owner", user=current_user, details={
         "tenant_id": tenant_id, "target_user_id": owner.get("id"),
         "used_custom_password": bool(custom_pw),

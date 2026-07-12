@@ -4255,7 +4255,8 @@ async def send_welcome_to_single_user(user_id: str, payload: dict = None, curren
     }
     
     from routes.super_admin_routes import _send_welcome_bundle_to_user
-    result = await _send_welcome_bundle_to_user(user, tenant)
+    # 🔑 مرّر النص الصريح — يضمن ما يُرسَل = ما كتبه المشرف حتى لو فشل فكّ vault
+    result = await _send_welcome_bundle_to_user(user, tenant, plain_password=custom_pw)
     
     try:
         await record_audit("user.send_welcome", user=current_user, details={
