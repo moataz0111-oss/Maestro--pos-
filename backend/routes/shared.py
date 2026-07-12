@@ -99,7 +99,7 @@ def hash_password(password: str) -> str:
 def verify_password(password: str, hashed: str) -> bool:
     return bcrypt.checkpw(password.encode('utf-8'), hashed.encode('utf-8'))
 
-def create_token(user_id: str, role: str, branch_id: Optional[str] = None, tenant_id: Optional[str] = None) -> str:
+def create_token(user_id: str, role: str, branch_id: Optional[str] = None, tenant_id: Optional[str] = None, session_id: Optional[str] = None) -> str:
     payload = {
         "user_id": user_id,
         "role": role,
@@ -107,6 +107,9 @@ def create_token(user_id: str, role: str, branch_id: Optional[str] = None, tenan
         "tenant_id": tenant_id,
         "exp": datetime.now(timezone.utc) + timedelta(hours=JWT_EXPIRATION_HOURS)
     }
+    # sid: يُستخدم لفرض جلسة نشطة واحدة لكل مستخدم (يُطابق users.active_session_id).
+    if session_id:
+        payload["sid"] = session_id
     return jwt.encode(payload, JWT_SECRET, algorithm=JWT_ALGORITHM)
 
 async def get_current_user(request: Request, credentials: HTTPAuthorizationCredentials = Depends(security)):
@@ -117,6 +120,14 @@ async def get_current_user(request: Request, credentials: HTTPAuthorizationCrede
         user = await db.users.find_one({"id": payload["user_id"]}, {"_id": 0})
         if not user:
             raise HTTPException(status_code=401, detail="المستخدم غير موجود")
+        # ✅ جلسة نشطة واحدة لكل مستخدم (باستثناء admin/super_admin — لا يُخزَّن لهم active_session_id)
+        active_sid = user.get("active_session_id")
+        token_sid = payload.get("sid")
+        if active_sid and token_sid and active_sid != token_sid:
+            raise HTTPException(
+                status_code=401,
+                detail="تم تسجيل الدخول من جهاز آخر — تم إنهاء هذه الجلسة",
+            )
         return user
     except jwt.ExpiredSignatureError:
         raise HTTPException(status_code=401, detail="انتهت صلاحية الجلسة")

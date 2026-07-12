@@ -11,7 +11,7 @@ from .shared import (
     hash_password, verify_password, create_token,
     build_tenant_query, UserRole, logger
 )
-from server import encrypt_plain_password  # للحفاظ على الكلمة الأصلية في vault
+from server import encrypt_plain_password, issue_user_session  # للحفاظ على الكلمة الأصلية في vault وجلسة نشطة واحدة
 from ..models import (
     UserCreate, UserLogin, UserResponse, UserUpdate, PasswordReset
 )
@@ -97,7 +97,9 @@ async def login(credentials: UserLogin):
     if "password_hash" in user:
         del user["password_hash"]
     
-    token = create_token(user["id"], user["role"], user.get("branch_id"))
+    # ✅ جلسة نشطة واحدة لكل مستخدم (باستثناء admin/super_admin)
+    _sid = await issue_user_session(user["id"], user.get("role"))
+    token = create_token(user["id"], user["role"], user.get("branch_id"), user.get("tenant_id"), session_id=_sid)
     return {"user": user, "token": token}
 
 
@@ -159,7 +161,8 @@ async def impersonate_user(user_id: str, current_user: dict = Depends(get_curren
     }
     await db.impersonation_logs.insert_one(audit_log)
     
-    token = create_token(target_user["id"], target_user["role"], target_user.get("branch_id"))
+    _sid = await issue_user_session(target_user["id"], target_user.get("role"))
+    token = create_token(target_user["id"], target_user["role"], target_user.get("branch_id"), target_user.get("tenant_id"), session_id=_sid)
     
     return {
         "user": target_user,

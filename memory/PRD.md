@@ -1,7 +1,41 @@
 # Maestro EGP - Multi-Tenant POS System PRD
+## Bug Fix — تحديث كلمة المرور والـ Vault (12 يوليو 2026) 🔑
+
+**المشكلة:** بعد تحديث بيانات موظف عبر PUT /api/users/{id} مع حقل `password`، الفرونت كان يرسله لكن Pydantic يُسقطه لأن `UserUpdate` model لا يحتوي هذا الحقل — فتبقى كلمة المرور القديمة تعمل، ويبقى `password_vault` قديم، فرسالة الترحيب على Email/WhatsApp تُرسل كلمة مرور خاطئة.
+
+**الحل:**
+- أضفت حقل `password: Optional[str] = None` إلى `UserUpdate` في `server.py` و `models.py`.
+- الكود القائم (لاين 4352-4356) يعمل الآن: يُحدَّث الـ hash + password_vault في نفس الوقت.
+- اختبار regression جديد: `tests/test_update_password_updates_vault.py` — يفكّ تشفير الـ vault ويقارنه بكلمة المرور المُحدَّثة.
+
+
+## Single Active Session Enforcement (12 يوليو 2026) — جلسة واحدة لكل مستخدم ✅
+
+**طلب المالك:** كل الحسابات (كاشير/مدير/سائق/مصنع/كول سنتر...) — جهاز واحد فقط. الاستثناء: مالك المشروع (admin) ومالك النظام (super_admin) — بلا قيد.
+
+**التنفيذ:**
+- `create_token` (في `server.py` و `routes/shared.py`) يقبل الآن `session_id` ويضعه كـ `sid` في JWT.
+- `issue_user_session(user_id, role)`: تولّد UUID جديد وتحفظه في `users.active_session_id`. تُستثنى admin/super_admin (يُمسح لهم الحقل).
+- `get_current_user` (في `server.py` و `routes/shared.py`): يقارن `payload.sid` بـ `users.active_session_id`. عدم التطابق → 401 مع رسالة «تم تسجيل الدخول من جهاز آخر — تم إنهاء هذه الجلسة».
+- `_issue_driver_token`: يمسح كل التوكنات السابقة للسائق قبل إصدار الجديد.
+- كل نقاط تسجيل الدخول محدَّثة: `/api/auth/login`, `/api/auth/login/verify-2fa`, `/api/super-admin/login`, `/api/super-admin/impersonate-tenant`, `/api/super-admin/impersonate-user`, `/api/driver/login`, والانتحال في `auth_routes.py`.
+- **الفرونت:** interceptor في `AuthContext.js` يعرض شاشة ذهبية عربية عند 401 يحوي «جهاز آخر» ويمسح localStorage وينقل لصفحة الدخول.
+- **الاختبارات:** `tests/test_single_active_session.py` (4 اختبارات: admin يعمل من عدة أجهزة، super_admin كذلك، employee ثاني دخول يُبطل الأول، ثالث دخول يُبطل الثاني).
+
+
 ## Single-Tab Enforcement (11 يوليو 2026) — تبويب واحد لكل جهاز ✅
 
 **طلب المالك:** لا يقبل النظام فتح صفحتين/تبويبين على نفس الجهاز — تبويب واحد فقط للعمل ولتسجيل الدخول. **بلا استثناءات** (يشمل تطبيق السائق، قائمة الزبون، وصفحة التتبع).
+
+
+## 2FA Activated (12 يوليو 2026)
+
+- تم تفعيل التحقق الثنائي عالمياً عبر `POST /api/super-admin/security-2fa-toggle` (enabled=true).
+- الاستجابة: `devices_revoked=3, driver_sessions_cleared=1`.
+- كل جهاز جديد سيحتاج OTP عبر Email/WhatsApp/Twilio SMS قبل الدخول.
+
+
+
 
 **التنفيذ:**
 - مكوّن جديد `frontend/src/components/SingleTabGuard.jsx` مثبَّت في `App.js` تحت `<BrowserRouter>` فيُغطّي كل المسارات.

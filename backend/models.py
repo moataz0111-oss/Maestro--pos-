@@ -95,7 +95,10 @@ class UserUpdate(BaseModel):
     role: Optional[str] = None
     branch_id: Optional[str] = None
     permissions: Optional[List[str]] = None
+    phone: Optional[str] = None
     is_active: Optional[bool] = None
+    # 🔑 كلمة مرور جديدة اختيارية — تُحدَّث معها password_vault لضمان دقة زر الترحيب
+    password: Optional[str] = None
 
 class PasswordReset(BaseModel):
     new_password: str

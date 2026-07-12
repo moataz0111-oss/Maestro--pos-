@@ -2287,6 +2287,8 @@ class UserUpdate(BaseModel):
     permissions: Optional[List[str]] = None
     phone: Optional[str] = None
     is_active: Optional[bool] = None
+    # 🔑 كلمة مرور جديدة اختيارية — عند تمريرها تُحدَّث password + password_vault
+    password: Optional[str] = None
 
 # Branch Models
 class BranchCreate(BaseModel):
@@ -4320,7 +4322,7 @@ async def update_user(user_id: str, update: UserUpdate, current_user: dict = Dep
     #     مثال: هاني (admin) يعدّل معتز (manager). معتز (manager) لا يعدّل هاني (admin).
     #     الاستثناء الوحيد: كل شخص يعدّل نفسه.
     _role_rank = {UserRole.SUPER_ADMIN: 4, UserRole.ADMIN: 3, UserRole.MANAGER: 2,
-                  UserRole.CASHIER: 1, UserRole.WAITER: 1}
+                  UserRole.CASHIER: 1}
     if not is_self_edit and not is_super_admin:
         my_rank = _role_rank.get(current_user["role"], 0)
         target_rank = _role_rank.get(current_role, 0)

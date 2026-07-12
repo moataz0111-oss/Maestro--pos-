@@ -42,6 +42,30 @@ if (!__authInterceptorRegistered) {
             + '<p style="color:#94a3b8;line-height:1.8">تم حظر عنوانك بسبب نشاط مشبوه أو محاولة وصول غير مصرّح بها.<br>إذا كنت تعتقد أن هذا خطأ، تواصل مع إدارة النظام.</p>'
             + '<p style="color:#475569;font-size:12px;margin-top:24px">Maestro EGP — نظام محمي</p></div></div>';
         }
+        // ✅ إنهاء الجلسة عند تسجيل الدخول من جهاز آخر (Single-Session Enforcement)
+        const detail = d?.detail || d?.message || '';
+        if (
+          error?.response?.status === 401 &&
+          typeof detail === 'string' &&
+          detail.includes('جهاز آخر') &&
+          !window.__sessionKickedShown
+        ) {
+          window.__sessionKickedShown = true;
+          try {
+            localStorage.removeItem('token');
+            localStorage.removeItem('user');
+          } catch (_e) { /* ignore */ }
+          document.documentElement.setAttribute('dir', 'rtl');
+          document.body.innerHTML =
+            '<div style="position:fixed;inset:0;z-index:2147483647;background:linear-gradient(135deg,#0f172a 0%,#1e293b 100%);color:#f8fafc;font-family:system-ui,Segoe UI,Tahoma,sans-serif;display:flex;align-items:center;justify-content:center;padding:24px" dir="rtl">'
+            + '<div style="background:#0b1220;border:1px solid rgba(234,179,8,0.35);border-radius:20px;max-width:460px;width:100%;padding:32px 28px;text-align:center;box-shadow:0 20px 60px rgba(0,0,0,0.55)">'
+            + '<div style="width:72px;height:72px;border-radius:50%;margin:0 auto 20px;background:linear-gradient(135deg,#eab308,#f59e0b);display:flex;align-items:center;justify-content:center;font-size:34px;color:#0b1220;font-weight:900">⚠️</div>'
+            + '<h2 style="margin:0 0 12px;font-size:22px;font-weight:800">تم تسجيل الدخول من جهاز آخر</h2>'
+            + '<p style="margin:0 0 22px;font-size:15px;line-height:1.75;color:#cbd5e1">لضمان دقة المحاسبة والورديات، يُسمح بجلسة واحدة فقط لهذا الحساب.<br>تم إنهاء جلستك على هذا الجهاز.</p>'
+            + '<button onclick="window.location.href=\'/login\'" data-testid="session-kicked-login-btn" style="background:linear-gradient(135deg,#eab308,#f59e0b);color:#0b1220;border:none;border-radius:12px;padding:12px 28px;font-size:15px;font-weight:800;cursor:pointer;box-shadow:0 6px 16px rgba(234,179,8,0.28)">تسجيل الدخول مجدداً</button>'
+            + '<p style="margin:18px 0 0;font-size:12px;color:#64748b">Maestro EGP — حماية الجلسات</p>'
+            + '</div></div>';
+        }
       } catch (e) { /* ignore */ }
       return Promise.reject(error);
     }
