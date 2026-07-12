@@ -177,7 +177,7 @@ export const BranchProvider = ({ children }) => {
       await fetchPendingOrdersCounts(branchesData);
       
       // إذا كان المستخدم مرتبط بفرع معين، حدد فرعه تلقائياً
-      if (user?.branch_id && !hasRole(['admin', 'super_admin', 'manager'])) {
+      if (user?.branch_id && !hasRole(['admin', 'general_manager', 'super_admin', 'manager'])) {
         setSelectedBranchId(user.branch_id);
         localStorage.setItem('selectedBranchId', user.branch_id);
       }
@@ -212,7 +212,7 @@ export const BranchProvider = ({ children }) => {
   // تغيير الفرع المحدد
   const selectBranch = (branchId) => {
     // الموظفون المقيدون بفرع لا يمكنهم تغيير الفرع
-    if (user?.branch_id && !hasRole(['admin', 'super_admin', 'manager'])) {
+    if (user?.branch_id && !hasRole(['admin', 'general_manager', 'super_admin', 'manager'])) {
       return;
     }
     
@@ -229,7 +229,7 @@ export const BranchProvider = ({ children }) => {
 
   // التحقق مما إذا كان المستخدم يمكنه اختيار "جميع الفروع"
   const canSelectAllBranches = () => {
-    return hasRole(['admin', 'super_admin', 'manager']);
+    return hasRole(['admin', 'general_manager', 'super_admin', 'manager']);
   };
 
   // الحصول على معرف الفرع لاستخدامه في الـ API

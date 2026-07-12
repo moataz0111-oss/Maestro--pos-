@@ -417,7 +417,7 @@ export default function Expenses() {
               ))}
             </select>
 
-            {inventoryMode === 'per_branch' && (hasRole(['admin', 'manager', 'supervisor']) || user?.permissions?.includes('expenses') || user?.permissions?.includes('inventory')) && (
+            {inventoryMode === 'per_branch' && (hasRole(['admin', 'general_manager', 'manager', 'supervisor']) || user?.permissions?.includes('expenses') || user?.permissions?.includes('inventory')) && (
               <>
                 <Button variant="outline" className="border-blue-500 text-blue-600 hover:bg-blue-50" onClick={() => navigate('/purchases-new', { state: { openDialog: 'supplier' } })} data-testid="expenses-add-supplier-btn">
                   <Building2 className="h-4 w-4 ml-2" />
@@ -430,7 +430,7 @@ export default function Expenses() {
               </>
             )}
 
-            {(hasRole(['admin', 'manager', 'supervisor']) || user?.permissions?.includes('expenses')) && (
+            {(hasRole(['admin', 'general_manager', 'manager', 'supervisor']) || user?.permissions?.includes('expenses')) && (
               <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
                 <DialogTrigger asChild>
                   <Button className="bg-primary text-primary-foreground" data-testid="add-expense-btn">

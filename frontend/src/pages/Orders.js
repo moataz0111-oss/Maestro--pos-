@@ -351,7 +351,7 @@ export default function Orders() {
   };
 
   // === فتح حوار تصحيح المسار ===
-  const isAdmin = user?.role === 'admin' || user?.role === 'general_manager' || user?.role === 'super_admin' || user?.role === 'manager';
+  const isAdmin = user?.role === 'admin' || role === 'general_manager' || user?.role === 'general_manager' || user?.role === 'super_admin' || user?.role === 'manager';
 
   const openFixRouting = (order) => {
     setFixRoutingOrder(order);

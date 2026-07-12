@@ -377,7 +377,7 @@ export default function Inventory() {
               ))}
             </select>
 
-            {hasRole(['admin', 'manager', 'supervisor']) && (
+            {hasRole(['admin', 'general_manager', 'manager', 'supervisor']) && (
               <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
                 <DialogTrigger asChild>
                   <Button className="bg-primary text-primary-foreground" data-testid="add-item-btn">

@@ -3264,7 +3264,7 @@ export default function WarehouseManufacturing() {
                         <Plus className="h-4 w-4" />
                       </Button>
                       {/* ⭐ نقص/تصفير الكمية — للمالك/المدير العام فقط */}
-                      {hasRole(['admin', 'super_admin']) && (
+                      {hasRole(['admin', 'general_manager', 'super_admin']) && (
                         <Button
                           variant="outline"
                           size="sm"
@@ -3291,7 +3291,7 @@ export default function WarehouseManufacturing() {
                             <Pencil className="h-4 w-4" />
                           </Button>
                           {/* ⭐ تصحيح إداري — يعمل حتى بعد التحويل (للأخطاء مثل غرام/كغم) — للمالك/المدير العام فقط */}
-                          {material.is_transferred && hasRole(['admin', 'super_admin']) && (
+                          {material.is_transferred && hasRole(['admin', 'general_manager', 'super_admin']) && (
                             <Button
                               variant="outline"
                               size="sm"

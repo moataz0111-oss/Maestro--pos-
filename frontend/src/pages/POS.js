@@ -265,7 +265,7 @@ export default function POS() {
   
   // نظام إشعارات الطلبات في الوقت الفعلي (للكاشير)
   const currentBranchIdForNotifications = getBranchIdForApi() || user?.branch_id;
-  const isCashierRole = user?.role === 'cashier' || user?.role === 'admin' || user?.role === 'owner';
+  const isCashierRole = user?.role === 'cashier' || user?.role === 'admin' || user?.role === 'general_manager' || user?.role === 'owner';
   
   // تفعيل الإشعارات للكاشير فقط
   const [incomingCustomerOrder, setIncomingCustomerOrder] = useState(null); // طلب قادم من تطبيق العميل

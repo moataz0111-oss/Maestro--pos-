@@ -43,7 +43,7 @@ function isoDay(d) {
 export default function StockCountHistoryDialog({ open, onOpenChange, branchId, branchName }) {
   const { t } = useTranslation();
   const { hasRole } = useAuth();
-  const isAdmin = hasRole(['admin', 'super_admin', 'manager', 'branch_manager']);
+  const isAdmin = hasRole(['admin', 'general_manager', 'super_admin', 'manager', 'branch_manager']);
   const [loading, setLoading] = useState(false);
   const [rows, setRows] = useState([]);
   const [expandedId, setExpandedId] = useState(null);

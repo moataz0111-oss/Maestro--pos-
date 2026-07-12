@@ -470,7 +470,7 @@ export const AuthProvider = ({ children }) => {
   const hasPermission = (permission) => {
     if (!user) return false;
     // المدير (admin) — مالك المشروع لديه جميع الصلاحيات
-    if (user.role === 'admin') return true;
+    if (user.role === 'admin' || role === 'general_manager' || user.role === 'general_manager') return true;
     // المدير العام (general_manager) لديه نفس صلاحيات المالك (عدا حذف/تعديل المالك — يُطبَّق في الباك إند)
     if (user.role === 'general_manager') return true;
     // SuperAdmin لديه جميع الصلاحيات

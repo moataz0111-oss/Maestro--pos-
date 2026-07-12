@@ -34,7 +34,7 @@ const API = API_URL;
 export default function DailyStockCountDialog({ open, onOpenChange, branchId, branchName, onSubmitted }) {
   const { t } = useTranslation();
   const { hasRole } = useAuth();
-  const isAdmin = hasRole(['admin', 'super_admin', 'manager', 'branch_manager']);
+  const isAdmin = hasRole(['admin', 'general_manager', 'super_admin', 'manager', 'branch_manager']);
 
   // التبويب النشط: المنتجات أو التغليف
   const [view, setView] = useState('products');

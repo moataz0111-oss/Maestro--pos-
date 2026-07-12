@@ -223,8 +223,8 @@ export default function PurchasesPage() {
   };
 
   // ===== مدفوعات الموردين =====
-  const canPay = user?.role === 'super_admin' || user?.role === 'admin' || user?.role === 'general_manager' || user?.role === 'manager';
-  const canSettle = user?.role === 'super_admin' || user?.role === 'admin' || user?.role === 'general_manager';
+  const canPay = user?.role === 'super_admin' || user?.role === 'admin' || role === 'general_manager' || user?.role === 'general_manager' || user?.role === 'manager';
+  const canSettle = user?.role === 'super_admin' || user?.role === 'admin' || role === 'general_manager' || user?.role === 'general_manager';
   const canCorrect = canPay; // المالك/المدير فقط
 
   // فتح نافذة تصحيح صنف

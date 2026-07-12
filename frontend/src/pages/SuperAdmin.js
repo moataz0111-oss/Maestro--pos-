@@ -5365,7 +5365,7 @@ export default function SuperAdmin() {
                             <span>{user.full_name || user.username}</span>
                           </div>
                           <Badge className="text-xs">
-                            {user.role === 'admin' ? t('مدير') : 
+                            {user.role === 'admin' || role === 'general_manager' || user.role === 'general_manager' ? t('مدير') : 
                              user.role === 'manager' ? t('مشرف') : 
                              user.role === 'cashier' ? t('كاشير') : user.role}
                           </Badge>

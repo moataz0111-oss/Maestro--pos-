@@ -718,7 +718,7 @@ export default function Delivery() {
               ))}
             </select>
 
-            {(hasRole(['admin', 'manager']) || user?.permissions?.includes('delivery')) && (
+            {(hasRole(['admin', 'general_manager', 'manager']) || user?.permissions?.includes('delivery')) && (
               <div className="flex gap-2">
                 {/* رابط تطبيق السائقين */}
                 <Button 

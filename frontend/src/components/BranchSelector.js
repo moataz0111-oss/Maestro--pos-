@@ -24,7 +24,7 @@ export default function BranchSelector({ className = '', showLabel = false, show
   } = useBranch();
 
   // الموظفون المقيدون بفرع لا يمكنهم تغيير الفرع
-  const isRestricted = user?.branch_id && !hasRole(['admin', 'super_admin', 'manager']);
+  const isRestricted = user?.branch_id && !hasRole(['admin', 'general_manager', 'super_admin', 'manager']);
 
   // إظهار حالة التحميل
   if (loading) {

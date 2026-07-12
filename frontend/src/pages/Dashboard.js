@@ -139,7 +139,7 @@ export default function Dashboard() {
     // ⭐ الأدوار المركزية لا ترى الإحصائيات إطلاقاً
     if (isCentralRole && permissionId === 'dashboard_statistics') return false;
     // المدير والسوبر أدمن لديهم جميع الصلاحيات
-    if (user?.role === 'admin' || user?.role === 'general_manager' || user?.role === 'super_admin') return true;
+    if (user?.role === 'admin' || role === 'general_manager' || user?.role === 'general_manager' || user?.role === 'super_admin') return true;
     // مدير الفرع لديه معظم الصلاحيات
     if (user?.role === 'branch_manager') return true;
     
@@ -1666,10 +1666,10 @@ export default function Dashboard() {
     
     // ⭐ إدارة الطلبات والكابتن: تظهر للمالك + الكاشير + المدراء (وليس للكابتن نفسه)
     if (action.id === 'captains-management') {
-      return ['cashier', 'supervisor', 'admin', 'super_admin', 'branch_manager', 'manager', 'owner'].includes(user?.role);
+      return ['cashier', 'supervisor', 'admin', 'general_manager', 'super_admin', 'branch_manager', 'manager', 'owner'].includes(user?.role);
     }
     
-    // المدير (admin) يرى كل شيء
+    // المدير (admin) والمدير العام (general_manager) يريان كل شيء
     if (user?.role === 'admin' || user?.role === 'general_manager' || user?.role === 'super_admin') return true;
     
     // مدير الفرع يرى كل شيء

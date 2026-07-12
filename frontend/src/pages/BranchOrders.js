@@ -125,7 +125,7 @@ export default function BranchOrders() {
   const navigate = useNavigate();
   const { t, isRTL } = useTranslation();
   const { hasRole } = useAuth();
-  const canViewWasteReport = hasRole(['admin', 'super_admin', 'manager', 'branch_manager']);
+  const canViewWasteReport = hasRole(['admin', 'general_manager', 'super_admin', 'manager', 'branch_manager']);
   const [orders, setOrders] = useState([]);
   const [branches, setBranches] = useState([]);
   const [manufacturedProducts, setManufacturedProducts] = useState([]);

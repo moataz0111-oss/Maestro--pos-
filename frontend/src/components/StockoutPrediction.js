@@ -35,7 +35,7 @@ const STATUS_META = {
 export function StockoutPredictionBanner({ onOpenDetails }) {
   const { t } = useTranslation();
   const { hasRole } = useAuth();
-  const canView = hasRole(['admin', 'super_admin', 'manager', 'branch_manager', 'warehouse', 'warehouse_keeper', 'stock_keeper']);
+  const canView = hasRole(['admin', 'general_manager', 'super_admin', 'manager', 'branch_manager', 'warehouse', 'warehouse_keeper', 'stock_keeper']);
   const [summary, setSummary] = useState(null);
   const [criticalItems, setCriticalItems] = useState([]);
 
