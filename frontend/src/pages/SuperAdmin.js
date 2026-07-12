@@ -5726,6 +5726,41 @@ export default function SuperAdmin() {
                 </h3>
                 <p className="text-sm text-gray-400">{t('تغيير بيانات تسجيل الدخول للمالك')}</p>
                 
+                {/* 🚨 تنبيه إذا وُجد أكثر من حساب سوبر أدمن */}
+                {(ownerSettings?.other_super_admins_count || 0) > 0 && (
+                  <div className="bg-red-900/30 border border-red-500 rounded-lg p-4 flex items-start gap-3" data-testid="other-super-admins-warning">
+                    <div className="text-red-400 text-2xl">⚠️</div>
+                    <div className="flex-1">
+                      <div className="font-bold text-red-300">
+                        {t('يوجد')} {ownerSettings.other_super_admins_count} {t('حساب سوبر أدمن آخر في النظام')}
+                      </div>
+                      <div className="text-sm text-red-200/80 mt-1">
+                        {t('وجود حسابات سوبر أدمن متعددة يمكن أن يسبب مشاكل أمنية. احذفها للاحتفاظ بحسابك فقط.')}
+                      </div>
+                      <Button
+                        variant="destructive"
+                        size="sm"
+                        className="mt-3"
+                        data-testid="delete-other-super-admins-btn"
+                        onClick={async () => {
+                          if (!window.confirm(t('هل أنت متأكد من حذف جميع حسابات السوبر أدمن الأخرى؟ لا يمكن التراجع.'))) return;
+                          try {
+                            const res = await axios.delete(`${API}/super-admin/other-super-admins`, {
+                              headers: { Authorization: `Bearer ${token}` }
+                            });
+                            toast.success(res.data.message || t('تم الحذف بنجاح'));
+                            fetchOwnerSettings();
+                          } catch (e) {
+                            toast.error(getErrorMessage(e) || t('فشل الحذف'));
+                          }
+                        }}
+                      >
+                        🗑️ {t('حذف جميع الحسابات الأخرى')}
+                      </Button>
+                    </div>
+                  </div>
+                )}
+                
                 <div className="grid grid-cols-1 gap-4">
                   <div className="space-y-2">
                     <Label className="text-gray-300">{t('البريد الإلكتروني الحالي')}</Label>
@@ -5735,6 +5770,7 @@ export default function SuperAdmin() {
                       disabled
                       className="bg-[#1A284E]/30 border-[#2A3A66] text-gray-400"
                       dir="ltr"
+                      data-testid="owner-current-email"
                     />
                     <p className="text-xs text-gray-500">{t('لا يمكن تغيير البريد الإلكتروني')}</p>
                   </div>

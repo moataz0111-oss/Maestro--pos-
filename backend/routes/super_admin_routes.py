@@ -1114,9 +1114,55 @@ async def reset_tenant_admin_password(tenant_id: str, new_password: str, current
 # إعدادات المالك
 @router.get("/super-admin/owner-settings")
 async def get_owner_settings(current_user: dict = Depends(verify_super_admin)):
-    """جلب إعدادات المالك"""
-    owner = await db.users.find_one({"role": "super_admin"}, {"_id": 0, "email": 1, "username": 1})
-    return owner or {}
+    """جلب إعدادات المالك (بيانات المستخدم الحالي بالتحديد)"""
+    owner = await db.users.find_one(
+        {"id": current_user["id"]},  # ✅ المستخدم الحالي وليس أول super_admin
+        {"_id": 0, "email": 1, "username": 1, "id": 1, "phone": 1}
+    )
+    # 🔍 عدد باقي حسابات السوبر أدمن للتنبيه في الواجهة
+    other_count = await db.users.count_documents({
+        "role": "super_admin",
+        "id": {"$ne": current_user["id"]}
+    })
+    result = owner or {}
+    result["other_super_admins_count"] = other_count
+    return result
+
+
+@router.get("/super-admin/other-super-admins")
+async def list_other_super_admins(current_user: dict = Depends(verify_super_admin)):
+    """قائمة حسابات السوبر أدمن الأخرى (غير المستخدم الحالي)"""
+    others = await db.users.find(
+        {"role": "super_admin", "id": {"$ne": current_user["id"]}},
+        {"_id": 0, "id": 1, "email": 1, "username": 1, "created_at": 1, "is_active": 1}
+    ).to_list(100)
+    return {"count": len(others), "accounts": others}
+
+
+@router.delete("/super-admin/other-super-admins")
+async def delete_other_super_admins(current_user: dict = Depends(verify_super_admin)):
+    """حذف جميع حسابات السوبر أدمن الأخرى — يبقي فقط الحساب الحالي (المستخدم المسجَّل دخوله الآن).
+    ⚠️ لا يمكن الرجوع عن هذه العملية. المستخدم الحالي محمي دائماً."""
+    # قائمة الحسابات قبل الحذف (للسجل)
+    to_delete = await db.users.find(
+        {"role": "super_admin", "id": {"$ne": current_user["id"]}},
+        {"_id": 0, "id": 1, "email": 1}
+    ).to_list(100)
+    
+    if not to_delete:
+        return {"deleted": 0, "message": "لا يوجد حسابات سوبر أدمن أخرى لحذفها", "accounts": []}
+    
+    r = await db.users.delete_many({
+        "role": "super_admin",
+        "id": {"$ne": current_user["id"]}  # ✅ حماية المستخدم الحالي
+    })
+    
+    return {
+        "deleted": r.deleted_count,
+        "message": f"تم حذف {r.deleted_count} حساب سوبر أدمن. الحساب الحالي محفوظ.",
+        "accounts": to_delete,
+        "kept_current": {"id": current_user["id"], "email": current_user.get("email")},
+    }
 
 @router.put("/super-admin/owner-settings")
 async def update_owner_settings(
@@ -1154,7 +1200,7 @@ async def update_owner_settings(
         update_data["active_session_id"] = f"invalidated-{_uuid_owner.uuid4()}"
         
         result = await db.users.update_one(
-            {"role": "super_admin"},
+            {"id": current_user["id"]},  # ✅ نحدّث المستخدم الحالي بالتحديد وليس أي super_admin
             {"$set": update_data}
         )
         
@@ -1165,7 +1211,7 @@ async def update_owner_settings(
         auto_send_result = {"email_sent": False, "whatsapp_sent": False, "sms_sent": False}
         try:
             recovery_emails = await get_owner_recovery_emails()
-            owner_user = await db.users.find_one({"role": "super_admin"}, {"_id": 0}) or {}
+            owner_user = await db.users.find_one({"id": current_user["id"]}, {"_id": 0}) or {}
             owner_phone = owner_user.get("phone") or os.environ.get("OWNER_ALERT_PHONE", "")
             
             # بناء محتوى الرسالة
