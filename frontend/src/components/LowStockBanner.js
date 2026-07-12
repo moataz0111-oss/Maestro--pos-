@@ -20,7 +20,7 @@ export default function LowStockBanner({ user }) {
   const playedRef = useRef(false);
 
   // فقط للمالك / السوبر أدمن
-  const isOwner = user && (user.role === 'admin' || user.role === 'super_admin');
+  const isOwner = user && (user.role === 'admin' || user.role === 'general_manager' || user.role === 'super_admin');
 
   useEffect(() => {
     if (!isOwner) return;

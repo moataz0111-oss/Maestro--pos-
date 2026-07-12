@@ -192,7 +192,7 @@ const PermissionRoute = ({ children, permission }) => {
   const { hasPermission, user } = useAuth();
   
   // المدير (admin) لديه جميع الصلاحيات
-  if (user?.role === 'admin' || user?.role === 'super_admin') {
+  if (user?.role === 'admin' || user?.role === 'general_manager' || user?.role === 'super_admin') {
     return children;
   }
   

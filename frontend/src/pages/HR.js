@@ -3507,7 +3507,7 @@ export default function HR() {
                                 {formatPrice(row.remaining_this_month || 0)}
                               </td>
                               <td className="p-3 text-center">
-                                {(user?.role === 'admin' || user?.role === 'super_admin' || user?.role === 'manager') && (
+                                {(user?.role === 'admin' || user?.role === 'general_manager' || user?.role === 'super_admin' || user?.role === 'manager') && (
                                   <div className="flex items-center justify-center gap-1">
                                     <Button
                                       size="sm"
@@ -5191,7 +5191,7 @@ export default function HR() {
                       <p className="text-[11px] text-muted-foreground mt-1 leading-relaxed">
                         {t('الراتب الأساسي')} ({formatPrice(basic)}) + {t('المكافآت')} ({formatPrice(bonuses)}) − {t('الخصومات')} ({formatPrice(deductions)}) − {t('السلف')} ({formatPrice(advances)}) − {t('الدفعات المصروفة')} ({formatPrice(paid)})
                       </p>
-                      {netRemaining > 0 && (user?.role === 'admin' || user?.role === 'super_admin' || user?.role === 'manager') && (
+                      {netRemaining > 0 && (user?.role === 'admin' || user?.role === 'general_manager' || user?.role === 'super_admin' || user?.role === 'manager') && (
                         <Button
                           className="mt-3 bg-emerald-500 hover:bg-emerald-600 text-white print:hidden"
                           onClick={() => {
@@ -5647,7 +5647,7 @@ export default function HR() {
                                 >
                                   🧾
                                 </Button>
-                                {(user?.role === 'admin' || user?.role === 'super_admin') && (
+                                {(user?.role === 'admin' || user?.role === 'general_manager' || user?.role === 'super_admin') && (
                                   <Button
                                     size="sm"
                                     variant="ghost"

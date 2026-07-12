@@ -27,7 +27,7 @@ export function AgentUpdateBanner({ t = (s) => s }) {
   useEffect(() => {
     // المالك فقط
     const role = getCurrentUserRole();
-    const isOwner = role === 'admin' || role === 'super_admin';
+    const isOwner = role === 'admin' || role === 'general_manager' || role === 'super_admin';
     if (!isOwner) return;
     if (checkedRef.current) return;
     checkedRef.current = true;

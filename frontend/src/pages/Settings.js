@@ -308,7 +308,7 @@ export default function Settings() {
   // دالة للتحقق من صلاحيات الإعدادات
   const hasSettingsPermission = (permissionId) => {
     // المدير (admin) لديه جميع الصلاحيات
-    if (user?.role === 'admin' || user?.role === 'super_admin') return true;
+    if (user?.role === 'admin' || user?.role === 'general_manager' || user?.role === 'super_admin') return true;
     // مدير الفرع لديه معظم الصلاحيات
     if (user?.role === 'branch_manager') return true;
     // التحقق من صلاحيات الموظف
@@ -1786,7 +1786,7 @@ export default function Settings() {
   // معاينة حساب المستخدم (تسجيل الدخول كمستخدم آخر)
   const handlePreviewUser = async (u) => {
     // لا يمكن معاينة حساب مدير عام
-    if (u.role === 'admin' || u.role === 'super_admin') {
+    if (u.role === 'admin' || u.role === 'general_manager' || u.role === 'super_admin') {
       toast.error(t('لا يمكن معاينة حساب مدير عام'));
       return;
     }
