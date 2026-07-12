@@ -308,7 +308,7 @@ export default function Settings() {
   // دالة للتحقق من صلاحيات الإعدادات
   const hasSettingsPermission = (permissionId) => {
     // المدير (admin) لديه جميع الصلاحيات
-    if (user?.role === 'admin' || role === 'general_manager' || user?.role === 'general_manager' || user?.role === 'super_admin') return true;
+    if (user?.role === 'admin' || user?.role === 'general_manager' || user?.role === 'super_admin') return true;
     // مدير الفرع لديه معظم الصلاحيات
     if (user?.role === 'branch_manager') return true;
     // التحقق من صلاحيات الموظف
@@ -1786,7 +1786,7 @@ export default function Settings() {
   // معاينة حساب المستخدم (تسجيل الدخول كمستخدم آخر)
   const handlePreviewUser = async (u) => {
     // لا يمكن معاينة حساب مدير عام
-    if (u.role === 'admin' || role === 'general_manager' || u.role === 'general_manager' || u.role === 'super_admin') {
+    if (u.role === 'admin' || u.role === 'general_manager' || u.role === 'super_admin') {
       toast.error(t('لا يمكن معاينة حساب مدير عام'));
       return;
     }
@@ -3261,7 +3261,7 @@ export default function Settings() {
                             onClick={() => setUserRoleFilter('admin')}
                             className="h-8"
                           >
-                            {t('المالك')} ({users.filter(u => u.role === 'admin' || role === 'general_manager').length})
+                            {t('المالك')} ({users.filter(u => u.role === 'admin' || u.role === 'general_manager').length})
                           </Button>
                           <Button
                             variant={userRoleFilter === 'general_manager' ? 'default' : 'outline'}
@@ -3366,7 +3366,7 @@ export default function Settings() {
                                 <TableCell>{u.email}</TableCell>
                                 <TableCell>
                                   <span className={`px-2 py-1 rounded-full text-xs ${
-                                    u.role === 'admin' || role === 'general_manager' ? 'bg-red-500/20 text-red-400' :
+                                    u.role === 'admin' || u.role === 'general_manager' ? 'bg-red-500/20 text-red-400' :
                                     u.role === 'manager' ? 'bg-blue-500/20 text-blue-400' :
                                     u.role === 'cashier' ? 'bg-green-500/20 text-green-400' :
                                     u.role === 'call_center' ? 'bg-cyan-500/20 text-cyan-400' :

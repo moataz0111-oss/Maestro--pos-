@@ -15,7 +15,7 @@ export default function PriceAlertsBell({ user }) {
   const [open, setOpen] = useState(false);
   const panelRef = useRef(null);
 
-  const isOwner = user && (user.role === 'admin' || role === 'general_manager' || user.role === 'general_manager' || user.role === 'super_admin');
+  const isOwner = user && (user.role === 'admin' || user.role === 'general_manager' || user.role === 'super_admin');
 
   const fetchAlerts = async () => {
     try {

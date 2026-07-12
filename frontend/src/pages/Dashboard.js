@@ -139,7 +139,7 @@ export default function Dashboard() {
     // ⭐ الأدوار المركزية لا ترى الإحصائيات إطلاقاً
     if (isCentralRole && permissionId === 'dashboard_statistics') return false;
     // المدير والسوبر أدمن لديهم جميع الصلاحيات
-    if (user?.role === 'admin' || role === 'general_manager' || user?.role === 'general_manager' || user?.role === 'super_admin') return true;
+    if (user?.role === 'admin' || user?.role === 'general_manager' || user?.role === 'super_admin') return true;
     // مدير الفرع لديه معظم الصلاحيات
     if (user?.role === 'branch_manager') return true;
     
