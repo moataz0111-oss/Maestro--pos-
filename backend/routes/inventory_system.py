@@ -1343,7 +1343,7 @@ async def pay_purchase_invoice(purchase_id: str, payload: PurchasePayment, curre
 async def delete_purchase_payment(purchase_id: str, payment_id: str, current_user: dict = Depends(get_current_user)):
     """إلغاء دفعة تسديد فاتورة — يعيد المبلغ للخزينة."""
     db = get_db()
-    if current_user["role"] not in [UserRole.ADMIN, UserRole.SUPER_ADMIN]:
+    if current_user["role"] not in [UserRole.ADMIN, UserRole.GENERAL_MANAGER, UserRole.SUPER_ADMIN]:
         raise HTTPException(status_code=403, detail="غير مصرح")
     p = await db.purchases_new.find_one({"id": purchase_id}, {"_id": 0})
     if not p:
@@ -1632,7 +1632,7 @@ async def pay_supplier_account(supplier_id: str, payload: SupplierPayment, curre
 async def settle_supplier_dues(supplier_id: str, current_user: dict = Depends(get_current_user)):
     """تصفير مستحقات المورد (تسوية بدون خصم من الخزينة) — للمبالغ المسحوبة يدوياً مسبقاً."""
     db = get_db()
-    if current_user["role"] not in [UserRole.ADMIN, UserRole.SUPER_ADMIN]:
+    if current_user["role"] not in [UserRole.ADMIN, UserRole.GENERAL_MANAGER, UserRole.SUPER_ADMIN]:
         raise HTTPException(status_code=403, detail="غير مصرح — التصفير للمالك فقط")
     tenant_id = get_user_tenant_id(current_user)
     supplier = await db.suppliers.find_one({"id": supplier_id}, {"_id": 0})

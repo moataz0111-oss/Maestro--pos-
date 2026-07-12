@@ -115,7 +115,7 @@ export default function POS() {
   // التحقق من دور المستخدم
   const isCallCenter = user?.role === 'call_center';
   const isCaptain = user?.role === 'captain';
-  const isOwner = ['admin', 'manager', 'super_admin', 'branch_manager'].includes(user?.role);
+  const isOwner = ['admin', 'general_manager', 'manager', 'super_admin', 'branch_manager'].includes(user?.role);
   
   // التحقق من الصلاحيات
   const hasPermission = (permId) => {

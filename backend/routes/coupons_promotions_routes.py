@@ -97,7 +97,7 @@ async def update_coupon(coupon_id: str, coupon: CouponCreate, current_user: dict
 @router.delete("/coupons/{coupon_id}")
 async def delete_coupon(coupon_id: str, current_user: dict = Depends(get_current_user)):
     """حذف كوبون"""
-    if current_user["role"] not in [UserRole.ADMIN, UserRole.SUPER_ADMIN]:
+    if current_user["role"] not in [UserRole.ADMIN, UserRole.GENERAL_MANAGER, UserRole.SUPER_ADMIN]:
         raise HTTPException(status_code=403, detail="غير مصرح")
     
     query = build_tenant_query(current_user, {"id": coupon_id})

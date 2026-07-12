@@ -45,7 +45,7 @@ async def get_sold_branches(
 ):
     """جلب قائمة الفروع المباعة - تلقائياً من الفروع المعلمة كمباعة"""
     db = get_database()
-    if current_user["role"] not in [UserRole.ADMIN, UserRole.SUPER_ADMIN]:
+    if current_user["role"] not in [UserRole.ADMIN, UserRole.GENERAL_MANAGER, UserRole.SUPER_ADMIN]:
         raise HTTPException(status_code=403, detail="غير مصرح")
     
     tenant_id = get_user_tenant_id(current_user)
@@ -101,7 +101,7 @@ async def get_external_branches_stats(
 ):
     """إحصائيات الفروع الخارجية للداشبورد"""
     db = get_database()
-    if current_user["role"] not in [UserRole.ADMIN, UserRole.SUPER_ADMIN]:
+    if current_user["role"] not in [UserRole.ADMIN, UserRole.GENERAL_MANAGER, UserRole.SUPER_ADMIN]:
         raise HTTPException(status_code=403, detail="غير مصرح")
     
     tenant_id = get_user_tenant_id(current_user)
@@ -162,7 +162,7 @@ async def get_monthly_revenue_report(
 ):
     """تقرير العوائد الشهرية من جميع الفروع المباعة"""
     db = get_database()
-    if current_user["role"] not in [UserRole.ADMIN, UserRole.SUPER_ADMIN]:
+    if current_user["role"] not in [UserRole.ADMIN, UserRole.GENERAL_MANAGER, UserRole.SUPER_ADMIN]:
         raise HTTPException(status_code=403, detail="غير مصرح")
     
     tenant_id = get_user_tenant_id(current_user)
@@ -250,7 +250,7 @@ async def get_sold_branch_summary(
 ):
     """جلب ملخص مالي للفرع المباع"""
     db = get_database()
-    if current_user["role"] not in [UserRole.ADMIN, UserRole.SUPER_ADMIN]:
+    if current_user["role"] not in [UserRole.ADMIN, UserRole.GENERAL_MANAGER, UserRole.SUPER_ADMIN]:
         raise HTTPException(status_code=403, detail="غير مصرح")
     
     tenant_id = get_user_tenant_id(current_user)
@@ -346,7 +346,7 @@ async def record_payment(
 ):
     """تسجيل دفعة من فرع مباع"""
     db = get_database()
-    if current_user["role"] not in [UserRole.ADMIN, UserRole.SUPER_ADMIN]:
+    if current_user["role"] not in [UserRole.ADMIN, UserRole.GENERAL_MANAGER, UserRole.SUPER_ADMIN]:
         raise HTTPException(status_code=403, detail="غير مصرح")
     
     tenant_id = get_user_tenant_id(current_user)
@@ -382,7 +382,7 @@ async def get_payments(
 ):
     """جلب سجل المدفوعات للفرع المباع"""
     db = get_database()
-    if current_user["role"] not in [UserRole.ADMIN, UserRole.SUPER_ADMIN]:
+    if current_user["role"] not in [UserRole.ADMIN, UserRole.GENERAL_MANAGER, UserRole.SUPER_ADMIN]:
         raise HTTPException(status_code=403, detail="غير مصرح")
     
     tenant_id = get_user_tenant_id(current_user)

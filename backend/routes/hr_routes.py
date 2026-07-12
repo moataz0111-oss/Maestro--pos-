@@ -206,7 +206,7 @@ async def update_employee(employee_id: str, update: EmployeeUpdate, current_user
 @router.delete("/employees/{employee_id}")
 async def delete_employee(employee_id: str, current_user: dict = Depends(get_current_user)):
     """حذف موظف نهائياً — يُنشئ delete-user job لكل أجهزة البصمة في فرعه إن كان لديه biometric_uid."""
-    if current_user["role"] not in [UserRole.ADMIN, UserRole.SUPER_ADMIN]:
+    if current_user["role"] not in [UserRole.ADMIN, UserRole.GENERAL_MANAGER, UserRole.SUPER_ADMIN]:
         raise HTTPException(status_code=403, detail="غير مصرح")
     
     query = build_tenant_query(current_user, {"id": employee_id})

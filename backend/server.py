@@ -885,7 +885,7 @@ async def security_audit_middleware(request: Request, call_next):
 # تمنع الكاشير/الكابتن/الكول-سنتر/السائق من قراءة بيانات لا تخصّهم، مع إبقاء الأدوار التشغيلية تعمل.
 import re as _re_rbac
 
-_MGMT_ROLES = {"super_admin", "admin", "manager"}
+_MGMT_ROLES = {"super_admin", "admin", "general_manager", "manager"}
 _INV_ROLES = _MGMT_ROLES | {"warehouse_keeper", "manufacturer"}
 _PURCH_ROLES = _MGMT_ROLES | {"purchasing", "warehouse_keeper"}
 
@@ -4065,7 +4065,7 @@ async def impersonate_user(user_id: str, current_user: dict = Depends(get_curren
     يُستخدم لمعاينة التطبيق من منظور المستخدم
     """
     # التحقق من الصلاحيات (المدير العام أو المالك فقط)
-    if current_user["role"] not in [UserRole.ADMIN, UserRole.SUPER_ADMIN]:
+    if current_user["role"] not in [UserRole.ADMIN, UserRole.GENERAL_MANAGER, UserRole.SUPER_ADMIN]:
         raise HTTPException(status_code=403, detail="غير مصرح - هذه الميزة للمدراء فقط")
     
     # Super Admin يمكنه معاينة أي مستخدم
@@ -4151,7 +4151,7 @@ async def get_impersonation_logs(
     """
     جلب سجلات انتحال الشخصية (للمدراء فقط)
     """
-    if current_user["role"] not in [UserRole.ADMIN, UserRole.SUPER_ADMIN]:
+    if current_user["role"] not in [UserRole.ADMIN, UserRole.GENERAL_MANAGER, UserRole.SUPER_ADMIN]:
         raise HTTPException(status_code=403, detail="غير مصرح")
     
     query = build_tenant_query(current_user)
@@ -4183,7 +4183,7 @@ async def get_audit_logs(
     page: int = 1
 ):
     """جلب سجل المراقبة الشامل - جميع عمليات الدخول/الخروج/الانتحال"""
-    if current_user["role"] not in [UserRole.ADMIN, UserRole.SUPER_ADMIN]:
+    if current_user["role"] not in [UserRole.ADMIN, UserRole.GENERAL_MANAGER, UserRole.SUPER_ADMIN]:
         raise HTTPException(status_code=403, detail="غير مصرح")
     
     query = build_tenant_query(current_user)
@@ -4206,7 +4206,7 @@ async def get_audit_logs(
 @api_router.delete("/auth/audit-logs")
 async def clear_audit_logs(current_user: dict = Depends(get_current_user)):
     """إفراغ سجل المراقبة"""
-    if current_user["role"] not in [UserRole.ADMIN, UserRole.SUPER_ADMIN]:
+    if current_user["role"] not in [UserRole.ADMIN, UserRole.GENERAL_MANAGER, UserRole.SUPER_ADMIN]:
         raise HTTPException(status_code=403, detail="غير مصرح")
     
     query = build_tenant_query(current_user)
@@ -4536,7 +4536,7 @@ async def get_tenant_limits(current_user: dict = Depends(get_current_user)):
 @api_router.post("/users", response_model=UserResponse)
 async def create_user(user: UserCreate, current_user: dict = Depends(get_current_user)):
     """إنشاء مستخدم جديد مع tenant_id تلقائياً"""
-    if current_user["role"] not in [UserRole.ADMIN, UserRole.SUPER_ADMIN]:
+    if current_user["role"] not in [UserRole.ADMIN, UserRole.GENERAL_MANAGER, UserRole.SUPER_ADMIN]:
         raise HTTPException(status_code=403, detail="إنشاء الحسابات متاح للمالك فقط")
 
     # منع تصعيد الصلاحيات: لا يُسمح بإنشاء super_admin إطلاقاً عبر هذا المسار
@@ -4699,7 +4699,7 @@ async def reset_user_password(user_id: str, data: PasswordReset, request: Reques
 
 @api_router.post("/branches", response_model=BranchResponse)
 async def create_branch(branch: BranchCreate, current_user: dict = Depends(get_current_user)):
-    if current_user["role"] not in [UserRole.ADMIN, UserRole.SUPER_ADMIN]:
+    if current_user["role"] not in [UserRole.ADMIN, UserRole.GENERAL_MANAGER, UserRole.SUPER_ADMIN]:
         raise HTTPException(status_code=403, detail="غير مصرح")
     
     tenant_id = get_user_tenant_id(current_user)
@@ -4803,7 +4803,7 @@ async def get_branch(branch_id: str, current_user: dict = Depends(get_current_us
 
 @api_router.put("/branches/{branch_id}")
 async def update_branch(branch_id: str, branch: BranchCreate, current_user: dict = Depends(get_current_user)):
-    if current_user["role"] not in [UserRole.ADMIN, UserRole.SUPER_ADMIN]:
+    if current_user["role"] not in [UserRole.ADMIN, UserRole.GENERAL_MANAGER, UserRole.SUPER_ADMIN]:
         raise HTTPException(status_code=403, detail="غير مصرح")
     query = build_tenant_query(current_user, {"id": branch_id})
     await db.branches.update_one(query, {"$set": branch.model_dump()})
@@ -4811,7 +4811,7 @@ async def update_branch(branch_id: str, branch: BranchCreate, current_user: dict
 
 @api_router.delete("/branches/{branch_id}")
 async def delete_branch(branch_id: str, current_user: dict = Depends(get_current_user)):
-    if current_user["role"] not in [UserRole.ADMIN, UserRole.SUPER_ADMIN]:
+    if current_user["role"] not in [UserRole.ADMIN, UserRole.GENERAL_MANAGER, UserRole.SUPER_ADMIN]:
         raise HTTPException(status_code=403, detail="غير مصرح")
     
     # Check if branch has users or orders
@@ -8682,7 +8682,7 @@ async def get_general_settings():
 async def update_restaurant_settings(settings: Dict[str, Any], current_user: dict = Depends(get_current_user)):
     """حفظ إعدادات المطعم (الاسم والشعار)"""
     # السماح للمدير (admin) والمالك (super_admin)
-    if current_user["role"] not in [UserRole.ADMIN, UserRole.SUPER_ADMIN]:
+    if current_user["role"] not in [UserRole.ADMIN, UserRole.GENERAL_MANAGER, UserRole.SUPER_ADMIN]:
         raise HTTPException(status_code=403, detail="غير مصرح")
     
     # جلب tenant_id من المستخدم
@@ -10189,7 +10189,7 @@ async def upload_restaurant_logo(
     """رفع شعار المطعم - للمدير أو المالك"""
     
     # السماح للمدير (admin) والمالك (super_admin)
-    if current_user["role"] not in [UserRole.ADMIN, UserRole.SUPER_ADMIN]:
+    if current_user["role"] not in [UserRole.ADMIN, UserRole.GENERAL_MANAGER, UserRole.SUPER_ADMIN]:
         raise HTTPException(status_code=403, detail="غير مصرح")
     
     # التحقق من نوع الملف - دعم HEIC من iPhone
@@ -10952,7 +10952,7 @@ async def update_finished_product(
 @api_router.delete("/finished-products/{product_id}")
 async def delete_finished_product(product_id: str, current_user: dict = Depends(get_current_user)):
     """حذف منتج نهائي"""
-    if current_user["role"] not in [UserRole.ADMIN, UserRole.SUPER_ADMIN]:
+    if current_user["role"] not in [UserRole.ADMIN, UserRole.GENERAL_MANAGER, UserRole.SUPER_ADMIN]:
         raise HTTPException(status_code=403, detail="غير مصرح")
     
     query = build_tenant_query(current_user, {"id": product_id, "item_type": "finished"})
@@ -15163,7 +15163,7 @@ async def health_check():
 @api_router.get("/system/stats")
 async def get_system_stats(current_user: dict = Depends(get_current_user)):
     """إحصائيات النظام"""
-    if current_user["role"] not in [UserRole.ADMIN, UserRole.SUPER_ADMIN]:
+    if current_user["role"] not in [UserRole.ADMIN, UserRole.GENERAL_MANAGER, UserRole.SUPER_ADMIN]:
         raise HTTPException(status_code=403, detail="غير مصرح")
     
     try:
@@ -15224,7 +15224,7 @@ async def create_backup(current_user: dict = Depends(get_current_user)):
 @api_router.get("/system/backup/list")
 async def list_backups(current_user: dict = Depends(get_current_user)):
     """قائمة النسخ الاحتياطية"""
-    if current_user["role"] not in [UserRole.ADMIN, UserRole.SUPER_ADMIN]:
+    if current_user["role"] not in [UserRole.ADMIN, UserRole.GENERAL_MANAGER, UserRole.SUPER_ADMIN]:
         raise HTTPException(status_code=403, detail="غير مصرح")
     
     import os

@@ -105,7 +105,7 @@ export default function WarehouseManufacturing() {
   const isWarehouseKeeper = userRole === 'warehouse_keeper';
   const isManufacturer = userRole === 'manufacturer';
   const isPurchaser = userRole === 'purchaser';
-  const isAdmin = userRole === 'admin' || userRole === 'super_admin' || userRole === 'branch_manager';
+  const isAdmin = userRole === 'admin' || userRole === 'general_manager' || userRole === 'super_admin' || userRole === 'branch_manager';
   
   // تحديد التاب الافتراضي حسب الدور
   const getDefaultTab = () => {

@@ -65,7 +65,7 @@ export default function Expenses() {
   const { t, isRTL } = useTranslation();
   const { isOnline, isOffline, updateSyncStatus } = useOffline();
   const navigate = useNavigate();
-  const isManager = ['admin', 'manager', 'super_admin', 'branch_manager'].includes(user?.role);
+  const isManager = ['admin', 'general_manager', 'manager', 'super_admin', 'branch_manager'].includes(user?.role);
   
   const [expenses, setExpenses] = useState([]);
   const [branches, setBranches] = useState([]);

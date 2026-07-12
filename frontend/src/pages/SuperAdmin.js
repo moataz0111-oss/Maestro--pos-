@@ -485,6 +485,8 @@ export default function SuperAdmin() {
   const { t, lang, isRTL } = useTranslation();
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [token, setToken] = useState(localStorage.getItem('super_admin_token'));
+  // ✅ حالة تحقق أولية من التوكن — منع إعادة التوجيه قبل انتهاء التحقق
+  const [verifyingToken, setVerifyingToken] = useState(!!localStorage.getItem('super_admin_token'));
   const [user, setUser] = useState(null);
   
   // Login/Register states
@@ -797,6 +799,8 @@ export default function SuperAdmin() {
     } catch (error) {
       console.error('Token verification failed:', error);
       logout();
+    } finally {
+      setVerifyingToken(false);
     }
   };
   
@@ -2779,18 +2783,19 @@ export default function SuperAdmin() {
 
   // Login/Register Screen — تم إلغاؤها. الدخول يتم فقط من الصفحة الرئيسية /login
   // إذا لم يكن المستخدم مسجّل الدخول → أعِد توجيهه للصفحة الرئيسية
+  // ⚠️ ننتظر انتهاء verifyToken أولاً لتفادي إعادة توجيه مبكرة بعد الدخول من /login
   useEffect(() => {
-    if (!isAuthenticated) {
+    if (!isAuthenticated && !verifyingToken) {
       try { navigate('/login', { replace: true }); } catch (_) { window.location.href = '/login'; }
     }
-  }, [isAuthenticated, navigate]);
+  }, [isAuthenticated, verifyingToken, navigate]);
   
   if (!isAuthenticated) {
     return (
       <div className="min-h-screen bg-[#070E22] flex items-center justify-center" dir="rtl" data-testid="sa-redirect-loading">
         <div className="text-center text-gray-400">
           <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-amber-400 mx-auto mb-3"></div>
-          <p>{t('جاري التحويل إلى صفحة تسجيل الدخول...')}</p>
+          <p>{verifyingToken ? t('جاري التحقق من الجلسة...') : t('جاري التحويل إلى صفحة تسجيل الدخول...')}</p>
         </div>
       </div>
     );

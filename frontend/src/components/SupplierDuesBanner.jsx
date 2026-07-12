@@ -24,7 +24,7 @@ export default function SupplierDuesBanner({ user }) {
   const [dismissed, setDismissed] = useState(false);
 
   // يظهر فقط للمالك والمدراء — ولا يظهر لمسؤول المشتريات (purchasing) أو الكاشير أو غيرهم
-  const isOwner = user && ['admin', 'super_admin', 'manager', 'branch_manager'].includes(user.role);
+  const isOwner = user && ['admin', 'general_manager', 'super_admin', 'manager', 'branch_manager'].includes(user.role);
 
   useEffect(() => {
     if (!isOwner) return;

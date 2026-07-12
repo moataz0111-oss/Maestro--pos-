@@ -83,7 +83,7 @@ export default function Orders() {
   const [deliveryApps, setDeliveryApps] = useState([]);
 
   // === أداة تنظيف الطلبات المكررة القديمة (مالك/مدير عام) ===
-  const isOwnerOrGM = ['admin', 'super_admin', 'manager'].includes(user?.role);
+  const isOwnerOrGM = ['admin', 'general_manager', 'super_admin', 'manager'].includes(user?.role);
   const [showDuplicatesDialog, setShowDuplicatesDialog] = useState(false);
   const [dupGroups, setDupGroups] = useState([]);
   const [dupTotal, setDupTotal] = useState(0);

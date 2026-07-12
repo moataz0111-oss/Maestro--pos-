@@ -122,7 +122,7 @@ export default function Dashboard() {
   const printRef = useRef();
   
   // المدير/المالك/المشرف يرون كل شيء - الكاشير يحتاج صلاحية مفعلة
-  const isManagerRole = ['admin', 'super_admin', 'manager'].includes(user?.role);
+  const isManagerRole = ['admin', 'general_manager', 'super_admin', 'manager'].includes(user?.role);
   const canSee = (permKey) => isManagerRole || user?.permissions?.includes(permKey);
 
   // ⭐ الأدوار المركزية (مخزن/مصنّع/مشتريات): لوحة مبسّطة — أيقونة واحدة فقط، بلا إحصائيات
@@ -331,8 +331,8 @@ export default function Dashboard() {
 
   // تحديد الفترة الافتراضية بناءً على صلاحيات المستخدم
   useEffect(() => {
-    // المدير والأدمن يرى كل الفترات
-    if (['admin', 'manager', 'owner'].includes(user?.role)) {
+    // المدير والأدمن يرى كل الفترات (يشمل المدير العام)
+    if (['admin', 'general_manager', 'manager', 'owner'].includes(user?.role)) {
       setStatsPeriod('today');
       return;
     }
@@ -469,7 +469,7 @@ export default function Dashboard() {
   const autoOpenShift = async () => {
     try {
       const branchId = getBranchIdForApi();
-      const isOwner = ['admin', 'manager', 'super_admin', 'branch_manager'].includes(user?.role);
+      const isOwner = ['admin', 'general_manager', 'manager', 'super_admin', 'branch_manager'].includes(user?.role);
       
       if (isOwner) {
         // المالك: لا يفتح وردية خاصة به - يبحث عن وردية كاشير مفتوحة
@@ -507,7 +507,7 @@ export default function Dashboard() {
       }
     } catch (error) {
       if (error.response?.status === 404) {
-        const isOwner = ['admin', 'manager', 'super_admin', 'branch_manager'].includes(user?.role);
+        const isOwner = ['admin', 'general_manager', 'manager', 'super_admin', 'branch_manager'].includes(user?.role);
         if (isOwner) {
           setActiveShift(null);
           setShowCashierSelect(true);
@@ -2415,7 +2415,7 @@ export default function Dashboard() {
                     { key: 'all_time', label: t('الكل'), permission: 'sales_view_all' }
                   ].filter(period => {
                     // المدير والأدمن يرى كل الأزرار
-                    if (['admin', 'manager', 'owner'].includes(user?.role)) return true;
+                    if (['admin', 'general_manager', 'manager', 'owner'].includes(user?.role)) return true;
                     // باقي المستخدمين يتم فحص صلاحياتهم
                     if (user?.permissions && Array.isArray(user.permissions)) {
                       return user.permissions.includes(period.permission);
@@ -2439,7 +2439,7 @@ export default function Dashboard() {
               {/* زر إدارة اليوم - يظهر فقط لمن لديه صلاحية */}
               {(hasDashboardPermission('dashboard_day_management') || 
                 (user?.permissions && user.permissions.includes('pos_day_management')) ||
-                ['admin', 'manager', 'owner'].includes(user?.role)) && dayStatus && (
+                ['admin', 'general_manager', 'manager', 'owner'].includes(user?.role)) && dayStatus && (
                 <Button
                   variant="outline"
                   size="sm"

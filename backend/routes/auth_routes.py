@@ -123,7 +123,7 @@ async def impersonate_user(user_id: str, current_user: dict = Depends(get_curren
     """
     db = get_database()
     
-    if current_user["role"] not in [UserRole.ADMIN, UserRole.SUPER_ADMIN]:
+    if current_user["role"] not in [UserRole.ADMIN, UserRole.GENERAL_MANAGER, UserRole.SUPER_ADMIN]:
         raise HTTPException(status_code=403, detail="غير مصرح - هذه الميزة للمدراء فقط")
     
     query = build_tenant_query(current_user, {"id": user_id})
@@ -184,7 +184,7 @@ async def get_impersonation_logs(
     """جلب سجلات انتحال الشخصية (للمدراء فقط)"""
     db = get_database()
     
-    if current_user["role"] not in [UserRole.ADMIN, UserRole.SUPER_ADMIN]:
+    if current_user["role"] not in [UserRole.ADMIN, UserRole.GENERAL_MANAGER, UserRole.SUPER_ADMIN]:
         raise HTTPException(status_code=403, detail="غير مصرح")
     
     query = build_tenant_query(current_user)

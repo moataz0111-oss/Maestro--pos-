@@ -198,7 +198,7 @@ async def cleanup_duplicate_deductions(current_user: dict = Depends(get_current_
 async def check_deductions_reset_eligibility(current_user: dict = Depends(get_current_user)):
     """فحص إذا كان المالك يستطيع تصفير الخصومات الآن"""
     db = get_database()
-    if current_user["role"] not in [UserRole.ADMIN, UserRole.SUPER_ADMIN]:
+    if current_user["role"] not in [UserRole.ADMIN, UserRole.GENERAL_MANAGER, UserRole.SUPER_ADMIN]:
         raise HTTPException(status_code=403, detail="هذه العملية متاحة للمالك فقط")
     
     tenant_id = get_user_tenant_id(current_user)
@@ -251,7 +251,7 @@ async def check_deductions_reset_eligibility(current_user: dict = Depends(get_cu
 async def reset_all_deductions(current_user: dict = Depends(get_current_user)):
     """تصفير (حذف نهائي) جميع الخصومات. للمالك فقط، مرة واحدة شهرياً بعد الـ 15"""
     db = get_database()
-    if current_user["role"] not in [UserRole.ADMIN, UserRole.SUPER_ADMIN]:
+    if current_user["role"] not in [UserRole.ADMIN, UserRole.GENERAL_MANAGER, UserRole.SUPER_ADMIN]:
         raise HTTPException(status_code=403, detail="هذه العملية متاحة للمالك فقط")
     
     tenant_id = get_user_tenant_id(current_user)
@@ -637,7 +637,7 @@ async def pay_payroll(payroll_id: str, current_user: dict = Depends(get_current_
     """صرف الراتب — يُخصم المبلغ المتبقي من **خزينة المالك حسب فرع الموظف**.
     يتجنّب الازدواج: يخصم (صافي الراتب − ما صُرف نقداً مسبقاً لنفس الشهر) فقط."""
     db = get_database()
-    if current_user["role"] not in [UserRole.ADMIN, UserRole.SUPER_ADMIN]:
+    if current_user["role"] not in [UserRole.ADMIN, UserRole.GENERAL_MANAGER, UserRole.SUPER_ADMIN]:
         raise HTTPException(status_code=403, detail="غير مصرح")
 
     payroll = await db.payroll.find_one({"id": payroll_id})
@@ -805,7 +805,7 @@ async def process_terminations(db, tenant_id: Optional[str] = None):
 async def terminate_employee(employee_id: str, current_user: dict = Depends(get_current_user)):
     """إنهاء خدمات موظف: خط أحمر + جدولة حذف بعد 24 ساعة + معاينة المستحقات."""
     db = get_database()
-    if current_user["role"] not in [UserRole.ADMIN, UserRole.SUPER_ADMIN]:
+    if current_user["role"] not in [UserRole.ADMIN, UserRole.GENERAL_MANAGER, UserRole.SUPER_ADMIN]:
         raise HTTPException(status_code=403, detail="غير مصرح")
     emp = await db.employees.find_one({"id": employee_id}, {"_id": 0})
     if not emp:
@@ -841,7 +841,7 @@ async def terminate_payout(employee_id: str, payload: Optional[SettlementPayout]
     """صرف مستحقات إنهاء الخدمة من خزينة المالك حسب فرع الموظف."""
     db = get_database()
     payload = payload or SettlementPayout()
-    if current_user["role"] not in [UserRole.ADMIN, UserRole.SUPER_ADMIN]:
+    if current_user["role"] not in [UserRole.ADMIN, UserRole.GENERAL_MANAGER, UserRole.SUPER_ADMIN]:
         raise HTTPException(status_code=403, detail="غير مصرح")
     emp = await db.employees.find_one({"id": employee_id}, {"_id": 0})
     if not emp:
@@ -957,7 +957,7 @@ async def get_settlement_receipt(employee_id: str, current_user: dict = Depends(
 async def reinstate_employee(employee_id: str, current_user: dict = Depends(get_current_user)):
     """إرجاع الموظف للعمل (خلال 24 ساعة فقط) — يعكس الصرف ويعيد الرصيد للخزينة."""
     db = get_database()
-    if current_user["role"] not in [UserRole.ADMIN, UserRole.SUPER_ADMIN]:
+    if current_user["role"] not in [UserRole.ADMIN, UserRole.GENERAL_MANAGER, UserRole.SUPER_ADMIN]:
         raise HTTPException(status_code=403, detail="غير مصرح")
     emp = await db.employees.find_one({"id": employee_id}, {"_id": 0})
     if not emp:
@@ -984,7 +984,7 @@ async def reinstate_employee(employee_id: str, current_user: dict = Depends(get_
 async def generate_all_payrolls(month: str, current_user: dict = Depends(get_current_user)):
     """إنشاء كشوف الرواتب لجميع الموظفين بناء على بيانات الحضور"""
     db = get_database()
-    if current_user["role"] not in [UserRole.ADMIN, UserRole.SUPER_ADMIN]:
+    if current_user["role"] not in [UserRole.ADMIN, UserRole.GENERAL_MANAGER, UserRole.SUPER_ADMIN]:
         raise HTTPException(status_code=403, detail="غير مصرح")
     
     tenant_id = get_user_tenant_id(current_user)
