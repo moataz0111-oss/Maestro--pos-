@@ -208,14 +208,14 @@ def build_branch_query(user: dict, base_query: dict = None) -> dict:
     user_role = user.get("role")
     
     # المستخدمون العاديون (cashier, supervisor, delivery) يرون فقط فرعهم
-    if user_branch_id and user_role not in [UserRole.SUPER_ADMIN, UserRole.ADMIN, UserRole.MANAGER]:
+    if user_branch_id and user_role not in [UserRole.SUPER_ADMIN, UserRole.ADMIN, UserRole.GENERAL_MANAGER, UserRole.MANAGER]:
         query["branch_id"] = user_branch_id
     
     return query
 
 def user_can_access_branch(user: dict, branch_id: str) -> bool:
     """التحقق من صلاحية المستخدم للوصول لفرع معين"""
-    if user.get("role") in [UserRole.SUPER_ADMIN, UserRole.ADMIN, UserRole.MANAGER]:
+    if user.get("role") in [UserRole.SUPER_ADMIN, UserRole.ADMIN, UserRole.GENERAL_MANAGER, UserRole.MANAGER]:
         return True
     return user.get("branch_id") == branch_id
 

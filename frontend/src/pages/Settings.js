@@ -2217,6 +2217,7 @@ export default function Settings() {
   const getRoleText = (role) => {
     const roles = {
       admin: t('المالك'),
+      general_manager: t('مدير عام'),
       manager: t('مدير'),
       supervisor: t('مشرف'),
       cashier: t('كاشير'),
@@ -3198,12 +3199,16 @@ export default function Settings() {
                                       <SelectItem value="manufacturer">{t('مصنّع')}</SelectItem>
                                       <SelectItem value="purchasing">{t('مسؤول مشتريات')}</SelectItem>
                                       <SelectItem value="manager">{t('مدير')}</SelectItem>
-                                      <SelectItem value="admin">{t('المالك')}</SelectItem>
+                                      <SelectItem value="general_manager">{t('مدير عام')}</SelectItem>
+                                      {/* «المالك» يُنشأ فقط بواسطة مالك النظام (super_admin) */}
+                                      {user?.role === 'super_admin' && (
+                                        <SelectItem value="admin">{t('المالك')}</SelectItem>
+                                      )}
                                     </SelectContent>
                                   </Select>
                                 </div>
-                                {/* ⭐ يختفي حقل الفرع للأدوار المركزية (مخزن/مصنع/مشتريات) — لا يعملون في الفروع */}
-                                {!['warehouse_keeper', 'manufacturer', 'purchasing'].includes(userForm.role) && (
+                                {/* ⭐ يختفي حقل الفرع للأدوار المركزية + للمالك والمدير العام (كل الفروع) */}
+                                {!['warehouse_keeper', 'manufacturer', 'purchasing', 'admin', 'general_manager'].includes(userForm.role) && (
                                 <div>
                                   <Label className="text-foreground">{t('الفرع')}</Label>
                                   <Select value={userForm.branch_id} onValueChange={(v) => setUserForm({ ...userForm, branch_id: v })}>
@@ -3247,7 +3252,15 @@ export default function Settings() {
                             onClick={() => setUserRoleFilter('admin')}
                             className="h-8"
                           >
-                            {t('مدير عام')} ({users.filter(u => u.role === 'admin').length})
+                            {t('المالك')} ({users.filter(u => u.role === 'admin').length})
+                          </Button>
+                          <Button
+                            variant={userRoleFilter === 'general_manager' ? 'default' : 'outline'}
+                            size="sm"
+                            onClick={() => setUserRoleFilter('general_manager')}
+                            className="h-8"
+                          >
+                            {t('مدير عام')} ({users.filter(u => u.role === 'general_manager').length})
                           </Button>
                           <Button
                             variant={userRoleFilter === 'manager' ? 'default' : 'outline'}
@@ -3449,12 +3462,16 @@ export default function Settings() {
                             <div className="grid grid-cols-2 gap-4">
                               <div>
                                 <Label className="text-foreground">{t('الدور')}</Label>
-                                <Select value={editUserForm.role} onValueChange={(val) => setEditUserForm(prev => ({...prev, role: val, branch_id: ['warehouse_keeper', 'manufacturer', 'purchasing'].includes(val) ? '' : prev.branch_id}))}>
+                                <Select value={editUserForm.role} onValueChange={(val) => setEditUserForm(prev => ({...prev, role: val, branch_id: ['warehouse_keeper', 'manufacturer', 'purchasing', 'admin', 'general_manager'].includes(val) ? '' : prev.branch_id}))}>
                                   <SelectTrigger className="bg-background border-input" data-testid="edit-user-role">
                                     <SelectValue />
                                   </SelectTrigger>
                                   <SelectContent>
-                                    <SelectItem value="admin">{t('المالك')}</SelectItem>
+                                    {/* «المالك» يُعرض فقط لأدمن النظام — أي مستخدم آخر لا يستطيع الترقية إلى مالك */}
+                                    {user?.role === 'super_admin' && (
+                                      <SelectItem value="admin">{t('المالك')}</SelectItem>
+                                    )}
+                                    <SelectItem value="general_manager">{t('مدير عام')}</SelectItem>
                                     <SelectItem value="manager">{t('مدير')}</SelectItem>
                                     <SelectItem value="cashier">{t('كاشير')}</SelectItem>
                                     <SelectItem value="captain">{t('كابتن')}</SelectItem>
@@ -3466,8 +3483,8 @@ export default function Settings() {
                                   </SelectContent>
                                 </Select>
                               </div>
-                              {/* ⭐ يختفي حقل الفرع للأدوار المركزية (مخزن/مصنع/مشتريات) */}
-                              {!['warehouse_keeper', 'manufacturer', 'purchasing'].includes(editUserForm.role) && (
+                              {/* ⭐ يختفي حقل الفرع للأدوار المركزية + للمالك والمدير العام (كل الفروع) */}
+                              {!['warehouse_keeper', 'manufacturer', 'purchasing', 'admin', 'general_manager'].includes(editUserForm.role) && (
                               <div>
                                 <Label className="text-foreground">{t('الفرع')}</Label>
                                 <Select value={editUserForm.branch_id || 'all'} onValueChange={(val) => setEditUserForm(prev => ({...prev, branch_id: val === 'all' ? '' : val}))}>

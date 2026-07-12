@@ -30,7 +30,7 @@ async def set_sales_target(
     """تحديد هدف المبيعات اليومي - المدير أو المالك فقط"""
     db = get_database()
     user_role = current_user.get("role", "")
-    if user_role not in [UserRole.SUPER_ADMIN, UserRole.ADMIN, UserRole.MANAGER]:
+    if user_role not in [UserRole.SUPER_ADMIN, UserRole.ADMIN, UserRole.GENERAL_MANAGER, UserRole.MANAGER]:
         raise HTTPException(status_code=403, detail="فقط المدير أو المالك يمكنه تحديد الهدف")
 
     body = await request.json()
@@ -82,7 +82,7 @@ async def get_sales_target(
 
     # حساب المبيعات الحالية لليوم
     user_role = current_user.get("role", "")
-    is_manager = user_role in [UserRole.SUPER_ADMIN, UserRole.ADMIN, UserRole.MANAGER]
+    is_manager = user_role in [UserRole.SUPER_ADMIN, UserRole.ADMIN, UserRole.GENERAL_MANAGER, UserRole.MANAGER]
 
     sales_query = {
         "status": {"$nin": [OrderStatus.CANCELLED, "refunded"]},

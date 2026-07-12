@@ -237,7 +237,7 @@ async def get_sales_report(
     user_branch_id = current_user.get("branch_id")
     user_role = current_user.get("role")
     
-    if user_branch_id and user_role not in [UserRole.SUPER_ADMIN, UserRole.ADMIN, UserRole.MANAGER]:
+    if user_branch_id and user_role not in [UserRole.SUPER_ADMIN, UserRole.ADMIN, UserRole.GENERAL_MANAGER, UserRole.MANAGER]:
         query["branch_id"] = user_branch_id
     elif branch_id:
         query["branch_id"] = branch_id
@@ -656,7 +656,7 @@ async def get_inventory_report(branch_id: Optional[str] = None, current_user: di
     user_branch_id = current_user.get("branch_id")
     user_role = current_user.get("role")
     
-    if user_branch_id and user_role not in [UserRole.SUPER_ADMIN, UserRole.ADMIN, UserRole.MANAGER]:
+    if user_branch_id and user_role not in [UserRole.SUPER_ADMIN, UserRole.ADMIN, UserRole.GENERAL_MANAGER, UserRole.MANAGER]:
         query["branch_id"] = user_branch_id
     elif branch_id:
         query["branch_id"] = branch_id
@@ -704,7 +704,7 @@ async def get_expenses_report(
     user_branch_id = current_user.get("branch_id")
     user_role = current_user.get("role")
     
-    if user_branch_id and user_role not in [UserRole.SUPER_ADMIN, UserRole.ADMIN, UserRole.MANAGER]:
+    if user_branch_id and user_role not in [UserRole.SUPER_ADMIN, UserRole.ADMIN, UserRole.GENERAL_MANAGER, UserRole.MANAGER]:
         query["branch_id"] = user_branch_id
     elif branch_id:
         query["branch_id"] = branch_id
@@ -776,7 +776,7 @@ async def get_profit_loss_report(
     user_branch_id = current_user.get("branch_id")
     user_role = current_user.get("role")
     
-    if user_branch_id and user_role not in [UserRole.SUPER_ADMIN, UserRole.ADMIN, UserRole.MANAGER]:
+    if user_branch_id and user_role not in [UserRole.SUPER_ADMIN, UserRole.ADMIN, UserRole.GENERAL_MANAGER, UserRole.MANAGER]:
         sales_query["branch_id"] = user_branch_id
     elif branch_id:
         sales_query["branch_id"] = branch_id
@@ -812,7 +812,7 @@ async def get_profit_loss_report(
     else:
         expense_query["$or"] = [{"tenant_id": {"$exists": False}}, {"tenant_id": None}]
     
-    if user_branch_id and user_role not in [UserRole.SUPER_ADMIN, UserRole.ADMIN, UserRole.MANAGER]:
+    if user_branch_id and user_role not in [UserRole.SUPER_ADMIN, UserRole.ADMIN, UserRole.GENERAL_MANAGER, UserRole.MANAGER]:
         expense_query["branch_id"] = user_branch_id
     elif branch_id:
         expense_query["branch_id"] = branch_id
@@ -832,7 +832,7 @@ async def get_profit_loss_report(
     branches_query = {"tenant_id": tenant_id, "is_active": {"$ne": False}}
     if branch_id:
         branches_query["id"] = branch_id
-    elif user_branch_id and user_role not in [UserRole.SUPER_ADMIN, UserRole.ADMIN, UserRole.MANAGER]:
+    elif user_branch_id and user_role not in [UserRole.SUPER_ADMIN, UserRole.ADMIN, UserRole.GENERAL_MANAGER, UserRole.MANAGER]:
         branches_query["id"] = user_branch_id
     else:
         branches_query["$or"] = [
@@ -858,7 +858,7 @@ async def get_profit_loss_report(
     employees_query = {"tenant_id": tenant_id, "is_active": {"$ne": False}}
     if branch_id:
         employees_query["branch_id"] = branch_id
-    elif user_branch_id and user_role not in [UserRole.SUPER_ADMIN, UserRole.ADMIN, UserRole.MANAGER]:
+    elif user_branch_id and user_role not in [UserRole.SUPER_ADMIN, UserRole.ADMIN, UserRole.GENERAL_MANAGER, UserRole.MANAGER]:
         employees_query["branch_id"] = user_branch_id
     
     employees = await db.employees.find(employees_query, {"_id": 0, "salary": 1}).to_list(1000)
@@ -966,7 +966,7 @@ async def get_delivery_credits_report(
     user_branch_id = current_user.get("branch_id")
     user_role = current_user.get("role")
     
-    if user_branch_id and user_role not in [UserRole.SUPER_ADMIN, UserRole.ADMIN, UserRole.MANAGER]:
+    if user_branch_id and user_role not in [UserRole.SUPER_ADMIN, UserRole.ADMIN, UserRole.GENERAL_MANAGER, UserRole.MANAGER]:
         query["branch_id"] = user_branch_id
     elif branch_id:
         query["branch_id"] = branch_id
@@ -1190,7 +1190,7 @@ async def get_products_report(
     user_branch_id = current_user.get("branch_id")
     user_role = current_user.get("role")
     
-    if user_branch_id and user_role not in [UserRole.SUPER_ADMIN, UserRole.ADMIN, UserRole.MANAGER]:
+    if user_branch_id and user_role not in [UserRole.SUPER_ADMIN, UserRole.ADMIN, UserRole.GENERAL_MANAGER, UserRole.MANAGER]:
         order_query["branch_id"] = user_branch_id
     elif branch_id:
         order_query["branch_id"] = branch_id
@@ -1264,7 +1264,7 @@ async def get_products_by_channel(
 
     user_branch_id = current_user.get("branch_id")
     user_role = current_user.get("role")
-    if user_branch_id and user_role not in [UserRole.SUPER_ADMIN, UserRole.ADMIN, UserRole.MANAGER]:
+    if user_branch_id and user_role not in [UserRole.SUPER_ADMIN, UserRole.ADMIN, UserRole.GENERAL_MANAGER, UserRole.MANAGER]:
         order_query["branch_id"] = user_branch_id
     elif branch_id:
         order_query["branch_id"] = branch_id
@@ -1394,7 +1394,7 @@ async def get_cancellations_report(
     user_branch_id = current_user.get("branch_id")
     user_role = current_user.get("role")
     
-    if user_branch_id and user_role not in [UserRole.SUPER_ADMIN, UserRole.ADMIN, UserRole.MANAGER]:
+    if user_branch_id and user_role not in [UserRole.SUPER_ADMIN, UserRole.ADMIN, UserRole.GENERAL_MANAGER, UserRole.MANAGER]:
         query["branch_id"] = user_branch_id
     elif branch_id:
         query["branch_id"] = branch_id
@@ -1406,7 +1406,7 @@ async def get_cancellations_report(
         total_query["tenant_id"] = tenant_id
     else:
         total_query["$or"] = [{"tenant_id": {"$exists": False}}, {"tenant_id": None}]
-    if user_branch_id and user_role not in [UserRole.SUPER_ADMIN, UserRole.ADMIN, UserRole.MANAGER]:
+    if user_branch_id and user_role not in [UserRole.SUPER_ADMIN, UserRole.ADMIN, UserRole.GENERAL_MANAGER, UserRole.MANAGER]:
         total_query["branch_id"] = user_branch_id
     elif branch_id:
         total_query["branch_id"] = branch_id
@@ -1416,7 +1416,7 @@ async def get_cancellations_report(
     today_query = {"status": "cancelled", "created_at": {"$regex": f"^{today}"}}
     if tenant_id:
         today_query["tenant_id"] = tenant_id
-    if user_branch_id and user_role not in [UserRole.SUPER_ADMIN, UserRole.ADMIN, UserRole.MANAGER]:
+    if user_branch_id and user_role not in [UserRole.SUPER_ADMIN, UserRole.ADMIN, UserRole.GENERAL_MANAGER, UserRole.MANAGER]:
         today_query["branch_id"] = user_branch_id
     elif branch_id:
         today_query["branch_id"] = branch_id
@@ -1457,7 +1457,7 @@ async def get_discounts_report(
     user_branch_id = current_user.get("branch_id")
     user_role = current_user.get("role")
     
-    if user_branch_id and user_role not in [UserRole.SUPER_ADMIN, UserRole.ADMIN, UserRole.MANAGER]:
+    if user_branch_id and user_role not in [UserRole.SUPER_ADMIN, UserRole.ADMIN, UserRole.GENERAL_MANAGER, UserRole.MANAGER]:
         query["branch_id"] = user_branch_id
     elif branch_id:
         query["branch_id"] = branch_id
@@ -1469,7 +1469,7 @@ async def get_discounts_report(
         sales_query["tenant_id"] = tenant_id
     else:
         sales_query["$or"] = [{"tenant_id": {"$exists": False}}, {"tenant_id": None}]
-    if user_branch_id and user_role not in [UserRole.SUPER_ADMIN, UserRole.ADMIN, UserRole.MANAGER]:
+    if user_branch_id and user_role not in [UserRole.SUPER_ADMIN, UserRole.ADMIN, UserRole.GENERAL_MANAGER, UserRole.MANAGER]:
         sales_query["branch_id"] = user_branch_id
     elif branch_id:
         sales_query["branch_id"] = branch_id
@@ -1521,7 +1521,7 @@ async def get_credit_report(
     user_branch_id = current_user.get("branch_id")
     user_role = current_user.get("role")
     
-    if user_branch_id and user_role not in [UserRole.SUPER_ADMIN, UserRole.ADMIN, UserRole.MANAGER]:
+    if user_branch_id and user_role not in [UserRole.SUPER_ADMIN, UserRole.ADMIN, UserRole.GENERAL_MANAGER, UserRole.MANAGER]:
         query["branch_id"] = user_branch_id
     elif branch_id:
         query["branch_id"] = branch_id
@@ -1654,7 +1654,7 @@ async def get_credit_collections(
     user_branch_id = current_user.get("branch_id")
     user_role = current_user.get("role")
     
-    if user_branch_id and user_role not in [UserRole.SUPER_ADMIN, UserRole.ADMIN, UserRole.MANAGER]:
+    if user_branch_id and user_role not in [UserRole.SUPER_ADMIN, UserRole.ADMIN, UserRole.GENERAL_MANAGER, UserRole.MANAGER]:
         query["branch_id"] = user_branch_id
     elif branch_id:
         query["branch_id"] = branch_id
@@ -2110,7 +2110,7 @@ async def get_delivery_collections(
     user_branch_id = current_user.get("branch_id")
     user_role = current_user.get("role")
     
-    if user_branch_id and user_role not in [UserRole.SUPER_ADMIN, UserRole.ADMIN, UserRole.MANAGER]:
+    if user_branch_id and user_role not in [UserRole.SUPER_ADMIN, UserRole.ADMIN, UserRole.GENERAL_MANAGER, UserRole.MANAGER]:
         query["branch_id"] = user_branch_id
     elif branch_id:
         query["branch_id"] = branch_id
@@ -2211,7 +2211,7 @@ async def get_card_report(
     user_branch_id = current_user.get("branch_id")
     user_role = current_user.get("role")
     
-    if user_branch_id and user_role not in [UserRole.SUPER_ADMIN, UserRole.ADMIN, UserRole.MANAGER]:
+    if user_branch_id and user_role not in [UserRole.SUPER_ADMIN, UserRole.ADMIN, UserRole.GENERAL_MANAGER, UserRole.MANAGER]:
         query["branch_id"] = user_branch_id
     elif branch_id:
         query["branch_id"] = branch_id
@@ -2342,7 +2342,7 @@ async def get_card_collections(
     user_branch_id = current_user.get("branch_id")
     user_role = current_user.get("role")
     
-    if user_branch_id and user_role not in [UserRole.SUPER_ADMIN, UserRole.ADMIN, UserRole.MANAGER]:
+    if user_branch_id and user_role not in [UserRole.SUPER_ADMIN, UserRole.ADMIN, UserRole.GENERAL_MANAGER, UserRole.MANAGER]:
         query["branch_id"] = user_branch_id
     elif branch_id:
         query["branch_id"] = branch_id

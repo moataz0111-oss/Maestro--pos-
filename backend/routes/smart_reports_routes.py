@@ -412,7 +412,7 @@ async def export_smart_report_excel(
     # فلترة الفرع
     user_branch_id = current_user.get("branch_id")
     user_role = current_user.get("role")
-    if user_branch_id and user_role not in [UserRole.SUPER_ADMIN, UserRole.ADMIN, UserRole.MANAGER]:
+    if user_branch_id and user_role not in [UserRole.SUPER_ADMIN, UserRole.ADMIN, UserRole.GENERAL_MANAGER, UserRole.MANAGER]:
         query["branch_id"] = user_branch_id
     elif branch_id:
         query["branch_id"] = branch_id
@@ -606,7 +606,7 @@ async def export_smart_report_pdf(
     
     user_branch_id = current_user.get("branch_id")
     user_role = current_user.get("role")
-    if user_branch_id and user_role not in [UserRole.SUPER_ADMIN, UserRole.ADMIN, UserRole.MANAGER]:
+    if user_branch_id and user_role not in [UserRole.SUPER_ADMIN, UserRole.ADMIN, UserRole.GENERAL_MANAGER, UserRole.MANAGER]:
         query["branch_id"] = user_branch_id
     elif branch_id:
         query["branch_id"] = branch_id

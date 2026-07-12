@@ -52,7 +52,7 @@ class DriverLocationUpdate(BaseModel):
 async def create_driver(driver: DriverCreate, current_user: dict = Depends(get_current_user)):
     """إنشاء سائق جديد"""
     db = get_database()
-    if current_user["role"] not in [UserRole.ADMIN, UserRole.MANAGER, UserRole.SUPER_ADMIN]:
+    if current_user["role"] not in [UserRole.ADMIN, UserRole.GENERAL_MANAGER, UserRole.MANAGER, UserRole.SUPER_ADMIN]:
         raise HTTPException(status_code=403, detail="غير مصرح")
     
     driver_doc = {

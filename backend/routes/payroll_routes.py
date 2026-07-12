@@ -170,7 +170,7 @@ async def cleanup_duplicate_deductions(current_user: dict = Depends(get_current_
     """تنظيف الخصومات التلقائية المكررة (نفس الموظف+اليوم+النوع) — يبقي الأقدم ويحذف الباقي.
     إصلاح بيانات قديمة نتجت قبل جعل مزامنة البصمة idempotent."""
     db = get_database()
-    if current_user["role"] not in [UserRole.ADMIN, UserRole.MANAGER, UserRole.SUPER_ADMIN]:
+    if current_user["role"] not in [UserRole.ADMIN, UserRole.GENERAL_MANAGER, UserRole.MANAGER, UserRole.SUPER_ADMIN]:
         raise HTTPException(status_code=403, detail="غير مصرح")
 
     query = build_tenant_query(current_user)
@@ -310,7 +310,7 @@ async def reset_all_deductions(current_user: dict = Depends(get_current_user)):
 async def create_bonus(bonus: BonusCreate, current_user: dict = Depends(get_current_user)):
     """إنشاء مكافأة"""
     db = get_database()
-    if current_user["role"] not in [UserRole.ADMIN, UserRole.MANAGER, UserRole.SUPER_ADMIN]:
+    if current_user["role"] not in [UserRole.ADMIN, UserRole.GENERAL_MANAGER, UserRole.MANAGER, UserRole.SUPER_ADMIN]:
         raise HTTPException(status_code=403, detail="غير مصرح")
     
     employee = await db.employees.find_one({"id": bonus.employee_id}, {"_id": 0})
@@ -420,7 +420,7 @@ async def get_overtime_requests(
 async def approve_overtime(request_id: str, current_user: dict = Depends(get_current_user)):
     """موافقة على الوقت الإضافي"""
     db = get_database()
-    if current_user["role"] not in [UserRole.ADMIN, UserRole.MANAGER, UserRole.SUPER_ADMIN]:
+    if current_user["role"] not in [UserRole.ADMIN, UserRole.GENERAL_MANAGER, UserRole.MANAGER, UserRole.SUPER_ADMIN]:
         raise HTTPException(status_code=403, detail="غير مصرح")
     req = await db.overtime_requests.find_one({"id": request_id})
     if not req:
@@ -435,7 +435,7 @@ async def approve_overtime(request_id: str, current_user: dict = Depends(get_cur
 async def reject_overtime(request_id: str, current_user: dict = Depends(get_current_user)):
     """رفض الوقت الإضافي"""
     db = get_database()
-    if current_user["role"] not in [UserRole.ADMIN, UserRole.MANAGER, UserRole.SUPER_ADMIN]:
+    if current_user["role"] not in [UserRole.ADMIN, UserRole.GENERAL_MANAGER, UserRole.MANAGER, UserRole.SUPER_ADMIN]:
         raise HTTPException(status_code=403, detail="غير مصرح")
     req = await db.overtime_requests.find_one({"id": request_id})
     if not req:
@@ -567,7 +567,7 @@ async def calculate_payroll(
 async def create_payroll(payroll: PayrollCreate, current_user: dict = Depends(get_current_user)):
     """إنشاء كشف راتب"""
     db = get_database()
-    if current_user["role"] not in [UserRole.ADMIN, UserRole.MANAGER, UserRole.SUPER_ADMIN]:
+    if current_user["role"] not in [UserRole.ADMIN, UserRole.GENERAL_MANAGER, UserRole.MANAGER, UserRole.SUPER_ADMIN]:
         raise HTTPException(status_code=403, detail="غير مصرح")
     
     employee = await db.employees.find_one({"id": payroll.employee_id}, {"_id": 0})

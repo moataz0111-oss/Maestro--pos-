@@ -56,7 +56,7 @@ async def get_coupons(current_user: dict = Depends(get_current_user)):
 @router.post("/coupons")
 async def create_coupon(coupon: CouponCreate, current_user: dict = Depends(get_current_user)):
     """إنشاء كوبون"""
-    if current_user["role"] not in [UserRole.ADMIN, UserRole.MANAGER, UserRole.SUPER_ADMIN]:
+    if current_user["role"] not in [UserRole.ADMIN, UserRole.GENERAL_MANAGER, UserRole.MANAGER, UserRole.SUPER_ADMIN]:
         raise HTTPException(status_code=403, detail="غير مصرح")
     
     # التحقق من عدم تكرار الكود
@@ -84,7 +84,7 @@ async def create_coupon(coupon: CouponCreate, current_user: dict = Depends(get_c
 @router.put("/coupons/{coupon_id}")
 async def update_coupon(coupon_id: str, coupon: CouponCreate, current_user: dict = Depends(get_current_user)):
     """تحديث كوبون"""
-    if current_user["role"] not in [UserRole.ADMIN, UserRole.MANAGER, UserRole.SUPER_ADMIN]:
+    if current_user["role"] not in [UserRole.ADMIN, UserRole.GENERAL_MANAGER, UserRole.MANAGER, UserRole.SUPER_ADMIN]:
         raise HTTPException(status_code=403, detail="غير مصرح")
     
     query = build_tenant_query(current_user, {"id": coupon_id})
@@ -419,7 +419,7 @@ async def get_promotions(current_user: dict = Depends(get_current_user)):
 @router.post("/promotions")
 async def create_promotion(promotion: PromotionCreate, current_user: dict = Depends(get_current_user)):
     """إنشاء عرض"""
-    if current_user["role"] not in [UserRole.ADMIN, UserRole.MANAGER, UserRole.SUPER_ADMIN]:
+    if current_user["role"] not in [UserRole.ADMIN, UserRole.GENERAL_MANAGER, UserRole.MANAGER, UserRole.SUPER_ADMIN]:
         raise HTTPException(status_code=403, detail="غير مصرح")
     
     promotion_doc = {

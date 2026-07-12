@@ -15,7 +15,7 @@ async def create_employee(employee: EmployeeCreate, current_user: dict = Depends
     
     🔥 عند إنشاء موظف جديد بـ biometric_uid، تُنشأ جوبات push تلقائياً لكل أجهزة
     البصمة النشطة في فرعه (حتى لو كان هناك 100 جهاز — كلها تستلم الموظف الجديد)."""
-    if current_user["role"] not in [UserRole.ADMIN, UserRole.MANAGER, UserRole.SUPER_ADMIN]:
+    if current_user["role"] not in [UserRole.ADMIN, UserRole.GENERAL_MANAGER, UserRole.MANAGER, UserRole.SUPER_ADMIN]:
         raise HTTPException(status_code=403, detail="غير مصرح")
     
     tenant_id = get_user_tenant_id(current_user)
@@ -132,7 +132,7 @@ async def get_employee(employee_id: str, current_user: dict = Depends(get_curren
 @router.put("/employees/{employee_id}")
 async def update_employee(employee_id: str, update: EmployeeUpdate, current_user: dict = Depends(get_current_user)):
     """تحديث بيانات موظف — عند تغيير biometric_uid يُنشأ push لكل أجهزة الفرع تلقائياً."""
-    if current_user["role"] not in [UserRole.ADMIN, UserRole.MANAGER, UserRole.SUPER_ADMIN]:
+    if current_user["role"] not in [UserRole.ADMIN, UserRole.GENERAL_MANAGER, UserRole.MANAGER, UserRole.SUPER_ADMIN]:
         raise HTTPException(status_code=403, detail="غير مصرح")
     
     query = build_tenant_query(current_user, {"id": employee_id})
@@ -272,7 +272,7 @@ async def delete_employee(employee_id: str, current_user: dict = Depends(get_cur
 @router.post("/employees/{employee_id}/face-photo")
 async def save_employee_face_photo(employee_id: str, request: Request, current_user: dict = Depends(get_current_user)):
     """حفظ صورة الوجه للموظف من جهاز البصمة"""
-    if current_user["role"] not in [UserRole.ADMIN, UserRole.MANAGER, UserRole.SUPER_ADMIN]:
+    if current_user["role"] not in [UserRole.ADMIN, UserRole.GENERAL_MANAGER, UserRole.MANAGER, UserRole.SUPER_ADMIN]:
         raise HTTPException(status_code=403, detail="غير مصرح")
     
     query = build_tenant_query(current_user, {"id": employee_id})
@@ -421,7 +421,7 @@ async def update_attendance(attendance_id: str, update: dict, current_user: dict
 @router.post("/advances", response_model=AdvanceResponse)
 async def create_advance(advance: AdvanceCreate, current_user: dict = Depends(get_current_user)):
     """طلب سلفة"""
-    if current_user["role"] not in [UserRole.ADMIN, UserRole.MANAGER, UserRole.SUPER_ADMIN]:
+    if current_user["role"] not in [UserRole.ADMIN, UserRole.GENERAL_MANAGER, UserRole.MANAGER, UserRole.SUPER_ADMIN]:
         raise HTTPException(status_code=403, detail="غير مصرح")
     
     employee = await db.employees.find_one({"id": advance.employee_id}, {"_id": 0})
@@ -529,7 +529,7 @@ async def get_advances(
 @router.post("/employees/{employee_id}/reset-advances")
 async def reset_employee_advances(employee_id: str, current_user: dict = Depends(get_current_user)):
     """تصفير رصيد السلف لموظف (تسوية المتبقي إلى صفر) — يُستخدم لمسح أرصدة الشهور السابقة/التجريبية."""
-    if current_user["role"] not in [UserRole.ADMIN, UserRole.MANAGER, UserRole.SUPER_ADMIN]:
+    if current_user["role"] not in [UserRole.ADMIN, UserRole.GENERAL_MANAGER, UserRole.MANAGER, UserRole.SUPER_ADMIN]:
         raise HTTPException(status_code=403, detail="غير مصرح")
     query = build_tenant_query(current_user)
     query["employee_id"] = employee_id
@@ -553,7 +553,7 @@ async def reset_employee_advances(employee_id: str, current_user: dict = Depends
 async def reset_advances_before_month(month: str, current_user: dict = Depends(get_current_user)):
     """تصفير أرصدة جميع السلف المسجّلة قبل بداية الشهر المحدد (استثناء الأشهر التجريبية السابقة).
     يبدأ الاحتساب الدقيق من الشهر المحدد. month بصيغة YYYY-MM."""
-    if current_user["role"] not in [UserRole.ADMIN, UserRole.MANAGER, UserRole.SUPER_ADMIN]:
+    if current_user["role"] not in [UserRole.ADMIN, UserRole.GENERAL_MANAGER, UserRole.MANAGER, UserRole.SUPER_ADMIN]:
         raise HTTPException(status_code=403, detail="غير مصرح")
     cutoff = f"{month}-01"
     query = build_tenant_query(current_user)

@@ -27,7 +27,7 @@ async def get_payroll_summary_report(
     user_branch_id = current_user.get("branch_id")
     user_role = current_user.get("role")
     
-    if user_branch_id and user_role not in [UserRole.SUPER_ADMIN, UserRole.ADMIN, UserRole.MANAGER]:
+    if user_branch_id and user_role not in [UserRole.SUPER_ADMIN, UserRole.ADMIN, UserRole.GENERAL_MANAGER, UserRole.MANAGER]:
         emp_query["branch_id"] = user_branch_id
     elif branch_id:
         emp_query["branch_id"] = branch_id
@@ -283,7 +283,7 @@ async def get_payroll_summary_report(
 async def deduct_advance_installment(advance_id: str, payload: dict, current_user: dict = Depends(get_current_user)):
     """احتساب قسط من سلفة سابقة يدوياً في شهر محدّد (المالك يحدّد المبلغ).
     يُنشئ سجل قسط (advance_installments) ويُنقص الرصيد المتبقّي للسلفة."""
-    if current_user["role"] not in [UserRole.ADMIN, UserRole.MANAGER, UserRole.SUPER_ADMIN]:
+    if current_user["role"] not in [UserRole.ADMIN, UserRole.GENERAL_MANAGER, UserRole.MANAGER, UserRole.SUPER_ADMIN]:
         raise HTTPException(status_code=403, detail="غير مصرح")
     tenant_id = get_user_tenant_id(current_user)
     advance = await db.advances.find_one({"id": advance_id}, {"_id": 0})
@@ -337,7 +337,7 @@ async def list_advance_installments(month: str, employee_id: str = None, current
 @router.delete("/advances/installments/{installment_id}")
 async def delete_advance_installment(installment_id: str, current_user: dict = Depends(get_current_user)):
     """التراجع عن احتساب قسط سلفة (يُعيد المبلغ للرصيد المتبقّي)."""
-    if current_user["role"] not in [UserRole.ADMIN, UserRole.MANAGER, UserRole.SUPER_ADMIN]:
+    if current_user["role"] not in [UserRole.ADMIN, UserRole.GENERAL_MANAGER, UserRole.MANAGER, UserRole.SUPER_ADMIN]:
         raise HTTPException(status_code=403, detail="غير مصرح")
     ins = await db.advance_installments.find_one({"id": installment_id}, {"_id": 0})
     if not ins:
@@ -559,7 +559,7 @@ async def get_daily_payroll_summary(
     emp_query = {"is_active": True}
     if tenant_id:
         emp_query["tenant_id"] = tenant_id
-    if user_branch_id and user_role not in [UserRole.SUPER_ADMIN, UserRole.ADMIN, UserRole.MANAGER]:
+    if user_branch_id and user_role not in [UserRole.SUPER_ADMIN, UserRole.ADMIN, UserRole.GENERAL_MANAGER, UserRole.MANAGER]:
         emp_query["branch_id"] = user_branch_id
     elif branch_id:
         emp_query["branch_id"] = branch_id
@@ -741,7 +741,7 @@ async def get_employee_salary_slip(
     # التحقق من صلاحية الفرع
     user_branch_id = current_user.get("branch_id")
     user_role = current_user.get("role")
-    if user_branch_id and user_role not in [UserRole.SUPER_ADMIN, UserRole.ADMIN, UserRole.MANAGER]:
+    if user_branch_id and user_role not in [UserRole.SUPER_ADMIN, UserRole.ADMIN, UserRole.GENERAL_MANAGER, UserRole.MANAGER]:
         if employee.get("branch_id") != user_branch_id:
             raise HTTPException(status_code=403, detail="غير مصرح")
     
@@ -912,7 +912,7 @@ async def export_payroll_excel(
     user_branch_id = current_user.get("branch_id")
     user_role = current_user.get("role")
     
-    if user_branch_id and user_role not in [UserRole.SUPER_ADMIN, UserRole.ADMIN, UserRole.MANAGER]:
+    if user_branch_id and user_role not in [UserRole.SUPER_ADMIN, UserRole.ADMIN, UserRole.GENERAL_MANAGER, UserRole.MANAGER]:
         emp_query["branch_id"] = user_branch_id
     elif branch_id:
         emp_query["branch_id"] = branch_id

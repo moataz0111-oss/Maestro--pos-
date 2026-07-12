@@ -11,7 +11,10 @@ from .shared import (
     hash_password, verify_password, create_token,
     build_tenant_query, UserRole, logger
 )
-from server import encrypt_plain_password, issue_user_session  # للحفاظ على الكلمة الأصلية في vault وجلسة نشطة واحدة
+# استيراد كسول من server لتجنّب أي دائرية أثناء بدء التشغيل — يُنفَّذ عند أول استدعاء فقط.
+def _get_server_helpers():
+    from server import encrypt_plain_password, issue_user_session
+    return encrypt_plain_password, issue_user_session
 from ..models import (
     UserCreate, UserLogin, UserResponse, UserUpdate, PasswordReset
 )

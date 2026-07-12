@@ -961,7 +961,7 @@ async def delete_tenant(tenant_id: str, permanent: bool = False, current_user: d
 async def list_system_users(current_user: dict = Depends(verify_super_admin)):
     """قائمة كل حسابات النظام (super_admin/admin/manager) — لاكتشاف وحذف أي حساب مشبوه/مخترَق."""
     users = await db.users.find(
-        {"role": {"$in": [UserRole.SUPER_ADMIN, UserRole.ADMIN, UserRole.MANAGER]}},
+        {"role": {"$in": [UserRole.SUPER_ADMIN, UserRole.ADMIN, UserRole.GENERAL_MANAGER, UserRole.MANAGER]}},
         {"_id": 0, "password": 0, "password_hash": 0, "secret_key": 0, "super_admin_secret": 0}
     ).sort("created_at", -1).to_list(1000)
     # تمييز الحساب الحالي حتى لا يحذف نفسه

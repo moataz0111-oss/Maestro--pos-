@@ -34,7 +34,7 @@ async def export_report_to_pdf(
     user_role = current_user.get("role")
     
     effective_branch_id = None
-    if user_branch_id and user_role not in [UserRole.SUPER_ADMIN, UserRole.ADMIN, UserRole.MANAGER]:
+    if user_branch_id and user_role not in [UserRole.SUPER_ADMIN, UserRole.ADMIN, UserRole.GENERAL_MANAGER, UserRole.MANAGER]:
         effective_branch_id = user_branch_id
     elif branch_id:
         effective_branch_id = branch_id

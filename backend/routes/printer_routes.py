@@ -24,7 +24,7 @@ class PrinterCreate(BaseModel):
 
 @router.post("/printers")
 async def create_printer(printer: PrinterCreate, current_user: dict = Depends(get_current_user)):
-    if current_user["role"] not in [UserRole.ADMIN, UserRole.MANAGER, UserRole.SUPER_ADMIN]:
+    if current_user["role"] not in [UserRole.ADMIN, UserRole.GENERAL_MANAGER, UserRole.MANAGER, UserRole.SUPER_ADMIN]:
         raise HTTPException(status_code=403, detail="غير مصرح")
     
     tenant_id = get_user_tenant_id(current_user)
@@ -61,7 +61,7 @@ async def get_printer_types(current_user: dict = Depends(get_current_user)):
 @router.post("/printer-types")
 async def create_printer_type(type_data: dict, current_user: dict = Depends(get_current_user)):
     """إضافة نوع طابعة مخصص"""
-    if current_user["role"] not in [UserRole.ADMIN, UserRole.MANAGER]:
+    if current_user["role"] not in [UserRole.ADMIN, UserRole.GENERAL_MANAGER, UserRole.MANAGER]:
         raise HTTPException(status_code=403, detail="غير مصرح")
     
     tenant_id = get_user_tenant_id(current_user)
@@ -96,7 +96,7 @@ async def get_printers(branch_id: Optional[str] = None, current_user: dict = Dep
 @router.put("/printers/{printer_id}")
 async def update_printer(printer_id: str, printer: dict, current_user: dict = Depends(get_current_user)):
     """تحديث طابعة - يقبل partial update (أي حقول، حتى is_online فقط)"""
-    if current_user["role"] not in [UserRole.ADMIN, UserRole.MANAGER, UserRole.SUPER_ADMIN]:
+    if current_user["role"] not in [UserRole.ADMIN, UserRole.GENERAL_MANAGER, UserRole.MANAGER, UserRole.SUPER_ADMIN]:
         raise HTTPException(status_code=403, detail="غير مصرح")
     
     # التحقق من أن الطابعة تنتمي لنفس العميل
@@ -117,7 +117,7 @@ async def update_printer(printer_id: str, printer: dict, current_user: dict = De
 
 @router.delete("/printers/{printer_id}")
 async def delete_printer(printer_id: str, current_user: dict = Depends(get_current_user)):
-    if current_user["role"] not in [UserRole.ADMIN, UserRole.MANAGER, UserRole.SUPER_ADMIN]:
+    if current_user["role"] not in [UserRole.ADMIN, UserRole.GENERAL_MANAGER, UserRole.MANAGER, UserRole.SUPER_ADMIN]:
         raise HTTPException(status_code=403, detail="غير مصرح")
     
     # التحقق من أن الطابعة تنتمي لنفس العميل

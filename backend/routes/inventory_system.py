@@ -4236,7 +4236,7 @@ async def get_unread_branch_request_notifications(current_user: dict = Depends(g
     # مسؤول الفرع يرى إشعارات فرعه فقط؛ المدير/المالك يرى الكل
     user_branch = current_user.get("branch_id")
     user_role = current_user.get("role")
-    if user_branch and user_role not in [UserRole.SUPER_ADMIN, UserRole.ADMIN, UserRole.MANAGER]:
+    if user_branch and user_role not in [UserRole.SUPER_ADMIN, UserRole.ADMIN, UserRole.GENERAL_MANAGER, UserRole.MANAGER]:
         query["to_branch_id"] = user_branch
     notifications = await db.branch_request_notifications.find(
         query, {"_id": 0}

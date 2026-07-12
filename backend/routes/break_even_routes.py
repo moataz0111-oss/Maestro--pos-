@@ -794,7 +794,7 @@ async def get_break_even_alerts(
     user_role = current_user.get("role")
     
     # التحقق من الصلاحية - المدير والأدمن فقط يرون التنبيهات
-    if user_role not in [UserRole.SUPER_ADMIN, UserRole.ADMIN, UserRole.MANAGER]:
+    if user_role not in [UserRole.SUPER_ADMIN, UserRole.ADMIN, UserRole.GENERAL_MANAGER, UserRole.MANAGER]:
         return {"alerts": [], "has_permission": False}
     
     # تحديد التاريخ الحالي
