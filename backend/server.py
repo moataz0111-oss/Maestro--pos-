@@ -2156,6 +2156,8 @@ class TenantCreate(BaseModel):
     owner_name: str  # اسم المالك
     owner_email: EmailStr
     owner_phone: Optional[str] = ""  # رقم الهاتف (اختياري)
+    # 🔑 كلمة مرور المالك المُدخَلة من الفورم — تُحفظ كما هي (hash + vault) لتُرسَل مطابقة
+    owner_password: Optional[str] = None
     subscription_type: str = "trial"  # trial, bronze, silver, gold, basic, premium, demo
     subscription_duration: int = 1  # مدة الاشتراك بالأشهر (1, 3, 6, 12)
     max_branches: int = 1

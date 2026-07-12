@@ -194,15 +194,16 @@ async def create_tenant(tenant: TenantCreate, background_tasks: BackgroundTasks,
     
     await db.tenants.insert_one(tenant_doc)
     
-    # إنشاء مستخدم admin للمستأجر
-    admin_password = f"{tenant.slug}123"  # كلمة مرور افتراضية
+    # 🔑 كلمة مرور المالك: نستخدم المُدخَلة من الفورم إن وُجدت، وإلا نستعمل الافتراضية.
+    # هذا يضمن أن رسالة الترحيب تحوي نفس الكلمة التي كتبها super_admin بالضبط.
+    admin_password = (tenant.owner_password or "").strip() or f"{tenant.slug}123"
     admin_doc = {
         "id": str(uuid.uuid4()),
         "username": f"{tenant.slug}_admin",
         "email": tenant.owner_email,
         "phone": tenant.owner_phone,  # 🔄 يُنقَل تلقائياً من بيانات التينانت (طلب المالك)
         "password": hash_password(admin_password),
-        "password_vault": encrypt_plain_password(admin_password),  # لحفظ كلمة المرور الأصلية للترحيب
+        "password_vault": encrypt_plain_password(admin_password),  # الأصل المشفَّر لإرسال الترحيب
         "full_name": tenant.owner_name,
         "role": UserRole.ADMIN,
         "branch_id": None,

@@ -113,6 +113,8 @@ class TenantCreate(BaseModel):
     owner_name: str
     owner_email: EmailStr
     owner_phone: Optional[str] = ""
+    # 🔑 كلمة مرور المالك المُدخَلة من الفورم — تُحفظ كما هي (hash + vault) لتُرسَل مطابقة
+    owner_password: Optional[str] = None
     subscription_type: str = "trial"
     subscription_duration: int = 1
     max_branches: int = 1

@@ -589,6 +589,7 @@ export default function SuperAdmin() {
     owner_name: '',
     owner_email: '',
     owner_phone: '',
+    owner_password: '',
     subscription_type: 'trial',
     subscription_duration: 1,
     max_branches: 1,
@@ -1514,6 +1515,7 @@ export default function SuperAdmin() {
         owner_name: '',
         owner_email: '',
         owner_phone: '',
+        owner_password: '',
         subscription_type: 'trial',
         subscription_duration: 1,
         max_branches: 1,
@@ -2835,11 +2837,19 @@ export default function SuperAdmin() {
         return;
       }
     } catch (_) { /* استمر إذا فشل الفحص */ }
-    if (!window.confirm(t('سيتم إرسال بيانات الدخول الحالية إلى:') + `\n${tenant.owner_email || t('بلا بريد')}\n${tenant.owner_phone || t('بلا هاتف')}\n\n` + t('متابعة؟'))) return;
+    // ✨ خيار جديد: اسمح للمالك بكتابة كلمة مرور جديدة تُحفظ في vault وتُرسَل مطابقة
+    const typed = window.prompt(
+      t('كلمة المرور المطلوب إرسالها للمالك') + ':\n\n' +
+      t('اتركها فارغة لاستخدام الحالية المحفوظة (إن كانت غير مطابقة، اكتب واحدة جديدة هنا).') + '\n\n' +
+      `${tenant.owner_email || t('بلا بريد')}\n${tenant.owner_phone || t('بلا هاتف')}`,
+      ''
+    );
+    if (typed === null) return; // ألغى المستخدم
+    const customPassword = (typed || '').trim();
     try {
       toast.loading(t('جاري الإرسال...'), { id: 'welcome-owner' });
-      // ✨ إرسال تلقائي — النظام يقرأ كلمة المرور من الخزنة تلقائياً (لا تدخّل يدوي)
-      const res = await axios.post(`${API}/super-admin/tenants/${tenant.id}/send-welcome-to-owner`, {}, { withCredentials: true });
+      const body = customPassword ? { custom_password: customPassword } : {};
+      const res = await axios.post(`${API}/super-admin/tenants/${tenant.id}/send-welcome-to-owner`, body, { withCredentials: true });
       const o = res.data?.owner || {};
       toast.dismiss('welcome-owner');
       const parts = [];
@@ -2849,6 +2859,7 @@ export default function SuperAdmin() {
       else if (o.phone && o.whatsapp_error) parts.push(`⚠️ ${t('واتساب')}: ${o.whatsapp_error}`);
       if (o.sms_sent) parts.push(`✅ SMS: ${o.phone} (${t('احتياطي')})`);
       else if (o.sms_error && o.sms_error !== 'sms_not_configured') parts.push(`❌ SMS: ${o.sms_error}`);
+      if (customPassword) parts.unshift(`🔐 ${t('كلمة المرور المُحدَّثة')}: ${customPassword}`);
       if (o.ok) toast.success((t('تم إرسال الترحيب لمالك') + ` ${tenant.name || tenant.slug}\n`) + parts.join('\n'), { duration: 10000 });
       else toast.error(t('فشل الإرسال') + '\n' + parts.join('\n'), { duration: 15000 });
     } catch (e) {
@@ -4438,6 +4449,20 @@ export default function SuperAdmin() {
                   testId="new-tenant-phone"
                 />
               </div>
+              <div className="space-y-2">
+                <Label>{t('كلمة مرور المالك')} <span className="text-xs text-gray-400">({t('اختياري — تُرسَل كما هي')})</span></Label>
+                <Input
+                  type="text"
+                  value={newTenantForm.owner_password}
+                  onChange={(e) => setNewTenantForm({...newTenantForm, owner_password: e.target.value})}
+                  placeholder={t('اتركها فارغة لكلمة افتراضية')}
+                  className="bg-[#1A284E]/50 border-[#2A3A66]"
+                  data-testid="new-tenant-owner-password"
+                />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label>{t('نوع الاشتراك')}</Label>
                 <Select 

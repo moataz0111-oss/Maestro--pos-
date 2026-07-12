@@ -1733,16 +1733,25 @@ export default function Settings() {
       toast.error(t('لا يوجد بريد ولا رقم لهذا المستخدم — أضفهما أولاً'));
       return;
     }
-    if (!confirm(t('سيتم إرسال بيانات الدخول الحالية إلى:') + `\n${u.full_name || u.username}\n${contactInfo}\n\n` + t('متابعة؟'))) return;
+    if (!confirm(t('سيتم إرسال بيانات الدخول إلى:') + `\n${u.full_name || u.username}\n${contactInfo}\n\n` + t('متابعة؟'))) return;
+    // ✨ خيار: اسمح بكتابة كلمة مرور جديدة تُحفظ وتُرسَل مطابقة
+    const typed = window.prompt(
+      t('كلمة المرور المطلوب إرسالها') + ':\n\n' +
+      t('اتركها فارغة لاستخدام الحالية من الخزنة (إن كانت غير مطابقة، اكتب واحدة جديدة هنا).'),
+      ''
+    );
+    if (typed === null) return; // ألغى المستخدم
+    const customPassword = (typed || '').trim();
     try {
       toast.loading(t('جاري الإرسال...'), { id: `wc-${u.id}` });
       const token = localStorage.getItem('token');
       const headers = { Authorization: `Bearer ${token}` };
-      // ✨ إرسال تلقائي — الخزنة تحمل كلمة المرور الحالية من آخر تعديل
-      const res = await axios.post(`${API}/users/${u.id}/send-welcome`, {}, { headers });
+      const body = customPassword ? { custom_password: customPassword } : {};
+      const res = await axios.post(`${API}/users/${u.id}/send-welcome`, body, { headers });
       toast.dismiss(`wc-${u.id}`);
       const r = res.data?.result || {};
       const parts = [];
+      if (customPassword) parts.push(`🔐 ${t('كلمة المرور المُحدَّثة')}: ${customPassword}`);
       if (r.email_sent) parts.push(`✅ ${t('البريد')}: ${r.email}`);
       else if (r.email) parts.push(`❌ ${t('البريد')}: ${r.email_error}`);
       if (r.whatsapp_sent) parts.push(`✅ ${t('واتساب')}: ${r.phone}`);
