@@ -1288,7 +1288,7 @@ const CashRegisterClosingTab = ({ t, formatPrice, selectedBranchId, branches, ge
 
   // ===== حذف صف شفت/إغلاق مكرر (للمالك/المدير) =====
   const { user: currentUser } = useAuth();
-  const canDeleteClosing = ['admin', 'super_admin', 'manager', 'owner'].includes(currentUser?.role);
+  const canDeleteClosing = [['admin', 'general_manager', 'super_admin', 'manager', 'owner']].includes(currentUser?.role);
   const [deletingClosingId, setDeletingClosingId] = useState(null);
 
   const handleDeleteClosing = async (closing) => {

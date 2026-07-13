@@ -475,9 +475,9 @@ async def notify_owner_multichannel(
                     _tn = await db.tenants.find_one({"id": tenant_id}, {"_id": 0, "owner_phone": 1}) or {}
                     if _tn.get("owner_phone"):
                         phones.append(_tn["owner_phone"])
-                # كل حسابات admin + manager + owner ذات الهاتف داخل نفس التينانت (فقط string phones)
+                # كل حسابات admin + general_manager + manager + owner ذات الهاتف داخل نفس التينانت
                 # 🔥 استبعاد super_admin عند وجود tenant_id — الرسائل الخاصة بالعملاء لا تُرسَل لمالك النظام
-                _owner_roles = ["admin", "owner", "manager", "branch_manager"]
+                _owner_roles = ["admin", "general_manager", "owner", "manager", "branch_manager"]
                 if not tenant_id:
                     _owner_roles.append("super_admin")  # فقط للتنبيهات النظامية العامة
                 user_q = {"role": {"$in": _owner_roles},
@@ -542,7 +542,7 @@ async def notify_owner_multichannel(
             body_html = f"<pre style='white-space:pre-wrap;font-family:Tahoma,Arial,sans-serif;font-size:14px;color:#111;margin:0'>{message}</pre>"
             html = build_branded_email_html(title=title, body_html=body_html, severity=severity)
             # 🔥 استبعاد super_admin عند وجود tenant_id — البريد الخاص بالعميل لا يُرسَل لمالك النظام
-            _owner_roles_email = ["admin", "owner", "manager", "branch_manager"]
+            _owner_roles_email = ["admin", "general_manager", "owner", "manager", "branch_manager"]
             if not tenant_id:
                 _owner_roles_email.append("super_admin")
             user_q = {"role": {"$in": _owner_roles_email},

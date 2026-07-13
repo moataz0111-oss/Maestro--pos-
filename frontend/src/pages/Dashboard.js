@@ -1065,7 +1065,7 @@ export default function Dashboard() {
         }
         
         // تحرير المالك من وردية الكاشير
-        if (['admin', 'manager', 'super_admin', 'branch_manager'].includes(user?.role)) {
+        if ([['admin', 'general_manager', 'manager', 'super_admin', 'branch_manager']].includes(user?.role)) {
           setActiveShift(null);
           if (ownerShiftTimeoutRef.current) {
             clearTimeout(ownerShiftTimeoutRef.current);
@@ -2122,7 +2122,7 @@ export default function Dashboard() {
             {/* Super Admin Button مُزال لأسباب أمنية — الوصول عبر تسجيل الدخول فقط على /super-admin */}
 
             {/* Active Shift Indicator - للمالك - قابل للنقر لإعادة الاختيار */}
-            {['admin', 'manager', 'super_admin', 'branch_manager'].includes(user?.role) && (
+            {[['admin', 'general_manager', 'manager', 'super_admin', 'branch_manager']].includes(user?.role) && (
               <Button
                 variant={activeShift?.cashier_name ? "secondary" : "outline"}
                 size="sm"
@@ -3004,7 +3004,7 @@ export default function Dashboard() {
                   {cashSummary.branch_name}
                 </Badge>
               )}
-              {activeShift?.cashier_name && ['admin', 'manager', 'super_admin', 'branch_manager'].includes(user?.role) && (
+              {activeShift?.cashier_name && [['admin', 'general_manager', 'manager', 'super_admin', 'branch_manager']].includes(user?.role) && (
                 <Badge variant="secondary" className="mr-2 text-sm">
                   <User className="h-4 w-4 ml-1" />
                   {t('وردية')}: {activeShift.cashier_name}

@@ -16,7 +16,7 @@ export default function WelcomeApprovalsBell({ user }) {
   const [grantCustomer, setGrantCustomer] = useState(null);
   const panelRef = useRef(null);
 
-  const canApprove = user && ['admin', 'manager', 'branch_manager', 'super_admin'].includes(user.role);
+  const canApprove = user && [['admin', 'general_manager', 'manager', 'branch_manager', 'super_admin']].includes(user.role);
 
   const fetchPending = async () => {
     try {

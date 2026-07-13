@@ -11,7 +11,7 @@ import { useAuth } from '../context/AuthContext';
 import { AlertTriangle, X, MapPin, User, Banknote, Package, Store, ChevronDown, ChevronUp } from 'lucide-react';
 
 const API = API_URL;
-const MANAGEMENT_ROLES = ['admin', 'manager', 'owner', 'super_admin', 'supervisor'];
+const MANAGEMENT_ROLES = [['admin', 'general_manager', 'manager', 'owner', 'super_admin', 'supervisor']];
 
 export const ManagementOrderAlerts = () => {
   const { user, isAuthenticated } = useAuth();
