@@ -1206,21 +1206,12 @@ async def init_database():
             await db.products.insert_many(default_products)
             logger.info("✅ Default products created (8) with images")
             
-            # إنشاء سائقين افتراضيين
-            default_drivers = [
-                {"id": str(uuid.uuid4()), "name": "سائق 1", "phone": "07801111111", "is_active": True, "tenant_id": "default", "created_at": datetime.now(timezone.utc).isoformat()},
-                {"id": str(uuid.uuid4()), "name": "سائق 2", "phone": "07802222222", "is_active": True, "tenant_id": "default", "created_at": datetime.now(timezone.utc).isoformat()},
-            ]
-            await db.drivers.insert_many(default_drivers)
-            logger.info("✅ Default drivers created (2)")
+            # ⛔ لا نُنشئ سائقين افتراضيين بأرقام تجريبية — كانت تُسبب إرسال OTP لأرقام وهمية
+            # يُنشئ المستخدم سائقيه بنفسه من الواجهة مع بياناتهم الحقيقية
+            logger.info("✅ Skipping default drivers seed (no dummy phones)")
             
-            # إنشاء موظفين افتراضيين
-            default_employees = [
-                {"id": str(uuid.uuid4()), "name": "موظف 1", "position": "كاشير", "phone": "07803333333", "salary": 500000, "is_active": True, "tenant_id": "default", "created_at": datetime.now(timezone.utc).isoformat()},
-                {"id": str(uuid.uuid4()), "name": "موظف 2", "position": "طباخ", "phone": "07804444444", "salary": 600000, "is_active": True, "tenant_id": "default", "created_at": datetime.now(timezone.utc).isoformat()},
-            ]
-            await db.employees.insert_many(default_employees)
-            logger.info("✅ Default employees created (2)")
+            # ⛔ لا نُنشئ موظفين افتراضيين بأرقام وهمية أيضاً
+            logger.info("✅ Skipping default employees seed (no dummy phones)")
             
             logger.info("=" * 50)
             logger.info("🎉 DATABASE INITIALIZATION COMPLETE!")

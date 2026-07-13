@@ -5,6 +5,7 @@
 يسجّل كل محاولة إرسال في MongoDB (wa_messages) لعرضها في لوحة المالك.
 """
 import os
+import re
 import uuid
 import httpx
 import logging
@@ -15,6 +16,34 @@ WA_TOKEN = os.environ.get("WA_SERVICE_TOKEN", "")
 _HEADERS = {"x-wa-token": WA_TOKEN}
 
 logger = logging.getLogger(__name__)
+
+
+# 🛡️ حماية: منع إرسال واتساب/OTP لأي رقم تجريبي/وهمي معروف
+# هذه الأنماط تُطابق أرقام seed القديمة والاختبارات التي تركت آثاراً.
+_DUMMY_PHONE_PATTERNS = [
+    # صيغة محلية: 0780XXXXXXX حيث XXXX تجريبي معروف
+    re.compile(r'^0780(0000|1111|2222|3333|4444|5555|6666|7777|8888|9999)\d{3}$'),
+    # صيغة دولية: +964780XXXXXXX أو 964780XXXXXXX
+    re.compile(r'^\+?964780(0000|1111|2222|3333|4444|5555|6666|7777|8888|9999)\d{3}$'),
+    # صيغة أخرى شائعة في الاختبارات: 07801234567, 07809876543
+    re.compile(r'^0780(1234567|9876543)$'),
+    # معرفات ديمو نصية
+    re.compile(r'demo[-_]?drv', re.IGNORECASE),
+    re.compile(r'^test|^dummy|^fake', re.IGNORECASE),
+    # صيغة بلا كود دولة (E.164 مقطوع)
+    re.compile(r'^780(0000|1111|2222|3333|4444|5555|6666|7777|8888|9999)\d{3}$'),
+]
+
+
+def is_dummy_phone(phone: str) -> bool:
+    """يتحقق هل الرقم تجريبي/وهمي — يمنع إرسال رسائل عليه."""
+    if not phone:
+        return True
+    p = str(phone).strip()
+    for pat in _DUMMY_PHONE_PATTERNS:
+        if pat.search(p):
+            return True
+    return False
 
 
 async def _log_message(phone: str, message: str, purpose: str, ok: bool, error, tenant_id=None, sent_by=None):
@@ -67,6 +96,13 @@ async def send_message(phone: str, message: str, purpose: str = "other", tenant_
     - إن فشل إرسال الوسائط أو الواتساب لا يدعمه: يعود تلقائياً لنص فقط.
     - يسجّل تلقائياً في wa_messages.
     """
+    # 🛡️ رفض الأرقام التجريبية/الوهمية قبل الإرسال
+    if is_dummy_phone(phone):
+        logger.warning(f"⛔ blocked send to dummy phone: {phone} (purpose={purpose})")
+        await _log_message(phone, message, purpose, ok=False,
+                            error="dummy_phone_blocked", tenant_id=tenant_id, sent_by=sent_by)
+        return False, "dummy_phone_blocked"
+    
     ok, err = False, None
     # 1) القالب الموحّد: header + separator + content + footer
     branded_text = _build_branded_text(message, title=title)
