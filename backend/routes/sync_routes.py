@@ -373,7 +373,7 @@ async def sync_order(order: OfflineOrder, current_user: dict = Depends(get_curre
 @router.get("/duplicate-orders")
 async def list_duplicate_orders(current_user: dict = Depends(get_current_user)):
     """عرض مجموعات الطلبات المكررة (نفس offline_id) للمراجعة قبل الحذف. للمالك/المدير فقط."""
-    if current_user.get("role", "") not in ["admin", "super_admin", "manager", "branch_manager", "owner"]:
+    if current_user.get("role", "") not in ["admin", "general_manager", "super_admin", "manager", "branch_manager", "owner"]:
         raise HTTPException(status_code=403, detail="غير مصرح")
     tenant_id = get_user_tenant_id(current_user)
     match = {"offline_id": {"$type": "string", "$ne": ""}}
@@ -399,7 +399,7 @@ async def cleanup_duplicate_orders(current_user: dict = Depends(get_current_user
     """حذف الطلبات المكررة (نفس offline_id) مع الإبقاء على نسخة واحدة لكل مجموعة،
     ثم إنشاء الفهرس الفريد لمنع التكرار مستقبلاً. للمالك/المدير فقط.
     قاعدة الإبقاء: نُبقي الطلب صاحب أصغر رقم طلب رسمي (أو الأقدم إن تساوَوا)."""
-    if current_user.get("role", "") not in ["admin", "super_admin", "manager", "branch_manager", "owner"]:
+    if current_user.get("role", "") not in ["admin", "general_manager", "super_admin", "manager", "branch_manager", "owner"]:
         raise HTTPException(status_code=403, detail="غير مصرح")
     tenant_id = get_user_tenant_id(current_user)
     match = {"offline_id": {"$type": "string", "$ne": ""}}
@@ -460,7 +460,7 @@ async def detect_business_duplicate_orders(current_user: dict = Depends(get_curr
     1) نفس رقم طلب شركة التوصيل (delivery_company_order_id) لنفس الشركة.
     2) بصمة محتوى متطابقة (فرع+نوع+إجمالي+عدد أصناف+دفع) خلال 10 دقائق.
     للمالك/المدير فقط — للمراجعة قبل التنظيف."""
-    if current_user.get("role", "") not in ["admin", "super_admin", "manager", "branch_manager", "owner"]:
+    if current_user.get("role", "") not in ["admin", "general_manager", "super_admin", "manager", "branch_manager", "owner"]:
         raise HTTPException(status_code=403, detail="غير مصرح")
     tenant_id = get_user_tenant_id(current_user)
     base = {"status": {"$nin": ["cancelled", "canceled", "deleted", "refunded"]}}
@@ -513,7 +513,7 @@ async def detect_business_duplicate_orders(current_user: dict = Depends(get_curr
 async def cleanup_business_duplicate_orders(current_user: dict = Depends(get_current_user)):
     """حذف التكرارات على مستوى العمل (رقم طلب الشركة + بصمة المحتوى) مع الإبقاء على نسخة واحدة
     (الأقدم/أصغر رقم طلب). للمالك/المدير فقط."""
-    if current_user.get("role", "") not in ["admin", "super_admin", "manager", "branch_manager", "owner"]:
+    if current_user.get("role", "") not in ["admin", "general_manager", "super_admin", "manager", "branch_manager", "owner"]:
         raise HTTPException(status_code=403, detail="غير مصرح")
     detection = await detect_business_duplicate_orders(current_user)
 

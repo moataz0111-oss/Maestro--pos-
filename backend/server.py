@@ -5276,7 +5276,7 @@ async def create_expense(expense: ExpenseCreate, current_user: dict = Depends(ge
     # 🛡 Lazy Shift Opening للمصاريف: إذا لم توجد وردية مفتوحة للكاشير اليوم، افتحها تلقائياً
     # هذا يضمن أن كل مصروف يحمل shift_id صحيح ولا يتسرّب لملخصات ورديات أخرى.
     # نستثني المدراء/المالكين (يمكنهم تسجيل مصاريف عامة بلا وردية)
-    is_manager_role = current_user.get("role", "") in ["admin", "super_admin", "manager", "branch_manager"]
+    is_manager_role = current_user.get("role", "") in ["admin", "general_manager", "super_admin", "manager", "branch_manager"]
     if not open_shift and branch_for_biz and not is_manager_role:
         new_shift_id = str(uuid.uuid4())
         new_shift_doc = {
@@ -5461,7 +5461,7 @@ async def get_expenses(
     
     # الكاشير يرى مصاريفه فقط في اليوم الحالي
     user_role = current_user.get("role", "")
-    is_manager = user_role in ["admin", "super_admin", "manager", "branch_manager"]
+    is_manager = user_role in ["admin", "general_manager", "super_admin", "manager", "branch_manager"]
     if not is_manager:
         query["created_by"] = current_user["id"]
         # الكاشير يرى فقط مصاريف اليوم التشغيلي (business_date من الوردية المفتوحة، أو تاريخ العراق اليوم)
@@ -6737,7 +6737,7 @@ async def create_order(order: OrderCreate, current_user: dict = Depends(get_curr
     # إذا لم توجد وردية مفتوحة
     if not current_shift:
         user_role = current_user.get("role", "")
-        is_owner = user_role in ["admin", "super_admin", "manager", "branch_manager"]
+        is_owner = user_role in ["admin", "general_manager", "super_admin", "manager", "branch_manager"]
         
         if is_owner:
             # المالك: لا ننشئ وردية باسمه - نرجع خطأ
@@ -6796,7 +6796,7 @@ async def create_order(order: OrderCreate, current_user: dict = Depends(get_curr
     
     # المالك/المدير: الطلب يُسجل باسم كاشير الوردية وليس باسم المالك
     user_role = current_user.get("role", "")
-    is_owner = user_role in ["admin", "super_admin", "manager", "branch_manager"]
+    is_owner = user_role in ["admin", "general_manager", "super_admin", "manager", "branch_manager"]
     if is_owner and current_shift and current_shift.get("cashier_id") != current_user.get("id"):
         effective_cashier_id = current_shift["cashier_id"]
     elif captain_link and current_shift:

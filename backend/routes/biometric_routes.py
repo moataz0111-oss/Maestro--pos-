@@ -222,7 +222,7 @@ async def sync_all_devices_in_branch(branch_id: str, current_user: dict = Depend
     - لكل جهاز، يُنشئ push-user job لكل موظف نشط ببصمة داخل نفس الفرع.
     - مثالي بعد استعادة/تحديث أو ربط أجهزة إضافية للفرع (يعمل حتى مع 100 جهاز).
     """
-    if current_user.get("role") not in ["admin", "super_admin", "manager", "branch_manager"]:
+    if current_user.get("role") not in ["admin", "general_manager", "super_admin", "manager", "branch_manager"]:
         raise HTTPException(status_code=403, detail="غير مصرح")
     tenant_id = get_user_tenant_id(current_user)
     devices_q = {"branch_id": branch_id, "is_active": True}
@@ -374,7 +374,7 @@ async def test_biometric_connection(device_id: str, current_user: dict = Depends
 @router.put("/biometric/devices/{device_id}")
 async def update_biometric_device(device_id: str, update: BiometricDeviceUpdate, current_user: dict = Depends(get_current_user)):
     """تحديث إعدادات جهاز البصمة (IP/Port/Password/Protocol/Firmware/…) — يعمل مع جميع موديلات ZKTeco."""
-    if current_user.get("role") not in ["admin", "super_admin", "manager", "branch_manager"]:
+    if current_user.get("role") not in ["admin", "general_manager", "super_admin", "manager", "branch_manager"]:
         raise HTTPException(status_code=403, detail="غير مصرح")
     tenant_id = current_user.get("tenant_id")
     existing = await db.biometric_devices.find_one({"id": device_id, "tenant_id": tenant_id})

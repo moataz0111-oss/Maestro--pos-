@@ -344,7 +344,7 @@ async def get_current_shift(branch_id: Optional[str] = None, current_user: dict 
     db = get_database()
     tenant_id = get_user_tenant_id(current_user)
     user_role = current_user.get("role", "")
-    is_owner = user_role in ["admin", "super_admin", "manager", "branch_manager"]
+    is_owner = user_role in ["admin", "general_manager", "super_admin", "manager", "branch_manager"]
     
     if is_owner:
         # المالك/المدير: البحث عن أي وردية مفتوحة للفرع المحدد
@@ -379,7 +379,7 @@ async def get_cashiers_list(branch_id: Optional[str] = None, current_user: dict 
     tenant_id = get_user_tenant_id(current_user)
     
     user_role = current_user.get("role", "")
-    if user_role not in ["admin", "super_admin", "manager", "branch_manager"]:
+    if user_role not in ["admin", "general_manager", "super_admin", "manager", "branch_manager"]:
         raise HTTPException(status_code=403, detail="غير مصرح")
     
     query = {"role": "cashier", "is_active": {"$ne": False}}
@@ -487,7 +487,7 @@ async def open_shift_for_cashier(data: OpenShiftForCashier, current_user: dict =
     tenant_id = get_user_tenant_id(current_user)
     
     user_role = current_user.get("role", "")
-    if user_role not in ["admin", "super_admin", "manager", "branch_manager"]:
+    if user_role not in ["admin", "general_manager", "super_admin", "manager", "branch_manager"]:
         raise HTTPException(status_code=403, detail="غير مصرح - فقط المدير يمكنه فتح وردية لكاشير")
     
     cashier = await db.users.find_one({"id": data.cashier_id}, {"_id": 0, "password": 0})
@@ -553,7 +553,7 @@ async def auto_open_shift(current_user: dict = Depends(get_current_user)):
     db = get_database()
     tenant_id = get_user_tenant_id(current_user)
     user_role = current_user.get("role", "")
-    is_owner = user_role in ["admin", "super_admin", "manager", "branch_manager"]
+    is_owner = user_role in ["admin", "general_manager", "super_admin", "manager", "branch_manager"]
     
     if is_owner:
         # المالك: البحث عن وردية كاشير مفتوحة بدلاً من إنشاء واحدة
@@ -678,7 +678,7 @@ async def link_captain_to_shift(shift_id: str, payload: CaptainLinkPayload, curr
     if not shift or shift.get("status") != "open":
         raise HTTPException(status_code=404, detail="الوردية غير موجودة أو مغلقة")
     role = current_user.get("role", "")
-    is_manager = role in ["admin", "super_admin", "manager", "branch_manager", "owner"]
+    is_manager = role in ["admin", "general_manager", "super_admin", "manager", "branch_manager", "owner"]
     if not is_manager and shift.get("cashier_id") != current_user["id"]:
         raise HTTPException(status_code=403, detail="يمكن فقط لصاحب الوردية أو المدير ربط كابتن")
     captain = await db.users.find_one({"id": payload.captain_id}, {"_id": 0, "password": 0})
@@ -717,7 +717,7 @@ async def unlink_captain_from_shift(shift_id: str, payload: CaptainLinkPayload, 
     if not shift:
         raise HTTPException(status_code=404, detail="الوردية غير موجودة")
     role = current_user.get("role", "")
-    is_manager = role in ["admin", "super_admin", "manager", "branch_manager", "owner"]
+    is_manager = role in ["admin", "general_manager", "super_admin", "manager", "branch_manager", "owner"]
     if not is_manager and shift.get("cashier_id") != current_user["id"]:
         raise HTTPException(status_code=403, detail="غير مصرح")
     now = datetime.now(timezone.utc).isoformat()
@@ -762,7 +762,7 @@ async def get_captains_shift_summary(shift_id: Optional[str] = None, branch_id: 
         if tenant_id:
             sq["tenant_id"] = tenant_id
         role = current_user.get("role", "")
-        if role not in ["admin", "super_admin", "manager", "branch_manager", "owner"]:
+        if role not in ["admin", "general_manager", "super_admin", "manager", "branch_manager", "owner"]:
             sq["cashier_id"] = current_user["id"]
         elif branch_id:
             sq["branch_id"] = branch_id
@@ -817,7 +817,7 @@ async def collect_captain_cash(payload: CaptainCollectPayload, current_user: dic
     if not shift or shift.get("status") != "open":
         raise HTTPException(status_code=404, detail="الوردية غير موجودة أو مغلقة")
     role = current_user.get("role", "")
-    is_manager = role in ["admin", "super_admin", "manager", "branch_manager", "owner"]
+    is_manager = role in ["admin", "general_manager", "super_admin", "manager", "branch_manager", "owner"]
     if not is_manager and shift.get("cashier_id") != current_user["id"]:
         raise HTTPException(status_code=403, detail="فقط كاشير الوردية أو المدير يؤكّد الاستلام")
     q = {"shift_id": payload.shift_id, "captain_id": payload.captain_id,
@@ -842,7 +842,7 @@ async def cleanup_non_cashier_shifts(current_user: dict = Depends(get_current_us
     تُزيل الفروقات النقدية الوهمية من تقرير الورديات."""
     db = get_database()
     tenant_id = get_user_tenant_id(current_user)
-    if current_user.get("role", "") not in ["admin", "super_admin", "manager", "branch_manager", "owner"]:
+    if current_user.get("role", "") not in ["admin", "general_manager", "super_admin", "manager", "branch_manager", "owner"]:
         raise HTTPException(status_code=403, detail="غير مصرح")
 
     user_query = {"role": {"$in": list(NON_CASHIER_ROLES)}}
@@ -886,7 +886,7 @@ async def receive_shift_cash(closing_id: str, data: ReceiveShiftCash, current_us
     يقبل المعرّف سواء كان معرّف الوردية (shift_id) أو معرّف سجل الإغلاق."""
     db = get_database()
     tenant_id = get_user_tenant_id(current_user)
-    if current_user.get("role", "") not in ["admin", "super_admin", "manager", "branch_manager", "owner"]:
+    if current_user.get("role", "") not in ["admin", "general_manager", "super_admin", "manager", "branch_manager", "owner"]:
         raise HTTPException(status_code=403, detail="غير مصرح")
 
     tq = {"tenant_id": tenant_id} if tenant_id else {}
@@ -1438,7 +1438,7 @@ async def get_cash_register_summary(
     # للمدراء: السماح بإغلاق أي وردية مفتوحة للفرع المحدد
     # للكاشير: البحث عن ورديته فقط
     user_role = current_user.get("role", "")
-    is_manager = user_role in ["admin", "super_admin", "manager", "branch_manager"]
+    is_manager = user_role in ["admin", "general_manager", "super_admin", "manager", "branch_manager"]
     
     shift_query = {"status": "open", "id": shift_id}
     if tenant_id:
@@ -1661,7 +1661,7 @@ async def close_cash_register(close_data: CashRegisterClose, current_user: dict 
     # للمدراء: السماح بإغلاق أي وردية مفتوحة للفرع المحدد
     # للكاشير: البحث عن ورديته فقط
     user_role = current_user.get("role", "")
-    is_manager = user_role in ["admin", "super_admin", "manager", "branch_manager"]
+    is_manager = user_role in ["admin", "general_manager", "super_admin", "manager", "branch_manager"]
     
     shift_query = {"status": "open", "id": close_data.shift_id}
     if tenant_id:
@@ -1906,7 +1906,7 @@ async def close_cash_register(close_data: CashRegisterClose, current_user: dict 
                     m_role = manager.get("role", "")
                     m_hash = manager.get("password_hash", manager.get("password", ""))
                     same_tenant = (not tenant_id) or manager.get("tenant_id") == tenant_id
-                    if m_role in ["admin", "super_admin", "manager", "branch_manager"] \
+                    if m_role in ["admin", "general_manager", "super_admin", "manager", "branch_manager"] \
                             and (same_tenant or m_role == "super_admin") \
                             and manager.get("is_active", True) \
                             and verify_password(m_pass, m_hash):

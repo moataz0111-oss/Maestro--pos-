@@ -486,9 +486,10 @@ export default function Dashboard() {
           setActiveShift(null);
           setShowCashierSelect(true);
           try {
-            const cashiersRes = await axios.get(`${API}/shifts/cashiers-list`, {
-              params: { branch_id: getBranchIdForApi() || '' }
-            });
+            // ✅ للمدير/المالك: عرض كاشيرية جميع الفروع (بدون فلتر فرع)
+            const _isMgmt = ['admin', 'general_manager', 'super_admin', 'manager'].includes(user?.role);
+            const _params = _isMgmt ? {} : { branch_id: getBranchIdForApi() || '' };
+            const cashiersRes = await axios.get(`${API}/shifts/cashiers-list`, { params: _params });
             setCashiersList(cashiersRes.data || []);
           } catch (e) {
             console.log('Error fetching cashiers:', e);
@@ -512,9 +513,10 @@ export default function Dashboard() {
           setActiveShift(null);
           setShowCashierSelect(true);
           try {
-            const cashiersRes = await axios.get(`${API}/shifts/cashiers-list`, {
-              params: { branch_id: getBranchIdForApi() || '' }
-            });
+            // ✅ عرض كاشيرية كل الفروع للمدير/المالك
+            const _isMgmt = ['admin', 'general_manager', 'super_admin', 'manager'].includes(user?.role);
+            const _params = _isMgmt ? {} : { branch_id: getBranchIdForApi() || '' };
+            const cashiersRes = await axios.get(`${API}/shifts/cashiers-list`, { params: _params });
             setCashiersList(cashiersRes.data || []);
           } catch (e) {
             console.log('Error fetching cashiers:', e);
@@ -559,9 +561,10 @@ export default function Dashboard() {
         // 🚫 مُنع فتح الوردية (يوجد وردية مفتوحة بنفس الاسم) — أظهر السبب بوضوح ولا تفشل بصمت
         toast.error(res.data.message || t('يوجد وردية مفتوحة بالفعل بنفس الاسم — يجب إغلاق صندوقها أولاً'));
         try {
-          const cashiersRes = await axios.get(`${API}/shifts/cashiers-list`, {
-            params: { branch_id: getBranchIdForApi() || '' }
-          });
+          // ✅ عرض كاشيرية كل الفروع للمدير
+          const _isMgmt = ['admin', 'general_manager', 'super_admin', 'manager'].includes(user?.role);
+          const _params = _isMgmt ? {} : { branch_id: getBranchIdForApi() || '' };
+          const cashiersRes = await axios.get(`${API}/shifts/cashiers-list`, { params: _params });
           setCashiersList(cashiersRes.data || []);
         } catch (e) { /* تجاهل */ }
       }
@@ -2122,16 +2125,17 @@ export default function Dashboard() {
             {/* Super Admin Button مُزال لأسباب أمنية — الوصول عبر تسجيل الدخول فقط على /super-admin */}
 
             {/* Active Shift Indicator - للمالك - قابل للنقر لإعادة الاختيار */}
-            {[['admin', 'general_manager', 'manager', 'super_admin', 'branch_manager']].includes(user?.role) && (
+            {['admin', 'general_manager', 'manager', 'super_admin', 'branch_manager'].includes(user?.role) && (
               <Button
                 variant={activeShift?.cashier_name ? "secondary" : "outline"}
                 size="sm"
                 className={`gap-1 px-3 ${activeShift?.cashier_name ? '' : 'border-yellow-500 text-yellow-600 hover:bg-yellow-500/10'}`}
                 onClick={async () => {
                   try {
-                    const cashiersRes = await axios.get(`${API}/shifts/cashiers-list`, {
-                      params: { branch_id: getBranchIdForApi() || '' }
-                    });
+                    // ✅ عرض كاشيرية كل الفروع للمدير
+                    const _isMgmt = ['admin', 'general_manager', 'super_admin', 'manager'].includes(user?.role);
+                    const _params = _isMgmt ? {} : { branch_id: getBranchIdForApi() || '' };
+                    const cashiersRes = await axios.get(`${API}/shifts/cashiers-list`, { params: _params });
                     setCashiersList(cashiersRes.data || []);
                   } catch (e) { console.log('Error fetching cashiers:', e); }
                   setShowCashierSelect(true);

@@ -1842,7 +1842,7 @@ async def reset_delivery_collections(
     للمالك/المدير فقط."""
     db = get_database()
     tenant_id = get_user_tenant_id(current_user)
-    if current_user.get("role", "") not in ["admin", "super_admin", "manager", "branch_manager", "owner"]:
+    if current_user.get("role", "") not in ["admin", "general_manager", "super_admin", "manager", "branch_manager", "owner"]:
         raise HTTPException(status_code=403, detail="غير مصرح")
 
     if not payload.delivery_app_id and not payload.delivery_app_name:
@@ -2019,7 +2019,7 @@ async def reassign_unassigned_delivery_orders(
     """توجيه جماعي لطلبات 'شركة توصيل (غير محددة)': إمّا تعيينها لشركة محددة، أو إرجاعها للآجل العادي."""
     db = get_database()
     tenant_id = get_user_tenant_id(current_user)
-    if current_user.get("role", "") not in ["admin", "super_admin", "manager", "branch_manager", "owner"]:
+    if current_user.get("role", "") not in ["admin", "general_manager", "super_admin", "manager", "branch_manager", "owner"]:
         raise HTTPException(status_code=403, detail="غير مصرح")
     if not payload.order_ids:
         raise HTTPException(status_code=400, detail="لم تُحدَّد أي طلبات")
