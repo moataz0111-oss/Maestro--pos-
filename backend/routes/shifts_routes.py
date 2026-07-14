@@ -988,6 +988,160 @@ async def receive_shift_cash(closing_id: str, data: ReceiveShiftCash, current_us
 
 
 
+@router.get("/reports/notification-recipients")
+async def get_notification_recipients(current_user: dict = Depends(get_current_user)):
+    """يعرض من سيستقبل تقارير الإغلاق وباقي إشعارات المالك — تشخيصي لمساعدة المالك على التأكد.
+    
+    يُظهر لكل مستخدم: هل عنده هاتف؟ هل عنده بريد؟ هل سيستقبل واتساب/إيميل؟ ولماذا لا يستقبل.
+    """
+    if current_user.get("role", "") not in ["admin", "general_manager", "super_admin", "owner"]:
+        raise HTTPException(status_code=403, detail="غير مصرح")
+    tenant_id = get_user_tenant_id(current_user)
+    _db = get_database()
+    tq = {"tenant_id": tenant_id} if tenant_id else {}
+    
+    # كل المدراء في التينانت
+    q = {**tq, "role": {"$in": ["admin", "general_manager", "owner", "manager", "branch_manager"]}}
+    users = await _db.users.find(q, {"_id": 0, "id": 1, "email": 1, "role": 1, "full_name": 1, "phone": 1, "is_active": 1}).to_list(100)
+    
+    recipients = []
+    for u in users:
+        phone = (u.get("phone") or "").strip()
+        has_valid_phone = bool(phone) and any(ch.isdigit() for ch in phone)
+        has_non_digits = phone and not all(ch.isdigit() or ch in "+ -()" for ch in phone)
+        
+        reasons = []
+        if not has_valid_phone:
+            reasons.append("لا يوجد رقم هاتف — أضف رقم واتساب")
+        if has_non_digits:
+            reasons.append(f"الرقم يحوي حروف غير صالحة ({phone}) — يجب أن يكون أرقاماً فقط")
+        if not u.get("email"):
+            reasons.append("لا يوجد بريد إلكتروني")
+        if u.get("is_active") is False:
+            reasons.append("الحساب معطَّل")
+        
+        recipients.append({
+            "id": u.get("id"),
+            "email": u.get("email"),
+            "role": u.get("role"),
+            "full_name": u.get("full_name") or "-",
+            "phone": phone or None,
+            "will_receive_whatsapp": has_valid_phone and not has_non_digits and u.get("is_active", True),
+            "will_receive_email": bool(u.get("email")) and u.get("is_active", True),
+            "issues": reasons,
+        })
+    
+    return {
+        "tenant_id": tenant_id,
+        "count": len(recipients),
+        "recipients": recipients,
+    }
+
+
+@router.get("/reports/shift-receipts")
+async def get_shift_receipts(
+    date_from: Optional[str] = None,
+    date_to: Optional[str] = None,
+    branch_id: Optional[str] = None,
+    current_user: dict = Depends(get_current_user)
+):
+    """كشف الاستلامات — يعرض كل عمليات استلام النقد من الشفتات المغلقة (قديمة وجديدة).
+    
+    لكل استلام يعرض:
+      - التاريخ التشغيلي + وقت الاستلام
+      - الفرع
+      - اسم الكاشير الذي استلم منه
+      - اسم المُستلم (الذي أخذ النقد)
+      - المبلغ المستلم من الإغلاق (قبل المصاريف الخارجية)
+      - المصاريف الخارجية (المدفوعة قبل الإيداع)
+      - سبب/ملاحظة المصاريف الخارجية
+      - صافي المُودَع في خزينة المالك
+    
+    يُجمع الإجماليات في النهاية للفترة المحددة.
+    """
+    db = get_database()
+    tenant_id = get_user_tenant_id(current_user)
+    if current_user.get("role", "") not in ["admin", "general_manager", "super_admin", "manager", "branch_manager", "owner"]:
+        raise HTTPException(status_code=403, detail="غير مصرح")
+    
+    tq = {"tenant_id": tenant_id} if tenant_id else {}
+    
+    # جمع البيانات من مصدرين: shifts + cash_register_closings (كلاهما قد يحوي received_at)
+    query = {**tq, "received_at": {"$exists": True, "$ne": None}}
+    if branch_id:
+        query["branch_id"] = branch_id
+    if date_from:
+        query.setdefault("business_date", {})["$gte"] = date_from
+    if date_to:
+        query.setdefault("business_date", {})["$lte"] = date_to
+    
+    # نجمع من shifts
+    shifts_docs = await db.shifts.find(query, {"_id": 0}).sort("received_at", -1).to_list(5000)
+    # نجمع من cash_register_closings (لتغطية الشفتات القديمة قبل توحيد الحقول)
+    closings_docs = await db.cash_register_closings.find(query, {"_id": 0}).sort("received_at", -1).to_list(5000)
+    
+    # دمج بلا تكرار (المفتاح shift_id أو id)
+    seen = set()
+    rows = []
+    for src in ("shift", "closing"):
+        docs = shifts_docs if src == "shift" else closings_docs
+        for d in docs:
+            key = d.get("id") or d.get("shift_id")
+            if not key or key in seen:
+                continue
+            seen.add(key)
+            rows.append({
+                "shift_id": d.get("id") or d.get("shift_id"),
+                "business_date": d.get("business_date") or (d.get("closed_at") or "")[:10],
+                "branch_id": d.get("branch_id"),
+                "branch_name": d.get("branch_name") or "-",
+                "cashier_id": d.get("cashier_id"),
+                "cashier_name": d.get("cashier_name") or "-",
+                "received_at": d.get("received_at"),
+                "received_by": d.get("received_by") or "-",
+                "received_amount": _safe_num(d.get("received_amount")),
+                "external_expenses": _safe_num(d.get("received_external_expenses")),
+                "external_expenses_note": d.get("received_external_expenses_note") or "",
+                "net_deposit": _safe_num(d.get("received_net_deposit")),
+                "closing_cash": _safe_num(d.get("closing_cash") or d.get("actual_cash") or d.get("counted_cash")),
+                "total_sales": _safe_num(d.get("total_sales")),
+                "source": src,
+            })
+    
+    # ترتيب بالتاريخ الأحدث أولاً
+    rows.sort(key=lambda r: r.get("received_at") or "", reverse=True)
+    
+    # حساب الإجماليات
+    totals = {
+        "count": len(rows),
+        "received_total": round(sum(r["received_amount"] for r in rows), 2),
+        "external_expenses_total": round(sum(r["external_expenses"] for r in rows), 2),
+        "net_deposit_total": round(sum(r["net_deposit"] for r in rows), 2),
+    }
+    
+    # تجميع حسب الفرع
+    per_branch = {}
+    for r in rows:
+        b = r.get("branch_name") or "-"
+        if b not in per_branch:
+            per_branch[b] = {"branch_name": b, "count": 0, "received": 0.0, "external": 0.0, "net": 0.0}
+        per_branch[b]["count"] += 1
+        per_branch[b]["received"] += r["received_amount"]
+        per_branch[b]["external"] += r["external_expenses"]
+        per_branch[b]["net"] += r["net_deposit"]
+    for v in per_branch.values():
+        v["received"] = round(v["received"], 2)
+        v["external"] = round(v["external"], 2)
+        v["net"] = round(v["net"], 2)
+    
+    return {
+        "rows": rows,
+        "totals": totals,
+        "per_branch": list(per_branch.values()),
+        "filters": {"date_from": date_from, "date_to": date_to, "branch_id": branch_id},
+    }
+
+
 @router.post("/shifts/{shift_id}/close")
 async def close_shift(shift_id: str, close_data: ShiftClose, current_user: dict = Depends(get_current_user)):
     """إغلاق الوردية"""

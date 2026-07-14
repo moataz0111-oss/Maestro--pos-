@@ -77,6 +77,7 @@ import {
   DialogHeader,
   DialogTitle,
   DialogFooter,
+  DialogDescription,
 } from '../components/ui/dialog';
 import { 
   printComprehensiveReport, 
@@ -1283,6 +1284,84 @@ const CashRegisterClosingTab = ({ t, formatPrice, selectedBranchId, branches, ge
   // ===== استلام نقد الشفت (إيداع تلقائي في الخزينة) =====
   const [receiveDialog, setReceiveDialog] = useState(null); // {closing}
   const [receiveForm, setReceiveForm] = useState({ received_amount: '', external_expenses: '', external_expenses_note: '', received_by: '' });
+  // ✅ كشف الاستلامات من الشفتات المغلقة
+  const [showReceiptsReport, setShowReceiptsReport] = useState(false);
+  const [receiptsData, setReceiptsData] = useState(null);
+  const [receiptsLoading, setReceiptsLoading] = useState(false);
+  // 📅 تواريخ الكشف مستقلة — تُبدأ من أول الشهر الحالي حتى اليوم افتراضياً
+  const _todayStr = new Date().toISOString().slice(0, 10);
+  const _monthStartStr = _todayStr.slice(0, 8) + '01';
+  const [receiptsFromDate, setReceiptsFromDate] = useState(_monthStartStr);
+  const [receiptsToDate, setReceiptsToDate] = useState(_todayStr);
+  // 🏬 فرع مستقل + طريقة التجميع
+  const [receiptsBranchId, setReceiptsBranchId] = useState('');
+  const [receiptsGroupBy, setReceiptsGroupBy] = useState('detail'); // detail | branch | day | day_branch
+  
+  const fetchReceiptsReport = async () => {
+    setReceiptsLoading(true);
+    try {
+      const params = {};
+      if (receiptsFromDate) params.date_from = receiptsFromDate;
+      if (receiptsToDate) params.date_to = receiptsToDate;
+      if (receiptsBranchId) params.branch_id = receiptsBranchId;
+      const res = await axios.get(`${API}/reports/shift-receipts`, { params });
+      setReceiptsData(res.data);
+    } catch (e) {
+      toast.error(t('فشل تحميل كشف الاستلامات'));
+    } finally {
+      setReceiptsLoading(false);
+    }
+  };
+  
+  useEffect(() => {
+    if (showReceiptsReport) {
+      fetchReceiptsReport();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [showReceiptsReport, receiptsFromDate, receiptsToDate, receiptsBranchId]);
+  
+  // 📊 تجميع صفوف الكشف حسب طريقة العرض المختارة
+  const groupedReceipts = React.useMemo(() => {
+    if (!receiptsData?.rows?.length) return { key: 'detail', rows: [], totals: null };
+    const rows = receiptsData.rows;
+    if (receiptsGroupBy === 'detail') return { key: 'detail', rows };
+    
+    const buckets = {};
+    for (const r of rows) {
+      let key;
+      if (receiptsGroupBy === 'branch') key = r.branch_name || '-';
+      else if (receiptsGroupBy === 'day') key = r.business_date || '-';
+      else key = `${r.business_date}|${r.branch_name}`; // day_branch
+      
+      if (!buckets[key]) {
+        buckets[key] = {
+          key,
+          business_date: r.business_date,
+          branch_name: r.branch_name,
+          count: 0,
+          received_amount: 0,
+          external_expenses: 0,
+          net_deposit: 0,
+          cashiers: new Set(),
+          receivers: new Set(),
+        };
+      }
+      buckets[key].count += 1;
+      buckets[key].received_amount += r.received_amount;
+      buckets[key].external_expenses += r.external_expenses;
+      buckets[key].net_deposit += r.net_deposit;
+      if (r.cashier_name && r.cashier_name !== '-') buckets[key].cashiers.add(r.cashier_name);
+      if (r.received_by && r.received_by !== '-') buckets[key].receivers.add(r.received_by);
+    }
+    const arr = Object.values(buckets).map(b => ({
+      ...b,
+      cashiers: Array.from(b.cashiers).join('، '),
+      receivers: Array.from(b.receivers).join('، '),
+    }));
+    // ترتيب: حسب اليوم تنازلياً ثم الفرع أبجدياً
+    arr.sort((a, b) => (b.business_date || '').localeCompare(a.business_date || '') || (a.branch_name || '').localeCompare(b.branch_name || ''));
+    return { key: receiptsGroupBy, rows: arr };
+  }, [receiptsData, receiptsGroupBy]);
   const [receiving, setReceiving] = useState(false);
   const totalReceived = closingsHistory.reduce((s, c) => s + (c.received_net_deposit || 0), 0);
 
@@ -1767,35 +1846,16 @@ const CashRegisterClosingTab = ({ t, formatPrice, selectedBranchId, branches, ge
           <Printer className="h-4 w-4 ml-2" />
           {t('طباعة')}
         </Button>
+        {/* ✅ زر جديد: كشف الاستلامات من الشفتات */}
+        <Button
+          onClick={() => setShowReceiptsReport(true)}
+          className="bg-amber-600 hover:bg-amber-700 text-white"
+          data-testid="btn-open-receipts-report"
+        >
+          <Wallet className="h-4 w-4 ml-2" />
+          {t('كشف الاستلامات')}
+        </Button>
       </div>
-
-      {/* نتائج فحص السلامة */}
-      {integrity && (
-        <div className={`rounded-lg border p-4 ${integrity.mismatch_count > 0 ? 'bg-red-950/40 border-red-600/50' : 'bg-emerald-950/40 border-emerald-600/50'}`} data-testid="integrity-results-panel">
-          <div className="flex items-center gap-2 mb-2">
-            {integrity.mismatch_count > 0 ? (
-              <AlertTriangle className="h-5 w-5 text-red-400" />
-            ) : (
-              <ShieldCheck className="h-5 w-5 text-emerald-400" />
-            )}
-            <span className="font-bold text-white">
-              {t('فحص السلامة التلقائي')}: {integrity.checked} {t('شفت')} — {integrity.ok_count} {t('متطابق')} ✓
-              {integrity.mismatch_count > 0 && <span className="text-red-400"> • {integrity.mismatch_count} {t('غير متطابق')} ⚠</span>}
-            </span>
-          </div>
-          {integrity.rows?.filter(r => r.status === 'mismatch').map(r => (
-            <div key={r.shift_id} className="mt-2 p-3 rounded bg-red-900/30 border border-red-700/40 text-sm" data-testid={`integrity-mismatch-${r.shift_id}`}>
-              <p className="font-bold text-red-300">{r.cashier_name} — {r.business_date}</p>
-              <ul className="mt-1 text-red-200 text-xs space-y-0.5">
-                {r.issues.map((iss, i) => <li key={i}>• {iss}</li>)}
-              </ul>
-            </div>
-          ))}
-          {integrity.mismatch_count === 0 && (
-            <p className="text-emerald-300 text-sm">{t('كل شفت متطابق مع طلباته ومصاريفه وتقرير إغلاقه — الحسابات سليمة 100%')}</p>
-          )}
-        </div>
-      )}
 
       {/* زر التبديل بين العرض المجمّع والفردي */}
       {closingsHistory.length > 0 && (
@@ -2597,6 +2657,256 @@ const CashRegisterClosingTab = ({ t, formatPrice, selectedBranchId, branches, ge
             <Button onClick={handleReceiveShift} disabled={receiving} className="bg-cyan-600 hover:bg-cyan-700 gap-1" data-testid="confirm-receive-shift">
               {receiving ? <RefreshCw className="h-4 w-4 animate-spin" /> : <CheckCircle className="h-4 w-4" />}
               {t('تأكيد الاستلام والإيداع')}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ✅ كشف الاستلامات من الشفتات المغلقة */}
+      <Dialog open={showReceiptsReport} onOpenChange={setShowReceiptsReport}>
+        <DialogContent className="max-w-5xl max-h-[90vh] overflow-y-auto bg-[#070E22] border-amber-700/40 text-white" dir="rtl" data-testid="receipts-report-dialog">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-amber-400">
+              <Wallet className="h-5 w-5" />
+              {t('كشف الاستلامات من الشفتات المغلقة')}
+            </DialogTitle>
+            <DialogDescription className="text-gray-400">
+              {t('يشمل كل عمليات استلام النقد من الشفتات — قديمة وحديثة — ضمن الفلاتر المختارة')}
+            </DialogDescription>
+          </DialogHeader>
+          
+          {/* 📅 فلترة داخل النافذة — يبدأ افتراضياً من 1 الشهر الحالي حتى اليوم */}
+          <div className="flex flex-wrap items-end gap-3 bg-[#0F1A3A]/40 border border-emerald-700/20 rounded-lg p-3">
+            <div>
+              <Label className="text-xs text-emerald-300">{t('من تاريخ')}</Label>
+              <Input
+                type="date"
+                value={receiptsFromDate}
+                onChange={(e) => setReceiptsFromDate(e.target.value)}
+                className="bg-[#070E22]/50 border-emerald-700/50 text-white w-40 mt-1"
+                data-testid="receipts-from-date"
+              />
+            </div>
+            <div>
+              <Label className="text-xs text-emerald-300">{t('إلى تاريخ')}</Label>
+              <Input
+                type="date"
+                value={receiptsToDate}
+                onChange={(e) => setReceiptsToDate(e.target.value)}
+                className="bg-[#070E22]/50 border-emerald-700/50 text-white w-40 mt-1"
+                data-testid="receipts-to-date"
+              />
+            </div>
+            {/* 🏬 فلتر الفرع */}
+            <div>
+              <Label className="text-xs text-emerald-300">{t('الفرع')}</Label>
+              <select
+                value={receiptsBranchId}
+                onChange={(e) => setReceiptsBranchId(e.target.value)}
+                className="bg-[#070E22]/50 border border-emerald-700/50 text-white rounded px-2 py-1 mt-1 w-48"
+                data-testid="receipts-branch-filter"
+              >
+                <option value="">{t('جميع الفروع')}</option>
+                {(branches || []).map(b => (
+                  <option key={b.id} value={b.id}>{b.name}</option>
+                ))}
+              </select>
+            </div>
+            {/* 📊 طريقة العرض */}
+            <div>
+              <Label className="text-xs text-emerald-300">{t('طريقة العرض')}</Label>
+              <select
+                value={receiptsGroupBy}
+                onChange={(e) => setReceiptsGroupBy(e.target.value)}
+                className="bg-[#070E22]/50 border border-emerald-700/50 text-white rounded px-2 py-1 mt-1 w-48"
+                data-testid="receipts-groupby"
+              >
+                <option value="detail">{t('تفصيلي — كل شفت على حدة')}</option>
+                <option value="branch">{t('حسب الفرع (مجمّع)')}</option>
+                <option value="day">{t('حسب اليوم (مجمّع)')}</option>
+                <option value="day_branch">{t('حسب اليوم + الفرع')}</option>
+              </select>
+            </div>
+            <div className="flex gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  const now = new Date();
+                  setReceiptsFromDate(now.toISOString().slice(0, 8) + '01');
+                  setReceiptsToDate(now.toISOString().slice(0, 10));
+                }}
+                className="border-amber-500/40 text-amber-300 hover:bg-amber-500/10"
+                data-testid="receipts-current-month-btn"
+              >
+                📅 {t('الشهر الحالي')}
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  const now = new Date();
+                  const prev = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+                  const prevEnd = new Date(now.getFullYear(), now.getMonth(), 0);
+                  setReceiptsFromDate(prev.toISOString().slice(0, 10));
+                  setReceiptsToDate(prevEnd.toISOString().slice(0, 10));
+                }}
+                className="border-blue-500/40 text-blue-300 hover:bg-blue-500/10"
+                data-testid="receipts-prev-month-btn"
+              >
+                📅 {t('الشهر السابق')}
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => { setReceiptsFromDate(_todayStr); setReceiptsToDate(_todayStr); }}
+                className="border-emerald-500/40 text-emerald-300 hover:bg-emerald-500/10"
+                data-testid="receipts-today-btn"
+              >
+                📅 {t('اليوم فقط')}
+              </Button>
+            </div>
+          </div>
+          
+          {receiptsLoading ? (
+            <div className="py-12 text-center text-gray-400">
+              <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-amber-400 mx-auto mb-3"></div>
+              {t('جاري تحميل الكشف...')}
+            </div>
+          ) : !receiptsData ? (
+            <div className="py-8 text-center text-gray-400">{t('اضغط تحديث لتحميل البيانات')}</div>
+          ) : (
+            <div className="space-y-4">
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                <div className="bg-blue-500/10 border border-blue-500/30 rounded-lg p-3">
+                  <p className="text-xs text-gray-400">{t('عدد الاستلامات')}</p>
+                  <p className="text-2xl font-bold text-blue-300" data-testid="receipts-count">{receiptsData.totals?.count || 0}</p>
+                </div>
+                <div className="bg-emerald-500/10 border border-emerald-500/30 rounded-lg p-3">
+                  <p className="text-xs text-gray-400">{t('مستلم قبل المصاريف الخارجية')}</p>
+                  <p className="text-xl font-bold text-emerald-300" data-testid="receipts-received-total">
+                    {(receiptsData.totals?.received_total || 0).toLocaleString()} IQD
+                  </p>
+                </div>
+                <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-3">
+                  <p className="text-xs text-gray-400">{t('مصاريف خارجية')}</p>
+                  <p className="text-xl font-bold text-red-300" data-testid="receipts-external-total">
+                    {(receiptsData.totals?.external_expenses_total || 0).toLocaleString()} IQD
+                  </p>
+                </div>
+                <div className="bg-amber-500/10 border border-amber-500/30 rounded-lg p-3">
+                  <p className="text-xs text-gray-400">{t('صافي مُودَع في الخزينة')}</p>
+                  <p className="text-xl font-bold text-amber-300" data-testid="receipts-net-total">
+                    {(receiptsData.totals?.net_deposit_total || 0).toLocaleString()} IQD
+                  </p>
+                </div>
+              </div>
+              
+              {receiptsData.per_branch?.length > 1 && (
+                <div className="bg-[#0F1A3A]/50 border border-emerald-700/30 rounded-lg p-3">
+                  <p className="text-sm font-semibold text-emerald-300 mb-2">{t('تجميع حسب الفرع')}</p>
+                  <div className="grid gap-2">
+                    {receiptsData.per_branch.map(b => (
+                      <div key={b.branch_name} className="flex items-center justify-between bg-[#070E22]/60 rounded p-2 text-sm">
+                        <span className="font-medium">{b.branch_name}</span>
+                        <span className="text-gray-400">{b.count} {t('شفت')}</span>
+                        <span className="text-emerald-300">{t('مستلم')}: {b.received.toLocaleString()}</span>
+                        <span className="text-red-300">{t('مصاريف')}: {b.external.toLocaleString()}</span>
+                        <span className="text-amber-300 font-bold">{t('صافي')}: {b.net.toLocaleString()}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+              
+              {groupedReceipts.rows?.length > 0 ? (
+                <div className="overflow-x-auto border border-emerald-700/30 rounded-lg">
+                  <table className="w-full text-sm" data-testid="receipts-table">
+                    <thead className="bg-[#0F1A3A]/70 border-b border-emerald-700/30">
+                      {groupedReceipts.key === 'detail' ? (
+                        <tr className="text-emerald-300">
+                          <th className="px-2 py-2 text-right">{t('التاريخ')}</th>
+                          <th className="px-2 py-2 text-right">{t('الفرع')}</th>
+                          <th className="px-2 py-2 text-right">{t('الكاشير')}</th>
+                          <th className="px-2 py-2 text-right">{t('مُستلَم')}</th>
+                          <th className="px-2 py-2 text-right">{t('مصاريف خارجية')}</th>
+                          <th className="px-2 py-2 text-right">{t('سبب/ملاحظة')}</th>
+                          <th className="px-2 py-2 text-right">{t('صافي مُودَع')}</th>
+                          <th className="px-2 py-2 text-right">{t('المُستلِم')}</th>
+                        </tr>
+                      ) : (
+                        <tr className="text-emerald-300">
+                          {(groupedReceipts.key === 'day' || groupedReceipts.key === 'day_branch') && (
+                            <th className="px-2 py-2 text-right">{t('التاريخ')}</th>
+                          )}
+                          {(groupedReceipts.key === 'branch' || groupedReceipts.key === 'day_branch') && (
+                            <th className="px-2 py-2 text-right">{t('الفرع')}</th>
+                          )}
+                          <th className="px-2 py-2 text-right">{t('عدد الشفتات')}</th>
+                          <th className="px-2 py-2 text-right">{t('الكاشيرية')}</th>
+                          <th className="px-2 py-2 text-right">{t('إجمالي المستلم')}</th>
+                          <th className="px-2 py-2 text-right">{t('إجمالي المصاريف')}</th>
+                          <th className="px-2 py-2 text-right">{t('إجمالي الصافي')}</th>
+                          <th className="px-2 py-2 text-right">{t('المستلمون')}</th>
+                        </tr>
+                      )}
+                    </thead>
+                    <tbody>
+                      {groupedReceipts.key === 'detail' ? groupedReceipts.rows.map((r, i) => (
+                        <tr key={r.shift_id || i} className="border-b border-[#2A3A66]/40 hover:bg-[#0F1A3A]/40" data-testid={`receipt-row-${i}`}>
+                          <td className="px-2 py-2 text-gray-300">{r.business_date}</td>
+                          <td className="px-2 py-2 text-white font-medium">{r.branch_name}</td>
+                          <td className="px-2 py-2 text-blue-300">{r.cashier_name}</td>
+                          <td className="px-2 py-2 text-emerald-300">{r.received_amount.toLocaleString()}</td>
+                          <td className="px-2 py-2 text-red-300">{r.external_expenses > 0 ? r.external_expenses.toLocaleString() : '-'}</td>
+                          <td className="px-2 py-2 text-gray-400 max-w-[220px] truncate" title={r.external_expenses_note}>
+                            {r.external_expenses_note || '-'}
+                          </td>
+                          <td className="px-2 py-2 text-amber-300 font-bold">{r.net_deposit.toLocaleString()}</td>
+                          <td className="px-2 py-2 text-white">{r.received_by}</td>
+                        </tr>
+                      )) : groupedReceipts.rows.map((g, i) => (
+                        <tr key={g.key || i} className="border-b border-[#2A3A66]/40 hover:bg-[#0F1A3A]/40" data-testid={`receipt-group-${i}`}>
+                          {(groupedReceipts.key === 'day' || groupedReceipts.key === 'day_branch') && (
+                            <td className="px-2 py-2 text-gray-300 font-medium">{g.business_date}</td>
+                          )}
+                          {(groupedReceipts.key === 'branch' || groupedReceipts.key === 'day_branch') && (
+                            <td className="px-2 py-2 text-white font-medium">{g.branch_name}</td>
+                          )}
+                          <td className="px-2 py-2 text-blue-300 text-center">{g.count}</td>
+                          <td className="px-2 py-2 text-blue-300 max-w-[200px] truncate" title={g.cashiers}>{g.cashiers || '-'}</td>
+                          <td className="px-2 py-2 text-emerald-300 font-bold">{g.received_amount.toLocaleString()}</td>
+                          <td className="px-2 py-2 text-red-300">{g.external_expenses > 0 ? g.external_expenses.toLocaleString() : '-'}</td>
+                          <td className="px-2 py-2 text-amber-300 font-bold">{g.net_deposit.toLocaleString()}</td>
+                          <td className="px-2 py-2 text-white max-w-[200px] truncate" title={g.receivers}>{g.receivers || '-'}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              ) : (
+                <div className="py-8 text-center text-gray-400 bg-[#0F1A3A]/40 rounded-lg">
+                  {t('لا توجد استلامات ضمن الفلاتر المختارة')}
+                </div>
+              )}
+            </div>
+          )}
+          
+          <DialogFooter className="gap-2">
+            <Button onClick={fetchReceiptsReport} disabled={receiptsLoading} className="bg-emerald-600 hover:bg-emerald-700" data-testid="receipts-refresh-btn">
+              <RefreshCw className={`h-4 w-4 ml-2 ${receiptsLoading ? 'animate-spin' : ''}`} />
+              {t('تحديث')}
+            </Button>
+            <Button
+              onClick={() => { window.print(); }}
+              className="bg-teal-600 hover:bg-teal-700"
+              data-testid="receipts-print-btn"
+            >
+              <Printer className="h-4 w-4 ml-2" />
+              {t('طباعة الكشف')}
+            </Button>
+            <Button variant="outline" onClick={() => setShowReceiptsReport(false)}>
+              {t('إغلاق')}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -3986,6 +4296,7 @@ const DeliveryReportTab = ({ deliveryCreditsReport, t, formatPrice, fetchReports
           )}
         </DialogContent>
       </Dialog>
+
 
 
     </div>
@@ -5620,6 +5931,7 @@ export default function Reports() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
 
       </main>
     </div>
