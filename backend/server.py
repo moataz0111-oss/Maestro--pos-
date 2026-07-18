@@ -3974,13 +3974,163 @@ class Verify2FARequest(BaseModel):
 class Resend2FARequest(BaseModel):
     verification_id: str
 
+
+# 🛡️ حماية 2FA: 5 محاولات فاشلة/إرسال → تجميد IP لمدة 24 ساعة كاملة
+# ⚠️ بعد انتهاء الـ24 ساعة، أول محاولة خاطئة = حظر دائم (يفكه المالك فقط)
+async def _is_ip_permanently_banned(ip: str) -> bool:
+    """يفحص هل الـIP محظور حظراً دائماً (يستعمل المخزون الموجود `blocked_ips`)."""
+    if not ip:
+        return False
+    return await _is_ip_blocked(ip)
+
+
+async def _is_ip_temporarily_blocked(ip: str) -> tuple[bool, int]:
+    """يفحص هل الـIP مجمَّد مؤقتاً (24 ساعة). Returns (blocked, retry_after_seconds)."""
+    if not ip:
+        return (False, 0)
+    now_ts = datetime.now(timezone.utc).timestamp()
+    doc = await db.ip_rate_limits.find_one({"ip": ip, "action": "any_2fa"})
+    if not doc:
+        return (False, 0)
+    blocked_until = doc.get("blocked_until", 0) or 0
+    if blocked_until > now_ts:
+        return (True, int(blocked_until - now_ts))
+    return (False, 0)
+
+
+async def _check_ip_rate_limit(ip: str, action: str, limit: int = 5, block_hours: int = 24) -> tuple[bool, str, int]:
+    """يتحقق من الـIP قبل السماح بعملية 2FA.
+    
+    - إن كان محظوراً حظراً دائماً → مرفوض دائماً
+    - إن كان مجمَّداً مؤقتاً (24 ساعة) → مرفوض حتى انتهاء المدة
+    - غير ذلك → مسموح
+    """
+    if not ip:
+        return (True, "", 0)
+    if await _is_ip_permanently_banned(ip):
+        return (False, "تم حظر هذا الجهاز نهائياً. يجب أن يقوم المالك بفك الحظر يدوياً من لوحة الأمان.", 0)
+    blocked, retry_after = await _is_ip_temporarily_blocked(ip)
+    if blocked:
+        hours = retry_after // 3600
+        minutes = (retry_after % 3600) // 60
+        return (False, f"تم تجميد هذا الجهاز بسبب تجاوز الحد المسموح. حاول بعد {hours} ساعة و{minutes} دقيقة.", retry_after)
+    return (True, "", 0)
+
+
+async def _record_ip_attempt(ip: str, action: str, limit: int = 5, block_hours: int = 24, only_on_failure: bool = True) -> tuple[bool, int, bool]:
+    """يسجّل محاولة على الـIP:
+    - إذا كان الـIP قد أكمل تجميداً سابقاً (فك الـ24 ساعة) → أول محاولة خاطئة = حظر دائم
+    - غير ذلك → عدّاد عادي حتى 5 → تجميد 24 ساعة
+    
+    Returns: (now_blocked_24h, remaining_before_block, now_permanent)
+    """
+    if not ip:
+        return (False, limit, False)
+    now = datetime.now(timezone.utc)
+    now_ts = now.timestamp()
+    action_key = "any_2fa"  # نستعمل مفتاحاً موحداً لكل محاولات 2FA (verify + resend)
+    doc = await db.ip_rate_limits.find_one({"ip": ip, "action": action_key})
+    
+    # هل الـIP سبق أن تم تجميده وانتهت المدة؟ → حظر دائم عند أول محاولة خاطئة
+    prev_frozen_expired = bool(doc and (doc.get("blocked_until", 0) or 0) > 0 and (doc.get("blocked_until", 0) or 0) <= now_ts and (doc.get("ban_count", 0) or 0) >= 1)
+    
+    if prev_frozen_expired:
+        # حظر دائم عبر النظام الموحّد `blocked_ips` — يفكه المالك من لوحة الأمان
+        try:
+            await _ban_ip_permanent(ip, "حظر دائم: فشل بعد انتهاء تجميد الـ24 ساعة", None)
+        except Exception:
+            pass
+        logger.warning(f"🚫🚫 IP {ip} PERMANENTLY BANNED — failed after previous 24h freeze")
+        return (False, 0, True)
+    
+    if not doc:
+        await db.ip_rate_limits.insert_one({
+            "ip": ip, "action": action_key, "reason": action,
+            "count": 1, "ban_count": 0,
+            "first_at": now.isoformat(), "last_at": now.isoformat(),
+            "blocked_until": 0,
+        })
+        return (False, limit - 1, False)
+    
+    new_count = int(doc.get("count", 0)) + 1
+    updates = {"count": new_count, "last_at": now.isoformat(), "reason": action}
+    now_blocked = False
+    
+    if new_count >= limit:
+        block_seconds = block_hours * 3600
+        updates["blocked_until"] = now_ts + block_seconds
+        updates["ban_count"] = int(doc.get("ban_count", 0) or 0) + 1
+        updates["count"] = 0  # نُصفّر العدّاد بعد التجميد
+        now_blocked = True
+        logger.warning(f"🚫 IP {ip} blocked for 24h (ban_count={updates['ban_count']}) — {action}")
+    
+    await db.ip_rate_limits.update_one(
+        {"ip": ip, "action": action_key},
+        {"$set": updates}
+    )
+    return (now_blocked, max(0, limit - new_count), False)
+
+
+# Middleware: يمنع أي طلب من IP محظور نهائياً (يشمل كل الموقع)
+@app.middleware("http")
+async def ip_ban_middleware(request: Request, call_next):
+    try:
+        from fastapi.responses import JSONResponse as _JResp
+        _ip = _client_ip(request)
+        # نسمح دائماً بمسارات فك الحظر من قبل المالك + Health
+        path = request.url.path or ""
+        _bypass = (
+            path in ("/api/health", "/api/security/ip-bans", "/health")
+            or path.startswith("/api/security/unban-ip")
+            or path.startswith("/api/security/ip-bans")
+        )
+        if not _bypass and _ip:
+            if await _is_ip_permanently_banned(_ip):
+                return _JResp(
+                    status_code=403,
+                    content={"detail": "تم حظر هذا الجهاز نهائياً بسبب تجاوز محاولات التحقق. يجب أن يقوم المالك بفك الحظر يدوياً.", "banned": True, "permanent": True}
+                )
+            blocked, retry_after = await _is_ip_temporarily_blocked(_ip)
+            if blocked:
+                return _JResp(
+                    status_code=429,
+                    headers={"Retry-After": str(retry_after)},
+                    content={"detail": f"تم تجميد هذا الجهاز لمدة 24 ساعة. حاول بعد {retry_after // 3600} ساعة.", "blocked": True, "retry_after": retry_after}
+                )
+    except Exception:
+        pass
+    return await call_next(request)
+
+
 @api_router.post("/auth/login/verify-2fa")
 async def verify_staff_2fa(payload: Verify2FARequest, request: Request, response: Response):
     """التحقق من رمز الدخول الثنائي للموظف/المالك وإصدار التوكن + توثيق الجهاز."""
     _ip = _client_ip(request)
+    
+    # 🛡️ فحص Rate Limiting: هل الـIP مجمَّد بسبب محاولات سابقة فاشلة؟
+    allowed, reason, retry_after = await _check_ip_rate_limit(_ip, "verify_2fa", limit=5, block_hours=24)
+    if not allowed:
+        raise HTTPException(status_code=429, detail=reason, headers={"Retry-After": str(retry_after)})
+    
     ok, sess, err = await verify_2fa_code(payload.verification_id, payload.code, _ip)
     if not ok:
-        raise HTTPException(status_code=401, detail=err or "رمز التحقق غير صحيح")
+        # 📊 تسجيل محاولة فاشلة — قد يؤدي للتجميد أو الحظر الدائم
+        now_blocked, remaining, now_permanent = await _record_ip_attempt(_ip, "verify_2fa", limit=5, block_hours=24)
+        if now_permanent:
+            raise HTTPException(
+                status_code=403,
+                detail="تم حظر هذا الجهاز نهائياً بعد تكرار المحاولات. يجب أن يقوم المالك بفك الحظر."
+            )
+        if now_blocked:
+            raise HTTPException(
+                status_code=429,
+                detail="تم تجاوز 5 محاولات فاشلة. تم تجميد هذا الجهاز لمدة 24 ساعة.",
+                headers={"Retry-After": "86400"}
+            )
+        err_msg = (err or "رمز التحقق غير صحيح")
+        if remaining > 0:
+            err_msg += f" — تبقّى {remaining} محاولة قبل التجميد"
+        raise HTTPException(status_code=401, detail=err_msg)
     if sess.get("subject_type") != "user":
         raise HTTPException(status_code=400, detail="جلسة تحقق غير صالحة")
     user = await db.users.find_one({"id": sess["subject_id"]}, {"_id": 0})
@@ -4005,13 +4155,40 @@ async def verify_staff_2fa(payload: Verify2FARequest, request: Request, response
 
 @api_router.post("/auth/2fa/resend")
 async def resend_2fa(payload: Resend2FARequest, request: Request):
-    """إعادة إرسال رمز التحقق لجلسة قائمة (بنفس القناة والوِجهة)."""
+    """إعادة إرسال رمز التحقق لجلسة قائمة (بنفس القناة والوِجهة).
+    
+    🛡️ محدود بـ5 عمليات إرسال — بعدها يتجمد الـIP لمدة 24 ساعة كاملة.
+    """
     _ip = _client_ip(request)
+    
+    # فحص Rate Limiting: هل الـIP مجمَّد؟
+    allowed, reason, retry_after = await _check_ip_rate_limit(_ip, "resend_2fa", limit=5, block_hours=24)
+    if not allowed:
+        raise HTTPException(status_code=429, detail=reason, headers={"Retry-After": str(retry_after)})
+    
     sess = await db.verification_sessions.find_one({"id": payload.verification_id}, {"_id": 0})
     if not sess:
         raise HTTPException(status_code=404, detail="الجلسة غير موجودة")
     if sess.get("consumed"):
         raise HTTPException(status_code=400, detail="تم استخدام هذه الجلسة")
+    
+    # 🛡️ Cooldown: 60 ثانية بين كل إعادة إرسال لنفس الجلسة
+    _last_resend = sess.get("last_resend_at")
+    if _last_resend:
+        try:
+            _elapsed = (datetime.now(timezone.utc) - datetime.fromisoformat(_last_resend)).total_seconds()
+            if _elapsed < 60:
+                _remaining_cd = int(60 - _elapsed)
+                raise HTTPException(
+                    status_code=429,
+                    detail=f"الرجاء الانتظار {_remaining_cd} ثانية قبل إعادة إرسال الرمز",
+                    headers={"Retry-After": str(_remaining_cd)}
+                )
+        except HTTPException:
+            raise
+        except Exception:
+            pass
+    
     dest = sess.get("destination")
     if sess.get("channel") == "email" and "," in (dest or ""):
         dest = dest.split(",")
@@ -4020,7 +4197,100 @@ async def resend_2fa(payload: Resend2FARequest, request: Request):
         sess.get("tenant_id"), sess["channel"], dest, sess.get("device_id"),
         _ip, request, extra=sess.get("extra"),
     )
+    
+    # ⏱ تسجيل وقت آخر إرسال لتطبيق الـcooldown في المرة القادمة
+    try:
+        await db.verification_sessions.update_one(
+            {"id": payload.verification_id},
+            {"$set": {"last_resend_at": datetime.now(timezone.utc).isoformat()}}
+        )
+    except Exception:
+        pass
+    
+    # 📊 تسجيل عملية الإرسال — قد يؤدي للتجميد أو الحظر الدائم
+    now_blocked, remaining, now_permanent = await _record_ip_attempt(_ip, "resend_2fa", limit=5, block_hours=24)
+    if now_permanent:
+        raise HTTPException(
+            status_code=403,
+            detail="تم حظر هذا الجهاز نهائياً بعد تكرار المحاولات. يجب أن يقوم المالك بفك الحظر."
+        )
+    if now_blocked:
+        raise HTTPException(
+            status_code=429,
+            detail="تم تجاوز 5 محاولات إرسال. تم تجميد هذا الجهاز لمدة 24 ساعة.",
+            headers={"Retry-After": "86400"}
+        )
+    
+    if isinstance(resp, dict):
+        resp["remaining_resends"] = remaining
     return resp
+
+
+# ═══════════════════════════════════════════════════════════════
+# 🛡️ إدارة حظر IP (للمالك فقط)
+# ═══════════════════════════════════════════════════════════════
+
+@api_router.get("/security/ip-bans")
+async def list_ip_bans(current_user: dict = Depends(get_current_user)):
+    """قائمة IPs المحظورة (دائم عبر blocked_ips + مؤقت عبر ip_rate_limits)."""
+    if current_user.get("role") not in [UserRole.ADMIN, UserRole.GENERAL_MANAGER, UserRole.SUPER_ADMIN, "admin", "general_manager", "super_admin", "owner"]:
+        raise HTTPException(status_code=403, detail="غير مصرح")
+    
+    now_ts = datetime.now(timezone.utc).timestamp()
+    # الحظر الدائم من الجدول الموجود
+    permanent = await db.blocked_ips.find({}, {"_id": 0}).to_list(500)
+    # التجميد المؤقت (24 ساعة)
+    temp_docs = await db.ip_rate_limits.find({"blocked_until": {"$gt": now_ts}}, {"_id": 0}).to_list(500)
+    
+    temp_list = []
+    for d in temp_docs:
+        blocked_until = d.get("blocked_until", 0)
+        remaining = int(max(0, blocked_until - now_ts))
+        temp_list.append({
+            "ip": d.get("ip"),
+            "action": d.get("reason") or d.get("action") or "any_2fa",
+            "blocked_until_ts": blocked_until,
+            "remaining_seconds": remaining,
+            "remaining_hours": remaining // 3600,
+            "last_at": d.get("last_at"),
+            "ban_count": d.get("ban_count", 0),
+        })
+    
+    return {
+        "permanent_bans": permanent,
+        "temporary_blocks": temp_list,
+        "total_permanent": len(permanent),
+        "total_temporary": len(temp_list),
+    }
+
+
+@api_router.post("/security/unban-ip")
+async def unban_ip(payload: dict, current_user: dict = Depends(get_current_user)):
+    """فك حظر IP (دائم أو مؤقت) — يستطيعه المالك فقط."""
+    if current_user.get("role") not in [UserRole.ADMIN, UserRole.SUPER_ADMIN, "admin", "super_admin", "owner"]:
+        raise HTTPException(status_code=403, detail="فك الحظر متاح للمالك فقط")
+    
+    ip = (payload or {}).get("ip", "").strip()
+    if not ip:
+        raise HTTPException(status_code=400, detail="يجب تحديد IP")
+    
+    # فك الحظر الدائم من blocked_ips (النظام الموحد)
+    r1 = await db.blocked_ips.delete_many({"ip": ip})
+    # حذف التجميد المؤقت
+    r2 = await db.ip_rate_limits.delete_many({"ip": ip})
+    # تحديث الذاكرة المؤقتة
+    try:
+        await _refresh_blocked_ips(force=True)
+    except Exception:
+        pass
+    
+    logger.info(f"✅ IP {ip} unbanned by {current_user.get('email')} — permanent={r1.deleted_count}, temporary={r2.deleted_count}")
+    
+    return {
+        "message": f"تم فك حظر {ip} بنجاح",
+        "permanent_unbanned": r1.deleted_count,
+        "temporary_cleared": r2.deleted_count,
+    }
 
 
 @api_router.get("/auth/me")
