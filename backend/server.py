@@ -5246,7 +5246,7 @@ async def get_products(
     if category_id:
         query["category_id"] = category_id
     products = await db.products.find(query, {"_id": 0}).skip(skip).limit(limit).to_list(limit)
-    _can_see_cost = (current_user.get("role") or "").lower() in ("admin", "manager", "super_admin", "owner")
+    _can_see_cost = (current_user.get("role") or "").lower() in ("admin", "manager", "super_admin", "owner", "general_manager", "branch_manager")
     for p in products:
         if _can_see_cost:
             p["profit"] = _sn(p.get("price")) - _sn(p.get("cost")) - _sn(p.get("operating_cost"))
@@ -5265,7 +5265,7 @@ async def get_product(product_id: str, current_user: dict = Depends(get_current_
     product = await db.products.find_one(query, {"_id": 0})
     if not product:
         raise HTTPException(status_code=404, detail="المنتج غير موجود")
-    if (current_user.get("role") or "").lower() in ("admin", "manager", "super_admin", "owner"):
+    if (current_user.get("role") or "").lower() in ("admin", "manager", "super_admin", "owner", "general_manager", "branch_manager"):
         product["profit"] = _sn(product.get("price")) - _sn(product.get("cost")) - _sn(product.get("operating_cost"))
     else:
         for _cf in ("cost", "operating_cost", "packaging_cost", "profit", "profit_margin",
@@ -16089,14 +16089,22 @@ class DriverLocationUpdate(BaseModel):
 async def driver_update_location(location: DriverLocationUpdate, current_driver: dict = Depends(get_current_driver)):
     """تحديث موقع السائق - من تطبيق السائق (مصادقة بتوكن السائق)"""
     driver_id = current_driver["id"]
+    now_iso = datetime.now(timezone.utc).isoformat()
     result = await db.drivers.update_one(
         {"id": driver_id},
         {"$set": {
+            # نخزّن في كل الحقول المستخدمة عبر النظام حتى تظهر الخريطة الموقع فوراً
             "current_location": {
                 "latitude": location.latitude,
                 "longitude": location.longitude
             },
-            "last_location_update": datetime.now(timezone.utc).isoformat()
+            "location_lat": location.latitude,
+            "location_lng": location.longitude,
+            "location_updated_at": now_iso,
+            "last_location_update": now_iso,
+            # كل بصمة GPS نشطة تعتبر السائق "متصل" — الخريطة تعتمد هذا للنشاط
+            "is_active": True,
+            "last_seen_at": now_iso,
         }}
     )
     

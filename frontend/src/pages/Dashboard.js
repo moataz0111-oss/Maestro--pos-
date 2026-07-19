@@ -1068,7 +1068,7 @@ export default function Dashboard() {
         }
         
         // تحرير المالك من وردية الكاشير
-        if ([['admin', 'general_manager', 'manager', 'super_admin', 'branch_manager']].includes(user?.role)) {
+        if (['admin', 'general_manager', 'manager', 'super_admin', 'branch_manager', 'owner'].includes(user?.role)) {
           setActiveShift(null);
           if (ownerShiftTimeoutRef.current) {
             clearTimeout(ownerShiftTimeoutRef.current);
@@ -3008,7 +3008,7 @@ export default function Dashboard() {
                   {cashSummary.branch_name}
                 </Badge>
               )}
-              {activeShift?.cashier_name && [['admin', 'general_manager', 'manager', 'super_admin', 'branch_manager']].includes(user?.role) && (
+              {activeShift?.cashier_name && ['admin', 'general_manager', 'manager', 'super_admin', 'branch_manager', 'owner'].includes(user?.role) && (
                 <Badge variant="secondary" className="mr-2 text-sm">
                   <User className="h-4 w-4 ml-1" />
                   {t('وردية')}: {activeShift.cashier_name}

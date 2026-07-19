@@ -689,10 +689,22 @@ async def _auto_process_attendance_internal(current_user: dict):
     if not employees:
         return {"message": "لا يوجد موظفين مسجلين بالبصمة", "processed": 0}
     
-    # خريطة biometric_uid → employee
-    uid_to_emp = {}
+    # 🔒 خريطة (branch_id, biometric_uid) → employee لدعم متعدد الفروع
+    # (نفس UID قد يتكرر عبر أجهزة فروع مختلفة — نميّز حسب الفرع)
+    uid_branch_to_emp = {}
+    uid_only_to_emps = {}  # fallback عندما لا يوجد branch_id على السجل
     for emp in employees:
-        uid_to_emp[str(emp.get("biometric_uid", ""))] = emp
+        uid_str = str(emp.get("biometric_uid", ""))
+        b = emp.get("branch_id") or ""
+        uid_branch_to_emp[(b, uid_str)] = emp
+        uid_only_to_emps.setdefault(uid_str, []).append(emp)
+    
+    # جلب أجهزة البصمة (device_id → branch_id) للتحقق من الفرع
+    dev_query = {}
+    if tenant_id:
+        dev_query["tenant_id"] = tenant_id
+    devices_list = await db.biometric_devices.find(dev_query, {"_id": 0, "id": 1, "branch_id": 1}).to_list(500)
+    device_to_branch = {d.get("id"): d.get("branch_id") or "" for d in devices_list}
     
     # 2. جلب سجلات البصمة غير المعالجة
     bio_query = {"processed": {"$ne": True}}
@@ -716,9 +728,17 @@ async def _auto_process_attendance_internal(current_user: dict):
 
     for rec in raw_records:
         uid = str(rec.get("employee_code", ""))
-        if uid not in uid_to_emp:
+        # حدد فرع البصمة من الجهاز
+        rec_device_id = rec.get("device_id")
+        rec_branch = device_to_branch.get(rec_device_id, "")
+        emp_for_punch = None
+        if rec_branch and (rec_branch, uid) in uid_branch_to_emp:
+            emp_for_punch = uid_branch_to_emp[(rec_branch, uid)]
+        elif uid in uid_only_to_emps and len(uid_only_to_emps[uid]) == 1:
+            # موظف وحيد بهذا الـ UID عبر كل الفروع — آمن
+            emp_for_punch = uid_only_to_emps[uid][0]
+        if not emp_for_punch:
             continue
-        emp_for_punch = uid_to_emp[uid]
         # استخراج التاريخ والوقت
         ts = rec.get("punch_time", "")
         if "T" in ts:
@@ -749,8 +769,9 @@ async def _auto_process_attendance_internal(current_user: dict):
             except Exception:
                 pass
 
-        # نخزّن (التاريخ التقويمي الحقيقي، HH:MM) — مفتاح التجميع هو business_date
-        daily_punches[(uid, date_part)].append((orig_date, time_part))
+        # نخزّن (التاريخ التقويمي الحقيقي، HH:MM) — مفتاح التجميع يتضمن employee_id لدعم multi-branch
+        _emp_id_key = emp_for_punch.get("id")
+        daily_punches[(uid, _emp_id_key, date_part)].append((orig_date, time_part))
 
     # === فصل الشفتات + ترتيب زمني صحيح (Shift Separation) ===
     # نحوّل كل مجموعة إلى قائمة HH:MM مرتّبة زمنياً (بالاعتماد على التاريخ التقويمي
@@ -774,7 +795,7 @@ async def _auto_process_attendance_internal(current_user: dict):
 
     # المرور الأول: الفصل/الترحيل للمجموعات الممتدة أكثر من شفت
     for _key in list(daily_punches.keys()):
-        _uid_k, _date_k = _key
+        _uid_k, _emp_id_k, _date_k = _key
         _dts = _entries_to_sorted_dts(daily_punches[_key])
         if not _dts:
             daily_punches[_key] = []
@@ -793,7 +814,7 @@ async def _auto_process_attendance_internal(current_user: dict):
                     _late = _dts[_gap_idx:]    # شفت اليوم
                     try:
                         _prev_d = (datetime.strptime(_date_k, "%Y-%m-%d") - timedelta(days=1)).strftime("%Y-%m-%d")
-                        daily_punches[(_uid_k, _prev_d)].extend(
+                        daily_punches[(_uid_k, _emp_id_k, _prev_d)].extend(
                             [(dt.strftime("%Y-%m-%d"), dt.strftime("%H:%M")) for dt in _early]
                         )
                         daily_punches[_key] = [(dt.strftime("%Y-%m-%d"), dt.strftime("%H:%M")) for dt in _late]
@@ -812,8 +833,11 @@ async def _auto_process_attendance_internal(current_user: dict):
     created_attendance = 0
     created_deductions = 0
     
-    for (uid, date_str), times in daily_punches.items():
-        emp = uid_to_emp.get(uid)
+    # بناء خريطة emp_id → emp للاستخدام السريع
+    emp_by_id = {e.get("id"): e for e in employees}
+    
+    for (uid, emp_id_key, date_str), times in daily_punches.items():
+        emp = emp_by_id.get(emp_id_key)
         if not emp:
             continue
         

@@ -347,7 +347,7 @@ export default function POS() {
       // الكول سنتر يستلم المكالمات افتراضياً
       if (user?.role === 'call_center') return true;
       // المدير والأدمن يمكنهم استلام المكالمات
-      if ([['admin', 'general_manager', 'manager', 'super_admin']].includes(user?.role)) return true;
+      if (['admin', 'general_manager', 'manager', 'super_admin', 'owner', 'branch_manager'].includes(user?.role)) return true;
       // التحقق من الصلاحية
       if (user?.permissions?.includes('receive_calls')) return true;
       return false;
@@ -1439,7 +1439,7 @@ export default function POS() {
   const updateQuantity = useCallback((productId, delta) => {
     playClick();
     // الكاشير وغير المدير/المالك ممنوع من تقليل صنف مُرسَل للمطبخ — فقط Admin/Manager/Super Admin
-    const canModifySent = [['admin', 'general_manager', 'manager', 'super_admin', 'owner']].includes(user?.role);
+    const canModifySent = ['admin', 'general_manager', 'manager', 'super_admin', 'owner', 'branch_manager'].includes(user?.role);
     setCart(prev => prev.map(item => {
       if (item.product_id === productId) {
         if (delta < 0 && item._sentToKitchen && item._originalQty && item.quantity <= item._originalQty) {
@@ -1464,7 +1464,7 @@ export default function POS() {
     // إذا الـitem مُرسَل للمطبخ مسبقاً (طلب معلق محفوظ) → نطبع أمر إلغاء + نُسجِّل
     if (item?._sentToKitchen && editingOrder) {
       // الكاشير ممنوع من حذف صنف مُرسَل للمطبخ — فقط Admin/Manager/Super Admin
-      const canModifySent = [['admin', 'general_manager', 'manager', 'super_admin', 'owner']].includes(user?.role);
+      const canModifySent = ['admin', 'general_manager', 'manager', 'super_admin', 'owner', 'branch_manager'].includes(user?.role);
       if (!canModifySent) {
         toast.error(t('غير مسموح — فقط مالك المطعم أو المدير العام يستطيع حذف صنف مُرسَل للمطبخ'));
         return;
@@ -3944,7 +3944,7 @@ export default function POS() {
                         <Plus className="h-4 w-4" />
                       </Button>
                       {/* زر الحذف - بعد الحفظ فقط المالك يقدر يحذف */}
-                      {(!editingOrder || [['admin', 'general_manager', 'manager', 'super_admin', 'branch_manager']].includes(user?.role)) && (
+                      {(!editingOrder || ['admin', 'general_manager', 'manager', 'super_admin', 'branch_manager', 'owner'].includes(user?.role)) && (
                       <Button
                         variant="ghost"
                         size="icon"
@@ -5152,7 +5152,7 @@ export default function POS() {
 function OrderCard({ order, onSelect, onForceDelete }) {
   const { t } = useTranslation();
   const { user } = useAuth();
-  const canForceDelete = [['admin', 'general_manager', 'manager', 'super_admin', 'owner']].includes(user?.role);
+  const canForceDelete = ['admin', 'general_manager', 'manager', 'super_admin', 'owner'].includes(user?.role);
   
   const getOrderTypeIcon = (type) => {
     switch (type) {

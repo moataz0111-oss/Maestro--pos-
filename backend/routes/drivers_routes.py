@@ -684,12 +684,17 @@ async def update_driver_location(driver_id: str, location: DriverLocationUpdate)
     if not driver:
         raise HTTPException(status_code=404, detail="السائق غير موجود")
     
+    now_iso = datetime.now(timezone.utc).isoformat()
     await db.drivers.update_one(
         {"id": driver_id},
         {"$set": {
             "location_lat": location.latitude,
             "location_lng": location.longitude,
-            "location_updated_at": datetime.now(timezone.utc).isoformat()
+            "location_updated_at": now_iso,
+            "last_location_update": now_iso,
+            "is_active": True,
+            "last_seen_at": now_iso,
+            "current_location": {"latitude": location.latitude, "longitude": location.longitude},
         }}
     )
     return {"message": "تم تحديث الموقع"}
@@ -705,18 +710,47 @@ async def get_drivers_locations(branch_id: Optional[str] = None, current_user: d
         "id": 1,
         "name": 1,
         "phone": 1,
+        "is_active": 1,
         "is_available": 1,
         "current_order_id": 1,
         "location_lat": 1,
         "location_lng": 1,
-        "location_updated_at": 1
+        "location_updated_at": 1,
+        "last_location_update": 1,
+        "last_seen_at": 1,
+        "current_location": 1,
     }).to_list(100)
     
+    now_utc = datetime.now(timezone.utc)
     for driver in drivers:
+        # توحيد الحقول: إن لم يوجد location_lat/lng استخدم current_location
+        if (driver.get("location_lat") is None or driver.get("location_lng") is None) and driver.get("current_location"):
+            cl = driver.get("current_location") or {}
+            if cl.get("latitude") is not None and cl.get("longitude") is not None:
+                driver["location_lat"] = cl.get("latitude")
+                driver["location_lng"] = cl.get("longitude")
+        # توحيد وقت التحديث
+        if not driver.get("location_updated_at"):
+            driver["location_updated_at"] = driver.get("last_location_update") or driver.get("last_seen_at")
+        # حساب النشاط الفعلي بناءً على آخر تحديث موقع (خلال آخر 10 دقائق = نشط)
+        try:
+            lu = driver.get("location_updated_at") or driver.get("last_seen_at")
+            if lu:
+                lu_dt = datetime.fromisoformat(str(lu).replace("Z", "+00:00"))
+                if lu_dt.tzinfo is None:
+                    lu_dt = lu_dt.replace(tzinfo=timezone.utc)
+                mins = (now_utc - lu_dt).total_seconds() / 60.0
+                driver["is_active"] = mins <= 10 and driver.get("is_active", True) is not False
+                driver["online_recent"] = mins <= 10
+                driver["last_seen_minutes"] = int(mins)
+            else:
+                driver["online_recent"] = False
+        except Exception:
+            driver["online_recent"] = False
         if driver.get("current_order_id"):
             order = await db.orders.find_one(
                 {"id": driver["current_order_id"]},
-                {"_id": 0, "order_number": 1, "customer_name": 1, "delivery_address": 1, "status": 1}
+                {"_id": 0, "order_number": 1, "customer_name": 1, "delivery_address": 1, "status": 1, "delivery_lat": 1, "delivery_lng": 1}
             )
             driver["current_order"] = order
     

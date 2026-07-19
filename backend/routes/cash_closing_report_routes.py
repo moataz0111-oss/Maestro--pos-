@@ -593,7 +593,7 @@ async def delete_cash_register_closing(record_id: str, current_user: dict = Depe
     صفوف التقرير تأتي من مجموعة shifts (أو cash_register_closings كاحتياطي)، لذا نحذف من الاثنين حسب المعرّف،
     ونعكس أي إيداع خزينة مرتبط. الطلبات نفسها تبقى (لا تتأثر مبيعات التقرير المحسوبة من الطلبات)."""
     role = current_user.get("role")
-    if role not in ["admin", "super_admin", "manager", "owner"]:
+    if role not in ["admin", "super_admin", "manager", "owner", "general_manager"]:
         raise HTTPException(status_code=403, detail="غير مصرح — حذف السجل للمالك/المدير فقط")
 
     tq = build_tenant_query(current_user)
@@ -660,7 +660,7 @@ async def purge_shift_completely(req: PurgeShiftRequest, current_user: dict = De
     يبحث بالاسم و/أو المعرّف، ويحذف: الوردية + سجل الإغلاق + الطلبات المرتبطة (shift_id أو نفس اسم الكاشير)
     + يعكس أي إيداع خزينة مرتبط. للمالك/المدير فقط. يدعم dry_run للمعاينة قبل الحذف."""
     role = current_user.get("role")
-    if role not in ["admin", "super_admin", "manager", "owner"]:
+    if role not in ["admin", "super_admin", "manager", "owner", "general_manager"]:
         raise HTTPException(status_code=403, detail="غير مصرح — الحذف النهائي للمالك/المدير فقط")
 
     name = (req.cashier_name or "").strip()

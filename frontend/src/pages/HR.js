@@ -1160,8 +1160,8 @@ export default function HR() {
   };
 
   // ===== أذونات وإجازات الموظفين (بموافقة المالك) =====
-  const canGrantLeave = [['admin', 'general_manager', 'super_admin', 'manager', 'supervisor']].includes(user?.role);
-  const canApproveLeave = [['admin', 'general_manager', 'super_admin']].includes(user?.role);
+  const canGrantLeave = ['admin', 'general_manager', 'super_admin', 'owner', 'manager', 'supervisor', 'branch_manager'].includes(user?.role);
+  const canApproveLeave = ['admin', 'general_manager', 'super_admin', 'owner', 'manager'].includes(user?.role);
 
   const fetchLeavePermissions = async () => {
     try {

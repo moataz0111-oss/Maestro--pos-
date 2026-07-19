@@ -701,6 +701,34 @@ export default function SuperAdmin() {
   const [toggling2fa, setToggling2fa] = useState(false);
   const [purging, setPurging] = useState(false);
   const [loadingSecurityLog, setLoadingSecurityLog] = useState(false);
+  // 🛡️ إدارة IPs المحظورة (24h + دائم)
+  const [ipBans, setIpBans] = useState({ permanent_bans: [], temporary_blocks: [] });
+  const [loadingIpBans, setLoadingIpBans] = useState(false);
+  
+  const fetchIpBans = async () => {
+    setLoadingIpBans(true);
+    try {
+      const tok = localStorage.getItem('super_admin_token') || localStorage.getItem('token');
+      const res = await axios.get(`${API}/security/ip-bans`, { headers: { Authorization: `Bearer ${tok}` } });
+      setIpBans(res.data || { permanent_bans: [], temporary_blocks: [] });
+    } catch (e) {
+      toast.error(t('فشل تحميل قائمة IPs'));
+    } finally {
+      setLoadingIpBans(false);
+    }
+  };
+  
+  const unbanIp = async (ip) => {
+    if (!window.confirm(t('هل أنت متأكد من فك الحظر عن') + ` ${ip}؟`)) return;
+    try {
+      const tok = localStorage.getItem('super_admin_token') || localStorage.getItem('token');
+      const res = await axios.post(`${API}/security/unban-ip`, { ip }, { headers: { Authorization: `Bearer ${tok}` } });
+      toast.success(res.data?.message || t('تم فك الحظر'));
+      fetchIpBans();
+    } catch (e) {
+      toast.error(getErrorMessage(e) || t('فشل فك الحظر'));
+    }
+  };
   
   // سجل رسائل الواتساب (المُرسَلة من النظام)
   const [waMessages, setWaMessages] = useState([]);
@@ -3902,10 +3930,73 @@ export default function SuperAdmin() {
                       <Shield className="h-5 w-5" />
                       <span className="font-bold">{t('السجل الأمني وإدارة العملاء')}</span>
                     </div>
-                    <Button onClick={fetchSecurityLog} variant="outline" size="sm" className="border-[#2A3A66]" data-testid="security-log-refresh">
-                      <RefreshCw className={`h-4 w-4 ${loadingSecurityLog ? 'animate-spin' : ''}`} />
-                    </Button>
+                    <div className="flex items-center gap-2">
+                      <Button onClick={fetchIpBans} variant="outline" size="sm" className="border-red-500/40 text-red-300 hover:bg-red-500/10" data-testid="ip-bans-refresh">
+                        🛡 {t('IPs المحظورة')}
+                      </Button>
+                      <Button onClick={fetchSecurityLog} variant="outline" size="sm" className="border-[#2A3A66]" data-testid="security-log-refresh">
+                        <RefreshCw className={`h-4 w-4 ${loadingSecurityLog ? 'animate-spin' : ''}`} />
+                      </Button>
+                    </div>
                   </div>
+                  
+                  {/* 🛡️ لوحة إدارة IPs المحظورة */}
+                  {(ipBans.permanent_bans.length > 0 || ipBans.temporary_blocks.length > 0 || loadingIpBans) && (
+                    <div className="rounded-lg p-4 bg-red-950/30 border border-red-700/40" data-testid="ip-bans-panel">
+                      <div className="flex items-center justify-between mb-3">
+                        <p className="font-bold text-red-300 flex items-center gap-2">
+                          🛡 {t('العناوين IP المحظورة')}
+                          <span className="text-xs bg-red-800/40 px-2 py-0.5 rounded">
+                            {t('دائم')}: {ipBans.permanent_bans.length} | {t('مؤقت')}: {ipBans.temporary_blocks.length}
+                          </span>
+                        </p>
+                      </div>
+                      
+                      {ipBans.permanent_bans.length > 0 && (
+                        <div className="mb-3">
+                          <p className="text-xs text-red-200 mb-2">{t('محظور دائم — يحتاج فك يدوي')}:</p>
+                          <div className="space-y-1">
+                            {ipBans.permanent_bans.map((b, i) => (
+                              <div key={i} className="flex items-center justify-between bg-[#070E22]/60 rounded p-2 text-sm" data-testid={`perm-ban-${i}`}>
+                                <div>
+                                  <span className="font-mono text-red-300">{b.ip}</span>
+                                  <span className="text-gray-400 text-xs mr-2">{b.reason || '-'}</span>
+                                </div>
+                                <Button size="sm" variant="destructive" onClick={() => unbanIp(b.ip)} data-testid={`unban-perm-${i}`}>
+                                  🔓 {t('فك الحظر')}
+                                </Button>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                      
+                      {ipBans.temporary_blocks.length > 0 && (
+                        <div>
+                          <p className="text-xs text-amber-200 mb-2">{t('مجمّد مؤقتاً 24 ساعة')}:</p>
+                          <div className="space-y-1">
+                            {ipBans.temporary_blocks.map((b, i) => (
+                              <div key={i} className="flex items-center justify-between bg-[#070E22]/60 rounded p-2 text-sm" data-testid={`temp-block-${i}`}>
+                                <div>
+                                  <span className="font-mono text-amber-300">{b.ip}</span>
+                                  <span className="text-gray-400 text-xs mr-2">
+                                    {b.action} — {t('باقٍ')} {Math.floor(b.remaining_hours)}h {Math.floor((b.remaining_seconds % 3600) / 60)}m
+                                  </span>
+                                </div>
+                                <Button size="sm" variant="outline" onClick={() => unbanIp(b.ip)} className="border-amber-500/50 text-amber-300 hover:bg-amber-500/10" data-testid={`unban-temp-${i}`}>
+                                  🔓 {t('إلغاء التجميد')}
+                                </Button>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                      
+                      {ipBans.permanent_bans.length === 0 && ipBans.temporary_blocks.length === 0 && !loadingIpBans && (
+                        <p className="text-center text-emerald-400 text-sm py-2">✅ {t('لا يوجد أي IP محظور حالياً')}</p>
+                      )}
+                    </div>
+                  )}
 
                   {/* لوحة تنشيط التحقق الإلزامي */}
                   <div className={`rounded-lg p-4 border ${securityStatus?.two_fa_enabled ? 'bg-green-950/40 border-green-600/40' : 'bg-[#0F1A3A]/60 border-amber-600/40'}`} data-testid="two-fa-activation-panel">

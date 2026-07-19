@@ -1,0 +1,39 @@
+{
+  "summary": "iter310 (bugfix batch): Verified 5 backend bug fixes + regressions. 12/12 tests pass. All 5 target areas verified: (1) admin HR endpoints reachable, (2) general_manager RBAC extension confirmed on price-alerts / low-stock-alerts / raw-materials delete / warehouse-purchase-requests approve+reject — no 403 for admin role; role list expanded correctly in inventory_system.py, (3) GET /api/products returns non-zero cost/profit for admin (and by code inspection general_manager/branch_manager now also see costs — line 5249 of server.py), (4) POST /api/driver/update-location correctly writes location_lat/location_lng/location_updated_at/is_active=true/last_seen_at and GET /api/drivers/locations returns is_active + online_recent + populated coords, (5) /api/health returns {status:ok} and 2FA still triggers for new devices.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "verification_details": {
+    "bug1_hr_leaves": "GET /api/leaves reachable with admin token (200). Frontend HR.js double-bracket fix (canGrantLeave/canApproveLeave) not runtime-tested (frontend skipped per request); backend role for admin confirmed.",
+    "bug3_gm_rbac": "Confirmed via code review at inventory_system.py lines 1803/1832/1877/2646/2670/2685/2701/2924/3159/3293/4887/7525 — all include 'general_manager'. Runtime: admin can hit GET /api/price-alerts (200), GET /api/raw-materials-new/alerts/low-stock (200), DELETE /api/raw-materials-new/{bogus} (404 not 403), POST /api/warehouse-purchase-requests/{bogus}/approve (400 not 403), POST /.../reject (200 with reason body). None returned 403.",
+    "bug4_products_cost": "GET /api/products with admin token returned products with cost>0 and profit populated. server.py line 5249 includes {admin,manager,super_admin,owner,general_manager,branch_manager} in _can_see_cost. Same list applied at /products/{id} line 5268.",
+    "bug5_driver_location": "Full E2E: driver login (07709990001/1234 with trusted device pre-seeded) → POST /api/driver/update-location {lat:33.3152,lng:44.3661} → 200 success. Then GET /api/drivers/locations: driver record contains location_lat=33.3152, location_lng=44.3661, is_active=true, online_recent=true, location_updated_at populated. All new fields verified working.",
+    "regression_health": "GET /api/health → 200 {status:ok, api:'Maestro EGP API'}",
+    "regression_2fa": "POST /api/auth/login without device_id → {requires_2fa:true, verification_id, channel:'whatsapp', pending_delivery:true}. Behavior preserved."
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iter295_bugs.py",
+    "/app/test_reports/pytest/iter295.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "server.py:5249 correctly extends cost-visibility to {admin,manager,super_admin,owner,general_manager,branch_manager}; same list applied at /products/{id} line 5268. Good — consistent between list and detail.",
+    "server.py:16093-16108 /driver/update-location now writes both current_location (nested) AND flat location_lat/location_lng plus is_active=true, last_seen_at, location_updated_at — fully addresses map-not-updating bug.",
+    "routes/drivers_routes.py:702-757 GET /locations enrichment: unifies flat vs nested location fields, computes online_recent based on 10-min window, respects manual is_active=false. Correct behavior.",
+    "routes/inventory_system.py: role lists at 12 locations consistently include 'general_manager'. However styles are mixed — some use UserRole.GENERAL_MANAGER enum and others hardcoded strings 'general_manager'. Non-blocking but consider normalizing.",
+    "server.py still at 18,269 lines — pre-existing.",
+    "Trusted-device backdoor: with two_fa_enabled=true, seeded trusted_devices rows bypass 2FA. Test seed rows should be revoked when 2FA is toggled off/on."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iter295_bugs.py (new — 12 pytest cases)"
+  ],
+  "success_rate": {"backend": "12/12 (100%)", "frontend": "skipped per request"},
+  "test_credentials": "admin@maestroegp.com / admin123 + trusted device_id='test-device-iter295' (seeded in trusted_devices). Driver: 07709990001/1234 + device_id='test-driver-iter295'. 2FA is enabled globally (security_config.two_fa_enabled=true); login without trusted device correctly returns requires_2fa=true.",
+  "seed_data_creation": "Inserted 3 test trusted_devices rows in maestro_pos.trusted_devices: (1) test-device-iter295 → admin user d3896bff..., (2) test-device-iter295-owner → owner 7c56652c..., (3) test-driver-iter295 → driver 40fc20d0.... Labelled 'iter295-test'. Driver 'سائق بريد' location was set to Baghdad (33.3152,44.3661) during E2E test — reset if visual map testing follows.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "iter310 verified all 5 backend bugs from this batch at API level. 2FA remains enabled globally — future tests need pre-seeded trusted device rows (see seed_data_creation) or read dev_code from pending verification_sessions (only code_hash stored — plaintext not recoverable). Frontend fixes (double-bracket HR.js, ManagementOrderAlerts.jsx etc.) were NOT UI-tested per E1 instruction — should be UI-verified before release.",
+  "rca_of_the_issue": "All 5 bugs stemmed from missing 'general_manager' role in RBAC role lists (bugs 3, 4) or missing location field mirroring (bug 5) / role list narrowness (bug 1). Backend changes confirmed working at API level."
+}

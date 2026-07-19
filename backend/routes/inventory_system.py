@@ -1800,7 +1800,7 @@ async def approve_warehouse_purchase_request(
     
     صلاحية المالك/المدير العام فقط.
     """
-    if current_user.get("role") not in ["admin", "manager", "super_admin", "owner"]:
+    if current_user.get("role") not in ["admin", "manager", "super_admin", "owner", "general_manager"]:
         raise HTTPException(status_code=403, detail="فقط المالك/المدير يستطيع الموافقة")
     
     db = get_db()
@@ -1829,7 +1829,7 @@ async def reject_warehouse_purchase_request(
     current_user: dict = Depends(get_current_user)
 ):
     """رفض المالك لطلب الشراء."""
-    if current_user.get("role") not in ["admin", "manager", "super_admin", "owner"]:
+    if current_user.get("role") not in ["admin", "manager", "super_admin", "owner", "general_manager"]:
         raise HTTPException(status_code=403, detail="فقط المالك/المدير يستطيع الرفض")
     
     db = get_db()
@@ -1874,7 +1874,7 @@ async def price_request_and_create_invoice(
     
     الفاتورة تبدأ pending وتنتظر إرسالها للمخزن (مرحلة الاستلام).
     """
-    if current_user.get("role") not in ["admin", "manager", "super_admin", "owner", "purchasing", "purchasing_keeper"]:
+    if current_user.get("role") not in ["admin", "manager", "super_admin", "owner", "general_manager", "purchasing", "purchasing_keeper"]:
         raise HTTPException(status_code=403, detail="غير مسموح")
     
     db = get_db()
@@ -2643,7 +2643,7 @@ async def list_price_alerts(
     current_user: dict = Depends(get_current_user)
 ):
     """تنبيهات تغير الأسعار — للمالك/السوبر فقط."""
-    if current_user.get("role") not in ["admin", "super_admin"]:
+    if current_user.get("role") not in ["admin", "super_admin", "general_manager", "owner", "manager"]:
         return {"alerts": [], "unread_count": 0, "total_count": 0}
 
     db = get_db()
@@ -2667,7 +2667,7 @@ async def list_price_alerts(
 
 @router.post("/price-alerts/{alert_id}/mark-read")
 async def mark_price_alert_read(alert_id: str, current_user: dict = Depends(get_current_user)):
-    if current_user.get("role") not in ["admin", "super_admin"]:
+    if current_user.get("role") not in ["admin", "super_admin", "general_manager", "owner", "manager"]:
         raise HTTPException(status_code=403, detail="غير مسموح")
     db = get_db()
     res = await db.price_alerts.update_one(
@@ -2682,7 +2682,7 @@ async def mark_price_alert_read(alert_id: str, current_user: dict = Depends(get_
 
 @router.post("/price-alerts/mark-all-read")
 async def mark_all_price_alerts_read(current_user: dict = Depends(get_current_user)):
-    if current_user.get("role") not in ["admin", "super_admin"]:
+    if current_user.get("role") not in ["admin", "super_admin", "general_manager", "owner", "manager"]:
         raise HTTPException(status_code=403, detail="غير مسموح")
     db = get_db()
     tenant_id = current_user.get("tenant_id")
@@ -2698,7 +2698,7 @@ async def mark_all_price_alerts_read(current_user: dict = Depends(get_current_us
 
 @router.post("/price-alerts/{alert_id}/dismiss")
 async def dismiss_price_alert(alert_id: str, current_user: dict = Depends(get_current_user)):
-    if current_user.get("role") not in ["admin", "super_admin"]:
+    if current_user.get("role") not in ["admin", "super_admin", "general_manager", "owner", "manager"]:
         raise HTTPException(status_code=403, detail="غير مسموح")
     db = get_db()
     res = await db.price_alerts.update_one(
@@ -2921,7 +2921,7 @@ async def get_raw_materials_low_stock(current_user: dict = Depends(get_current_u
     tenant_id = get_user_tenant_id(current_user)
 
     # المالك / السوبر فقط
-    if current_user.get("role") not in ["admin", "super_admin"]:
+    if current_user.get("role") not in ["admin", "super_admin", "general_manager", "owner", "manager"]:
         return {"alerts": [], "critical_count": 0, "warning_count": 0, "total_count": 0}
 
     query = {}
@@ -3156,7 +3156,7 @@ async def update_raw_material(material_id: str, material: RawMaterialCreate, cur
 @router.delete("/raw-materials-new/{material_id}")
 async def delete_raw_material(material_id: str, current_user: dict = Depends(get_current_user)):
     """حذف مادة خام — مسموح فقط قبل التحويل للتصنيع، وللمالك/السوبر فقط."""
-    if current_user.get("role") not in ["admin", "super_admin"]:
+    if current_user.get("role") not in ["admin", "super_admin", "general_manager", "owner", "manager"]:
         raise HTTPException(status_code=403, detail="غير مسموح — للمالك فقط")
 
     db = get_db()
@@ -3290,7 +3290,7 @@ async def reduce_raw_material_stock(
     """نقص كمية المادة الخام أو تصفيرها — متاح فقط للمالك/المدير العام (admin/super_admin).
     zero=true ⇒ تصفير الكمية بالكامل. وإلا يُنقص بمقدار quantity (لا تقل عن صفر)."""
     role = (current_user or {}).get("role", "")
-    if role not in ("admin", "super_admin"):
+    if role not in ("admin", "super_admin", "general_manager", "owner", "manager"):
         raise HTTPException(status_code=403, detail="هذا الإجراء متاح للمالك/المدير العام فقط")
 
     db = get_db()
@@ -4884,7 +4884,7 @@ async def delete_manufacturing_inventory_item(
     صلاحية: مدير/سوبر/مالك فقط. يُعيد للمادة المعدّل المرتبط فرصة لإعادة التحويل بسعر صحيح.
     """
     role = (current_user.get("role") or "").lower()
-    if role not in {"admin", "super_admin", "owner", "manager"}:
+    if role not in {"admin", "super_admin", "owner", "manager", "general_manager"}:
         raise HTTPException(status_code=403, detail="غير مسموح — للمدير/المالك فقط")
     db = get_db()
     item = await db.manufacturing_inventory.find_one({"id": item_id}, {"_id": 0})
@@ -7522,7 +7522,7 @@ async def waste_efficiency_report(
     """
     # صلاحيات: المالك/المدير فقط
     role = (current_user or {}).get("role", "")
-    if role not in ("admin", "super_admin", "manager", "branch_manager"):
+    if role not in ("admin", "super_admin", "manager", "branch_manager", "general_manager", "owner"):
         raise HTTPException(status_code=403, detail="هذا التقرير متاح للمالك/المدير فقط")
     
     db = get_db()
@@ -7733,7 +7733,7 @@ async def branch_waste_efficiency_report(
     - الفقد الفعلي: من حركات branch_loss الناتجة عن الجرد.
     """
     role = (current_user or {}).get("role", "")
-    if role not in ("admin", "super_admin", "manager", "branch_manager"):
+    if role not in ("admin", "super_admin", "manager", "branch_manager", "general_manager", "owner"):
         raise HTTPException(status_code=403, detail="هذا التقرير متاح للمالك/المدير فقط")
 
     db = get_db()
@@ -7952,7 +7952,7 @@ async def branch_comparison_report(
     يفكّك مبيعات كل فرع لمكوّناتها المُصنّعة، ويضيف الفقد الفعلي من الجرد (branch_loss)،
     ويرتّب الفروع من الأعلى هدراً للأقل."""
     role = (current_user or {}).get("role", "")
-    if role not in ("admin", "super_admin", "manager", "branch_manager"):
+    if role not in ("admin", "super_admin", "manager", "branch_manager", "general_manager", "owner"):
         raise HTTPException(status_code=403, detail="هذا التقرير متاح للمالك/المدير فقط")
 
     db = get_db()

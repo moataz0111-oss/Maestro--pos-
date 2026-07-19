@@ -1,6 +1,39 @@
 # Maestro EGP - Changelog
 
 
+## Session: 19 Jul 2026 (fork) — إصلاح 5 مشاكل بلاغ صور (iter310) ✅
+
+**متطلب المستخدم:** أرسل 5 لقطات مع تعليقات مكتوبة بخط اليد تصف 5 مشاكل مختلفة (HR/الإجازات، حضور البصمة، صلاحيات المدير العام، حقل التكلفة، خريطة السائقين).
+
+**إصلاحات مكتملة (Backend 12/12 tests pass):**
+
+1. **Bug #1 — أزرار الإجازات:** أخطاء `[[...]]` (Array-in-Array) في `HR.js` و`POS.js` و`Dashboard.js` و`Reports.js` و`ManagementOrderAlerts.jsx` و`WelcomeApprovalsBell.js` — كل تحقق `.includes(user?.role)` كان يرجع `false` دائماً. الآن `canGrantLeave` / `canApproveLeave` تشمل owner + general_manager + admin + manager + supervisor + branch_manager.
+
+2. **Bug #2 — بصمة الفروع المتعددة:** `_auto_process_attendance_internal` في `biometric_routes.py` كانت تستخدم `biometric_uid` كمفتاح فقط. مع فروع متعددة تكرار UIDs يسبب دهس/تجاوز موظف. تم التحويل لـ `(branch_id, uid)` مع fallback لـ UID فريد، وأضيف `device_to_branch` map. `daily_punches` أصبح مفتاحه `(uid, emp_id, date)` لتفادي التداخل.
+
+3. **Bug #3 — صلاحيات المدير العام:** في `inventory_system.py` تم توسيع 12 قائمة role لتشمل `general_manager` (price-alerts، low-stock، raw-materials delete، warehouse-purchase-requests approve/reject، إلخ). و`cash_closing_report_routes.py` أضيف general_manager أيضاً.
+
+4. **Bug #4 — حقل تكلفة المنتج للمدير العام:** `server.py:5249` و`5268` أضيف general_manager + branch_manager إلى `_can_see_cost`. الآن GM يرى `cost` و`operating_cost` و`packaging_cost` و`profit`.
+
+5. **Bug #5 — خريطة مواقع السائقين:** `POST /api/driver/update-location` كان يخزّن في `current_location` فقط، بينما `GET /api/drivers/locations` يقرأ `location_lat/lng`. تم مزامنة كل الحقول (flat + nested) + إضافة `is_active=true` و`last_seen_at`. `/drivers/locations` تحسّن ليحسب `online_recent` (خلال 10 دقائق) و`last_seen_minutes` ويوحّد الحقول.
+
+**Files changed:**
+- `/app/backend/server.py` (products cost RBAC, /driver/update-location)
+- `/app/backend/routes/inventory_system.py` (12 role checks extended)
+- `/app/backend/routes/drivers_routes.py` (locations endpoint enrichment)
+- `/app/backend/routes/biometric_routes.py` (multi-branch UID keying)
+- `/app/backend/routes/cash_closing_report_routes.py` (GM RBAC)
+- `/app/frontend/src/pages/HR.js` (leave permission bracket fix)
+- `/app/frontend/src/pages/POS.js` (4 bracket fixes)
+- `/app/frontend/src/pages/Dashboard.js` (2 bracket fixes)
+- `/app/frontend/src/pages/Reports.js` (canDeleteClosing bracket)
+- `/app/frontend/src/components/ManagementOrderAlerts.jsx` (MANAGEMENT_ROLES)
+- `/app/frontend/src/components/WelcomeApprovalsBell.js` (canApprove)
+
+**Testing:** `iter310.json` → 12/12 pass. E2E driver location flow verified: login → update-location → /drivers/locations returns populated coords + is_active=true + online_recent=true.
+
+
+
 ## Session: 07 Jul 2026 (fork) — إدارة بريد الاسترداد من الواجهة ✅ (iter294)
 
 **متطلب المستخدم:** "والبريد الاحطياطي اي ادخله" — طلب مكان لإدارة بريد الاسترداد من الواجهة (كان مسبقاً مثبتاً في `.env` فقط).
