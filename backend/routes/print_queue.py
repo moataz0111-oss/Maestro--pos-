@@ -312,7 +312,7 @@ async def get_all_agents_status(current_user: dict = Depends(get_current_user)):
     branch_query = {}
     if tenant_id:
         branch_query["tenant_id"] = tenant_id
-    branches = await db.branches.find(branch_query, {"_id": 0, "id": 1, "name": 1}).to_list(200)
+    branches = await db.branches.find(branch_query, {"_id": 0, "id": 1, "name": 1}).to_list(length=None)
     
     # جلب جميع heartbeats من آخر 24 ساعة
     now = datetime.now(timezone.utc)
@@ -320,7 +320,7 @@ async def get_all_agents_status(current_user: dict = Depends(get_current_user)):
     heartbeats = await db.agent_heartbeats.find(
         {"last_seen": {"$gte": cutoff_24h}},
         {"_id": 0}
-    ).to_list(1000)
+    ).to_list(length=None)
     
     # مطابقة كل فرع بـ heartbeat
     # جلب أوامر الطباعة المعلقة per branch (لتشخيص التأخير الحقيقي)
@@ -329,7 +329,7 @@ async def get_all_agents_status(current_user: dict = Depends(get_current_user)):
         pending_query["tenant_id"] = tenant_id
     pending_jobs = await db.print_queue.find(
         pending_query, {"_id": 0, "branch_id": 1, "created_at": 1}
-    ).to_list(1000)
+    ).to_list(length=None)
     
     # حساب pending per branch + أقدم job
     pending_by_branch = {}

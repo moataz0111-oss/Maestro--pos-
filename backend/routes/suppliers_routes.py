@@ -48,7 +48,7 @@ class SupplierUpdate(BaseModel):
 async def get_suppliers(current_user: dict = Depends(get_current_user)):
     """جلب قائمة الموردين"""
     query = build_tenant_query(current_user)
-    suppliers = await db.suppliers.find(query, {"_id": 0}).sort("created_at", -1).to_list(500)
+    suppliers = await db.suppliers.find(query, {"_id": 0}).sort("created_at", -1).to_list(length=None)
     return suppliers
 
 @router.post("/suppliers")

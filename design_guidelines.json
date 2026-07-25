@@ -1,70 +1,209 @@
 {
-  "theme": "dark",
-  "archetype": "5 (Luxury)",
-  "global": {
+  "project_context": {
+    "app_type": "saas_app",
+    "mode": "Enterprise / Corporation Mode (Maestro EGP)",
     "direction": "rtl",
-    "background": "radial-gradient(120% 70% at 50% 0%, #1e3a78 0%, #0c1738 45%, #050A24 100%)",
-    "typography": {
-      "headings": {
-        "color": "#f6d488",
-        "weight": "font-extrabold"
-      },
-      "body": {
-        "color": "#cfd6ea",
-        "weight": "font-medium"
+    "language": "Arabic",
+    "theme": "dark",
+    "core_brand_colors": {
+      "navy": "#0D1A2E",
+      "gold": "#F5B84E"
+    }
+  },
+  "rtl_arabic_guidelines": {
+    "direction": "rtl",
+    "tailwind_logical_properties": "MANDATORY: Use logical properties (ps-, pe-, ms-, me-, text-start, text-end, border-s, border-e, rounded-s, rounded-e) instead of physical properties (pl-, pr-, ml-, mr-, text-left, text-right) to natively support RTL without layout breaks.",
+    "typography": "Use Arabic-specific web fonts. Ensure line heights are 'leading-relaxed' to accommodate Arabic script diacritics.",
+    "icons": "Ensure directional icons (arrows, chevrons) are flipped for RTL using 'rtl:-scale-x-100'."
+  },
+  "typography": {
+    "headings": {
+      "family": "Tajawal, sans-serif",
+      "weights": ["700", "900"],
+      "classes": "font-bold tracking-tight text-white"
+    },
+    "body": {
+      "family": "Cairo, IBM Plex Sans Arabic, sans-serif",
+      "weights": ["400", "500", "600"],
+      "classes": "font-medium text-slate-300 leading-relaxed"
+    }
+  },
+  "colors": {
+    "background": {
+      "base": "#0D1A2E",
+      "surface": "#16263F",
+      "surface_elevated": "#1C2F4D",
+      "glass": "rgba(22, 38, 63, 0.7)"
+    },
+    "brand": {
+      "primary": "#F5B84E",
+      "primary_hover": "#E0A33B",
+      "primary_active": "#C78B28",
+      "primary_glow": "rgba(245, 184, 78, 0.15)"
+    },
+    "text": {
+      "primary": "#FFFFFF",
+      "secondary": "#94A3B8",
+      "muted": "#64748B",
+      "inverse": "#0D1A2E"
+    },
+    "status": {
+      "success": "#10B981",
+      "success_bg": "rgba(16, 185, 129, 0.1)",
+      "danger": "#EF4444",
+      "danger_bg": "rgba(239, 68, 68, 0.1)",
+      "warning": "#F5B84E",
+      "warning_bg": "rgba(245, 184, 78, 0.1)",
+      "info": "#3B82F6",
+      "info_bg": "rgba(59, 130, 246, 0.1)"
+    },
+    "borders": {
+      "default": "#253959",
+      "subtle": "rgba(255, 255, 255, 0.05)",
+      "focus": "#F5B84E"
+    }
+  },
+  "visual_enhancers": {
+    "glassmorphism": "backdrop-blur-xl bg-[#16263F]/70 border border-white/5 shadow-[0_8px_32px_rgba(0,0,0,0.2)]",
+    "shadows": {
+      "card": "shadow-[0_4px_20px_rgba(0,0,0,0.3)]",
+      "glow": "shadow-[0_0_15px_rgba(245,184,78,0.2)]"
+    },
+    "borders": "Use 1px border of #253959 for structure, add an inner 1px border of white/5 for premium depth.",
+    "radii": "Use rounded-xl for main cards, rounded-2xl for modals, rounded-full for pills and action buttons."
+  },
+  "grids_and_layouts": {
+    "dashboard_bento": "grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-6. Prioritize density and high-contrast data visualization.",
+    "spacing": "Generous internal padding (p-6 or p-8) to prevent Arabic text from touching borders."
+  },
+  "component_guidelines": {
+    "buttons": "Pill-shaped (rounded-full) or smooth rounded-lg. Primary uses gold (#F5B84E) with dark text (#0D1A2E). Secondary uses transparent bg with gold border and gold text.",
+    "cards": "Solid surface (#16263F) with subtle border (#253959). Hover states should elevate (-translate-y-1) and increase border brightness.",
+    "inputs": "Dark background (#0D1A2E) with border (#253959). Focus state must use ring-1 ring-[#F5B84E] border-[#F5B84E]."
+  },
+  "screens_and_mockups": {
+    "Screen 1: Super Admin Enable Enterprise Mode": {
+      "description": "Super Admin toggle inside Client Management page.",
+      "layout": "A dedicated settings card with glassmorphic depth.",
+      "ui_elements": [
+        {"type": "Toggle", "label": "تفعيل وضع المؤسسة (Enable Enterprise Mode)", "testid": "toggle-enterprise-mode"},
+        {"type": "Checkbox Group", "label": "الأنشطة المسموحة (Allowed Activities)", "options": ["مطعم/مقهى", "صالون تجميل", "عيادة طبية", "سوبر ماركت", "شركة توزيع", "شركة توصيل/لوجستيات", "متجر تجزئة", "مصنع/إنتاج"]},
+        {"type": "Slider/Input", "label": "الحد الأقصى للمشاريع (Max Projects)", "testid": "input-max-projects"},
+        {"type": "Date Picker", "label": "تاريخ الصلاحية (Expiration Date)", "testid": "input-expiry-date"},
+        {"type": "Button", "label": "حفظ الإعدادات (Save Settings)", "style": "primary-gold", "testid": "btn-save-enterprise-config"}
+      ]
+    },
+    "Screen 2: Enterprise Portfolio Dashboard": {
+      "description": "The landing page after the owner logs in, displaying all projects as cards.",
+      "layout": "Bento Grid layout (Mode B) with a sticky header.",
+      "ui_elements": [
+        {"type": "Header", "title": "لوحة تحكم المؤسسة (Enterprise Dashboard)"},
+        {"type": "Primary CTA", "label": "+ إنشاء مشروع (+ Create Project)", "testid": "btn-create-project"},
+        {"type": "Secondary CTA", "label": "التقرير الموحد (Unified Report)", "testid": "btn-unified-report"},
+        {"type": "Project Card", "content": "Activity icon (e.g., Utensils, Stethoscope), Project Name, Today's Revenue (إيرادات اليوم), Active Shifts (ورديات نشطة), Employee Count (عدد الموظفين), Health Status indicator (حالة صحية).", "testid": "card-project-item"}
+      ]
+    },
+    "Screen 3: Project Switcher": {
+      "description": "A top-bar dropdown/command menu for fast context switching.",
+      "layout": "Glassmorphic dropdown panel attached to the top navigation bar.",
+      "ui_elements": [
+        {"type": "Trigger", "label": "تبديل المشروع (Switch Project) / اسم المشروع الحالي (Current Project Name)", "testid": "dropdown-project-switcher"},
+        {"type": "Search Input", "label": "ابحث عن مشروع... (Search project...)"},
+        {"type": "List Item", "content": "Project Icon + Name + Quick Status Dot"}
+      ]
+    },
+    "Screen 4: Unified Cross-Project Report": {
+      "description": "A powerful analytics page aggregating data across all projects.",
+      "layout": "Dense data table layout with top filter bar and visualization charts.",
+      "ui_elements": [
+        {"type": "Filters", "items": ["نطاق التاريخ (Date Range)", "اختيار المشاريع (Multi-select Projects)", "نوع النشاط (Activity Type)", "عرض كـ: تفصيل لكل مشروع / المجموع الكلي (View As: Per-project / Consolidated)"]},
+        {"type": "Custom Filter", "label": "تكاليف متنوعة (Miscellaneous Costs Breakdown)", "testid": "filter-misc-costs"},
+        {"type": "Charts", "types": ["Total Sales Bar Chart", "Cost Breakdown Pie Chart"]},
+        {"type": "Data Tables", "sections": ["المبيعات (Sales)", "التكاليف (Costs)", "حركات المستودع (Warehouse Movements)", "مخرجات التصنيع (Manufacturing Output)", "حضور وانصراف الموظفين (Employee Attendance)"]}
+      ]
+    },
+    "Screen 5: Employee/User Isolation View": {
+      "description": "Global directory of employees scoped by project for the owner.",
+      "layout": "List or Grid view grouped by Project ID.",
+      "ui_elements": [
+        {"type": "Title", "label": "دليل موظفي المؤسسة (Enterprise Employee Directory)"},
+        {"type": "Group Header", "label": "اسم المشروع (Project Name)"},
+        {"type": "Employee Row", "content": "Avatar, Name, Role, Status, with restriction indicator."}
+      ]
+    },
+    "Screen 6: Sidebar (المؤسسة)": {
+      "description": "Sidebar navigation entry mirroring 'External Branches'.",
+      "layout": "Vertical sidebar item.",
+      "ui_elements": [
+        {"type": "Menu Item", "icon": "Building (🏢)", "label": "المؤسسة (Enterprise)", "hover_state": "bg-[#16263F] text-[#F5B84E] border-s-2 border-[#F5B84E]", "testid": "sidebar-link-enterprise"}
+      ]
+    },
+    "Screen 7: Create Project Wizard": {
+      "description": "Wizard for initializing a new project under the enterprise.",
+      "layout": "Step-by-step modal or dedicated page with progress indicator.",
+      "ui_elements": [
+        {"type": "Step 1", "label": "نوع النشاط (Activity Type)", "input": "Grid of 8 large visual buttons with custom icons."},
+        {"type": "Step 2", "label": "تفاصيل المشروع (Project Details)", "inputs": ["اسم المشروع (Name)", "العملة (Currency)", "المنطقة الزمنية (Timezone)"]},
+        {"type": "Step 3", "label": "الإعداد الأولي (Initial Setup)", "inputs": ["الفروع المبدئية (Initial Branches)", "مدير المشروع (Project Admin)"]}
+      ]
+    }
+  },
+  "icons": {
+    "library": "lucide-react",
+    "activity_mapping": {
+      "Restaurant": "Utensils",
+      "Salon": "Scissors",
+      "Clinic": "Stethoscope",
+      "Supermarket": "ShoppingCart",
+      "Distribution": "Truck",
+      "Delivery": "Package",
+      "Retail": "Tag",
+      "Manufacturing": "Factory"
+    },
+    "enterprise": "Building2"
+  },
+  "mongodb_schema_suggestions": {
+    "tenant_collection": {
+      "enterprise_config": {
+        "is_enterprise": "Boolean",
+        "max_projects": "Number",
+        "allowed_activities": "Array of Strings",
+        "expiry_date": "Date"
       }
     },
-    "colors": {
-      "primary_gold": "#f6a623",
-      "primary_gradient": "linear-gradient(160deg, #ffe08a, #f6a623)",
-      "primary_text": "#08122e",
-      "surface_gradient": "linear-gradient(160deg, #0c1a3d, #0a1430)",
-      "border_gold": "rgba(246,166,35,0.4)"
+    "projects_collection": {
+      "_id": "ObjectId",
+      "tenant_id": "ObjectId (Ref: Tenants)",
+      "name": "String",
+      "activity_type": "String",
+      "currency": "String",
+      "timezone": "String",
+      "status": "String (Active, Suspended)",
+      "created_at": "Date"
+    },
+    "users_collection": {
+      "project_ids": "Array of ObjectIds (Allows isolation per project, Owner gets access to all)"
     }
   },
-  "components": {
-    "app_wrapper": {
-      "css": "background: radial-gradient(120% 70% at 50% 0%, #1e3a78 0%, #0c1738 45%, #050A24 100%); color: #cfd6ea;",
-      "instruction": "Apply this inline style to the outermost wrapper (e.g. div with min-h-screen). Remove classes like bg-gray-50, bg-gradient-to-br from-blue-500 to-green-500, or from-orange-50 to-red-50."
-    },
-    "headers": {
-      "css": "background: transparent; border-bottom: 1px solid rgba(246,166,35,0.2);",
-      "instruction": "Replace existing solid or gradient backgrounds from <header>. Use this transparent dark styling. Ensure header text and icons use the gold (#f6d488) or body text color."
-    },
-    "cards": {
-      "css": "background: linear-gradient(160deg, #0c1a3d, #0a1430); border: 1px solid rgba(246,166,35,0.4); box-shadow: 0 8px 20px rgba(0,0,0,0.4); border-radius: 1rem;",
-      "instruction": "Update all <Card> components. Remove bg-white, bg-neutral-900/95. Apply this gradient and gold border inline."
-    },
-    "primary_buttons": {
-      "css": "background: linear-gradient(160deg, #ffe08a, #f6a623); color: #08122e; border: none; box-shadow: 0 10px 26px rgba(246,166,35,0.35); border-radius: 9999px; font-weight: 800;",
-      "instruction": "Update main CTAs (login, add to cart, submit order). Replace bg-blue-500, bg-orange-500, etc. Apply the gold gradient pill with dark text using inline styles."
-    },
-    "secondary_buttons": {
-      "css": "background: transparent; border: 1px solid rgba(246,166,35,0.5); color: #f6a623; border-radius: 9999px;",
-      "instruction": "For outline or ghost buttons, use transparent background with gold border and gold text."
-    },
-    "inputs": {
-      "css": "background: rgba(10, 19, 48, 0.6); border: 1px solid rgba(246,166,35,0.4); color: #ffffff;",
-      "instruction": "Make input backgrounds dark, border gold, and text white. Remove bg-white or default borders."
-    },
-    "status_colors": {
-      "instruction": "Keep green ONLY for positive accept/success (delivered, accept call, completed). Use gold/yellow for pending/preparing. Use red for cancelled. Convert solid badges to dark-theme compatible: e.g., 'delivered' -> bg-green-500/20 text-green-400 border border-green-500/30, 'pending' -> bg-yellow-500/20 text-yellow-400 border border-yellow-500/30."
-    },
-    "incoming_call_screen": {
-      "instruction": "Update the `incomingOrder` overlay in DriverApp.js. Use `background: linear-gradient(160deg, #0c1a3d, #0a1430); border: 1px solid rgba(246,166,35,0.5)` for the modal. 'Accept' button MUST BE GREEN (bg-green-600). 'Dismiss' button outline gold."
-    },
-    "tracking_timeline": {
-      "instruction": "Update icons and lines in tracking timeline to use gold for active steps, and muted navy/grey for inactive."
-    }
+  "implementation_guide": {
+    "tech_stack": "React (.js files, NOT .tsx), Tailwind CSS, Shadcn UI",
+    "files_to_modify": [
+      "/app/frontend/src/pages/SuperAdmin.js (Add Enable Enterprise Mode toggle)",
+      "/app/frontend/src/App.js (Add Enterprise sidebar routing)",
+      "/app/frontend/src/pages/EnterpriseDashboard.js (New)",
+      "/app/frontend/src/components/ProjectSwitcher.js (New)",
+      "/app/frontend/src/pages/UnifiedReport.js (New)",
+      "/app/frontend/src/pages/CreateProjectWizard.js (New)"
+    ],
+    "testing": "All interactive elements MUST include a data-testid attribute formatted as kebab-case based on their role."
   },
-  "instructions_to_main_agent": [
-    "Identify all top-level wrappers (e.g., `min-h-screen`) in DriverApp.js and CustomerMenu.js and apply the radial-gradient inline style.",
-    "Update all `<Card>` and `<CardContent>` to use the dark navy gradient (`#0c1a3d` to `#0a1430`) with the gold border (`rgba(246,166,35,0.4)`).",
-    "Replace primary action buttons (Login, Submit Order, Add to Cart) with the gold pill gradient style and dark text (`#08122e`).",
-    "Refactor typography colors: set base text to `#cfd6ea` and headings/accents to `#f6d488`.",
-    "Ensure the green color (`#10b981` or `bg-green-500`) is preserved strictly for 'success', 'delivered', or 'accept' actions.",
-    "Remove all references to `from-orange-500 to-red-500` or `from-blue-500 to-green-500` in headers, cards, and buttons.",
-    "Ensure `data-testid` attributes are preserved on interactive elements. Add `data-testid` if missing on interactive elements.",
-    "Be careful to preserve existing logic (state, API calls, hooks) - only touch the visual Tailwind classes and inline styles."
+  "universal_guidelines_for_main_agent": [
+    "You MUST use .js extensions for React components, not .tsx.",
+    "Do not center align the app container (.App { text-align: center; } is forbidden).",
+    "Do not use generic purple gradients or AI-slop aesthetics. Adhere strictly to the Deep Navy (#0D1A2E) and Warm Gold (#F5B84E) palette.",
+    "Use 2-3x more spacing (p-6, p-8) than usual to give the UI a premium enterprise feel.",
+    "All text must be correctly localized in Arabic, utilizing RTL Tailwind logical classes.",
+    "For components, utilize Shadcn UI where applicable, customizing the base styles in Tailwind to match the dark/gold theme.",
+    "DO NOT use a transparent background for headers, dropdowns, or modals. Use #16263F or glassmorphism (bg-[#16263F]/70 backdrop-blur-xl)."
   ]
 }

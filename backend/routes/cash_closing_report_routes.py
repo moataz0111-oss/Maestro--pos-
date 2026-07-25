@@ -133,7 +133,7 @@ async def get_cash_register_closing_report(
         ]
     
     # جلب الطلبات
-    all_orders = await db.orders.find(query, {"_id": 0}).to_list(5000)
+    all_orders = await db.orders.find(query, {"_id": 0}).to_list(length=None)
     
     # فصل الطلبات: نشطة / مرتجعة / ملغية
     orders = []          # طلبات نشطة (تحسب في المبيعات)
@@ -173,7 +173,7 @@ async def get_cash_register_closing_report(
             {"business_date": {"$exists": False}, "date": biz_range_exp.copy()}
         ]
     
-    expenses = await db.expenses.find(expenses_query, {"_id": 0}).to_list(1000)
+    expenses = await db.expenses.find(expenses_query, {"_id": 0}).to_list(length=None)
     
     # جلب إغلاقات الصندوق
     closings_query = build_tenant_query(current_user)
@@ -188,7 +188,7 @@ async def get_cash_register_closing_report(
             closings_query["closed_at"] = {}
         closings_query["closed_at"]["$lte"] = end_date
     
-    closings = await db.cash_register_closings.find(closings_query, {"_id": 0}).sort("closed_at", -1).to_list(100)
+    closings = await db.cash_register_closings.find(closings_query, {"_id": 0}).sort("closed_at", -1).to_list(length=None)
     # إزالة صفوف الإغلاق المكررة تلقائياً حتى يطابق تقرير الإغلاق المبيعات الحقيقية (منطقة حساسة — بلا حذف من القاعدة)
     closings, _dup_removed = dedupe_shift_closings(closings)
     
@@ -274,7 +274,7 @@ async def get_cash_register_closing_report(
         cashier_users = await db.users.find(
             {"id": {"$in": list(cashier_ids_set)}},
             {"_id": 0, "id": 1, "full_name": 1, "username": 1, "email": 1}
-        ).to_list(100)
+        ).to_list(length=None)
         for u in cashier_users:
             users_lookup[u["id"]] = u.get("full_name") or u.get("username") or u.get("email", "")
     
@@ -535,10 +535,10 @@ async def get_cash_register_closings_history(
     end_date: Optional[str] = None,
     branch_id: Optional[str] = None,
     cashier_id: Optional[str] = None,
-    limit: int = 50,
+    limit: int = 0,
     current_user: dict = Depends(get_current_user)
 ):
-    """سجل إغلاقات الصندوق السابقة"""
+    """سجل إغلاقات الصندوق السابقة — بدون حد أقصى افتراضياً (limit=0 = الكل)"""
     query = build_tenant_query(current_user)
     
     if branch_id:
@@ -560,7 +560,7 @@ async def get_cash_register_closings_history(
             {"business_date": {"$exists": False}, "closed_at": closed_range},
         ]
     
-    closings = await db.cash_register_closings.find(query, {"_id": 0}).sort("closed_at", -1).to_list(limit)
+    closings = await db.cash_register_closings.find(query, {"_id": 0}).sort("closed_at", -1).to_list(length=None if not limit else limit)
     # إزالة صفوف الإغلاق المكررة تلقائياً (نفس الوردية سُجّلت مرتين بسبب باغ فتح شفتين متزامنين)
     # حتى يطابق النقد المعدود/المتوقع والمبيعات القيم الحقيقية. لا حذف من القاعدة — استبعاد من التقرير فقط.
     closings, dup_removed = dedupe_shift_closings(closings)
@@ -693,14 +693,14 @@ async def purge_shift_completely(req: PurgeShiftRequest, current_user: dict = De
         return {**base, "$or": extra_or}
 
     # الورديات المطابقة
-    shifts = await db.shifts.find(_scoped(match_ors), {"_id": 0}).to_list(500)
+    shifts = await db.shifts.find(_scoped(match_ors), {"_id": 0}).to_list(length=None)
     shift_ids = [s["id"] for s in shifts if s.get("id")]
 
     # سجلات الإغلاق المطابقة (بالاسم/المعرّف أو المرتبطة بالورديات)
     closing_ors = list(match_ors)
     if shift_ids:
         closing_ors.append({"shift_id": {"$in": shift_ids}})
-    closings = await db.cash_register_closings.find(_scoped(closing_ors), {"_id": 0}).to_list(500)
+    closings = await db.cash_register_closings.find(_scoped(closing_ors), {"_id": 0}).to_list(length=None)
     closing_ids = [c["id"] for c in closings if c.get("id")]
 
     # الطلبات المطابقة: بالـ shift_id أو بنفس اسم الكاشير
@@ -711,7 +711,7 @@ async def purge_shift_completely(req: PurgeShiftRequest, current_user: dict = De
         order_ors.append({"cashier_name": name_rx})
     orders = []
     if order_ors:
-        orders = await db.orders.find(_scoped(order_ors), {"_id": 0, "id": 1, "total": 1, "cashier_name": 1, "shift_id": 1}).to_list(20000)
+        orders = await db.orders.find(_scoped(order_ors), {"_id": 0, "id": 1, "total": 1, "cashier_name": 1, "shift_id": 1}).to_list(length=None)
     orders_total = sum(_sn(o.get("total")) for o in orders)
 
     preview = {
@@ -810,7 +810,7 @@ async def get_delivery_credits_report(
             query["created_at"] = {}
         query["created_at"]["$lte"] = end_date
     
-    orders = await db.orders.find(query, {"_id": 0}).to_list(1000)
+    orders = await db.orders.find(query, {"_id": 0}).to_list(length=None)
     
     total_sales = sum(_sn(o.get("total")) for o in orders)
     total_commission = sum(o.get("delivery_commission", 0) for o in orders)
@@ -911,7 +911,7 @@ async def get_products_report(
     if end_dt:
         query["created_at"]["$lte"] = end_dt.isoformat()
     
-    orders = await db.orders.find(query, {"_id": 0, "items": 1}).to_list(10000)
+    orders = await db.orders.find(query, {"_id": 0, "items": 1}).to_list(length=None)
     
     # حساب المنتجات الأكثر مبيعاً
     product_sales = {}
@@ -966,7 +966,7 @@ async def get_hourly_report(
         today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
         query["created_at"] = {"$regex": f"^{today}"}
     
-    orders = await db.orders.find(query, {"_id": 0, "created_at": 1, "total": 1}).to_list(10000)
+    orders = await db.orders.find(query, {"_id": 0, "created_at": 1, "total": 1}).to_list(length=None)
     
     # تقسيم حسب الساعة
     hourly_data = {str(h).zfill(2): {"orders": 0, "sales": 0} for h in range(24)}

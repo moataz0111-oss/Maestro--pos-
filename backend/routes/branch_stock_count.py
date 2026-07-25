@@ -98,7 +98,7 @@ async def _build_count_template(db, branch_id: str, business_date: str, tenant_i
             {"tenant_id": {"$exists": False}},
             {"tenant_id": None},
         ]
-    branch_inv = await db.branch_inventory.find(inv_query, {"_id": 0}).to_list(2000)
+    branch_inv = await db.branch_inventory.find(inv_query, {"_id": 0}).to_list(length=None)
     
     # جرد البارحة (لو موجود) → الافتتاحي = actual_qty للبارحة
     prev_date = (datetime.fromisoformat(business_date).date() - timedelta(days=1)).isoformat()
@@ -154,7 +154,7 @@ async def _build_count_template(db, branch_id: str, business_date: str, tenant_i
     }
     if tenant_id:
         orders_query["tenant_id"] = tenant_id
-    day_orders = await db.orders.find(orders_query, {"_id": 0, "items": 1}).to_list(5000)
+    day_orders = await db.orders.find(orders_query, {"_id": 0, "items": 1}).to_list(length=None)
 
     # تحميل المنتجات النهائية + المنتجات المُصنّعة المرتبطة دفعة واحدة (أداء)
     finished_ids = set()
@@ -580,7 +580,7 @@ async def pending_count_alerts(branch_id: Optional[str] = None, current_user: di
         shift_q["branch_id"] = target_branch
     open_shifts = await db.shifts.find(
         shift_q, {"_id": 0, "branch_id": 1, "business_date": 1, "started_at": 1, "opened_at": 1}
-    ).to_list(100)
+    ).to_list(length=None)
 
     seen = set()
     pending = []
@@ -658,7 +658,7 @@ async def history(
             {"tenant_id": None},
         ]
     
-    rows = await db.branch_stock_counts.find(q, {"_id": 0}).sort("business_date", -1).to_list(500)
+    rows = await db.branch_stock_counts.find(q, {"_id": 0}).sort("business_date", -1).to_list(length=None)
     return {"counts": rows, "period": {"start": start_date, "end": end_date}}
 
 

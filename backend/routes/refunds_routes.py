@@ -271,7 +271,7 @@ async def check_order_refund_status(order_id: str, branch_id: Optional[str] = No
         order_date_str = order_day.strftime('%Y-%m-%d')
     
     # البحث عن إرجاعات لهذا الطلب
-    refunds = await db.refunds.find({"order_id": order["id"]}, {"_id": 0}).to_list(10)
+    refunds = await db.refunds.find({"order_id": order["id"]}, {"_id": 0}).to_list(length=None)
     
     # تحديد إمكانية الإرجاع
     can_refund = (

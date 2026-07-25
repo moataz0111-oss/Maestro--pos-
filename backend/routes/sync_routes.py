@@ -389,7 +389,7 @@ async def list_duplicate_orders(current_user: dict = Depends(get_current_user)):
         {"$sort": {"count": -1}},
         {"$limit": 500},
     ]
-    groups = await db.orders.aggregate(pipeline).to_list(500)
+    groups = await db.orders.aggregate(pipeline).to_list(length=None)
     total_dups = sum(g["count"] - 1 for g in groups)
     return {"duplicate_groups": len(groups), "extra_orders_to_remove": total_dups, "groups": groups}
 
@@ -411,7 +411,7 @@ async def cleanup_duplicate_orders(current_user: dict = Depends(get_current_user
                     "orders": {"$push": {"id": "$id", "order_number": "$order_number", "created_at": "$created_at"}}}},
         {"$match": {"count": {"$gt": 1}}},
     ]
-    groups = await db.orders.aggregate(pipeline).to_list(5000)
+    groups = await db.orders.aggregate(pipeline).to_list(length=None)
 
     deleted_ids = []
     for g in groups:
@@ -479,7 +479,7 @@ async def detect_business_duplicate_orders(current_user: dict = Depends(get_curr
         {"$match": {"count": {"$gt": 1}}},
         {"$limit": 500},
     ]
-    for g in await db.orders.aggregate(ext_pipeline).to_list(500):
+    for g in await db.orders.aggregate(ext_pipeline).to_list(length=None):
         groups.append({"type": "external_ref", "key": g["_id"], "count": g["count"], "orders": g["orders"]})
 
     # (2) بصمة محتوى متطابقة خلال 10 دقائق (يلتقط التكرارات القديمة بلا رقم خارجي)
@@ -500,7 +500,7 @@ async def detect_business_duplicate_orders(current_user: dict = Depends(get_curr
     for g in groups:
         for o in g["orders"]:
             seen_ids.add(o.get("id"))
-    for g in await db.orders.aggregate(fp_pipeline).to_list(500):
+    for g in await db.orders.aggregate(fp_pipeline).to_list(length=None):
         if all(o.get("id") in seen_ids for o in g["orders"]):
             continue
         groups.append({"type": "content_fingerprint", "key": g["_id"], "count": g["count"], "orders": g["orders"]})
@@ -1079,7 +1079,7 @@ async def notify_other_devices(tenant_id: str, current_device_endpoint: str, tit
             "tenant_id": tenant_id,
             "endpoint": {"$ne": current_device_endpoint},
             "is_active": True
-        }).to_list(100)
+        }).to_list(length=None)
         
         sent_count = 0
         for sub in subscriptions:
@@ -1241,7 +1241,7 @@ async def get_push_subscriptions(current_user: dict = Depends(get_current_user))
         subscriptions = await db.push_subscriptions.find(
             {"tenant_id": tenant_id, "is_active": True},
             {"_id": 0, "keys": 0}  # لا نرسل المفاتيح
-        ).to_list(100)
+        ).to_list(length=None)
         
         return {
             "count": len(subscriptions),
@@ -1264,7 +1264,7 @@ async def get_pending_notifications(current_user: dict = Depends(get_current_use
         notifications = await db.notifications.find(
             {"tenant_id": tenant_id},
             {"_id": 0}
-        ).sort("created_at", -1).limit(20).to_list(20)
+        ).sort("created_at", -1).limit(20).to_list(length=None)
         
         return {"notifications": notifications}
         

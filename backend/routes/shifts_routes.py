@@ -188,7 +188,7 @@ async def _open_shift_conflict(db, tenant_id, branch_id, cashier_id, cashier_nam
         q["tenant_id"] = tenant_id
     open_shifts = await db.shifts.find(
         q, {"_id": 0, "id": 1, "cashier_id": 1, "cashier_name": 1, "branch_id": 1, "started_at": 1}
-    ).to_list(1000)
+    ).to_list(length=None)
     own = None
     other = None
     nn = _norm_name(cashier_name)
@@ -206,7 +206,7 @@ async def _get_pending_captain_cash(db, shift_id, tenant_id):
     if tenant_id:
         q["tenant_id"] = tenant_id
     held = await db.orders.find(
-        q, {"_id": 0, "captain_id": 1, "captain_name": 1, "total": 1}).to_list(5000)
+        q, {"_id": 0, "captain_id": 1, "captain_name": 1, "total": 1}).to_list(length=None)
     by_cap = {}
     for o in held:
         cid = o.get("captain_id")
@@ -388,13 +388,13 @@ async def get_cashiers_list(branch_id: Optional[str] = None, current_user: dict 
     if branch_id:
         query["branch_id"] = branch_id
     
-    cashiers = await db.users.find(query, {"_id": 0, "password": 0}).to_list(100)
+    cashiers = await db.users.find(query, {"_id": 0, "password": 0}).to_list(length=None)
     
     # جلب أسماء الفروع
     branch_ids = list(set(c.get("branch_id") for c in cashiers if c.get("branch_id")))
     branches_lookup = {}
     if branch_ids:
-        branches = await db.branches.find({"id": {"$in": branch_ids}}, {"_id": 0, "id": 1, "name": 1}).to_list(50)
+        branches = await db.branches.find({"id": {"$in": branch_ids}}, {"_id": 0, "id": 1, "name": 1}).to_list(length=None)
         branches_lookup = {b["id"]: b["name"] for b in branches}
     
     # إضافة حالة الوردية واسم الفرع لكل كاشير
@@ -655,13 +655,13 @@ async def get_available_captains(branch_id: Optional[str] = None, current_user: 
     q = {"role": "captain", "is_active": {"$ne": False}}
     if tenant_id:
         q["tenant_id"] = tenant_id
-    captains = await db.users.find(q, {"_id": 0, "password": 0}).to_list(200)
+    captains = await db.users.find(q, {"_id": 0, "password": 0}).to_list(length=None)
     target_branch = branch_id or current_user.get("branch_id")
     if target_branch:
         captains = [c for c in captains if not c.get("branch_id") or c.get("branch_id") == target_branch]
     links = await db.captain_shift_links.find(
         {"active": True, **({"tenant_id": tenant_id} if tenant_id else {})}, {"_id": 0}
-    ).to_list(500)
+    ).to_list(length=None)
     linked_map = {lk["captain_id"]: lk for lk in links}
     for c in captains:
         link = linked_map.get(c["id"])
@@ -777,7 +777,7 @@ async def get_captains_shift_summary(shift_id: Optional[str] = None, branch_id: 
         q["tenant_id"] = tenant_id
     orders = await db.orders.find(
         q, {"_id": 0, "captain_id": 1, "captain_name": 1, "total": 1, "payment_method": 1,
-            "captain_cash_status": 1, "order_number": 1, "order_type": 1, "created_at": 1}).to_list(10000)
+            "captain_cash_status": 1, "order_number": 1, "order_type": 1, "created_at": 1}).to_list(length=None)
 
     by_cap = {}
     for o in orders:
@@ -824,7 +824,7 @@ async def collect_captain_cash(payload: CaptainCollectPayload, current_user: dic
          "payment_method": "cash", "captain_cash_status": "held"}
     if tenant_id:
         q["tenant_id"] = tenant_id
-    held = await db.orders.find(q, {"_id": 0, "total": 1}).to_list(5000)
+    held = await db.orders.find(q, {"_id": 0, "total": 1}).to_list(length=None)
     collected_amount = sum(float(o.get("total") or 0) for o in held)
     now = datetime.now(timezone.utc).isoformat()
     res = await db.orders.update_many(q, {"$set": {
@@ -848,7 +848,7 @@ async def cleanup_non_cashier_shifts(current_user: dict = Depends(get_current_us
     user_query = {"role": {"$in": list(NON_CASHIER_ROLES)}}
     if tenant_id:
         user_query["tenant_id"] = tenant_id
-    non_cashier_users = await db.users.find(user_query, {"_id": 0, "id": 1, "full_name": 1, "role": 1}).to_list(1000)
+    non_cashier_users = await db.users.find(user_query, {"_id": 0, "id": 1, "full_name": 1, "role": 1}).to_list(length=None)
     non_cashier_ids = [u["id"] for u in non_cashier_users]
 
     if not non_cashier_ids:
@@ -858,7 +858,7 @@ async def cleanup_non_cashier_shifts(current_user: dict = Depends(get_current_us
     if tenant_id:
         del_query["tenant_id"] = tenant_id
     # عيّنة قبل الحذف لإظهارها في الرد
-    affected = await db.shifts.find(del_query, {"_id": 0, "cashier_name": 1, "role": 1}).to_list(1000)
+    affected = await db.shifts.find(del_query, {"_id": 0, "cashier_name": 1, "role": 1}).to_list(length=None)
     result = await db.shifts.delete_many(del_query)
     # ⭐ حذف سجلات الإغلاق (cash_register_closings) لرؤساء الأقسام أيضاً —
     # لأن بطاقات تقرير الإغلاق تُقرأ من هذه المجموعة وليست من shifts،
@@ -1002,7 +1002,7 @@ async def get_notification_recipients(current_user: dict = Depends(get_current_u
     
     # كل المدراء في التينانت
     q = {**tq, "role": {"$in": ["admin", "general_manager", "owner", "manager", "branch_manager"]}}
-    users = await _db.users.find(q, {"_id": 0, "id": 1, "email": 1, "role": 1, "full_name": 1, "phone": 1, "is_active": 1}).to_list(100)
+    users = await _db.users.find(q, {"_id": 0, "id": 1, "email": 1, "role": 1, "full_name": 1, "phone": 1, "is_active": 1}).to_list(length=None)
     
     recipients = []
     for u in users:
@@ -1076,9 +1076,9 @@ async def get_shift_receipts(
         query.setdefault("business_date", {})["$lte"] = date_to
     
     # نجمع من shifts
-    shifts_docs = await db.shifts.find(query, {"_id": 0}).sort("received_at", -1).to_list(5000)
+    shifts_docs = await db.shifts.find(query, {"_id": 0}).sort("received_at", -1).to_list(length=None)
     # نجمع من cash_register_closings (لتغطية الشفتات القديمة قبل توحيد الحقول)
-    closings_docs = await db.cash_register_closings.find(query, {"_id": 0}).sort("received_at", -1).to_list(5000)
+    closings_docs = await db.cash_register_closings.find(query, {"_id": 0}).sort("received_at", -1).to_list(length=None)
     
     # دمج بلا تكرار (المفتاح shift_id أو id)
     seen = set()
@@ -1180,7 +1180,7 @@ async def close_shift(shift_id: str, close_data: ShiftClose, current_user: dict 
     if shift_branch:
         orders_query["branch_id"] = shift_branch  # منع خلط فروع
     
-    all_orders_raw = await db.orders.find(orders_query).to_list(5000)
+    all_orders_raw = await db.orders.find(orders_query).to_list(length=None)
     
     # فصل المرتجعات (لا تُحسب في المبيعات لكن نقدها يُخصم من expected_cash)
     orders = []
@@ -1234,7 +1234,7 @@ async def close_shift(shift_id: str, close_data: ShiftClose, current_user: dict 
         {"cashier_id": {"$exists": False}, "created_by": {"$exists": False}}  # المصاريف القديمة بدون cashier
     ]
     
-    expenses = await db.expenses.find(expenses_query, {"_id": 0}).to_list(500)
+    expenses = await db.expenses.find(expenses_query, {"_id": 0}).to_list(length=None)
     total_expenses = sum(_safe_num(e.get("amount")) for e in expenses)
     
     # === جلب استخدامات الكوبونات في هذه الوردية ===
@@ -1247,7 +1247,7 @@ async def close_shift(shift_id: str, close_data: ShiftClose, current_user: dict 
     if shift_branch:
         coupon_usage_query["branch_id"] = shift_branch
     
-    coupon_usages = await db.coupon_usage.find(coupon_usage_query, {"_id": 0}).to_list(500)
+    coupon_usages = await db.coupon_usage.find(coupon_usage_query, {"_id": 0}).to_list(length=None)
     # تجميع حسب الكوبون
     coupons_summary_map = {}
     for cu in coupon_usages:
@@ -1499,7 +1499,7 @@ async def get_shifts(
             {"business_date": {"$exists": False}, "started_at": started_range.copy()}
         ]
     
-    shifts = await db.shifts.find(query, {"_id": 0}).sort("started_at", -1).to_list(100)
+    shifts = await db.shifts.find(query, {"_id": 0}).sort("started_at", -1).to_list(length=None)
 
     # ⭐ استبعاد ورديات رؤساء الأقسام (مخزن/تصنيع/مطبخ/مشتريات) — تظهر ورديات الكاشير حصراً.
     # نحدّد الدور من المستخدم الحالي (مصدر موثوق) ثم من حقل role المخزّن على الوردية كاحتياط.
@@ -1509,7 +1509,7 @@ async def get_shifts(
         if cashier_ids:
             users = await db.users.find(
                 {"id": {"$in": cashier_ids}}, {"_id": 0, "id": 1, "role": 1}
-            ).to_list(1000)
+            ).to_list(length=None)
             role_by_id = {u["id"]: (u.get("role") or "").strip().lower() for u in users}
 
         def _is_non_cashier(s):
@@ -1547,7 +1547,7 @@ async def _resolve_open_shift_for_close(db, shift_query, tenant_id, prefer_not_u
     ولا نجمع أي ورديات أخرى معها — التزاماً بمتطلّب المستخدم: لا دمج إطلاقاً.
 
     يُعيد: (shift, [shift_id], started_at)."""
-    opens = await db.shifts.find(shift_query, {"_id": 0}).to_list(200)
+    opens = await db.shifts.find(shift_query, {"_id": 0}).to_list(length=None)
     if not opens:
         return None, [], None
 
@@ -1632,7 +1632,7 @@ async def get_cash_register_summary(
     if tenant_id:
         shift_order_query["tenant_id"] = tenant_id
     
-    shift_orders = await db.orders.find(shift_order_query).to_list(1000)
+    shift_orders = await db.orders.find(shift_order_query).to_list(length=None)
     
     # 2. طلبات في نفس الفرع خلال فترة الوردية بدون shift_id (طلبات تطبيق الزبائن وغيرها)
     unlinked_query = {
@@ -1645,7 +1645,7 @@ async def get_cash_register_summary(
     if shift.get("branch_id"):
         unlinked_query["branch_id"] = shift["branch_id"]
     
-    unlinked_orders = await db.orders.find(unlinked_query).to_list(1000)
+    unlinked_orders = await db.orders.find(unlinked_query).to_list(length=None)
     
     # 3. دمج الطلبات مع إزالة التكرار
     seen_ids = set(o.get("id") for o in shift_orders if o.get("id"))
@@ -1665,13 +1665,13 @@ async def get_cash_register_summary(
         }
         if tenant_id:
             fallback_query["tenant_id"] = tenant_id
-        orders = await db.orders.find(fallback_query).to_list(1000)
+        orders = await db.orders.find(fallback_query).to_list(length=None)
     
     # الطلبات الملغاة لهذه الوردية (نفس المنطق: shift_id + بدون shift_id)
     cancelled_shift = {"shift_id": {"$in": consolidated_ids}, "status": OrderStatus.CANCELLED}
     if tenant_id:
         cancelled_shift["tenant_id"] = tenant_id
-    cancelled_orders = await db.orders.find(cancelled_shift).to_list(1000)
+    cancelled_orders = await db.orders.find(cancelled_shift).to_list(length=None)
     
     cancelled_unlinked_query = {
         "created_at": {"$gte": shift_start},
@@ -1682,7 +1682,7 @@ async def get_cash_register_summary(
         cancelled_unlinked_query["tenant_id"] = tenant_id
     if shift.get("branch_id"):
         cancelled_unlinked_query["branch_id"] = shift["branch_id"]
-    cancelled_unlinked = await db.orders.find(cancelled_unlinked_query).to_list(1000)
+    cancelled_unlinked = await db.orders.find(cancelled_unlinked_query).to_list(length=None)
     
     seen_cancelled = set(o.get("id") for o in cancelled_orders if o.get("id"))
     for o in cancelled_unlinked:
@@ -1694,7 +1694,7 @@ async def get_cash_register_summary(
     refunded_shift_q = {"shift_id": {"$in": consolidated_ids}, "status": "refunded"}
     if tenant_id:
         refunded_shift_q["tenant_id"] = tenant_id
-    refunded_orders_list = await db.orders.find(refunded_shift_q).to_list(1000)
+    refunded_orders_list = await db.orders.find(refunded_shift_q).to_list(length=None)
     
     refunded_unlinked_q = {
         "created_at": {"$gte": shift_start},
@@ -1705,7 +1705,7 @@ async def get_cash_register_summary(
         refunded_unlinked_q["tenant_id"] = tenant_id
     if shift.get("branch_id"):
         refunded_unlinked_q["branch_id"] = shift["branch_id"]
-    refunded_unlinked_list = await db.orders.find(refunded_unlinked_q).to_list(1000)
+    refunded_unlinked_list = await db.orders.find(refunded_unlinked_q).to_list(length=None)
     
     seen_refunded = set(o.get("id") for o in refunded_orders_list if o.get("id"))
     for o in refunded_unlinked_list:
@@ -1754,7 +1754,7 @@ async def get_cash_register_summary(
     # جلب المصروفات الخاصة بهذه الوردية فقط (قاعدة معتمدة: shift_id أو منشئ+يوم+فرع)
     expense_query = shift_expense_query(shift, tenant_id)
     
-    expenses = await db.expenses.find(expense_query).to_list(100)
+    expenses = await db.expenses.find(expense_query).to_list(length=None)
     total_expenses = sum(_safe_num(e.get("amount")) for e in expenses)
     
     opening_cash = _safe_num(shift.get("opening_cash", shift.get("opening_balance", 0)))
@@ -1916,7 +1916,7 @@ async def close_cash_register(close_data: CashRegisterClose, current_user: dict 
     if tenant_id:
         shift_order_query["tenant_id"] = tenant_id
     
-    shift_orders = await db.orders.find(shift_order_query).to_list(1000)
+    shift_orders = await db.orders.find(shift_order_query).to_list(length=None)
     
     unlinked_query = {
         "created_at": {"$gte": shift_start},
@@ -1928,7 +1928,7 @@ async def close_cash_register(close_data: CashRegisterClose, current_user: dict 
     if shift.get("branch_id"):
         unlinked_query["branch_id"] = shift["branch_id"]
     
-    unlinked_orders = await db.orders.find(unlinked_query).to_list(1000)
+    unlinked_orders = await db.orders.find(unlinked_query).to_list(length=None)
     
     seen_ids = set(o.get("id") for o in shift_orders if o.get("id"))
     for o in unlinked_orders:
@@ -1948,12 +1948,12 @@ async def close_cash_register(close_data: CashRegisterClose, current_user: dict 
             fallback_query["tenant_id"] = tenant_id
         if shift.get("branch_id"):
             fallback_query["branch_id"] = shift["branch_id"]
-        orders = await db.orders.find(fallback_query).to_list(1000)
+        orders = await db.orders.find(fallback_query).to_list(length=None)
     
     cancelled_shift = {"shift_id": {"$in": consolidated_ids}, "status": OrderStatus.CANCELLED}
     if tenant_id:
         cancelled_shift["tenant_id"] = tenant_id
-    cancelled_orders = await db.orders.find(cancelled_shift).to_list(1000)
+    cancelled_orders = await db.orders.find(cancelled_shift).to_list(length=None)
     
     cancelled_unlinked_query = {
         "created_at": {"$gte": shift_start},
@@ -1964,7 +1964,7 @@ async def close_cash_register(close_data: CashRegisterClose, current_user: dict 
         cancelled_unlinked_query["tenant_id"] = tenant_id
     if shift.get("branch_id"):
         cancelled_unlinked_query["branch_id"] = shift["branch_id"]
-    cancelled_unlinked = await db.orders.find(cancelled_unlinked_query).to_list(1000)
+    cancelled_unlinked = await db.orders.find(cancelled_unlinked_query).to_list(length=None)
     
     seen_cancelled = set(o.get("id") for o in cancelled_orders if o.get("id"))
     for o in cancelled_unlinked:
@@ -1976,7 +1976,7 @@ async def close_cash_register(close_data: CashRegisterClose, current_user: dict 
     refunded_shift = {"shift_id": {"$in": consolidated_ids}, "status": "refunded"}
     if tenant_id:
         refunded_shift["tenant_id"] = tenant_id
-    refunded_orders = await db.orders.find(refunded_shift).to_list(1000)
+    refunded_orders = await db.orders.find(refunded_shift).to_list(length=None)
     
     refunded_unlinked_query = {
         "created_at": {"$gte": shift_start},
@@ -1987,7 +1987,7 @@ async def close_cash_register(close_data: CashRegisterClose, current_user: dict 
         refunded_unlinked_query["tenant_id"] = tenant_id
     if shift.get("branch_id"):
         refunded_unlinked_query["branch_id"] = shift["branch_id"]
-    refunded_unlinked = await db.orders.find(refunded_unlinked_query).to_list(1000)
+    refunded_unlinked = await db.orders.find(refunded_unlinked_query).to_list(length=None)
     
     seen_refunded = set(o.get("id") for o in refunded_orders if o.get("id"))
     for o in refunded_unlinked:
@@ -2034,7 +2034,7 @@ async def close_cash_register(close_data: CashRegisterClose, current_user: dict 
             cancelled_by[cancelled_by_id]["count"] += 1
             cancelled_by[cancelled_by_id]["total"] += _safe_num(o.get("total"))
     
-    expenses = await db.expenses.find(shift_expense_query(shift, tenant_id), {"_id": 0}).to_list(100)
+    expenses = await db.expenses.find(shift_expense_query(shift, tenant_id), {"_id": 0}).to_list(length=None)
     total_expenses = sum(_safe_num(e.get("amount")) for e in expenses)
     
     net_profit = gross_profit - total_expenses
@@ -2171,7 +2171,7 @@ async def get_active_shift_details(shift_id: Optional[str] = None, cashier_id: O
     if tenant_id:
         order_query["tenant_id"] = tenant_id
     
-    orders = await db.orders.find(order_query).to_list(1000)
+    orders = await db.orders.find(order_query).to_list(length=None)
     
     if not orders:
         fallback_query = {
@@ -2183,7 +2183,7 @@ async def get_active_shift_details(shift_id: Optional[str] = None, cashier_id: O
             fallback_query["tenant_id"] = tenant_id
         if shift.get("branch_id"):
             fallback_query["branch_id"] = shift["branch_id"]
-        orders = await db.orders.find(fallback_query).to_list(1000)
+        orders = await db.orders.find(fallback_query).to_list(length=None)
     
     # حساب المبيعات
     total_sales = sum(_safe_num(o.get("total")) for o in orders)
@@ -2212,7 +2212,7 @@ async def get_active_shift_details(shift_id: Optional[str] = None, cashier_id: O
     if shift.get("branch_id"):
         expenses_query["branch_id"] = shift["branch_id"]
     
-    expenses = await db.expenses.find(expenses_query, {"_id": 0}).to_list(100)
+    expenses = await db.expenses.find(expenses_query, {"_id": 0}).to_list(length=None)
     total_expenses = sum(_safe_num(e.get("amount")) for e in expenses)
     
     # جلب المرتجعات
@@ -2224,7 +2224,7 @@ async def get_active_shift_details(shift_id: Optional[str] = None, cashier_id: O
         "cashier_id": shift_cashier_id,
         "created_at": {"$gte": shift_start},
         **({"tenant_id": tenant_id} if tenant_id else {})
-    }).to_list(100)
+    }).to_list(length=None)
     total_refunds = sum(_safe_num(r.get("total")) for r in refund_orders)
     
     # جلب الإلغاءات
@@ -2233,7 +2233,7 @@ async def get_active_shift_details(shift_id: Optional[str] = None, cashier_id: O
         "cashier_id": shift_cashier_id,
         "created_at": {"$gte": shift_start},
         **({"tenant_id": tenant_id} if tenant_id else {})
-    }).to_list(100)
+    }).to_list(length=None)
     total_cancellations = sum(_safe_num(c.get("total")) for c in cancelled_orders)
     
     opening_cash = _safe_num(shift.get("opening_cash", shift.get("opening_balance", 0)))
@@ -2285,7 +2285,7 @@ async def _recompute_shift_actuals(db, shift: dict) -> dict:
         orders_query["tenant_id"] = shift_tenant
     if shift_branch:
         orders_query["branch_id"] = shift_branch
-    all_orders_raw = await db.orders.find(orders_query, {"_id": 0, "total": 1, "status": 1}).to_list(5000)
+    all_orders_raw = await db.orders.find(orders_query, {"_id": 0, "total": 1, "status": 1}).to_list(length=None)
     orders = [o for o in all_orders_raw if o.get("status") != "refunded"]
     actual_sales = sum(_safe_num(o.get("total")) for o in orders)
 
@@ -2301,7 +2301,7 @@ async def _recompute_shift_actuals(db, shift: dict) -> dict:
     }
     if shift_tenant:
         expenses_query["tenant_id"] = shift_tenant
-    expenses = await db.expenses.find(expenses_query, {"_id": 0, "amount": 1}).to_list(500)
+    expenses = await db.expenses.find(expenses_query, {"_id": 0, "amount": 1}).to_list(length=None)
     actual_expenses = sum(_safe_num(e.get("amount")) for e in expenses)
 
     return {"actual_sales": actual_sales, "actual_expenses": actual_expenses, "actual_orders": len(orders)}
@@ -2424,7 +2424,7 @@ async def integrity_shifts_check(
         {"business_date": {"$gte": sd, "$lte": ed}},
         {"business_date": {"$exists": False}, "started_at": {"$gte": sd, "$lte": ed + "T23:59:59"}},
     ]
-    shifts = await db.shifts.find(q, {"_id": 0}).sort("started_at", -1).to_list(200)
+    shifts = await db.shifts.find(q, {"_id": 0}).sort("started_at", -1).to_list(length=None)
     rows, mismatch_count = await _integrity_rows_for_shifts(db, shifts)
     notified = 0
     if notify and mismatch_count:
@@ -2447,7 +2447,7 @@ async def run_startup_integrity_check(db) -> int:
     yest = (datetime.now(timezone.utc) + _td(hours=3) - _td(days=1)).strftime("%Y-%m-%d")
     shifts = await db.shifts.find(
         {"status": "closed", "business_date": {"$in": [today, yest]}}, {"_id": 0}
-    ).to_list(500)
+    ).to_list(length=None)
     by_tenant = {}
     for s in shifts:
         by_tenant.setdefault(s.get("tenant_id"), []).append(s)

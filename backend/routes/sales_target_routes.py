@@ -95,7 +95,7 @@ async def get_sales_target(
     if not is_manager:
         sales_query["cashier_id"] = current_user["id"]
 
-    orders = await db.orders.find(sales_query, {"_id": 0, "total": 1}).to_list(10000)
+    orders = await db.orders.find(sales_query, {"_id": 0, "total": 1}).to_list(length=None)
     current_sales = sum(_sn(o.get("total")) for o in orders)
 
     target_amount = target.get("target_amount", 0)

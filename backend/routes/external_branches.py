@@ -55,7 +55,7 @@ async def get_sold_branches(
     if not include_inactive:
         branch_query["is_active"] = True
     
-    sold_branches_from_branches = await db.branches.find(branch_query, {"_id": 0}).to_list(100)
+    sold_branches_from_branches = await db.branches.find(branch_query, {"_id": 0}).to_list(length=None)
     
     result = []
     for branch in sold_branches_from_branches:
@@ -110,7 +110,7 @@ async def get_external_branches_stats(
     sold_branches = await db.branches.find(
         {"tenant_id": tenant_id, "is_sold_branch": True, "is_active": True}, 
         {"_id": 0, "id": 1, "owner_percentage": 1, "monthly_fee": 1}
-    ).to_list(100)
+    ).to_list(length=None)
     
     sold_count = len(sold_branches)
     
@@ -184,7 +184,7 @@ async def get_monthly_revenue_report(
     sold_branches = await db.branches.find(
         {"tenant_id": tenant_id, "is_sold_branch": True, "is_active": True}, 
         {"_id": 0}
-    ).to_list(100)
+    ).to_list(length=None)
     
     branches_data = []
     total_revenue = 0
@@ -390,6 +390,6 @@ async def get_payments(
     payments = await db.sold_branch_payments.find(
         {"branch_id": branch_id, "tenant_id": tenant_id},
         {"_id": 0}
-    ).sort("payment_date", -1).to_list(100)
+    ).sort("payment_date", -1).to_list(length=None)
     
     return payments

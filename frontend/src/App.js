@@ -85,6 +85,7 @@ const SystemContact = lazy(() => import("./pages/SystemContact"));
 const BreakEvenReport = lazy(() => import("./pages/BreakEvenReport"));
 const PriceIncreaseReport = lazy(() => import("./pages/PriceIncreaseReport"));
 const OwnerWallet = lazy(() => import("./pages/OwnerWallet"));
+const EnterprisePreview = lazy(() => import("./pages/EnterprisePreview"));
 const CaptainsManagement = lazy(() => import("./pages/CaptainsManagement"));
 const ExternalBranchesManagement = lazy(() => import("./pages/ExternalBranchesManagement"));
 
@@ -599,6 +600,8 @@ function AppRoutes() {
           </ProtectedRoute>
         } 
       />
+      {/* صفحة معاينة "وضع المؤسسة" — تصميم فقط، لا اتصال بقاعدة البيانات */}
+      <Route path="/enterprise-preview" element={<EnterprisePreview />} />
       {/* صفحة Super Admin - لوحة تحكم المالك */}
       <Route path="/super-admin" element={<SuperAdmin />} />
       {/* صفحة إدارة النظام */}

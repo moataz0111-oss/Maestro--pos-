@@ -59,7 +59,7 @@ async def get_sales_report(
     query["status"] = {"$nin": ["cancelled", "refunded"]}
     query["is_refunded"] = {"$ne": True}
     
-    orders = await db.orders.find(query, {"_id": 0}).to_list(10000)
+    orders = await db.orders.find(query, {"_id": 0}).to_list(length=None)
     
     # فصل الطلبات المدفوعة عن المعلقة
     paid_orders = [o for o in orders if o.get("payment_status") in ["paid", "credit", None]]
@@ -259,7 +259,7 @@ async def get_credit_report(
         query["created_at"]["$lte"] = end_date
     
     # جلب الطلبات
-    all_orders = await db.orders.find(query, {"_id": 0}).to_list(1000)
+    all_orders = await db.orders.find(query, {"_id": 0}).to_list(length=None)
     
     # جلب قائمة العملاء الذين هم شركات توصيل
     tenant_id = current_user.get("tenant_id")
@@ -269,7 +269,7 @@ async def get_credit_report(
     else:
         delivery_customers_query["$or"] = [{"tenant_id": {"$exists": False}}, {"tenant_id": None}]
     
-    delivery_customers = await db.customers.find(delivery_customers_query, {"id": 1}).to_list(1000)
+    delivery_customers = await db.customers.find(delivery_customers_query, {"id": 1}).to_list(length=None)
     delivery_customer_ids = {c.get("id") for c in delivery_customers}
     
     # فلترة يدوية - استبعاد طلبات شركات التوصيل والمرتجعات بكل الطرق الممكنة
@@ -421,7 +421,7 @@ async def export_smart_report_excel(
     
     if report_type == "sales":
         ws.title = "تقرير المبيعات الذكي"
-        orders = await db.orders.find(query, {"_id": 0}).to_list(10000)
+        orders = await db.orders.find(query, {"_id": 0}).to_list(length=None)
         
         # العنوان
         ws.merge_cells('A1:F1')
@@ -467,7 +467,7 @@ async def export_smart_report_excel(
         
     elif report_type == "products":
         ws.title = "المنتجات الأكثر مبيعاً"
-        orders = await db.orders.find(query, {"_id": 0}).to_list(10000)
+        orders = await db.orders.find(query, {"_id": 0}).to_list(length=None)
         
         # حساب مبيعات المنتجات
         product_sales = {}
@@ -511,7 +511,7 @@ async def export_smart_report_excel(
         today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
         query["created_at"] = {"$regex": f"^{today}"}
         
-        orders = await db.orders.find(query, {"_id": 0, "created_at": 1, "total": 1}).to_list(10000)
+        orders = await db.orders.find(query, {"_id": 0, "created_at": 1, "total": 1}).to_list(length=None)
         
         hourly_data = {str(h).zfill(2): {"orders": 0, "sales": 0} for h in range(24)}
         for order in orders:
@@ -629,7 +629,7 @@ async def export_smart_report_pdf(
     
     if report_type == "sales":
         title_text = f"تقرير المبيعات الذكي - {period}"
-        orders = await db.orders.find(query, {"_id": 0}).to_list(10000)
+        orders = await db.orders.find(query, {"_id": 0}).to_list(length=None)
         
         headers = ["#", "رقم الطلب", "التاريخ", "النوع", "طريقة الدفع", "المبلغ"]
         order_types = {"dine_in": "محلي", "takeaway": "سفري", "delivery": "توصيل"}
@@ -651,7 +651,7 @@ async def export_smart_report_pdf(
         
     elif report_type == "products":
         title_text = "المنتجات الأكثر مبيعاً"
-        orders = await db.orders.find(query, {"_id": 0}).to_list(10000)
+        orders = await db.orders.find(query, {"_id": 0}).to_list(length=None)
         
         product_sales = {}
         for order in orders:
@@ -674,7 +674,7 @@ async def export_smart_report_pdf(
         today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
         query["created_at"] = {"$regex": f"^{today}"}
         
-        orders = await db.orders.find(query, {"_id": 0, "created_at": 1, "total": 1}).to_list(10000)
+        orders = await db.orders.find(query, {"_id": 0, "created_at": 1, "total": 1}).to_list(length=None)
         
         hourly_data = {str(h).zfill(2): {"orders": 0, "sales": 0} for h in range(24)}
         for order in orders:

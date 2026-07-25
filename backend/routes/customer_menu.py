@@ -98,13 +98,13 @@ async def get_menu_routes(db):
         categories = await db.categories.find(
             {"tenant_id": tenant_id, "is_active": {"$ne": False}},
             {"_id": 0}
-        ).sort("sort_order", 1).to_list(100)
+        ).sort("sort_order", 1).to_list(length=None)
         
         # جلب المنتجات
         products = await db.products.find(
             {"tenant_id": tenant_id, "is_available": {"$ne": False}},
             {"_id": 0}
-        ).to_list(500)
+        ).to_list(length=None)
         
         # جلب إعدادات المطعم
         settings = await db.tenant_settings.find_one(
@@ -116,14 +116,14 @@ async def get_menu_routes(db):
         branches = await db.branches.find(
             {"tenant_id": tenant_id, "is_active": {"$ne": False}},
             {"_id": 0}
-        ).to_list(50)
+        ).to_list(length=None)
         
         # إذا لم يكن هناك فروع، أنشئ فرع افتراضي
         if not branches:
             branches = await db.branches.find(
                 {"is_active": {"$ne": False}},
                 {"_id": 0}
-            ).to_list(50)
+            ).to_list(length=None)
         
         return {
             "restaurant": {
@@ -416,7 +416,7 @@ async def get_customer_order_routes(db):
         orders = await db.orders.find(
             {"customer_id": customer["id"], "tenant_id": tenant["id"]},
             {"_id": 0}
-        ).sort("created_at", -1).limit(50).to_list(50)
+        ).sort("created_at", -1).limit(50).to_list(length=None)
         
         return orders
     
@@ -465,7 +465,7 @@ async def get_customer_order_routes(db):
 
 async def setup_menu_slugs(db):
     """إعداد slugs لجميع المطاعم"""
-    tenants = await db.tenants.find({}, {"_id": 0}).to_list(100)
+    tenants = await db.tenants.find({}, {"_id": 0}).to_list(length=None)
     
     for tenant in tenants:
         if not tenant.get("menu_slug"):

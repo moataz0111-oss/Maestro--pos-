@@ -70,7 +70,7 @@ async def get_daily_break_even(
             {"branch_type": {"$nin": NON_BRANCH_TYPES}},
         ]
     
-    branches = await db.branches.find(branches_query, {"_id": 0}).to_list(100)
+    branches = await db.branches.find(branches_query, {"_id": 0}).to_list(length=None)
     # ⭐ صفِّ الفروع الفعلية فقط (دفاع إضافي ضد أي بيانات قديمة)
     branches = [b for b in branches if (b.get("branch_type") or "branch") == "branch"]
     
@@ -81,7 +81,7 @@ async def get_daily_break_even(
         "tenant_id": tenant_id,
         "is_active": {"$ne": False},
         "branch_type": {"$in": NON_BRANCH_TYPES},
-    }, {"_id": 0, "id": 1, "name": 1, "branch_type": 1}).to_list(50)
+    }, {"_id": 0, "id": 1, "name": 1, "branch_type": 1}).to_list(length=None)
     external_dept_ids = [b["id"] for b in external_dept_branches]
     external_employees_docs = []
     if external_dept_ids:
@@ -89,7 +89,7 @@ async def get_daily_break_even(
             "tenant_id": tenant_id,
             "branch_id": {"$in": external_dept_ids},
             "is_active": {"$ne": False},
-        }, {"_id": 0, "id": 1, "name": 1, "salary": 1, "branch_id": 1}).to_list(500)
+        }, {"_id": 0, "id": 1, "name": 1, "salary": 1, "branch_id": 1}).to_list(length=None)
     total_external_monthly_salaries = sum(_sn(e.get("salary")) for e in external_employees_docs)
     total_external_daily_salaries = total_external_monthly_salaries / 30
     # نصيب كل فرع فعلي بالتساوي
@@ -147,7 +147,7 @@ async def get_daily_break_even(
             "tenant_id": tenant_id,
             "branch_id": branch_id_val,
             "is_active": {"$ne": False}
-        }, {"_id": 0, "salary": 1}).to_list(1000)
+        }, {"_id": 0, "salary": 1}).to_list(length=None)
         
         total_monthly_salaries = sum(_sn(emp.get("salary")) for emp in employees)
         daily_salaries = total_monthly_salaries / 30
@@ -166,7 +166,7 @@ async def get_daily_break_even(
                     "date": {"$gte": start_of_day.isoformat(), "$lte": end_of_day.isoformat()},
                 },
             ],
-        }, {"_id": 0, "amount": 1}).to_list(10000)
+        }, {"_id": 0, "amount": 1}).to_list(length=None)
         daily_other_expenses = sum(_sn(e.get("amount")) for e in daily_expenses_docs)
         
         # الهدف اليومي = التكاليف الثابتة + الرواتب + المصاريف اليومية + حصة الرواتب الخارجية
@@ -191,7 +191,7 @@ async def get_daily_break_even(
             ]
         }
         
-        orders = await db.orders.find(orders_query, {"_id": 0, "total": 1, "total_cost": 1, "profit": 1}).to_list(10000)
+        orders = await db.orders.find(orders_query, {"_id": 0, "total": 1, "total_cost": 1, "profit": 1}).to_list(length=None)
         
         # حساب الربح الإجمالي (من المواد الخام فقط)
         daily_gross_profit = sum(_sn(o.get("profit")) for o in orders)
@@ -362,7 +362,7 @@ async def get_daily_break_even_range(
             {"branch_type": {"$nin": NON_BRANCH_TYPES}},
         ]
     
-    branches = await db.branches.find(branches_query, {"_id": 0}).to_list(100)
+    branches = await db.branches.find(branches_query, {"_id": 0}).to_list(length=None)
     branches = [b for b in branches if (b.get("branch_type") or "branch") == "branch"]
     
     # ⭐ رواتب الأقسام الإدارية للفترة، موزَّعة على الفروع الفعلية
@@ -370,7 +370,7 @@ async def get_daily_break_even_range(
         "tenant_id": tenant_id,
         "is_active": {"$ne": False},
         "branch_type": {"$in": NON_BRANCH_TYPES},
-    }, {"_id": 0, "id": 1, "name": 1, "branch_type": 1}).to_list(50)
+    }, {"_id": 0, "id": 1, "name": 1, "branch_type": 1}).to_list(length=None)
     external_dept_ids_r = [b["id"] for b in external_dept_branches_r]
     external_employees_docs_r = []
     if external_dept_ids_r:
@@ -378,7 +378,7 @@ async def get_daily_break_even_range(
             "tenant_id": tenant_id,
             "branch_id": {"$in": external_dept_ids_r},
             "is_active": {"$ne": False},
-        }, {"_id": 0, "id": 1, "name": 1, "salary": 1, "branch_id": 1}).to_list(500)
+        }, {"_id": 0, "id": 1, "name": 1, "salary": 1, "branch_id": 1}).to_list(length=None)
     total_ext_monthly_r = sum(_sn(e.get("salary")) for e in external_employees_docs_r)
     total_ext_range_r = (total_ext_monthly_r / 30) * days_count
     num_real_branches_r = len(branches) or 1
@@ -438,7 +438,7 @@ async def get_daily_break_even_range(
             "tenant_id": tenant_id,
             "branch_id": branch_id_val,
             "is_active": {"$ne": False}
-        }, {"_id": 0, "salary": 1}).to_list(1000)
+        }, {"_id": 0, "salary": 1}).to_list(length=None)
         
         total_monthly_salaries = sum(_sn(emp.get("salary")) for emp in employees)
         salaries_range = (total_monthly_salaries / 30) * days_count
@@ -459,7 +459,7 @@ async def get_daily_break_even_range(
                     },
                 },
             ],
-        }, {"_id": 0, "amount": 1}).to_list(20000)
+        }, {"_id": 0, "amount": 1}).to_list(length=None)
         range_other_expenses = sum(_sn(e.get("amount")) for e in exp_docs)
         
         # الهدف الإجمالي للفترة (يشمل حصة الرواتب الخارجية)
@@ -489,7 +489,7 @@ async def get_daily_break_even_range(
             ]
         }
         
-        orders = await db.orders.find(orders_query, {"_id": 0, "total": 1, "total_cost": 1, "profit": 1}).to_list(10000)
+        orders = await db.orders.find(orders_query, {"_id": 0, "total": 1, "total_cost": 1, "profit": 1}).to_list(length=None)
         
         # حساب الأرباح والمبيعات
         branch_profit = sum(_sn(o.get("profit")) for o in orders)
@@ -682,7 +682,7 @@ async def get_monthly_break_even_summary(
             {"branch_type": {"$nin": NON_BRANCH_TYPES}},
         ]
     
-    branches = await db.branches.find(branches_query, {"_id": 0}).to_list(100)
+    branches = await db.branches.find(branches_query, {"_id": 0}).to_list(length=None)
     branches = [b for b in branches if (b.get("branch_type") or "branch") == "branch"]
     
     result_branches = []
@@ -704,7 +704,7 @@ async def get_monthly_break_even_summary(
             "tenant_id": tenant_id,
             "branch_id": branch_id_val,
             "is_active": {"$ne": False}
-        }, {"_id": 0, "salary": 1, "name": 1}).to_list(1000)
+        }, {"_id": 0, "salary": 1, "name": 1}).to_list(length=None)
         
         total_salaries = sum(_sn(emp.get("salary")) for emp in employees)
         
@@ -722,7 +722,7 @@ async def get_monthly_break_even_summary(
             }
         }
         
-        orders = await db.orders.find(orders_query, {"_id": 0}).to_list(100000)
+        orders = await db.orders.find(orders_query, {"_id": 0}).to_list(length=None)
         
         monthly_sales = sum(_sn(o.get("total")) for o in orders)
         monthly_material_cost = sum(_sn(o.get("total_cost")) for o in orders)
@@ -806,7 +806,7 @@ async def get_break_even_alerts(
     branches = await db.branches.find(
         {"tenant_id": tenant_id, "is_active": {"$ne": False}}, 
         {"_id": 0}
-    ).to_list(100)
+    ).to_list(length=None)
     
     alerts = []
     
@@ -826,7 +826,7 @@ async def get_break_even_alerts(
             "tenant_id": tenant_id,
             "branch_id": branch_id,
             "is_active": {"$ne": False}
-        }, {"_id": 0, "salary": 1}).to_list(1000)
+        }, {"_id": 0, "salary": 1}).to_list(length=None)
         
         daily_salaries = sum(_sn(emp.get("salary")) for emp in employees) / 30
         
@@ -846,7 +846,7 @@ async def get_break_even_alerts(
                 "$gte": start_of_day.isoformat(),
                 "$lte": end_of_day.isoformat()
             }
-        }, {"_id": 0, "profit": 1}).to_list(10000)
+        }, {"_id": 0, "profit": 1}).to_list(length=None)
         
         daily_profit = sum(_sn(o.get("profit")) for o in orders)
         coverage_percentage = (daily_profit / daily_target * 100) if daily_target > 0 else 0

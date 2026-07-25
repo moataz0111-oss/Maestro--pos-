@@ -87,7 +87,7 @@ async def _build_template(db, department: str, period: str, tenant_id: Optional[
             {"tenant_id": None},
         ]
     
-    raw_items = await coll.find(q, {"_id": 0}).to_list(5000)
+    raw_items = await coll.find(q, {"_id": 0}).to_list(length=None)
     items = []
     for it in raw_items:
         # ⭐ المنتجات المُصنّعة تستخدم unit_cost_after_waste/unit_cost_before_waste

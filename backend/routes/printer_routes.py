@@ -54,7 +54,7 @@ async def get_printer_types(current_user: dict = Depends(get_current_user)):
     # جلب الأنواع المخصصة للعميل
     tenant_id = get_user_tenant_id(current_user)
     query = {"tenant_id": tenant_id} if tenant_id else {}
-    custom_types = await db.printer_types.find(query, {"_id": 0}).to_list(50)
+    custom_types = await db.printer_types.find(query, {"_id": 0}).to_list(length=None)
     
     return {"default": default_types, "custom": custom_types}
 
@@ -90,7 +90,7 @@ async def get_printers(branch_id: Optional[str] = None, current_user: dict = Dep
     query = build_tenant_query(current_user)
     if branch_id:
         query["branch_id"] = branch_id
-    printers = await db.printers.find(query, {"_id": 0}).to_list(50)
+    printers = await db.printers.find(query, {"_id": 0}).to_list(length=None)
     return printers
 
 @router.put("/printers/{printer_id}")

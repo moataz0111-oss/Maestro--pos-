@@ -150,13 +150,13 @@ async def get_deductions(
     if end_date:
         query.setdefault("date", {})["$lte"] = end_date
     
-    deductions = await db.deductions.find(query, {"_id": 0}).sort("date", -1).to_list(500)
+    deductions = await db.deductions.find(query, {"_id": 0}).sort("date", -1).to_list(length=None)
     
     # تحديث أسماء الموظفين من البيانات الحالية
     if deductions:
         emp_ids = list(set(d.get("employee_id") for d in deductions if d.get("employee_id")))
         if emp_ids:
-            emps = await db.employees.find({"id": {"$in": emp_ids}}, {"_id": 0, "id": 1, "name": 1}).to_list(500)
+            emps = await db.employees.find({"id": {"$in": emp_ids}}, {"_id": 0, "id": 1, "name": 1}).to_list(length=None)
             name_map = {e["id"]: e.get("name", "") for e in emps}
             for d in deductions:
                 eid = d.get("employee_id")
@@ -175,7 +175,7 @@ async def cleanup_duplicate_deductions(current_user: dict = Depends(get_current_
 
     query = build_tenant_query(current_user)
     query["created_by"] = "system"
-    deductions = await db.deductions.find(query).sort("created_at", 1).to_list(10000)
+    deductions = await db.deductions.find(query).sort("created_at", 1).to_list(length=None)
 
     seen = {}
     to_delete = []
@@ -356,13 +356,13 @@ async def get_bonuses(
     if end_date:
         query.setdefault("date", {})["$lte"] = end_date
     
-    bonuses = await db.bonuses.find(query, {"_id": 0}).sort("date", -1).to_list(500)
+    bonuses = await db.bonuses.find(query, {"_id": 0}).sort("date", -1).to_list(length=None)
     
     # تحديث أسماء الموظفين من البيانات الحالية
     if bonuses:
         emp_ids = list(set(b.get("employee_id") for b in bonuses if b.get("employee_id")))
         if emp_ids:
-            emps = await db.employees.find({"id": {"$in": emp_ids}}, {"_id": 0, "id": 1, "name": 1}).to_list(500)
+            emps = await db.employees.find({"id": {"$in": emp_ids}}, {"_id": 0, "id": 1, "name": 1}).to_list(length=None)
             name_map = {e["id"]: e.get("name", "") for e in emps}
             for b in bonuses:
                 eid = b.get("employee_id")
@@ -401,13 +401,13 @@ async def get_overtime_requests(
         query["employee_id"] = employee_id
     if month:
         query["date"] = {"$regex": f"^{month}"}
-    requests = await db.overtime_requests.find(query, {"_id": 0}).sort("created_at", -1).to_list(500)
+    requests = await db.overtime_requests.find(query, {"_id": 0}).sort("created_at", -1).to_list(length=None)
     
     # تحديث أسماء الموظفين من البيانات الحالية
     if requests:
         emp_ids = list(set(r.get("employee_id") for r in requests if r.get("employee_id")))
         if emp_ids:
-            emps = await db.employees.find({"id": {"$in": emp_ids}}, {"_id": 0, "id": 1, "name": 1}).to_list(500)
+            emps = await db.employees.find({"id": {"$in": emp_ids}}, {"_id": 0, "id": 1, "name": 1}).to_list(length=None)
             name_map = {e["id"]: e.get("name", "") for e in emps}
             for r in requests:
                 eid = r.get("employee_id")
@@ -471,7 +471,7 @@ async def calculate_payroll(
     attendance = await db.attendance.find({
         "employee_id": employee_id,
         "date": {"$regex": f"^{month}"}
-    }, {"_id": 0}).to_list(31)
+    }, {"_id": 0}).to_list(length=None)
     
     worked_days = len([a for a in attendance if a.get("status") in ["present", "late", "early_leave"]])
     absent_days = len([a for a in attendance if a.get("status") == "absent"])
@@ -497,7 +497,7 @@ async def calculate_payroll(
         "employee_id": employee_id,
         "date": {"$regex": f"^{month}"},
         "status": "approved"
-    }, {"_id": 0}).to_list(100)
+    }, {"_id": 0}).to_list(length=None)
     approved_ot_hours = sum(o.get("hours", 0) for o in approved_overtime)
     overtime_pay = round(approved_ot_hours * hourly_rate * 1.5, 2)
     
@@ -505,14 +505,14 @@ async def calculate_payroll(
     deductions = await db.deductions.find({
         "employee_id": employee_id,
         "date": {"$regex": f"^{month}"}
-    }, {"_id": 0}).to_list(100)
+    }, {"_id": 0}).to_list(length=None)
     total_deductions = sum(d.get("amount", 0) for d in deductions)
     
     # جلب المكافآت
     bonuses = await db.bonuses.find({
         "employee_id": employee_id,
         "date": {"$regex": f"^{month}"}
-    }, {"_id": 0}).to_list(100)
+    }, {"_id": 0}).to_list(length=None)
     total_bonuses = sum(b.get("amount", 0) for b in bonuses)
     
     # جلب السلف المعتمدة التي ما زال لها رصيد متبقٍّ — نخصم القسط الشهري فقط
@@ -521,7 +521,7 @@ async def calculate_payroll(
         "employee_id": employee_id,
         "status": "approved",
         "remaining_amount": {"$gt": 0}
-    }, {"_id": 0}).to_list(100)
+    }, {"_id": 0}).to_list(length=None)
     advance_deduction = sum(a.get("monthly_deduction", 0) for a in advances)
     
     # صافي الراتب = الراتب المستحق + وقت إضافي موافق + مكافآت - خصومات - سلف
@@ -533,7 +533,7 @@ async def calculate_payroll(
     payments = await db.salary_payments.find({
         "employee_id": employee_id,
         "payment_date": {"$gte": month_start, "$lte": month_end}
-    }, {"_id": 0}).to_list(2000)
+    }, {"_id": 0}).to_list(length=None)
     paid_amount = round(sum(p.get("amount", 0) or 0 for p in payments), 2)
     remaining = round(net_salary - paid_amount, 2)
     
@@ -604,13 +604,13 @@ async def get_payroll(
     if status:
         query["status"] = status
     
-    payrolls = await db.payroll.find(query, {"_id": 0}).sort("created_at", -1).to_list(500)
+    payrolls = await db.payroll.find(query, {"_id": 0}).sort("created_at", -1).to_list(length=None)
     
     # تحديث أسماء الموظفين من البيانات الحالية + إرفاق الدفعات النقدية المصروفة
     if payrolls:
         emp_ids = list(set(p.get("employee_id") for p in payrolls if p.get("employee_id")))
         if emp_ids:
-            emps = await db.employees.find({"id": {"$in": emp_ids}}, {"_id": 0, "id": 1, "name": 1}).to_list(500)
+            emps = await db.employees.find({"id": {"$in": emp_ids}}, {"_id": 0, "id": 1, "name": 1}).to_list(length=None)
             name_map = {e["id"]: e.get("name", "") for e in emps}
             for p in payrolls:
                 eid = p.get("employee_id")
@@ -625,7 +625,7 @@ async def get_payroll(
                 pays = await db.salary_payments.find({
                     "employee_id": eid,
                     "payment_date": {"$gte": f"{pmonth}-01", "$lte": f"{pmonth}-31"}
-                }, {"_id": 0}).to_list(2000)
+                }, {"_id": 0}).to_list(length=None)
                 paid_amount = round(sum(x.get("amount", 0) or 0 for x in pays), 2)
             p["paid_amount"] = paid_amount
             p["remaining"] = round((p.get("net_salary", 0) or 0) - paid_amount, 2)
@@ -664,7 +664,7 @@ async def pay_payroll(payroll_id: str, current_user: dict = Depends(get_current_
         prev_payments = await db.salary_payments.find(
             {"employee_id": payroll.get("employee_id"), "salary_month": month},
             {"_id": 0, "amount": 1},
-        ).to_list(1000)
+        ).to_list(length=None)
         already_paid = round(sum(p.get("amount", 0) for p in prev_payments), 2)
 
     amount_to_withdraw = round(max(net_salary - already_paid, 0), 2)
@@ -675,9 +675,9 @@ async def pay_payroll(payroll_id: str, current_user: dict = Depends(get_current_
         branch_q = {"branch_id": emp_branch_id}
         if tenant_id:
             branch_q["tenant_id"] = tenant_id
-        br_deposits = await db.owner_deposits.find(branch_q, {"_id": 0, "amount": 1}).to_list(5000)
-        br_withdrawals = await db.owner_withdrawals.find(branch_q, {"_id": 0, "amount": 1}).to_list(5000)
-        br_transfers = await db.owner_profit_transfers.find(branch_q, {"_id": 0, "amount": 1}).to_list(5000)
+        br_deposits = await db.owner_deposits.find(branch_q, {"_id": 0, "amount": 1}).to_list(length=None)
+        br_withdrawals = await db.owner_withdrawals.find(branch_q, {"_id": 0, "amount": 1}).to_list(length=None)
+        br_transfers = await db.owner_profit_transfers.find(branch_q, {"_id": 0, "amount": 1}).to_list(length=None)
         branch_balance = (
             sum(d.get("amount", 0) for d in br_deposits)
             - sum(w.get("amount", 0) for w in br_withdrawals)
@@ -737,7 +737,7 @@ async def _compute_employee_net(db, employee: dict, month: str) -> dict:
     hourly_rate = basic_salary / (30 * work_hours_per_day) if work_hours_per_day > 0 else 0
     daily_rate = basic_salary / 30
 
-    attendance = await db.attendance.find({"employee_id": employee_id, "date": {"$regex": f"^{month}"}}, {"_id": 0}).to_list(31)
+    attendance = await db.attendance.find({"employee_id": employee_id, "date": {"$regex": f"^{month}"}}, {"_id": 0}).to_list(length=None)
     worked_days = len([a for a in attendance if a.get("status") in ["present", "late", "early_leave"]])
     total_worked_hours = sum(a.get("worked_hours", 0) for a in attendance)
 
@@ -748,18 +748,18 @@ async def _compute_employee_net(db, employee: dict, month: str) -> dict:
     else:
         earned_salary = round(daily_rate * worked_days, 2)
 
-    approved_overtime = await db.overtime_requests.find({"employee_id": employee_id, "date": {"$regex": f"^{month}"}, "status": "approved"}, {"_id": 0}).to_list(100)
+    approved_overtime = await db.overtime_requests.find({"employee_id": employee_id, "date": {"$regex": f"^{month}"}, "status": "approved"}, {"_id": 0}).to_list(length=None)
     overtime_pay = round(sum(o.get("hours", 0) for o in approved_overtime) * hourly_rate * 1.5, 2)
-    deductions = await db.deductions.find({"employee_id": employee_id, "date": {"$regex": f"^{month}"}}, {"_id": 0}).to_list(100)
+    deductions = await db.deductions.find({"employee_id": employee_id, "date": {"$regex": f"^{month}"}}, {"_id": 0}).to_list(length=None)
     total_deductions = sum(d.get("amount", 0) for d in deductions)
-    bonuses = await db.bonuses.find({"employee_id": employee_id, "date": {"$regex": f"^{month}"}}, {"_id": 0}).to_list(100)
+    bonuses = await db.bonuses.find({"employee_id": employee_id, "date": {"$regex": f"^{month}"}}, {"_id": 0}).to_list(length=None)
     total_bonuses = sum(b.get("amount", 0) for b in bonuses)
     # عند إنهاء الخدمة: نخصم كامل رصيد السلف المتبقي (وليس القسط الشهري فقط)
-    advances = await db.advances.find({"employee_id": employee_id, "status": "approved", "remaining_amount": {"$gt": 0}}, {"_id": 0}).to_list(100)
+    advances = await db.advances.find({"employee_id": employee_id, "status": "approved", "remaining_amount": {"$gt": 0}}, {"_id": 0}).to_list(length=None)
     advance_remaining = sum(a.get("remaining_amount", 0) for a in advances)
 
     net_salary = round(earned_salary + overtime_pay + total_bonuses - total_deductions - advance_remaining, 2)
-    payments = await db.salary_payments.find({"employee_id": employee_id, "salary_month": month}, {"_id": 0, "amount": 1}).to_list(2000)
+    payments = await db.salary_payments.find({"employee_id": employee_id, "salary_month": month}, {"_id": 0, "amount": 1}).to_list(length=None)
     paid_amount = round(sum(p.get("amount", 0) or 0 for p in payments), 2)
     remaining = round(net_salary - paid_amount, 2)
     return {
@@ -787,7 +787,7 @@ async def process_terminations(db, tenant_id: Optional[str] = None):
     now_iso = now.isoformat()
     base = {"tenant_id": tenant_id} if tenant_id else {}
     # 1) الإنهاء النهائي بعد 24 ساعة
-    pending = await db.employees.find({**base, "employment_status": "terminated_pending", "auto_finalize_at": {"$lte": now_iso}}, {"_id": 0, "id": 1, "termination_date": 1}).to_list(500)
+    pending = await db.employees.find({**base, "employment_status": "terminated_pending", "auto_finalize_at": {"$lte": now_iso}}, {"_id": 0, "id": 1, "termination_date": 1}).to_list(length=None)
     for e in pending:
         await db.employees.update_one({"id": e["id"]}, {"$set": {
             "employment_status": "terminated",
@@ -796,7 +796,7 @@ async def process_terminations(db, tenant_id: Optional[str] = None):
             "archive_purge_at": _end_of_next_month_iso(e.get("termination_date") or now_iso),
         }})
     # 2) الحذف النهائي من الأرشيف بعد نهاية الشهر التالي
-    to_purge = await db.employees.find({**base, "employment_status": "terminated", "archive_purge_at": {"$lte": now_iso}}, {"_id": 0, "id": 1}).to_list(500)
+    to_purge = await db.employees.find({**base, "employment_status": "terminated", "archive_purge_at": {"$lte": now_iso}}, {"_id": 0, "id": 1}).to_list(length=None)
     for e in to_purge:
         await db.employees.delete_one({"id": e["id"]})
 
@@ -872,9 +872,9 @@ async def terminate_payout(employee_id: str, payload: Optional[SettlementPayout]
         branch_q = {"branch_id": emp_branch_id}
         if tenant_id:
             branch_q["tenant_id"] = tenant_id
-        deps = await db.owner_deposits.find(branch_q, {"_id": 0, "amount": 1}).to_list(5000)
-        wds = await db.owner_withdrawals.find(branch_q, {"_id": 0, "amount": 1}).to_list(5000)
-        trs = await db.owner_profit_transfers.find(branch_q, {"_id": 0, "amount": 1}).to_list(5000)
+        deps = await db.owner_deposits.find(branch_q, {"_id": 0, "amount": 1}).to_list(length=None)
+        wds = await db.owner_withdrawals.find(branch_q, {"_id": 0, "amount": 1}).to_list(length=None)
+        trs = await db.owner_profit_transfers.find(branch_q, {"_id": 0, "amount": 1}).to_list(length=None)
         balance = sum(d.get("amount", 0) for d in deps) - sum(w.get("amount", 0) for w in wds) - sum(t.get("amount", 0) for t in trs)
         if amount > balance:
             raise HTTPException(status_code=400, detail=f"رصيد فرع \"{emp_branch_name or emp_branch_id}\" غير كافٍ في خزينة المالك. المتاح: {balance:,.0f} IQD، المطلوب: {amount:,.0f} IQD")
@@ -990,7 +990,7 @@ async def generate_all_payrolls(month: str, current_user: dict = Depends(get_cur
     tenant_id = get_user_tenant_id(current_user)
     query = {"tenant_id": tenant_id, "is_active": True} if tenant_id else {"is_active": True}
     
-    employees = await db.employees.find(query, {"_id": 0}).to_list(1000)
+    employees = await db.employees.find(query, {"_id": 0}).to_list(length=None)
     
     generated = 0
     for emp in employees:
@@ -1010,7 +1010,7 @@ async def generate_all_payrolls(month: str, current_user: dict = Depends(get_cur
             attendance = await db.attendance.find({
                 "employee_id": emp["id"],
                 "date": {"$regex": f"^{month}"}
-            }, {"_id": 0}).to_list(31)
+            }, {"_id": 0}).to_list(length=None)
             
             worked_days = len([a for a in attendance if a.get("status") in ["present", "late", "early_leave"]])
             absent_days = len([a for a in attendance if a.get("status") == "absent"])
@@ -1032,7 +1032,7 @@ async def generate_all_payrolls(month: str, current_user: dict = Depends(get_cur
                 "employee_id": emp["id"],
                 "date": {"$regex": f"^{month}"},
                 "status": "approved"
-            }, {"_id": 0}).to_list(100)
+            }, {"_id": 0}).to_list(length=None)
             approved_ot_hours = sum(o.get("hours", 0) for o in approved_ot)
             overtime_pay = round(approved_ot_hours * hourly_rate * 1.5, 2)
             
@@ -1040,14 +1040,14 @@ async def generate_all_payrolls(month: str, current_user: dict = Depends(get_cur
             deductions = await db.deductions.find({
                 "employee_id": emp["id"],
                 "date": {"$regex": f"^{month}"}
-            }).to_list(100)
+            }).to_list(length=None)
             total_deductions = sum(d.get("amount", 0) for d in deductions)
             
             # مكافآت
             bonuses = await db.bonuses.find({
                 "employee_id": emp["id"],
                 "date": {"$regex": f"^{month}"}
-            }).to_list(100)
+            }).to_list(length=None)
             total_bonuses = sum(b.get("amount", 0) for b in bonuses)
             
             # سلف: القسط الشهري للسلف التي لها رصيد متبقٍّ (موحّد مع تقرير الرواتب)
@@ -1055,7 +1055,7 @@ async def generate_all_payrolls(month: str, current_user: dict = Depends(get_cur
                 "employee_id": emp["id"],
                 "status": "approved",
                 "remaining_amount": {"$gt": 0}
-            }).to_list(100)
+            }).to_list(length=None)
             advance_deduction = sum(a.get("monthly_deduction", 0) for a in advances)
             
             net_salary = round(earned_salary + overtime_pay + total_bonuses - total_deductions - advance_deduction, 2)
@@ -1121,15 +1121,15 @@ async def get_payroll_print_data(payroll_id: str, current_user: dict = Depends(g
 
     deductions = await db.deductions.find(
         {**sub_q, "date": {"$gte": start_date, "$lte": end_date}}, {"_id": 0}
-    ).to_list(200)
+    ).to_list(length=None)
 
     bonuses = await db.bonuses.find(
         {**sub_q, "date": {"$gte": start_date, "$lte": end_date}}, {"_id": 0}
-    ).to_list(200)
+    ).to_list(length=None)
 
     advances = await db.advances.find(
         {**sub_q, "status": {"$in": ["approved", "paid"]}}, {"_id": 0}
-    ).to_list(200)
+    ).to_list(length=None)
 
     return {
         "payroll": payroll,
@@ -1174,22 +1174,22 @@ async def get_employee_account_statement(
 
     deductions = await db.deductions.find(
         {**sub_q, **date_filter}, {"_id": 0}
-    ).sort("date", -1).to_list(1000)
+    ).sort("date", -1).to_list(length=None)
 
     bonuses = await db.bonuses.find(
         {**sub_q, **date_filter}, {"_id": 0}
-    ).sort("date", -1).to_list(1000)
+    ).sort("date", -1).to_list(length=None)
 
-    advances = await db.advances.find(sub_q, {"_id": 0}).sort("created_at", -1).to_list(1000)
+    advances = await db.advances.find(sub_q, {"_id": 0}).sort("created_at", -1).to_list(length=None)
 
     payroll_query = dict(sub_q)
     if start_date and end_date:
         payroll_query["month"] = {"$gte": start_date[:7], "$lte": end_date[:7]}
-    payrolls = await db.payroll.find(payroll_query, {"_id": 0}).sort("month", -1).to_list(500)
+    payrolls = await db.payroll.find(payroll_query, {"_id": 0}).sort("month", -1).to_list(length=None)
 
     attendance = await db.attendance.find(
         {**sub_q, **date_filter}, {"_id": 0}
-    ).sort("date", -1).to_list(2000)
+    ).sort("date", -1).to_list(length=None)
 
     # الدفعات المصروفة (دفعات الكشف اليومي النقدية)
     payments_q = dict(sub_q)
@@ -1197,7 +1197,7 @@ async def get_employee_account_statement(
         payments_q["payment_date"] = {"$gte": start_date, "$lte": end_date}
     salary_payments = await db.salary_payments.find(
         payments_q, {"_id": 0}
-    ).sort("payment_date", -1).to_list(2000)
+    ).sort("payment_date", -1).to_list(length=None)
 
     totals = {
         "total_deductions": sum(d.get("amount", 0) or 0 for d in deductions),
@@ -1344,7 +1344,7 @@ async def list_leave_permissions(
         query["branch_id"] = branch_id
     if month:
         query["date_from"] = {"$regex": f"^{month}"}
-    rows = await db.leave_permissions.find(query, {"_id": 0}).sort("created_at", -1).to_list(1000)
+    rows = await db.leave_permissions.find(query, {"_id": 0}).sort("created_at", -1).to_list(length=None)
     return rows
 
 

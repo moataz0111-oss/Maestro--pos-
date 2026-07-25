@@ -57,7 +57,7 @@ async def get_customer_restaurants():
     tenants = await db.tenants.find(
         {"menu_slug": {"$ne": None, "$exists": True}},
         {"_id": 0}
-    ).to_list(100)
+    ).to_list(length=None)
     
     restaurants = []
     for tenant in tenants:
@@ -154,7 +154,7 @@ async def get_customer_menu(tenant_id: str):
     categories = await db.categories.find(
         {"tenant_id": tid},
         {"_id": 0}
-    ).sort("sort_order", 1).to_list(100)
+    ).sort("sort_order", 1).to_list(length=None)
     
     # جلب المنتجات - فقط للعميل المحدد (مع إخفاء الحقول الحساسة: التكلفة/الربح/الوصفة)
     products = await db.products.find(
@@ -169,7 +169,7 @@ async def get_customer_menu(tenant_id: str):
             "supplier_id": 0, "supplier": 0, "wholesale_price": 0,
             "purchase_price": 0, "margin": 0
         }
-    ).to_list(500)
+    ).to_list(length=None)
 
     # تنظيف شامل دفاعي: حذف أي حقل حسّاس قد يكشف الكلفة/الربح/الوصفة/المورّد للزبون العام
     _SENSITIVE_SUBSTR = ("cost", "profit", "recipe", "raw_material", "ingredient",
@@ -190,7 +190,7 @@ async def get_customer_menu(tenant_id: str):
         # 🔒 للعميل العام: فقط الحقول الآمنة (الاسم/العنوان/الهاتف/الموقع) — إخفاء الإيجار/الفواتير/نسبة الشراكة/بيانات المشتري (تقرير الأمان #1)
         {"_id": 0, "id": 1, "name": 1, "address": 1, "phone": 1,
          "latitude": 1, "longitude": 1, "is_active": 1, "branch_type": 1}
-    ).to_list(50)
+    ).to_list(length=None)
     
     # إذا لم توجد فروع حقيقية، لا نُنشئ فرع افتراضي للعملاء
     # بل نعرض رسالة أنه لا توجد فروع متاحة
@@ -628,7 +628,7 @@ async def get_customer_order_history(
         query,
         {"_id": 0, "id": 1, "order_number": 1, "items": 1, "total": 1, 
          "status": 1, "created_at": 1, "order_type": 1}
-    ).sort("created_at", -1).limit(20).to_list(20)
+    ).sort("created_at", -1).limit(20).to_list(length=None)
     
     # إضافة تسميات الحالة بالعربية
     status_labels = {

@@ -83,7 +83,7 @@ async def list_biometric_devices(branch_id: Optional[str] = None, current_user: 
     if branch_id:
         query["branch_id"] = branch_id
     
-    devices = await db.biometric_devices.find(query, {"_id": 0}).to_list(100)
+    devices = await db.biometric_devices.find(query, {"_id": 0}).to_list(length=None)
     return devices
 
 @router.post("/biometric/devices")
@@ -228,13 +228,13 @@ async def sync_all_devices_in_branch(branch_id: str, current_user: dict = Depend
     devices_q = {"branch_id": branch_id, "is_active": True}
     if tenant_id:
         devices_q["tenant_id"] = tenant_id
-    devices = await db.biometric_devices.find(devices_q, {"_id": 0}).to_list(500)
+    devices = await db.biometric_devices.find(devices_q, {"_id": 0}).to_list(length=None)
     
     emp_q = {"branch_id": branch_id, "is_active": True,
              "$or": [{"biometric_uid": {"$nin": [None, ""]}}, {"biometric_id": {"$nin": [None, ""]}}]}
     if tenant_id:
         emp_q["tenant_id"] = tenant_id
-    employees = await db.employees.find(emp_q, {"_id": 0, "id": 1, "biometric_uid": 1, "biometric_id": 1, "full_name": 1, "name": 1}).to_list(2000)
+    employees = await db.employees.find(emp_q, {"_id": 0, "id": 1, "biometric_uid": 1, "biometric_id": 1, "full_name": 1, "name": 1}).to_list(length=None)
     
     total_enqueued = 0
     now_iso = datetime.now(timezone.utc).isoformat()
@@ -313,7 +313,7 @@ async def export_device_users(device_id: str, current_user: dict = Depends(get_c
              "$or": [{"biometric_uid": {"$nin": [None, ""]}}, {"biometric_id": {"$nin": [None, ""]}}]}
     if tenant_id:
         emp_q["tenant_id"] = tenant_id
-    employees = await db.employees.find(emp_q, {"_id": 0, "id": 1, "biometric_uid": 1, "biometric_id": 1, "full_name": 1, "name": 1, "position": 1}).to_list(5000)
+    employees = await db.employees.find(emp_q, {"_id": 0, "id": 1, "biometric_uid": 1, "biometric_id": 1, "full_name": 1, "name": 1, "position": 1}).to_list(length=None)
     users = []
     for e in employees:
         bio_uid = e.get("biometric_uid") or e.get("biometric_id")
@@ -684,7 +684,7 @@ async def _auto_process_attendance_internal(current_user: dict):
     emp_query = {"is_active": True, "biometric_uid": {"$ne": None, "$exists": True}}
     if tenant_id:
         emp_query["tenant_id"] = tenant_id
-    employees = await db.employees.find(emp_query, {"_id": 0}).to_list(500)
+    employees = await db.employees.find(emp_query, {"_id": 0}).to_list(length=None)
     
     if not employees:
         return {"message": "لا يوجد موظفين مسجلين بالبصمة", "processed": 0}
@@ -703,14 +703,14 @@ async def _auto_process_attendance_internal(current_user: dict):
     dev_query = {}
     if tenant_id:
         dev_query["tenant_id"] = tenant_id
-    devices_list = await db.biometric_devices.find(dev_query, {"_id": 0, "id": 1, "branch_id": 1}).to_list(500)
+    devices_list = await db.biometric_devices.find(dev_query, {"_id": 0, "id": 1, "branch_id": 1}).to_list(length=None)
     device_to_branch = {d.get("id"): d.get("branch_id") or "" for d in devices_list}
     
     # 2. جلب سجلات البصمة غير المعالجة
     bio_query = {"processed": {"$ne": True}}
     if tenant_id:
         bio_query["tenant_id"] = tenant_id
-    raw_records = await db.biometric_attendance.find(bio_query, {"_id": 0}).to_list(10000)
+    raw_records = await db.biometric_attendance.find(bio_query, {"_id": 0}).to_list(length=None)
     
     if not raw_records:
         return {"message": "لا توجد سجلات جديدة للمعالجة", "processed": 0}

@@ -646,7 +646,7 @@ async def _refresh_blocked_ips(force=False):
     if not force and (now - _BLOCKED_IPS_TS) < _BLOCKED_TTL:
         return
     try:
-        docs = await db.blocked_ips.find({}, {"_id": 0, "ip": 1}).to_list(10000)
+        docs = await db.blocked_ips.find({}, {"_id": 0, "ip": 1}).to_list(length=None)
         _BLOCKED_IPS = {d.get("ip") for d in docs if d.get("ip")}
         _BLOCKED_IPS_TS = now
     except Exception:
@@ -663,7 +663,7 @@ async def _refresh_owner_ips(force=False):
     if not force and (now - _OWNER_IPS_TS) < _BLOCKED_TTL:
         return
     try:
-        docs = await db.owner_trusted_ips.find({}, {"_id": 0, "ip": 1}).to_list(1000)
+        docs = await db.owner_trusted_ips.find({}, {"_id": 0, "ip": 1}).to_list(length=None)
         _OWNER_IPS = {d.get("ip") for d in docs if d.get("ip")}
         _OWNER_IPS_TS = now
     except Exception:
@@ -1383,19 +1383,19 @@ async def purge_pentest_probe_data_v1():
     try:
         rx = {"$regex": r"(rw\s*probe|read.?write\s*probe|pentest|sqlmap|burpsuite|nikto|<script)", "$options": "i"}
         name_q = {"cashier_name": rx}
-        probe_shifts = await db.shifts.find(name_q, {"_id": 0, "id": 1, "cashier_name": 1}).to_list(2000)
+        probe_shifts = await db.shifts.find(name_q, {"_id": 0, "id": 1, "cashier_name": 1}).to_list(length=None)
         shift_ids = [s["id"] for s in probe_shifts if s.get("id")]
 
         closing_or = [name_q]
         if shift_ids:
             closing_or.append({"shift_id": {"$in": shift_ids}})
-        probe_closings = await db.cash_register_closings.find({"$or": closing_or}, {"_id": 0, "id": 1}).to_list(2000)
+        probe_closings = await db.cash_register_closings.find({"$or": closing_or}, {"_id": 0, "id": 1}).to_list(length=None)
         closing_ids = [c["id"] for c in probe_closings if c.get("id")]
 
         order_or = [name_q]
         if shift_ids:
             order_or.append({"shift_id": {"$in": shift_ids}})
-        probe_orders = await db.orders.find({"$or": order_or}, {"_id": 0, "id": 1, "total": 1}).to_list(50000)
+        probe_orders = await db.orders.find({"$or": order_or}, {"_id": 0, "id": 1, "total": 1}).to_list(length=None)
 
         if not (probe_shifts or probe_closings or probe_orders):
             return  # لا شيء لتنظيفه — idempotent
@@ -1552,7 +1552,7 @@ async def auto_migrate_business_dates():
              "started_at": 1, "opened_at": 1, "ended_at": 1, "cash_sales": 1, "opening_cash": 1, "opening_balance": 1}
         ):
             exp_q = _shift_exp_q(s, s.get("tenant_id"))
-            shift_expenses = await db.expenses.find(exp_q, {"_id": 0, "amount": 1}).to_list(500)
+            shift_expenses = await db.expenses.find(exp_q, {"_id": 0, "amount": 1}).to_list(length=None)
             total_exp = sum(float(e.get("amount") or 0) for e in shift_expenses)
             opening_cash = float(s.get("opening_cash") or s.get("opening_balance") or 0)
             cash_sales = float(s.get("cash_sales") or 0)
@@ -1597,7 +1597,7 @@ async def auto_migrate_business_dates():
                     affected_shifts = await db.shifts.find(
                         shift_q,
                         {"_id": 0, "id": 1, "started_at": 1, "ended_at": 1, "opening_cash": 1, "opening_balance": 1, "cash_sales": 1}
-                    ).to_list(100)
+                    ).to_list(length=None)
                     for s in affected_shifts:
                         s_end = s.get("ended_at") or ""
                         if s_end and orphan_created > s_end:
@@ -1611,7 +1611,7 @@ async def auto_migrate_business_dates():
                             q["tenant_id"] = orphan_tenant
                         if s_end:
                             q["created_at"]["$lte"] = s_end
-                        shift_exps = await db.expenses.find(q, {"_id": 0, "amount": 1}).to_list(500)
+                        shift_exps = await db.expenses.find(q, {"_id": 0, "amount": 1}).to_list(length=None)
                         total_exp = sum(float(e.get("amount") or 0) for e in shift_exps)
                         opening_cash = float(s.get("opening_cash") or s.get("opening_balance") or 0)
                         cash_sales = float(s.get("cash_sales") or 0)
@@ -2583,18 +2583,18 @@ class OrderCreate(BaseModel):
 class OrderResponse(BaseModel):
     model_config = ConfigDict(extra="ignore")
     id: str
-    order_number: int
-    order_type: str
+    order_number: Optional[int] = 0
+    order_type: Optional[str] = "dine_in"
     table_id: Optional[str] = None
     customer_name: Optional[str] = None
     customer_phone: Optional[str] = None
     delivery_address: Optional[str] = None
     buzzer_number: Optional[str] = None  # رقم جهاز التنبيه
-    items: List[Dict[str, Any]]
-    subtotal: float
+    items: Optional[List[Dict[str, Any]]] = None
+    subtotal: Optional[float] = 0.0
     discount: float = 0.0  # Default for legacy orders
     tax: float = 0.0  # Default for legacy orders
-    total: float
+    total: Optional[float] = 0.0
     total_cost: float = 0.0
     profit: float = 0.0
     branch_id: Optional[str] = None  # Made optional for customer orders
@@ -4238,9 +4238,9 @@ async def list_ip_bans(current_user: dict = Depends(get_current_user)):
     
     now_ts = datetime.now(timezone.utc).timestamp()
     # الحظر الدائم من الجدول الموجود
-    permanent = await db.blocked_ips.find({}, {"_id": 0}).to_list(500)
+    permanent = await db.blocked_ips.find({}, {"_id": 0}).to_list(length=None)
     # التجميد المؤقت (24 ساعة)
-    temp_docs = await db.ip_rate_limits.find({"blocked_until": {"$gt": now_ts}}, {"_id": 0}).to_list(500)
+    temp_docs = await db.ip_rate_limits.find({"blocked_until": {"$gt": now_ts}}, {"_id": 0}).to_list(length=None)
     
     temp_list = []
     for d in temp_docs:
@@ -4484,7 +4484,7 @@ async def get_users(current_user: dict = Depends(get_current_user)):
     
     # فلترة المستخدمين حسب tenant_id
     query = build_tenant_query(current_user)
-    users = await db.users.find(query, {"_id": 0, "password": 0}).to_list(1000)
+    users = await db.users.find(query, {"_id": 0, "password": 0}).to_list(length=None)
     return users
 
 @api_router.post("/users/{user_id}/send-welcome")
@@ -5038,7 +5038,7 @@ async def get_branches(
             ]}
         ]
     
-    branches = await db.branches.find(query, {"_id": 0}).to_list(100)
+    branches = await db.branches.find(query, {"_id": 0}).to_list(length=None)
     # تطبيع المخرجات عبر BranchResponse (نفس سلوك الإدارة السابق) + إخفاء الحقول المالية عن غير الإدارة
     _SENSITIVE_BRANCH_FIELDS = (
         "rent_cost", "water_cost", "electricity_cost", "generator_cost",
@@ -5118,7 +5118,7 @@ async def get_kitchen_sections(branch_id: Optional[str] = None, current_user: di
     query = build_tenant_query(current_user)  # فلترة حسب tenant_id
     if branch_id:
         query["branch_id"] = branch_id
-    sections = await db.kitchen_sections.find(query, {"_id": 0}).sort("sort_order", 1).to_list(100)
+    sections = await db.kitchen_sections.find(query, {"_id": 0}).sort("sort_order", 1).to_list(length=None)
     return sections
 
 @api_router.put("/kitchen-sections/{section_id}")
@@ -5179,7 +5179,7 @@ async def get_categories(current_user: dict = Depends(get_current_user)):
         return []
     
     query = {"tenant_id": tenant_id} if tenant_id else {"tenant_id": "default"}
-    categories = await db.categories.find(query, {"_id": 0}).sort("sort_order", 1).to_list(100)
+    categories = await db.categories.find(query, {"_id": 0}).sort("sort_order", 1).to_list(length=None)
     return categories
 
 @api_router.put("/categories/{category_id}")
@@ -5319,7 +5319,7 @@ async def translate_entity_names(overwrite: bool = False, current_user: dict = D
         q = {"tenant_id": tenant_id}
         if not overwrite:
             q["$or"] = [{"name_en": {"$in": [None, ""]}}, {"name_en": {"$exists": False}}]
-        items = await coll.find(q, {"_id": 0, "id": 1, "name": 1}).to_list(1000)
+        items = await coll.find(q, {"_id": 0, "id": 1, "name": 1}).to_list(length=None)
         items = [it for it in items if it.get("name")]
         translated = 0
         for i in range(0, len(items), 40):
@@ -5490,7 +5490,7 @@ async def get_purchases(
     if end_date:
         query.setdefault("created_at", {})["$lte"] = end_date + "T23:59:59"
     
-    purchases = await db.purchases.find(query, {"_id": 0}).sort("created_at", -1).to_list(500)
+    purchases = await db.purchases.find(query, {"_id": 0}).sort("created_at", -1).to_list(length=None)
     return purchases
 
 # ==================== EXPENSE ROUTES - المصاريف ====================
@@ -5585,7 +5585,7 @@ async def create_expense(expense: ExpenseCreate, current_user: dict = Depends(ge
             # نستخدم نفس منطق shift_expense_query لضمان اتساق العدّ
             from routes.shared import shift_expense_query
             exp_q = shift_expense_query(current_shift, tenant_id_for_biz)
-            shift_expenses_live = await db.expenses.find(exp_q, {"_id": 0, "amount": 1}).to_list(500)
+            shift_expenses_live = await db.expenses.find(exp_q, {"_id": 0, "amount": 1}).to_list(length=None)
             total_exp_live = sum(float(e.get("amount") or 0) for e in shift_expenses_live)
             opening_cash_live = float(current_shift.get("opening_cash") or current_shift.get("opening_balance") or 0)
             cash_sales_live = float(current_shift.get("cash_sales") or 0)
@@ -5653,7 +5653,7 @@ async def list_stale_shifts(
     if branch_id:
         q["branch_id"] = branch_id
     
-    stale = await db.shifts.find(q, {"_id": 0, "id": 1, "cashier_id": 1, "cashier_name": 1, "started_at": 1, "business_date": 1, "branch_id": 1}).to_list(50)
+    stale = await db.shifts.find(q, {"_id": 0, "id": 1, "cashier_id": 1, "cashier_name": 1, "started_at": 1, "business_date": 1, "branch_id": 1}).to_list(length=None)
     
     # احسب الساعات منذ الافتتاح
     now = datetime.now(timezone.utc)
@@ -5750,13 +5750,13 @@ async def get_expenses(
     if branch_id:
         query["branch_id"] = branch_id
     
-    expenses = await db.expenses.find(query, {"_id": 0}).sort("date", -1).to_list(500)
+    expenses = await db.expenses.find(query, {"_id": 0}).sort("date", -1).to_list(length=None)
     
     # ملء اسم الكاشير للمصاريف القديمة التي لا تحتوي على created_by_name
     needs_update = [e for e in expenses if not e.get("created_by_name") and e.get("created_by")]
     if needs_update:
         user_ids = list(set(e["created_by"] for e in needs_update))
-        users = await db.users.find({"id": {"$in": user_ids}}, {"_id": 0, "id": 1, "full_name": 1, "username": 1}).to_list(100)
+        users = await db.users.find({"id": {"$in": user_ids}}, {"_id": 0, "id": 1, "full_name": 1, "username": 1}).to_list(length=None)
         user_map = {u["id"]: u.get("full_name") or u.get("username", "") for u in users}
         for e in expenses:
             if not e.get("created_by_name") and e.get("created_by"):
@@ -5791,7 +5791,7 @@ async def get_custom_expense_categories(current_user: dict = Depends(get_current
     categories = await db.expense_categories.find(
         query,
         {"_id": 0}
-    ).to_list(100)
+    ).to_list(length=None)
     
     return categories
 
@@ -5841,7 +5841,7 @@ async def create_operating_cost(cost: OperatingCostCreate, current_user: dict = 
 @api_router.get("/operating-costs")
 async def get_operating_costs(branch_id: Optional[str] = None, current_user: dict = Depends(get_current_user)):
     query = {"branch_id": branch_id} if branch_id else {}
-    costs = await db.operating_costs.find(query, {"_id": 0}).to_list(100)
+    costs = await db.operating_costs.find(query, {"_id": 0}).to_list(length=None)
     return costs
 
 # ==================== moved to routes/hr_routes.py ====================
@@ -5865,7 +5865,7 @@ async def get_employee_ratings(
     if branch_id:
         emp_query["branch_id"] = branch_id
     
-    employees = await db.employees.find(emp_query, {"_id": 0}).to_list(500)
+    employees = await db.employees.find(emp_query, {"_id": 0}).to_list(length=None)
     
     if not employees:
         return {"ratings": [], "summary": {}}
@@ -5878,21 +5878,21 @@ async def get_employee_ratings(
         "tenant_id": tenant_id,
         "employee_id": {"$in": employee_ids},
         "date": {"$regex": f"^{month}"}
-    }, {"_id": 0}).to_list(15000)
+    }, {"_id": 0}).to_list(length=None)
     
     # جلب جميع الخصومات دفعة واحدة
     all_deductions = await db.deductions.find({
         "tenant_id": tenant_id,
         "employee_id": {"$in": employee_ids},
         "month": month
-    }, {"_id": 0}).to_list(5000)
+    }, {"_id": 0}).to_list(length=None)
     
     # جلب جميع المكافآت دفعة واحدة
     all_bonuses = await db.bonuses.find({
         "tenant_id": tenant_id,
         "employee_id": {"$in": employee_ids},
         "month": month
-    }, {"_id": 0}).to_list(5000)
+    }, {"_id": 0}).to_list(length=None)
     
     # تجميع البيانات حسب الموظف
     attendance_by_emp = {}
@@ -6134,14 +6134,14 @@ async def get_inventory_transfers(
     if transfer_type:
         query["transfer_type"] = transfer_type
     
-    transfers = await db.inventory_transfers.find(query, {"_id": 0}).sort("created_at", -1).to_list(500)
+    transfers = await db.inventory_transfers.find(query, {"_id": 0}).sort("created_at", -1).to_list(length=None)
     return transfers
 
 @api_router.get("/inventory-transactions")
 async def get_inventory_transactions(current_user: dict = Depends(get_current_user)):
     """جلب حركات المخزون (واردات/صادرات)"""
     query = build_tenant_query(current_user)
-    transactions = await db.inventory_transactions.find(query, {"_id": 0}).sort("created_at", -1).to_list(500)
+    transactions = await db.inventory_transactions.find(query, {"_id": 0}).sort("created_at", -1).to_list(length=None)
     return transactions
 
 @api_router.put("/inventory-transfers/{transfer_id}/approve")
@@ -6291,7 +6291,7 @@ async def get_tables(branch_id: Optional[str] = None, current_user: dict = Depen
     query = build_tenant_query(current_user)  # فلترة حسب tenant_id
     if branch_id:
         query["branch_id"] = branch_id
-    tables = await db.tables.find(query, {"_id": 0}).sort("number", 1).to_list(100)
+    tables = await db.tables.find(query, {"_id": 0}).sort("number", 1).to_list(length=None)
     return tables
 
 @api_router.put("/tables/{table_id}/status")
@@ -6467,7 +6467,7 @@ async def get_customers(search: Optional[str] = None, phone: Optional[str] = Non
             {"phone2": {"$regex": search}},
             {"area": {"$regex": search, "$options": "i"}}
         ]
-    customers = await db.customers.find(query, {"_id": 0}).sort("name", 1).to_list(500)
+    customers = await db.customers.find(query, {"_id": 0}).sort("name", 1).to_list(length=None)
     return customers
 
 @api_router.get("/customers/{customer_id}", response_model=CustomerResponse)
@@ -6506,7 +6506,7 @@ async def get_customer_by_phone(phone: str, current_user: dict = Depends(get_cur
     
     # جلب آخر 10 طلبات للعميل
     orders_query = build_tenant_query(current_user, {"customer_phone": phone})
-    orders = await db.orders.find(orders_query, {"_id": 0}).sort("created_at", -1).limit(10).to_list(10)
+    orders = await db.orders.find(orders_query, {"_id": 0}).sort("created_at", -1).limit(10).to_list(length=None)
     
     return {
         "found": True,
@@ -6573,7 +6573,7 @@ async def get_welcome_approvals(current_user: dict = Depends(get_current_user)):
     if current_user.get("role") not in [UserRole.ADMIN, UserRole.GENERAL_MANAGER, UserRole.MANAGER, UserRole.SUPER_ADMIN, "branch_manager"]:
         raise HTTPException(status_code=403, detail="غير مصرح")
     query = build_tenant_query(current_user, {"welcome_status": "pending"})
-    customers = await db.customers.find(query, {"_id": 0}).sort("created_at", -1).to_list(100)
+    customers = await db.customers.find(query, {"_id": 0}).sort("created_at", -1).to_list(length=None)
     return {"pending": customers, "count": len(customers)}
 
 @api_router.get("/welcome-discount/stats")
@@ -6586,7 +6586,7 @@ async def welcome_discount_stats(current_user: dict = Depends(get_current_user))
     cq = build_tenant_query(current_user, {"is_welcome": True})
     coupons = await db.coupons.find(cq, {"_id": 0, "code": 1, "customer_name": 1, "created_at": 1,
                                           "used_count": 1, "total_discount_given": 1, "valid_until": 1,
-                                          "discount_type": 1, "discount_value": 1}).sort("created_at", -1).to_list(500)
+                                          "discount_type": 1, "discount_value": 1}).sort("created_at", -1).to_list(length=None)
     now_iso = datetime.now(timezone.utc).isoformat()
     used = sum(1 for c in coupons if (c.get("used_count") or 0) > 0)
     expired = sum(1 for c in coupons if (c.get("valid_until") or "") < now_iso and (c.get("used_count") or 0) == 0)
@@ -6690,7 +6690,7 @@ async def grant_welcome_discount(customer_id: str, payload: dict = Body(default=
     _bq = {"tenant_id": tenant_id} if tenant_id else {}
     if branch_ids:
         _bq["id"] = {"$in": branch_ids}
-    _branches = await db.branches.find(_bq, {"_id": 0, "name": 1}).to_list(50)
+    _branches = await db.branches.find(_bq, {"_id": 0, "name": 1}).to_list(length=None)
     branch_names = [b.get("name") for b in _branches if b.get("name")]
     branches_str = "، ".join(branch_names) if branch_names else "جميع فروعنا"
 
@@ -7470,7 +7470,7 @@ async def create_order(order: OrderCreate, current_user: dict = Depends(get_curr
     
     return order_doc
 
-@api_router.get("/orders", response_model=List[OrderResponse])
+@api_router.get("/orders", response_model=List[OrderResponse], response_model_exclude_none=True)
 async def get_orders(
     branch_id: Optional[str] = None,
     status: Optional[str] = None,
@@ -7518,7 +7518,7 @@ async def get_orders(
     if order_type:
         query["order_type"] = order_type
     
-    orders = await db.orders.find(query, {"_id": 0}).sort("created_at", -1).to_list(500)
+    orders = await db.orders.find(query, {"_id": 0}).sort("created_at", -1).to_list(length=None)
     return orders
 
 
@@ -7540,7 +7540,7 @@ async def get_delivery_orders(
     if date:
         query["created_at"] = {"$regex": f"^{date}"}
 
-    orders = await db.orders.find(query, {"_id": 0}).sort("created_at", -1).to_list(500)
+    orders = await db.orders.find(query, {"_id": 0}).sort("created_at", -1).to_list(length=None)
     now = datetime.now(timezone.utc)
 
     def _parse(dt):
@@ -8039,8 +8039,8 @@ async def get_kitchen_orders(current_user: dict = Depends(get_current_user)):
     }
     
     # دمج النتائج
-    orders_with_kitchen_status = await db.orders.find(query, {"_id": 0}).sort("created_at", 1).to_list(200)
-    orders_new = await db.orders.find(query_new, {"_id": 0}).sort("created_at", 1).to_list(200)
+    orders_with_kitchen_status = await db.orders.find(query, {"_id": 0}).sort("created_at", 1).to_list(length=None)
+    orders_new = await db.orders.find(query_new, {"_id": 0}).sort("created_at", 1).to_list(length=None)
     
     # إضافة kitchen_status الافتراضي للطلبات الجديدة
     for order in orders_new:
@@ -8068,7 +8068,7 @@ async def get_kitchen_orders(current_user: dict = Depends(get_current_user)):
     branch_ids = list(set(o.get("branch_id") for o in unique_orders if o.get("branch_id")))
     branches = {}
     if branch_ids:
-        branches_list = await db.branches.find({"id": {"$in": branch_ids}}, {"_id": 0, "id": 1, "name": 1}).to_list(100)
+        branches_list = await db.branches.find({"id": {"$in": branch_ids}}, {"_id": 0, "id": 1, "name": 1}).to_list(length=None)
         branches = {b["id"]: b["name"] for b in branches_list}
     
     for order in unique_orders:
@@ -8270,7 +8270,7 @@ async def recompute_order_costs(
     if tenant_id:
         query["tenant_id"] = tenant_id
 
-    orders = await db.orders.find(query, {"_id": 0}).to_list(length=10000)
+    orders = await db.orders.find(query, {"_id": 0}).to_list(length=None)
     summary = {
         "examined": len(orders),
         "updated": 0,
@@ -8543,7 +8543,7 @@ async def create_delivery_app_setting(setting: DeliveryAppSettingCreate, current
 @api_router.get("/delivery-app-settings")
 async def get_delivery_app_settings(current_user: dict = Depends(get_current_user)):
     query = build_tenant_query(current_user)
-    settings = await db.delivery_app_settings.find(query, {"_id": 0}).to_list(20)
+    settings = await db.delivery_app_settings.find(query, {"_id": 0}).to_list(length=None)
     return settings
 
 @api_router.delete("/delivery-app-settings/{app_id}")
@@ -8568,7 +8568,7 @@ async def get_delivery_apps(current_user: dict = Depends(get_current_user)):
     
     # Get all settings from database for this tenant
     query = build_tenant_query(current_user)
-    all_settings = await db.delivery_app_settings.find(query, {"_id": 0}).to_list(50)
+    all_settings = await db.delivery_app_settings.find(query, {"_id": 0}).to_list(length=None)
     
     # Create a map of app_id to settings
     settings_map = {s["app_id"]: s for s in all_settings}
@@ -8653,7 +8653,7 @@ async def export_sales_to_excel(
         ws.title = "تقرير المبيعات"
         
         # Get orders
-        orders = await db.orders.find(query, {"_id": 0}).to_list(10000)
+        orders = await db.orders.find(query, {"_id": 0}).to_list(length=None)
         
         # Headers
         headers = ["رقم الطلب", "التاريخ", "الوقت", "النوع", "العميل", "الفرع", "طريقة الدفع", "المبلغ", "الحالة"]
@@ -8701,7 +8701,7 @@ async def export_sales_to_excel(
         ws.title = "تقرير المنتجات"
         
         # Get orders with items
-        orders = await db.orders.find(query, {"_id": 0, "items": 1, "total": 1, "status": 1}).to_list(10000)
+        orders = await db.orders.find(query, {"_id": 0, "items": 1, "total": 1, "status": 1}).to_list(length=None)
         
         # Aggregate products
         products = {}
@@ -8737,7 +8737,7 @@ async def export_sales_to_excel(
         ws.title = "تقرير المصاريف"
         
         # Get expenses
-        expenses = await db.expenses.find(query, {"_id": 0}).to_list(10000)
+        expenses = await db.expenses.find(query, {"_id": 0}).to_list(length=None)
         
         # Headers
         headers = ["التاريخ", "الفئة", "الوصف", "المبلغ"]
@@ -8819,7 +8819,7 @@ async def get_today_cash_register(current_user: dict = Depends(get_current_user)
     if branch_id:
         cash_query["branch_id"] = branch_id
     
-    cash_orders = await db.orders.find(cash_query, {"_id": 0, "total": 1, "order_number": 1}).to_list(500)
+    cash_orders = await db.orders.find(cash_query, {"_id": 0, "total": 1, "order_number": 1}).to_list(length=None)
     total_cash_sales = sum(_sn(o.get("total")) for o in cash_orders)
     
     # مبيعات البطاقة (منفصلة - ليست نقدي)
@@ -8830,7 +8830,7 @@ async def get_today_cash_register(current_user: dict = Depends(get_current_user)
     }
     if branch_id:
         card_query["branch_id"] = branch_id
-    card_orders = await db.orders.find(card_query, {"total": 1}).to_list(500)
+    card_orders = await db.orders.find(card_query, {"total": 1}).to_list(length=None)
     total_card_sales = sum(_sn(o.get("total")) for o in card_orders)
     
     # الآجل العادي (بدون التوصيل - شركات التوصيل لها قسم منفصل)
@@ -8842,7 +8842,7 @@ async def get_today_cash_register(current_user: dict = Depends(get_current_user)
     }
     if branch_id:
         credit_query["branch_id"] = branch_id
-    credit_orders = await db.orders.find(credit_query, {"total": 1}).to_list(500)
+    credit_orders = await db.orders.find(credit_query, {"total": 1}).to_list(length=None)
     total_credit = sum(_sn(o.get("total")) for o in credit_orders)
     
     # آجل شركات التوصيل (منفصل)
@@ -8853,14 +8853,14 @@ async def get_today_cash_register(current_user: dict = Depends(get_current_user)
     }
     if branch_id:
         delivery_credit_query["branch_id"] = branch_id
-    delivery_credit_orders = await db.orders.find(delivery_credit_query, {"total": 1, "delivery_app": 1}).to_list(500)
+    delivery_credit_orders = await db.orders.find(delivery_credit_query, {"total": 1, "delivery_app": 1}).to_list(length=None)
     total_delivery_credit = sum(_sn(o.get("total")) for o in delivery_credit_orders)
     
     # المصاريف
     expenses_query = {"date": today}
     if branch_id:
         expenses_query["branch_id"] = branch_id
-    expenses = await db.expenses.find(expenses_query, {"_id": 0}).to_list(100)
+    expenses = await db.expenses.find(expenses_query, {"_id": 0}).to_list(length=None)
     total_expenses = sum(_sn(e.get("amount")) for e in expenses)
     
     # آخر إغلاق
@@ -8895,7 +8895,7 @@ async def get_today_cash_register(current_user: dict = Depends(get_current_user)
 
 @api_router.get("/settings")
 async def get_settings(current_user: dict = Depends(get_current_user)):
-    settings = await db.settings.find({}, {"_id": 0}).to_list(100)
+    settings = await db.settings.find({}, {"_id": 0}).to_list(length=None)
     return {s["type"]: s.get("value") or s for s in settings}
 
 @api_router.post("/settings/email-recipients")
@@ -9190,7 +9190,7 @@ async def fix_data_endpoint(current_user: dict = Depends(verify_super_admin)):
             }},
             {"$match": {"count": {"$gt": 1}}}
         ]
-        duplicates = await db.tables.aggregate(pipeline).to_list(100)
+        duplicates = await db.tables.aggregate(pipeline).to_list(length=None)
         for dup in duplicates:
             # الاحتفاظ بأول طاولة وحذف الباقي
             ids_to_delete = dup["ids"][1:]
@@ -9881,7 +9881,7 @@ async def get_super_admin_sales_summary(
     tenants = await db.tenants.find(
         {"is_demo": {"$ne": True}, "subscription_type": {"$ne": "demo"}}, 
         {"_id": 0, "id": 1, "name": 1}
-    ).to_list(100)
+    ).to_list(length=None)
     
     total_sales_usd = 0
     total_orders = 0
@@ -10121,11 +10121,11 @@ async def get_staff_members(
     if role:
         query["role"] = role
     
-    staff = await db.users.find(query, {"_id": 0, "password": 0}).to_list(500)
+    staff = await db.users.find(query, {"_id": 0, "password": 0}).to_list(length=None)
     
     # إضافة اسم الفرع لكل موظف
     branch_ids = list(set([s.get("branch_id") for s in staff if s.get("branch_id")]))
-    branches = await db.branches.find({"id": {"$in": branch_ids}}, {"_id": 0, "id": 1, "name": 1}).to_list(100)
+    branches = await db.branches.find({"id": {"$in": branch_ids}}, {"_id": 0, "id": 1, "name": 1}).to_list(length=None)
     branch_map = {b["id"]: b["name"] for b in branches}
     
     for s in staff:
@@ -10604,7 +10604,7 @@ class PurchaseSupplierCreate(BaseModel):
 async def get_purchase_invoices(current_user: dict = Depends(get_current_user)):
     """جلب فواتير الشراء"""
     query = build_tenant_query(current_user)
-    invoices = await db.purchase_invoices.find(query, {"_id": 0}).sort("created_at", -1).to_list(500)
+    invoices = await db.purchase_invoices.find(query, {"_id": 0}).sort("created_at", -1).to_list(length=None)
     
     # إضافة اسم المورد لكل فاتورة
     for invoice in invoices:
@@ -10797,7 +10797,7 @@ async def send_purchase_invoice_to_warehouse(invoice_id: str, current_user: dict
 async def get_purchase_suppliers(current_user: dict = Depends(get_current_user)):
     """جلب موردي المشتريات"""
     query = build_tenant_query(current_user)
-    suppliers = await db.purchase_suppliers.find(query, {"_id": 0}).sort("created_at", -1).to_list(500)
+    suppliers = await db.purchase_suppliers.find(query, {"_id": 0}).sort("created_at", -1).to_list(length=None)
     return suppliers
 
 @api_router.post("/purchase-suppliers")
@@ -10821,7 +10821,7 @@ async def create_purchase_supplier(supplier: PurchaseSupplierCreate, current_use
 async def get_warehouse_purchase_requests(current_user: dict = Depends(get_current_user)):
     """جلب طلبات الشراء من المخزن"""
     query = build_tenant_query(current_user)
-    requests = await db.warehouse_purchase_requests.find(query, {"_id": 0}).sort("created_at", -1).to_list(500)
+    requests = await db.warehouse_purchase_requests.find(query, {"_id": 0}).sort("created_at", -1).to_list(length=None)
     return requests
 
 @api_router.post("/warehouse-purchase-requests/{request_id}/transfer")
@@ -10868,7 +10868,7 @@ async def get_packaging_requests(current_user: dict = Depends(get_current_user))
     if not tenant_id:
         raise HTTPException(status_code=400, detail="Tenant ID required")
     
-    requests = await db.packaging_requests.find({"tenant_id": tenant_id}).sort("created_at", -1).to_list(100)
+    requests = await db.packaging_requests.find({"tenant_id": tenant_id}).sort("created_at", -1).to_list(length=None)
     for r in requests:
         r["id"] = r.pop("_id", r.get("id"))
     return requests
@@ -11037,7 +11037,7 @@ async def get_branch_packaging_inventory(branch_id: Optional[str] = None, curren
     elif branch_id:
         query["branch_id"] = branch_id
     
-    inventory = await db.branch_packaging_inventory.find(query, {"_id": 0}).to_list(500)
+    inventory = await db.branch_packaging_inventory.find(query, {"_id": 0}).to_list(length=None)
     for item in inventory:
         # حساب الكمية المتبقية
         item["remaining_quantity"] = _sn(item.get("quantity")) - item.get("used_quantity", 0)
@@ -11144,7 +11144,7 @@ async def get_finished_products(
     if category:
         query["category"] = category
     
-    products = await db.inventory.find(query, {"_id": 0}).to_list(500)
+    products = await db.inventory.find(query, {"_id": 0}).to_list(length=None)
     return products
 
 @api_router.get("/finished-products/{product_id}")
@@ -11360,7 +11360,7 @@ async def get_branch_orders(
     if status:
         query["status"] = status
     
-    orders = await db.branch_orders.find(query, {"_id": 0}).sort("created_at", -1).to_list(500)
+    orders = await db.branch_orders.find(query, {"_id": 0}).sort("created_at", -1).to_list(length=None)
     
     # جلب أسماء الفروع
     for order in orders:
@@ -11619,7 +11619,7 @@ async def get_dashboard_backgrounds(current_user: dict = Depends(get_current_use
     tenant_backgrounds = await db.dashboard_backgrounds.find(
         {"tenant_id": tenant_id} if tenant_id else {},
         {"_id": 0}
-    ).to_list(50)
+    ).to_list(length=None)
     
     # جلب الخلفية المحددة حالياً
     settings = await db.tenant_settings.find_one(
@@ -12383,7 +12383,7 @@ async def get_biometric_attendance(
         else:
             query["punch_time"] = {"$lte": end_date}
     
-    records = await db.biometric_attendance.find(query, {"_id": 0}).sort("punch_time", -1).to_list(500)
+    records = await db.biometric_attendance.find(query, {"_id": 0}).sort("punch_time", -1).to_list(length=None)
     return records
 
 # ==================== LOYALTY PROGRAM ROUTES ====================
@@ -12464,7 +12464,7 @@ async def get_loyalty_members(current_user: dict = Depends(get_current_user)):
     members = await db.loyalty_members.find(
         {"tenant_id": current_user.get("tenant_id")},
         {"_id": 0}
-    ).sort("total_points", -1).to_list(500)
+    ).sort("total_points", -1).to_list(length=None)
     return members
 
 @api_router.post("/loyalty/members")
@@ -12656,7 +12656,7 @@ async def get_member_transactions(member_id: str, current_user: dict = Depends(g
     transactions = await db.loyalty_transactions.find(
         {"member_id": member_id, "tenant_id": current_user.get("tenant_id")},
         {"_id": 0}
-    ).sort("created_at", -1).to_list(100)
+    ).sort("created_at", -1).to_list(length=None)
     return transactions
 
 # ==================== CUSTOMER REVIEWS ====================
@@ -12670,7 +12670,7 @@ async def get_customer_reviews(current_user: dict = Depends(get_current_user)):
     reviews = await db.customer_reviews.find(
         query,
         {"_id": 0}
-    ).sort("created_at", -1).to_list(100)
+    ).sort("created_at", -1).to_list(length=None)
     
     return reviews
 
@@ -12757,7 +12757,7 @@ async def get_raw_materials(category: Optional[str] = None, current_user: dict =
     if category:
         query["category"] = category
     
-    materials = await db.raw_materials.find(query, {"_id": 0}).to_list(500)
+    materials = await db.raw_materials.find(query, {"_id": 0}).to_list(length=None)
     return materials
 
 @api_router.post("/recipes/materials")
@@ -12795,7 +12795,7 @@ async def delete_raw_material(material_id: str, current_user: dict = Depends(get
 @api_router.get("/recipes")
 async def get_recipes(current_user: dict = Depends(get_current_user)):
     """قائمة الوصفات"""
-    recipes = await db.recipes.find({"tenant_id": current_user.get("tenant_id")}, {"_id": 0}).to_list(500)
+    recipes = await db.recipes.find({"tenant_id": current_user.get("tenant_id")}, {"_id": 0}).to_list(length=None)
     return recipes
 
 @api_router.post("/recipes")
@@ -12808,7 +12808,7 @@ async def create_recipe(recipe: RecipeCreate, current_user: dict = Depends(get_c
     
     # جلب المواد الخام
     material_ids = [ing.get("material_id") for ing in recipe.ingredients]
-    materials = await db.raw_materials.find({"id": {"$in": material_ids}}, {"_id": 0}).to_list(100)
+    materials = await db.raw_materials.find({"id": {"$in": material_ids}}, {"_id": 0}).to_list(length=None)
     materials_dict = {m["id"]: m for m in materials}
     
     # حساب التكلفة
@@ -12879,7 +12879,7 @@ async def get_low_stock_alerts(current_user: dict = Depends(get_current_user)):
         "tenant_id": current_user.get("tenant_id"),
         "is_active": True,
         "$expr": {"$lte": ["$current_stock", "$min_stock"]}
-    }, {"_id": 0}).to_list(100)
+    }, {"_id": 0}).to_list(length=None)
     
     alerts = []
     for mat in materials:
@@ -12927,7 +12927,7 @@ class InvoiceTemplateCreate(BaseModel):
 @api_router.get("/invoices/printers")
 async def get_printers(current_user: dict = Depends(get_current_user)):
     """قائمة الطابعات"""
-    printers = await db.printers.find({"tenant_id": current_user.get("tenant_id")}, {"_id": 0}).to_list(50)
+    printers = await db.printers.find({"tenant_id": current_user.get("tenant_id")}, {"_id": 0}).to_list(length=None)
     return printers
 
 @api_router.post("/invoices/printers")
@@ -12956,7 +12956,7 @@ async def delete_printer(printer_id: str, current_user: dict = Depends(get_curre
 @api_router.get("/invoices/templates")
 async def get_invoice_templates(current_user: dict = Depends(get_current_user)):
     """قائمة قوالب الفواتير"""
-    templates = await db.invoice_templates.find({"tenant_id": current_user.get("tenant_id")}, {"_id": 0}).to_list(50)
+    templates = await db.invoice_templates.find({"tenant_id": current_user.get("tenant_id")}, {"_id": 0}).to_list(length=None)
     return templates
 
 @api_router.post("/invoices/templates")
@@ -13124,7 +13124,7 @@ async def get_auto_print_data(order_id: str, branch_id: Optional[str] = None, cu
     elif order.get("branch_id"):
         printer_query["branch_id"] = order.get("branch_id")
     
-    printers = await db.printers.find(printer_query, {"_id": 0}).to_list(50)
+    printers = await db.printers.find(printer_query, {"_id": 0}).to_list(length=None)
     
     if not printers:
         return {"message": "لا توجد طابعات مفعّلة للطباعة التلقائية", "printers": []}
@@ -13278,7 +13278,7 @@ async def send_notification(request: SendNotificationRequest, background_tasks: 
     elif request.target_type == "branch":
         query["branch_id"] = request.target_id
     
-    tokens = await db.fcm_tokens.find(query, {"token": 1, "_id": 0}).to_list(1000)
+    tokens = await db.fcm_tokens.find(query, {"token": 1, "_id": 0}).to_list(length=None)
     token_list = [t["token"] for t in tokens]
     
     if not token_list:
@@ -13309,7 +13309,7 @@ async def get_notification_logs(current_user: dict = Depends(get_current_user)):
     logs = await db.notification_logs.find(
         {"tenant_id": current_user.get("tenant_id")},
         {"_id": 0}
-    ).sort("created_at", -1).to_list(100)
+    ).sort("created_at", -1).to_list(length=None)
     return logs
 
 # Helper function to send notification on new order (called from order creation)
@@ -13321,7 +13321,7 @@ async def notify_new_order(order: dict, tenant_id: str):
             "tenant_id": tenant_id,
             "user_type": {"$in": ["driver", "admin", "staff"]},
             "is_active": True
-        }).to_list(100)
+        }).to_list(length=None)
         
         if tokens:
             # TODO: إرسال عبر Firebase
@@ -13385,7 +13385,7 @@ async def get_dashboard_stats(
     elif user_branch_id and not is_manager:
         branches_query["id"] = user_branch_id
     
-    branches = await db.branches.find(branches_query, {"_id": 0}).to_list(100)
+    branches = await db.branches.find(branches_query, {"_id": 0}).to_list(length=None)
     
     # حساب التكاليف الثابتة الشهرية
     total_rent = sum(_sn(b.get("rent_cost")) for b in branches)
@@ -13402,7 +13402,7 @@ async def get_dashboard_stats(
     elif user_branch_id and not is_manager:
         employees_query["branch_id"] = user_branch_id
     
-    employees = await db.employees.find(employees_query, {"_id": 0, "salary": 1}).to_list(1000)
+    employees = await db.employees.find(employees_query, {"_id": 0, "salary": 1}).to_list(length=None)
     total_salaries = sum(_sn(e.get("salary")) for e in employees)
     daily_salaries = total_salaries / 30
     
@@ -13415,7 +13415,7 @@ async def get_dashboard_stats(
         if start_date:
             query["created_at"] = {"$gte": start_date}
         
-        orders = await db.orders.find(query, {"_id": 0, "total": 1, "total_cost": 1, "profit": 1, "payment_method": 1}).to_list(10000)
+        orders = await db.orders.find(query, {"_id": 0, "total": 1, "total_cost": 1, "profit": 1, "payment_method": 1}).to_list(length=None)
         
         total_sales = sum(_sn(o.get("total")) for o in orders)
         total_orders = len(orders)
@@ -13456,7 +13456,7 @@ async def get_dashboard_stats(
     
     # جلب آخر الطلبات
     recent_query = base_query.copy()
-    recent_orders = await db.orders.find(recent_query, {"_id": 0}).sort("created_at", -1).limit(10).to_list(10)
+    recent_orders = await db.orders.find(recent_query, {"_id": 0}).sort("created_at", -1).limit(10).to_list(length=None)
     
     # جلب معلومات الوردية الحالية
     shift_query = {"status": "open"}
@@ -13512,11 +13512,11 @@ async def get_day_status(
     
     # الورديات المفتوحة
     shift_query = {**base_query, "status": "open"}
-    open_shifts = await db.shifts.find(shift_query, {"_id": 0}).to_list(100)
+    open_shifts = await db.shifts.find(shift_query, {"_id": 0}).to_list(length=None)
     
     # الطلبات المعلقة
     pending_query = {**base_query, "status": {"$in": ["pending", "preparing", "ready"]}}
-    pending_orders = await db.orders.find(pending_query, {"_id": 0, "id": 1, "order_number": 1, "status": 1, "total": 1, "created_at": 1}).to_list(100)
+    pending_orders = await db.orders.find(pending_query, {"_id": 0, "id": 1, "order_number": 1, "status": 1, "total": 1, "created_at": 1}).to_list(length=None)
     
     # آخر إغلاق يومي
     last_close = await db.day_closures.find_one(base_query, sort=[("closed_at", -1)])
@@ -13561,7 +13561,7 @@ async def close_day(
     
     # التحقق من الطلبات المعلقة
     pending_query = {**base_query, "status": {"$in": ["pending", "preparing", "ready"]}}
-    pending_orders = await db.orders.find(pending_query, {"_id": 0}).to_list(100)
+    pending_orders = await db.orders.find(pending_query, {"_id": 0}).to_list(length=None)
     
     if pending_orders and not request.force:
         return DayCloseResponse(
@@ -13572,7 +13572,7 @@ async def close_day(
     
     # إغلاق جميع الورديات المفتوحة
     shift_query = {**base_query, "status": "open"}
-    open_shifts = await db.shifts.find(shift_query, {"_id": 0}).to_list(100)
+    open_shifts = await db.shifts.find(shift_query, {"_id": 0}).to_list(length=None)
     
     shifts_closed = 0
     total_day_sales = 0
@@ -13586,7 +13586,7 @@ async def close_day(
         orders = await db.orders.find({
             "shift_id": shift["id"],
             "status": {"$ne": OrderStatus.CANCELLED}
-        }).to_list(1000)
+        }).to_list(length=None)
         
         # fallback: إذا لم توجد طلبات بـ shift_id
         if not orders and shift_start:
@@ -13594,7 +13594,7 @@ async def close_day(
                 "cashier_id": shift.get("cashier_id", ""),
                 "created_at": {"$gte": shift_start},
                 "status": {"$ne": OrderStatus.CANCELLED}
-            }).to_list(1000)
+            }).to_list(length=None)
         
         shift_sales = sum(_sn(o.get("total")) for o in orders)
         shift_profit = sum(_sn(o.get("profit")) for o in orders)
@@ -13603,7 +13603,7 @@ async def close_day(
         expense_query = {"branch_id": shift.get("branch_id")}
         if shift_start:
             expense_query["created_at"] = {"$gte": shift_start}
-        expenses = await db.expenses.find(expense_query).to_list(100)
+        expenses = await db.expenses.find(expense_query).to_list(length=None)
         shift_expenses = sum(_sn(e.get("amount")) for e in expenses)
         
         # حساب النقد المتوقع - الإغلاق الإجباري = closing_cash صفر = short cash
@@ -13707,7 +13707,7 @@ async def auto_close_old_shifts():
         old_shifts = await db.shifts.find({
             "status": "open",
             "started_at": {"$lt": cutoff}
-        }).to_list(100)
+        }).to_list(length=None)
         
         for shift in old_shifts:
             shift_start = shift.get("started_at") or shift.get("opened_at") or ""
@@ -13716,14 +13716,14 @@ async def auto_close_old_shifts():
             orders = await db.orders.find({
                 "shift_id": shift["id"],
                 "status": {"$ne": OrderStatus.CANCELLED}
-            }).to_list(1000)
+            }).to_list(length=None)
             
             if not orders and shift_start:
                 orders = await db.orders.find({
                     "cashier_id": shift.get("cashier_id", ""),
                     "created_at": {"$gte": shift_start},
                     "status": {"$ne": OrderStatus.CANCELLED}
-                }).to_list(1000)
+                }).to_list(length=None)
             
             total_sales = sum(_sn(o.get("total")) for o in orders)
             total_profit = sum(_sn(o.get("profit")) for o in orders)
@@ -13732,7 +13732,7 @@ async def auto_close_old_shifts():
             expense_query = {"branch_id": shift.get("branch_id")}
             if shift_start:
                 expense_query["created_at"] = {"$gte": shift_start}
-            expenses = await db.expenses.find(expense_query).to_list(100)
+            expenses = await db.expenses.find(expense_query).to_list(length=None)
             total_expenses = sum(_sn(e.get("amount")) for e in expenses)
             
             opening_cash = _sn(shift.get("opening_cash") or shift.get("opening_balance") or 0)
@@ -13793,7 +13793,7 @@ async def send_daily_report_email(
     branch_query = {}
     if tenant_id:
         branch_query["tenant_id"] = tenant_id
-    branches = await db.branches.find(branch_query, {"_id": 0}).to_list(100)
+    branches = await db.branches.find(branch_query, {"_id": 0}).to_list(length=None)
     
     branches_data = []
     total_sales = 0
@@ -13807,13 +13807,13 @@ async def send_daily_report_email(
         
         # طلبات الفرع اليوم
         orders_query = {**base_query, "branch_id": branch["id"], "created_at": {"$gte": today}}
-        orders = await db.orders.find(orders_query, {"_id": 0, "total": 1, "profit": 1}).to_list(1000)
+        orders = await db.orders.find(orders_query, {"_id": 0, "total": 1, "profit": 1}).to_list(length=None)
         
         # مصاريف الفرع اليوم
         expenses_query = {"branch_id": branch["id"], "date": {"$gte": today}}
         if tenant_id:
             expenses_query["tenant_id"] = tenant_id
-        expenses = await db.expenses.find(expenses_query, {"_id": 0, "amount": 1}).to_list(1000)
+        expenses = await db.expenses.find(expenses_query, {"_id": 0, "amount": 1}).to_list(length=None)
         
         branch_sales = sum(_sn(o.get("total")) for o in orders)
         branch_expenses = sum(_sn(e.get("amount")) for e in expenses)
@@ -13899,14 +13899,14 @@ async def get_daily_report_preview(
         base_query["branch_id"] = branch_id
     
     # جلب إحصائيات اليوم
-    orders = await db.orders.find(base_query, {"_id": 0}).to_list(1000)
+    orders = await db.orders.find(base_query, {"_id": 0}).to_list(length=None)
     
     expenses_query = {"date": {"$gte": today}}
     if tenant_id:
         expenses_query["tenant_id"] = tenant_id
     if branch_id:
         expenses_query["branch_id"] = branch_id
-    expenses = await db.expenses.find(expenses_query, {"_id": 0}).to_list(1000)
+    expenses = await db.expenses.find(expenses_query, {"_id": 0}).to_list(length=None)
     
     total_sales = sum(_sn(o.get("total")) for o in orders)
     total_profit = sum(_sn(o.get("profit")) for o in orders)
@@ -13964,7 +13964,7 @@ async def _alert_forgotten_open_shifts():
             "started_at": {"$lt": threshold},
             "alerted_forgotten": {"$ne": True},
         }
-        open_shifts = await db.shifts.find(query).to_list(500)
+        open_shifts = await db.shifts.find(query).to_list(length=None)
         if not open_shifts:
             return
         
@@ -14082,7 +14082,7 @@ async def migrate_duplicate_admins_to_general_manager():
             {"$group": {"_id": "$tenant_id", "keep_id": {"$first": "$id"},
                         "all_ids": {"$push": "$id"}}},
         ]
-        groups = await db.users.aggregate(pipeline).to_list(1000)
+        groups = await db.users.aggregate(pipeline).to_list(length=None)
         demoted = 0
         for g in groups:
             extra_ids = [uid for uid in g["all_ids"] if uid != g["keep_id"]]
@@ -14139,7 +14139,7 @@ async def fix_pending_orders_extras_calc():
         active_statuses = ["pending", "preparing", "ready", "on_hold", "in_progress"]
         active_orders = await db.orders.find(
             {"status": {"$in": active_statuses}}, {"_id": 0}
-        ).to_list(10000)
+        ).to_list(length=None)
         
         fixed_count = 0
         for o in active_orders:
@@ -14197,9 +14197,9 @@ async def backfill_shift_cash_deposit_branch_v1():
             return
         logger.info(f"🔧 Running migration: {MIG_KEY}")
         from datetime import datetime as _dt, timezone as _tz
-        branches = await db.branches.find({}, {"_id": 0, "id": 1, "name": 1}).to_list(2000)
+        branches = await db.branches.find({}, {"_id": 0, "id": 1, "name": 1}).to_list(length=None)
         bmap = {b.get("id"): b.get("name") for b in branches}
-        deps = await db.owner_deposits.find({"source": "shift_cash"}, {"_id": 0}).to_list(50000)
+        deps = await db.owner_deposits.find({"source": "shift_cash"}, {"_id": 0}).to_list(length=None)
         fixed = 0
         for d in deps:
             bid = d.get("branch_id")
@@ -14247,9 +14247,9 @@ async def backfill_shift_cash_deposit_branch_v2():
             return
         logger.info(f"🔧 Running migration: {MIG_KEY}")
         from datetime import datetime as _dt, timezone as _tz
-        branches = await db.branches.find({}, {"_id": 0, "id": 1, "name": 1}).to_list(2000)
+        branches = await db.branches.find({}, {"_id": 0, "id": 1, "name": 1}).to_list(length=None)
         bmap = {b.get("id"): b.get("name") for b in branches}
-        deps = await db.owner_deposits.find({"source": "shift_cash"}, {"_id": 0}).to_list(100000)
+        deps = await db.owner_deposits.find({"source": "shift_cash"}, {"_id": 0}).to_list(length=None)
         bname_to_id = {b.get("name"): b.get("id") for b in branches if b.get("name")}
         fixed = 0
         for d in deps:
@@ -14320,7 +14320,7 @@ async def cleanup_mistaken_expense_moataz36():
         if done:
             return
 
-        candidates = await db.expenses.find({"description": {"$regex": "معتز"}}, {"_id": 0}).to_list(2000)
+        candidates = await db.expenses.find({"description": {"$regex": "معتز"}}, {"_id": 0}).to_list(length=None)
         def _has36(e):
             return "36" in (e.get("description") or "") or "36" in (str(e.get("reference_number") or ""))
         to_delete = [e for e in candidates if "معتز" in (e.get("description") or "") and _has36(e)]
@@ -14345,7 +14345,7 @@ async def cleanup_mistaken_expense_moataz36():
             exp_q = {"branch_id": bid, "category": {"$ne": "refund"}, "created_at": {"$gte": sh.get("started_at", "")}}
             if tid:
                 exp_q["tenant_id"] = tid
-            exps = await db.expenses.find(exp_q, {"_id": 0, "amount": 1}).to_list(500)
+            exps = await db.expenses.find(exp_q, {"_id": 0, "amount": 1}).to_list(length=None)
             total_exp = sum(float(x.get("amount") or 0) for x in exps)
             oc = float(sh.get("opening_cash") or sh.get("opening_balance") or 0)
             cs = float(sh.get("cash_sales") or 0)
@@ -14387,7 +14387,7 @@ async def seed_department_branches():
             {"name": "قسم المشتريات", "branch_type": "purchasing"},
         ]
         
-        tenants = await db.tenants.find({}, {"_id": 0, "id": 1}).to_list(1000)
+        tenants = await db.tenants.find({}, {"_id": 0, "id": 1}).to_list(length=None)
         created = 0
         for ten in tenants:
             tid = ten.get("id")
@@ -14464,7 +14464,7 @@ async def cleanup_duplicate_expenses():
         gas_expenses = await db.expenses.find({
             "amount": 50000,
             "description": {"$regex": "غاز", "$options": "i"}
-        }, {"_id": 0}).sort("created_at", 1).to_list(1000)
+        }, {"_id": 0}).sort("created_at", 1).to_list(length=None)
         
         if not gas_expenses:
             logger.info("   لا توجد مصاريف غاز 50,000 مطابقة")
@@ -14514,7 +14514,7 @@ async def cleanup_duplicate_expenses():
             shift_q = {"branch_id": branch_id, "started_at": {"$lte": exp_created}}
             if tenant_id:
                 shift_q["tenant_id"] = tenant_id
-            affected = await db.shifts.find(shift_q, {"_id": 0}).to_list(100)
+            affected = await db.shifts.find(shift_q, {"_id": 0}).to_list(length=None)
             for s in affected:
                 if s["id"] in recomputed_shifts:
                     continue
@@ -14530,7 +14530,7 @@ async def cleanup_duplicate_expenses():
                     q["tenant_id"] = tenant_id
                 if s_end:
                     q["created_at"]["$lte"] = s_end
-                shift_expenses = await db.expenses.find(q, {"_id": 0, "amount": 1}).to_list(500)
+                shift_expenses = await db.expenses.find(q, {"_id": 0, "amount": 1}).to_list(length=None)
                 total_exp = sum(float(e.get("amount") or 0) for e in shift_expenses)
                 opening_cash = float(s.get("opening_cash") or s.get("opening_balance") or 0)
                 cash_sales = float(s.get("cash_sales") or 0)
@@ -14584,7 +14584,7 @@ async def purge_ghost_order_saidiya_11_20260430():
         saidiya_branches = await db.branches.find(
             {"name": {"$regex": "السيدية|السيديه|صيدية", "$options": "i"}},
             {"_id": 0, "id": 1, "name": 1, "tenant_id": 1}
-        ).to_list(10)
+        ).to_list(length=None)
         
         if not saidiya_branches:
             logger.info(f"   لا يوجد فرع السيدية في هذه القاعدة — تم تخطي الـ migration وتسجيله")
@@ -14607,7 +14607,7 @@ async def purge_ghost_order_saidiya_11_20260430():
             "order_type": "dine_in",
             "created_at": {"$regex": "^2026-04-30"},
         }
-        ghost_orders = await db.orders.find(query, {"_id": 0}).to_list(10)
+        ghost_orders = await db.orders.find(query, {"_id": 0}).to_list(length=None)
         
         if not ghost_orders:
             logger.info("   لم يتم العثور على طلب شبح مطابق — تم تسجيل الـ migration كمُنفّذ")
@@ -14749,7 +14749,7 @@ async def backfill_closing_business_date():
         closings = await db.cash_register_closings.find(
             {"$or": [{"business_date": {"$exists": False}}, {"business_date": None}, {"business_date": ""}]},
             {"_id": 0, "id": 1, "shift_id": 1, "shift_start": 1, "closed_at": 1, "started_at": 1}
-        ).to_list(5000)
+        ).to_list(length=None)
         
         logger.info(f"   سجلات تحتاج تعبئة: {len(closings)}")
         fixed = 0
@@ -14807,7 +14807,7 @@ async def auto_heal_shifts_and_business_dates():
         stale_shifts = await db.shifts.find(
             {"status": "open", "started_at": {"$lt": stale_cutoff}},
             {"_id": 0, "id": 1, "started_at": 1, "cashier_name": 1}
-        ).to_list(200)
+        ).to_list(length=None)
         
         for s in stale_shifts:
             # احسب وقت إغلاق منطقي: started_at + 18 ساعة (افتراض شفت طبيعي)
@@ -15050,7 +15050,7 @@ async def fix_yamen_orders_jadriya_20260503():
         jadriya_branches = await db.branches.find(
             {"name": {"$regex": "جادرية|الجادرية|Jadriya|Al-Jadriya", "$options": "i"}},
             {"_id": 0, "id": 1, "name": 1, "tenant_id": 1}
-        ).to_list(10)
+        ).to_list(length=None)
         
         if not jadriya_branches:
             logger.info("   لا يوجد فرع جادرية في هذه القاعدة — تم تسجيل migration كمُنفّذ")
@@ -15260,7 +15260,7 @@ async def renumber_offline_orders_chronologically_v2():
                 "count": {"$sum": 1},
             }}
         ]
-        groups = await db.orders.aggregate(pipeline).to_list(5000)
+        groups = await db.orders.aggregate(pipeline).to_list(length=None)
 
         for grp in groups:
             min_num = grp.get("min_num") or 0
@@ -15283,7 +15283,7 @@ async def renumber_offline_orders_chronologically_v2():
 
             all_orders = await db.orders.find(
                 q, {"_id": 0, "id": 1, "created_at": 1, "order_number": 1}
-            ).sort("created_at", 1).to_list(2000)
+            ).sort("created_at", 1).to_list(length=None)
 
             for new_num, ord_doc in enumerate(all_orders, start=1):
                 old_num = ord_doc.get("order_number")
@@ -15345,7 +15345,7 @@ async def renumber_offline_orders_chronologically_v1():
                 "_id": {"branch_id": "$branch_id", "business_date": "$business_date", "tenant_id": "$tenant_id"},
                 "min_offline_num": {"$min": "$order_number"},
             }}
-        ]).to_list(2000)
+        ]).to_list(length=None)
 
         for grp in offline_groups:
             branch_id = grp["_id"].get("branch_id")
@@ -15376,7 +15376,7 @@ async def renumber_offline_orders_chronologically_v1():
                 continue
 
             # 2) نُعيد ترقيم كل الطلبات لهذا اليوم/الفرع تسلسلياً حسب created_at
-            all_orders = await db.orders.find(q, {"_id": 0, "id": 1, "created_at": 1, "order_number": 1, "is_offline_order": 1}).sort("created_at", 1).to_list(2000)
+            all_orders = await db.orders.find(q, {"_id": 0, "id": 1, "created_at": 1, "order_number": 1, "is_offline_order": 1}).sort("created_at", 1).to_list(length=None)
             for new_num, ord_doc in enumerate(all_orders, start=1):
                 old_num = ord_doc.get("order_number")
                 if old_num != new_num:
@@ -15579,7 +15579,7 @@ async def get_favorites(
     favorites = await db.customer_favorites.find(
         query,
         {"_id": 0}
-    ).sort("created_at", -1).limit(10).to_list(10)
+    ).sort("created_at", -1).limit(10).to_list(length=None)
     
     return favorites
 
@@ -15619,7 +15619,7 @@ async def get_drivers(current_user: dict = Depends(get_current_user)):
     drivers = await db.drivers.find(
         {"tenant_id": tenant_id},
         {"_id": 0}
-    ).sort("name", 1).to_list(100)
+    ).sort("name", 1).to_list(length=None)
     
     return drivers
 
@@ -16013,7 +16013,7 @@ async def get_driver_orders(current_driver: dict = Depends(get_current_driver)):
             "status": {"$nin": ["delivered", "cancelled", "canceled", "refunded", "rejected"]}
         },
         {"_id": 0}
-    ).sort("created_at", -1).to_list(50)
+    ).sort("created_at", -1).to_list(length=None)
     
     # إضافة status_label
     status_labels = {
@@ -16280,7 +16280,7 @@ async def get_order_chat(order_id: str, after: Optional[str] = None):
     query = {"order_id": order_id}
     if after:
         query["created_at"] = {"$gt": after}
-    msgs = await db.order_chats.find(query, {"_id": 0}).sort("created_at", 1).to_list(500)
+    msgs = await db.order_chats.find(query, {"_id": 0}).sort("created_at", 1).to_list(length=None)
     return {"messages": msgs}
 
 @api_router.post("/order-chat/{order_id}")
@@ -16483,7 +16483,7 @@ async def send_push_notification(phone: str, title: str, body: str, data: dict =
         if user_type:
             query["user_type"] = user_type
 
-        subscriptions = await db.push_subscriptions.find(query).to_list(100)
+        subscriptions = await db.push_subscriptions.find(query).to_list(length=None)
 
         payload = json.dumps({
             "title": title,
@@ -17165,7 +17165,7 @@ async def get_pending_order_notifications(
         query,
         {"_id": 0, "id": 1, "order_number": 1, "customer_name": 1, 
          "total": 1, "created_at": 1, "payment_method": 1, "items": 1}
-    ).sort("created_at", -1).to_list(20)
+    ).sort("created_at", -1).to_list(length=None)
     
     # تحديد الطلبات الجديدة (غير المشاهدة)
     user_id = current_user.get("id", "")
@@ -17288,7 +17288,7 @@ async def get_delayed_orders(
         query["tenant_id"] = tenant_id
     
     # جلب الطلبات المتأخرة
-    delayed_orders = await db.orders.find(query, {"_id": 0}).sort("created_at", 1).to_list(50)
+    delayed_orders = await db.orders.find(query, {"_id": 0}).sort("created_at", 1).to_list(length=None)
     
     # حساب مدة التأخير لكل طلب
     now = datetime.now(timezone.utc)
@@ -17580,7 +17580,7 @@ async def get_licensed_devices(current_user: dict = Depends(get_current_user)):
     devices = await db.license_devices.find(
         {"tenant_id": tenant_id, "is_active": True},
         {"_id": 0}
-    ).to_list(100)
+    ).to_list(length=None)
     
     tenant = await db.tenants.find_one({"id": tenant_id}, {"_id": 0, "max_devices": 1})
     max_devices = tenant.get("max_devices", 5) if tenant else 5
@@ -17628,7 +17628,7 @@ async def get_tenant_devices(
     devices = await db.license_devices.find(
         {"tenant_id": tenant_id},
         {"_id": 0}
-    ).to_list(100)
+    ).to_list(length=None)
     
     tenant = await db.tenants.find_one({"id": tenant_id}, {"_id": 0, "max_devices": 1})
     max_devices = tenant.get("max_devices", 5) if tenant else 5
@@ -17721,7 +17721,7 @@ async def superadmin_cleanup_orphan_expense(
         affected_shifts = await db.shifts.find(
             shift_q,
             {"_id": 0, "id": 1, "started_at": 1, "ended_at": 1, "opening_cash": 1, "opening_balance": 1, "cash_sales": 1}
-        ).to_list(100)
+        ).to_list(length=None)
         for s in affected_shifts:
             s_end = s.get("ended_at") or ""
             if s_end and exp_created > s_end:
@@ -17735,7 +17735,7 @@ async def superadmin_cleanup_orphan_expense(
                 exp_q["tenant_id"] = exp_tenant
             if s_end:
                 exp_q["created_at"]["$lte"] = s_end
-            shift_expenses = await db.expenses.find(exp_q, {"_id": 0, "amount": 1}).to_list(500)
+            shift_expenses = await db.expenses.find(exp_q, {"_id": 0, "amount": 1}).to_list(length=None)
             total_exp = sum(float(e.get("amount") or 0) for e in shift_expenses)
             opening_cash = float(s.get("opening_cash") or s.get("opening_balance") or 0)
             cash_sales = float(s.get("cash_sales") or 0)
@@ -17804,7 +17804,7 @@ async def migrate_business_dates(force: bool = False, current_user: dict = Depen
         all_shifts = await db.shifts.find(
             {"tenant_id": tenant_id},
             {"_id": 0, "id": 1, "branch_id": 1, "started_at": 1, "opened_at": 1, "ended_at": 1, "business_date": 1, "status": 1}
-        ).sort("started_at", 1).to_list(10000)
+        ).sort("started_at", 1).to_list(length=None)
         
         # ترتيب الورديات حسب الفرع
         shifts_by_branch = {}
@@ -17899,7 +17899,7 @@ async def migrate_business_dates(force: bool = False, current_user: dict = Depen
         closed_shifts = await db.shifts.find(
             {"tenant_id": tenant_id, "status": "closed"},
             {"_id": 0, "id": 1, "branch_id": 1, "started_at": 1, "opened_at": 1, "ended_at": 1, "cash_sales": 1, "opening_cash": 1, "opening_balance": 1}
-        ).to_list(10000)
+        ).to_list(length=None)
         
         for s in closed_shifts:
             shift_start = s.get("started_at") or s.get("opened_at") or ""
@@ -17914,7 +17914,7 @@ async def migrate_business_dates(force: bool = False, current_user: dict = Depen
             }
             if shift_end:
                 exp_query["created_at"]["$lte"] = shift_end
-            shift_expenses = await db.expenses.find(exp_query, {"_id": 0, "amount": 1}).to_list(500)
+            shift_expenses = await db.expenses.find(exp_query, {"_id": 0, "amount": 1}).to_list(length=None)
             total_exp = sum(float(e.get("amount") or 0) for e in shift_expenses)
             
             opening_cash = float(s.get("opening_cash") or s.get("opening_balance") or 0)
@@ -18008,14 +18008,14 @@ async def get_sales_leaderboard(
     
     orders = await db.orders.find(query, {
         "_id": 0, "cashier_id": 1, "cashier_name": 1, "total": 1
-    }).to_list(10000)
+    }).to_list(length=None)
     
     # جلب أسماء الكاشيرية من قاعدة البيانات
     cashier_ids = list(set(o.get("cashier_id") for o in orders if o.get("cashier_id")))
     users_list = await db.users.find(
         {"id": {"$in": cashier_ids}},
         {"_id": 0, "id": 1, "name": 1, "full_name": 1}
-    ).to_list(500)
+    ).to_list(length=None)
     user_names = {u["id"]: u.get("full_name") or u.get("name", "غير معروف") for u in users_list}
     
     cashier_stats = {}
@@ -18180,7 +18180,7 @@ async def fix_delivery_orders(current_user: dict = Depends(verify_super_admin)):
     """تحديث الطلبات القديمة لشركات التوصيل - يُنفذ مرة واحدة"""
     
     # جلب كل العملاء الذين هم شركات توصيل
-    delivery_customers = await db.customers.find({"is_delivery_company": True}, {"_id": 0, "id": 1, "name": 1, "phone": 1}).to_list(1000)
+    delivery_customers = await db.customers.find({"is_delivery_company": True}, {"_id": 0, "id": 1, "name": 1, "phone": 1}).to_list(length=None)
     
     if not delivery_customers:
         return {"message": "لا توجد شركات توصيل مسجلة", "updated": 0}
@@ -18194,7 +18194,7 @@ async def fix_delivery_orders(current_user: dict = Depends(verify_super_admin)):
     orders = await db.orders.find({
         "payment_method": "credit",
         "is_delivery_company": {"$ne": True}  # لم يتم تحديثها بعد
-    }, {"_id": 0}).to_list(10000)
+    }, {"_id": 0}).to_list(length=None)
     
     updated_count = 0
     for order in orders:

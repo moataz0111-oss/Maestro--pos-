@@ -221,7 +221,7 @@ async def get_super_admin_ratings_overview(current_user: dict = Depends(verify_s
         }}
     ]
     
-    tenant_ratings = await db.order_ratings.aggregate(pipeline).to_list(100)
+    tenant_ratings = await db.order_ratings.aggregate(pipeline).to_list(length=None)
     
     # جلب أسماء العملاء
     result = []
@@ -266,7 +266,7 @@ async def get_customer_orders(tenant_id: str, customer_token: str):
     orders = await db.orders.find(
         {"customer_id": customer["id"]},
         {"_id": 0}
-    ).sort("created_at", -1).limit(50).to_list(50)
+    ).sort("created_at", -1).limit(50).to_list(length=None)
     
     return orders
 

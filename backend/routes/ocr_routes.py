@@ -168,7 +168,7 @@ async def get_purchase_orders(
     if branch_id:
         query["branch_id"] = branch_id
     
-    orders = await db.purchase_orders.find(query, {"_id": 0}).sort("created_at", -1).to_list(500)
+    orders = await db.purchase_orders.find(query, {"_id": 0}).sort("created_at", -1).to_list(length=None)
     
     for order in orders:
         supplier = await db.suppliers.find_one({"id": order.get("supplier_id")}, {"_id": 0, "name": 1})
@@ -289,7 +289,7 @@ async def get_raw_materials(
         query["category"] = category
     
     # البحث في raw_materials أولاً (الجدول الصحيح)
-    materials = await db.raw_materials.find(query, {"_id": 0}).sort("name", 1).to_list(500)
+    materials = await db.raw_materials.find(query, {"_id": 0}).sort("name", 1).to_list(length=None)
     
     # إذا لم نجد شيء، نبحث أيضاً في inventory بنوع raw (للتوافقية القديمة)
     if not materials:
@@ -298,7 +298,7 @@ async def get_raw_materials(
             old_query["branch_id"] = branch_id
         if category:
             old_query["category"] = category
-        materials = await db.inventory.find(old_query, {"_id": 0}).sort("name", 1).to_list(500)
+        materials = await db.inventory.find(old_query, {"_id": 0}).sort("name", 1).to_list(length=None)
     
     return materials
 
@@ -342,7 +342,7 @@ async def get_low_stock_alerts(current_user: dict = Depends(get_current_user)):
     """جلب تنبيهات انخفاض المخزون"""
     query = build_tenant_query(current_user)
     
-    materials = await db.raw_materials.find(query, {"_id": 0}).to_list(500)
+    materials = await db.raw_materials.find(query, {"_id": 0}).to_list(length=None)
     
     alerts = []
     for material in materials:

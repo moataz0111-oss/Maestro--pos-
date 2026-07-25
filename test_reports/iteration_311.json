@@ -1,0 +1,58 @@
+{
+  "summary": "Backend-only regression for report cap removal: 12 tests executed, 9 passed and 3 failed. A controlled 10,001-order dataset proved GET /api/reports/sales is no longer capped at 10,000. Cash-closing history default and limit=0 returned identical unlimited results. Health, 2FA trigger, and 5/6 requested collection endpoints passed. Release is not safe yet because profit-loss and orders return 500, the requested comprehensive route is absent, and code review found many remaining hard-coded to_list limits despite the stated 211-limit removal.",
+  "backend_issues": {
+    "critical": [
+      {
+        "endpoint": "/api/reports/profit-loss?start_date=2026-07-01&end_date=2026-07-25",
+        "issue": "Returns 500. Backend traceback shows KeyError: 'total' at reports_routes.py:788 because total_revenue uses o['total'] on legacy/incomplete order documents. This prevents validating the high-volume order count and makes the report fragile with live historical data.",
+        "priority": "CRITICAL"
+      },
+      {
+        "endpoint": "/api/orders",
+        "issue": "Returns 500 with FastAPI ResponseValidationError (60 validation errors). Existing orders lack required OrderResponse fields such as order_number, order_type, subtotal, items, or total.",
+        "priority": "CRITICAL"
+      },
+      {
+        "endpoint": "/api/reports/comprehensive",
+        "issue": "Returns 404 Not Found; no comprehensive backend route was found, so the requested total_revenue/total_expenses/net_profit contract cannot be verified.",
+        "priority": "HIGH"
+      }
+    ],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_report_caps_iter311.py",
+    "/app/test_reports/pytest/iter311_report_caps_retry.xml"
+  ],
+  "action_items": [
+    "Make profit-loss tolerate historical orders with missing total (for example, numeric-safe o.get('total', 0)) and retest with >10,000 orders.",
+    "Fix /api/orders compatibility with legacy/incomplete records by normalizing data or making appropriate response fields optional/defaulted; it currently fails the explicit regression requirement.",
+    "Implement or clarify the expected /api/reports/comprehensive endpoint and response contract.",
+    "Audit and remove unintended remaining hard limits. Current code still has 247 non-length=None to_list calls; report-related examples include weekly-low-profit length=10000, products-by-channel 20000, report candidates 20000, and cash-register-closing report history to_list(100). Preserve deliberate pagination/aggregation limits explicitly rather than claiming all limits were removed.",
+    "Re-run this test suite before production release."
+  ],
+  "critical_code_review_comments": [
+    "The implementation does not match the claim that 211 hard limits were removed: grep found 247 backend to_list calls without length=None. Thirteen remain at 10k/20k, including reports_routes.py:509, 1274, 1940 and cash_closing_report_routes.py:714.",
+    "cash_closing_report_routes.py:191 still truncates GET /reports/cash-register-closing embedded closings to 100 even though the separate history endpoint is unlimited; users may still see inconsistent histories across the two report APIs.",
+    "reports_routes.py:788 directly indexes o['total']; historical documents can omit it and crash the whole report. Other report sums should be audited for direct indexing of legacy fields.",
+    "server.py is over 18,000 lines, far beyond the 700-line maintainability guideline; route/model extraction is needed to reduce regression risk."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_report_caps_iter311.py",
+    "/app/test_reports/iteration_311.json"
+  ],
+  "success_rate": {
+    "backend": "9/12 (75%)",
+    "frontend": "skipped per request"
+  },
+  "seed_data_creation": "Temporarily inserted 10,001 TEST_CAP_* paid orders for tenant default dated 2026-07-25. Fixture cleanup succeeded; verified qa_orders=0 afterward.",
+  "should_call_test_agent_after_fix": true,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Use public REACT_APP_BACKEND_URL. Trusted admin test device test-device-iter295 still obtains a token; login without a device correctly triggers 2FA. The >10k fixture is self-cleaning. Sales passed the >10k proof; profit-loss failed before count validation. Cash closings with and without limit both passed and were identical.",
+  "rca_of_the_issue": "Reproduction: run test_report_caps_iter311.py. Sales successfully counts the 10,001 controlled orders, proving its to_list(length=None) fix. Profit-loss loads the full range but crashes on an older order missing total because line 788 uses o['total']. /orders fails response-model validation against many seeded historical documents. /reports/comprehensive has no registered route. Broad grep confirms the bulk limit replacement was incomplete, so other silent caps remain possible."
+}

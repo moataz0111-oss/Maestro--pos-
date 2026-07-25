@@ -62,7 +62,7 @@ async def get_reservations(
     if branch_id:
         query["branch_id"] = branch_id
     
-    reservations = await db.reservations.find(query, {"_id": 0}).sort("date", -1).to_list(500)
+    reservations = await db.reservations.find(query, {"_id": 0}).sort("date", -1).to_list(length=None)
     return reservations
 
 @router.post("/reservations")
@@ -179,7 +179,7 @@ async def get_reviews(
         else:
             query["response"] = None
     
-    reviews = await db.reviews.find(query, {"_id": 0}).sort("created_at", -1).to_list(500)
+    reviews = await db.reviews.find(query, {"_id": 0}).sort("created_at", -1).to_list(length=None)
     return reviews
 
 @router.post("/reviews")
@@ -238,7 +238,7 @@ async def get_reviews_stats(current_user: dict = Depends(get_current_user)):
     """إحصائيات التقييمات"""
     query = build_tenant_query(current_user)
     
-    reviews = await db.reviews.find(query, {"_id": 0, "rating": 1, "response": 1}).to_list(1000)
+    reviews = await db.reviews.find(query, {"_id": 0, "rating": 1, "response": 1}).to_list(length=None)
     
     total = len(reviews)
     if total == 0:

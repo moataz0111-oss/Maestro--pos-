@@ -84,7 +84,7 @@ async def get_drivers(branch_id: Optional[str] = None, include_orders: bool = Fa
     query = build_tenant_query(current_user)
     if branch_id:
         query["branch_id"] = branch_id
-    drivers = await db.drivers.find(query, {"_id": 0}).to_list(100)
+    drivers = await db.drivers.find(query, {"_id": 0}).to_list(length=None)
     
     if include_orders:
         for driver in drivers:
@@ -134,17 +134,17 @@ async def drivers_performance(period: str = "today", branch_id: Optional[str] = 
         "_id": 0, "driver_id": 1, "driver_name": 1, "status": 1, "total": 1, "delivery_fee": 1,
         "created_at": 1, "delivered_at": 1, "out_for_delivery_at": 1, "delivery_location": 1,
         "branch_id": 1, "is_delivery_company": 1, "delivery_app": 1, "delivery_app_name": 1
-    }).to_list(10000)
+    }).to_list(length=None)
 
     # إحداثيات الفروع (للمسافة التقديرية فرع→زبون)
-    branches = await db.branches.find({}, {"_id": 0, "id": 1, "latitude": 1, "longitude": 1}).to_list(200)
+    branches = await db.branches.find({}, {"_id": 0, "id": 1, "latitude": 1, "longitude": 1}).to_list(length=None)
     bmap = {b["id"]: b for b in branches if b.get("latitude") is not None and b.get("longitude") is not None}
 
     # كل سائقي المطعم (حتى من ليس له طلبات في الفترة)
     dq = build_tenant_query(current_user)
     if branch_id:
         dq["branch_id"] = branch_id
-    drivers = await db.drivers.find(dq, {"_id": 0, "id": 1, "name": 1, "phone": 1, "is_active": 1, "is_available": 1}).to_list(500)
+    drivers = await db.drivers.find(dq, {"_id": 0, "id": 1, "name": 1, "phone": 1, "is_active": 1, "is_available": 1}).to_list(length=None)
 
     perf = {}
     def _row(did, name, phone="", is_active=True, is_available=True):
@@ -358,7 +358,7 @@ async def assign_driver(driver_id: str, order_id: str, force: bool = False, deli
     active = await db.orders.find(
         {"driver_id": driver_id, "status": {"$in": [OrderStatus.PENDING, OrderStatus.PREPARING, OrderStatus.READY, "out_for_delivery"]}},
         {"_id": 0, "id": 1, "status": 1, "delivery_location": 1}
-    ).to_list(100)
+    ).to_list(length=None)
     # استبعد الطلب نفسه إن كان موجوداً
     active = [o for o in active if o.get("id") != order_id]
     departed = any(o.get("status") == "out_for_delivery" for o in active)
@@ -495,7 +495,7 @@ async def get_driver_stats(driver_id: str):
     orders = await db.orders.find({
         "driver_id": driver_id,
         "status": {"$in": [OrderStatus.DELIVERED, OrderStatus.PENDING, OrderStatus.READY]}
-    }, {"_id": 0}).to_list(1000)
+    }, {"_id": 0}).to_list(length=None)
     
     unpaid_total = sum(o.get("total", 0) for o in orders if o.get("driver_payment_status") != "paid")
     paid_total = sum(o.get("total", 0) for o in orders if o.get("driver_payment_status") == "paid")
@@ -527,7 +527,7 @@ async def get_driver_orders(driver_id: str):
     orders = await db.orders.find({
         "driver_id": driver_id,
         "status": {"$in": [OrderStatus.DELIVERED, OrderStatus.PENDING, OrderStatus.READY]}
-    }, {"_id": 0}).to_list(100)
+    }, {"_id": 0}).to_list(length=None)
     
     orders.sort(key=lambda x: (x.get("driver_payment_status") == "paid", x.get("created_at", "")), reverse=False)
     return orders
@@ -600,7 +600,7 @@ async def get_driver_portal_data(driver_id: str):
     orders = await db.orders.find({
         "driver_id": driver_id,
         "status": {"$in": [OrderStatus.PENDING, OrderStatus.PREPARING, OrderStatus.READY, OrderStatus.DELIVERED]}
-    }, {"_id": 0}).sort("created_at", -1).to_list(50)
+    }, {"_id": 0}).sort("created_at", -1).to_list(length=None)
     
     today = datetime.now(timezone.utc).date().isoformat()
     unpaid_total = sum(o.get("total", 0) for o in orders if o.get("driver_payment_status") != "paid" and o.get("status") == OrderStatus.DELIVERED)
@@ -631,7 +631,7 @@ async def get_driver_by_phone(phone: str):
     orders = await db.orders.find({
         "driver_id": driver["id"],
         "status": {"$in": [OrderStatus.PENDING, OrderStatus.PREPARING, OrderStatus.READY, OrderStatus.DELIVERED]}
-    }, {"_id": 0}).sort("created_at", -1).to_list(50)
+    }, {"_id": 0}).sort("created_at", -1).to_list(length=None)
     
     today = datetime.now(timezone.utc).date().isoformat()
     unpaid_total = sum(o.get("total", 0) for o in orders if o.get("driver_payment_status") != "paid" and o.get("status") == OrderStatus.DELIVERED)
@@ -719,7 +719,7 @@ async def get_drivers_locations(branch_id: Optional[str] = None, current_user: d
         "last_location_update": 1,
         "last_seen_at": 1,
         "current_location": 1,
-    }).to_list(100)
+    }).to_list(length=None)
     
     now_utc = datetime.now(timezone.utc)
     for driver in drivers:

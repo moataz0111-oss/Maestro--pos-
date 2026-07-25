@@ -728,7 +728,7 @@ async def create_supplier(supplier: SupplierCreate):
 async def get_suppliers():
     """جلب جميع الموردين"""
     db = get_db()
-    suppliers = await db.suppliers.find({"is_active": True}, {"_id": 0}).to_list(1000)
+    suppliers = await db.suppliers.find({"is_active": True}, {"_id": 0}).to_list(length=None)
     return suppliers
 
 @router.get("/suppliers/{supplier_id}", response_model=SupplierResponse)
@@ -1050,7 +1050,7 @@ async def get_purchases(status: Optional[str] = None, current_user: dict = Depen
     if status:
         query["status"] = status
     
-    purchases = await db.purchases_new.find(query, {"_id": 0}).sort("created_at", -1).to_list(1000)
+    purchases = await db.purchases_new.find(query, {"_id": 0}).sort("created_at", -1).to_list(length=None)
     return purchases
 
 @router.get("/purchases-new/{purchase_id}")
@@ -1085,9 +1085,9 @@ def _purchase_payment_summary(p: dict) -> dict:
 async def _total_treasury_balance(db, tenant_id: Optional[str]) -> float:
     """إجمالي رصيد خزينة المالك (كل الفروع) = الإيداعات − السحوبات − تحويلات الأرباح."""
     q = {"tenant_id": tenant_id} if tenant_id else {}
-    deps = await db.owner_deposits.find(q, {"_id": 0, "amount": 1}).to_list(20000)
-    wds = await db.owner_withdrawals.find(q, {"_id": 0, "amount": 1}).to_list(20000)
-    tfs = await db.owner_profit_transfers.find(q, {"_id": 0, "amount": 1}).to_list(20000)
+    deps = await db.owner_deposits.find(q, {"_id": 0, "amount": 1}).to_list(length=None)
+    wds = await db.owner_withdrawals.find(q, {"_id": 0, "amount": 1}).to_list(length=None)
+    tfs = await db.owner_profit_transfers.find(q, {"_id": 0, "amount": 1}).to_list(length=None)
     return round(
         sum(float(d.get("amount") or 0) for d in deps)
         - sum(float(w.get("amount") or 0) for w in wds)
@@ -1118,7 +1118,7 @@ async def purchases_report(
             rng["$lte"] = end + "T23:59:59"
         query["created_at"] = rng
 
-    raw = await db.purchases_new.find(query, {"_id": 0}).sort("created_at", -1).to_list(5000)
+    raw = await db.purchases_new.find(query, {"_id": 0}).sort("created_at", -1).to_list(length=None)
 
     invoices = []
     suppliers_map: Dict[str, Dict[str, Any]] = {}
@@ -1168,7 +1168,7 @@ async def purchases_report(
         s["total_quantity"] += qty_total
 
     # إثراء بيانات الموردين (هاتف/نوع)
-    sup_docs = {s["id"]: s for s in await db.suppliers.find({}, {"_id": 0}).to_list(2000)}
+    sup_docs = {s["id"]: s for s in await db.suppliers.find({}, {"_id": 0}).to_list(length=None)}
     suppliers = []
     for s in suppliers_map.values():
         doc = sup_docs.get(s.get("supplier_id")) or {}
@@ -1224,7 +1224,7 @@ async def supplier_payment_dues(current_user: dict = Depends(get_current_user)):
       - أي فاتورة عليها متبقٍّ تُعتبر مستحقة وتظهر في القائمة.
     """
     db = get_db()
-    raw = await db.purchases_new.find({}, {"_id": 0}).sort("created_at", -1).to_list(5000)
+    raw = await db.purchases_new.find({}, {"_id": 0}).sort("created_at", -1).to_list(length=None)
     now = datetime.now(timezone.utc)
 
     items = []
@@ -1546,7 +1546,7 @@ async def _supplier_open_invoices(db, supplier_id, tenant_id):
     q = {"supplier_id": supplier_id}
     if tenant_id:
         q["tenant_id"] = tenant_id
-    invs = await db.purchases_new.find(q, {"_id": 0}).to_list(20000)
+    invs = await db.purchases_new.find(q, {"_id": 0}).to_list(length=None)
     invs.sort(key=lambda x: (x.get("created_at") or x.get("invoice_date") or ""))
     out = []
     for p in invs:
@@ -1679,7 +1679,7 @@ async def supplier_account(supplier_id: str, start: Optional[str] = None, end: O
     q = {"supplier_id": supplier_id}
     if tenant_id:
         q["tenant_id"] = tenant_id
-    invs = await db.purchases_new.find(q, {"_id": 0}).to_list(20000)
+    invs = await db.purchases_new.find(q, {"_id": 0}).to_list(length=None)
 
     def in_range(d):
         if not d:
@@ -2190,7 +2190,7 @@ async def get_inventory_movements(
     if category and category in CATEGORY_MAP:
         query["type"] = {"$in": CATEGORY_MAP[category]}
     
-    movements = await db.inventory_movements.find(query, {"_id": 0}).sort("created_at", -1).to_list(2000)
+    movements = await db.inventory_movements.find(query, {"_id": 0}).sort("created_at", -1).to_list(length=None)
     
     # تصنيف كل حركة — النوع هو المرجع (يصحّح أي category مخزّن قديم/غير دقيق)
     type_to_category = {}
@@ -2287,7 +2287,7 @@ async def get_raw_material_consumption(
     if product_id:
         query["product_id"] = product_id
 
-    movements = await db.inventory_movements.find(query, {"_id": 0}).sort("created_at", -1).to_list(5000)
+    movements = await db.inventory_movements.find(query, {"_id": 0}).sort("created_at", -1).to_list(length=None)
 
     by_material = {}
     by_product = {}
@@ -2563,7 +2563,7 @@ async def get_warehouse_purchase_requests(
             {"tenant_id": {"$exists": False}},
             {"tenant_id": None},
         ]
-    requests = await db.warehouse_purchase_requests.find(query, {"_id": 0}).sort("created_at", -1).to_list(1000)
+    requests = await db.warehouse_purchase_requests.find(query, {"_id": 0}).sort("created_at", -1).to_list(length=None)
     return requests
 
 @router.patch("/warehouse-purchase-requests/{request_id}/status")
@@ -2621,7 +2621,7 @@ async def list_material_cost_layers(material_id: str, current_user: dict = Depen
     layers = await db.material_cost_layers.find(
         {"material_id": material_id, **({"tenant_id": tenant_id} if tenant_id else {})},
         {"_id": 0}
-    ).sort("received_at", 1).to_list(500)
+    ).sort("received_at", 1).to_list(length=None)
     active = [layer for layer in layers if layer.get("status") == "active" and (layer.get("remaining_quantity", 0) or 0) > 0]
     total_active_qty = sum(float(layer.get("remaining_quantity", 0) or 0) for layer in active)
     total_active_value = sum(float(layer.get("remaining_quantity", 0) or 0) * float(layer.get("unit_cost", 0) or 0) for layer in active)
@@ -2720,7 +2720,7 @@ async def get_raw_materials(current_user: dict = Depends(get_current_user)):
     if tenant_id:
         query["tenant_id"] = tenant_id
     
-    materials = await db.raw_materials.find(query, {"_id": 0}).to_list(1000)
+    materials = await db.raw_materials.find(query, {"_id": 0}).to_list(length=None)
     
     # جلب IDs المواد المحوّلة (مرة واحدة) لتحسين الأداء
     transferred_ids = await _get_transferred_material_ids(db, tenant_id)
@@ -2928,7 +2928,7 @@ async def get_raw_materials_low_stock(current_user: dict = Depends(get_current_u
     if tenant_id:
         query["tenant_id"] = tenant_id
 
-    materials = await db.raw_materials.find(query, {"_id": 0}).to_list(2000)
+    materials = await db.raw_materials.find(query, {"_id": 0}).to_list(length=None)
 
     alerts = []
     for m in materials:
@@ -3478,7 +3478,7 @@ async def get_warehouse_transfers(transfer_type: Optional[str] = None, current_u
     if transfer_type:
         query["transfer_type"] = transfer_type
     
-    transfers = await db.warehouse_transfers.find(query, {"_id": 0}).sort("created_at", -1).to_list(1000)
+    transfers = await db.warehouse_transfers.find(query, {"_id": 0}).sort("created_at", -1).to_list(length=None)
     return transfers
 
 @router.post("/warehouse-transfers")
@@ -3752,7 +3752,7 @@ async def get_branch_requests(status: Optional[str] = None, branch_id: Optional[
     if branch_id:
         query["to_branch_id"] = branch_id
     
-    requests = await db.branch_requests.find(query, {"_id": 0}).sort("created_at", -1).to_list(1000)
+    requests = await db.branch_requests.find(query, {"_id": 0}).sort("created_at", -1).to_list(length=None)
 
     # 🔄 تحديث available_quantity ليساوي "المتبقي" المعروض على بطاقة المنتج في تبويب التصنيع.
     # ⭐⭐ السبب الجذري: "المتبقي" ليس حقل quantity الخام، بل = إجمالي المُصنّع − المحوّل − المستهلَك
@@ -3761,7 +3761,7 @@ async def get_branch_requests(status: Optional[str] = None, branch_id: Optional[
     all_prods = await db.manufactured_products.find(
         {}, {"_id": 0, "id": 1, "name": 1, "quantity": 1, "tenant_id": 1,
              "total_produced": 1, "transferred_quantity": 1, "unit": 1}
-    ).to_list(50000)
+    ).to_list(length=None)
     remaining_by_id = await _remaining_qty_map(db, all_prods)
     for req in requests:
         req_tenant = req.get("tenant_id")
@@ -3798,7 +3798,7 @@ async def get_branch_requests(status: Optional[str] = None, branch_id: Optional[
     if pkg_ids:
         mats = await db.packaging_materials.find(
             {"id": {"$in": list(pkg_ids)}}, {"_id": 0, "id": 1, "name": 1, "quantity": 1}
-        ).to_list(5000)
+        ).to_list(length=None)
         pqty_by_id = {m["id"]: float(m.get("quantity") or 0) for m in mats}
         pqty_by_name = {normalize_arabic(m.get("name") or ""): float(m.get("quantity") or 0) for m in mats if normalize_arabic(m.get("name") or "")}
         for req in requests:
@@ -3931,7 +3931,7 @@ async def _resolve_request_product(db, item: dict, tenant_id):
             return p
     nm = item.get("product_name") or ""
     if nm.strip():
-        all_prods = await db.manufactured_products.find({}, {"_id": 0}).to_list(50000)
+        all_prods = await db.manufactured_products.find({}, {"_id": 0}).to_list(length=None)
         scope = [p for p in all_prods if p.get("tenant_id") == tenant_id] if tenant_id else []
         if not scope:
             scope = all_prods
@@ -4240,7 +4240,7 @@ async def get_unread_branch_request_notifications(current_user: dict = Depends(g
         query["to_branch_id"] = user_branch
     notifications = await db.branch_request_notifications.find(
         query, {"_id": 0}
-    ).sort([("created_at", -1)]).limit(200).to_list(200)
+    ).sort([("created_at", -1)]).limit(200).to_list(length=None)
     return notifications
 
 
@@ -4337,7 +4337,7 @@ async def get_unread_manufacturing_notifications(current_user: dict = Depends(ge
         query["tenant_id"] = tenant_id
     notifications = await db.manufacturing_notifications.find(
         query, {"_id": 0}
-    ).sort([("created_at", -1)]).limit(200).to_list(200)
+    ).sort([("created_at", -1)]).limit(200).to_list(length=None)
     return notifications
 
 
@@ -4377,7 +4377,7 @@ async def get_manufacturing_requests(status: Optional[str] = None, current_user:
     if status:
         query["status"] = status
     
-    requests = await db.manufacturing_requests.find(query, {"_id": 0}).sort("created_at", -1).to_list(1000)
+    requests = await db.manufacturing_requests.find(query, {"_id": 0}).sort("created_at", -1).to_list(length=None)
     
     # 🔄 تحديث available_quantity لكل صنف من raw_materials الحالية
     # (الكميات المحفوظة قديمة وقد تغيّرت منذ إنشاء الطلب)
@@ -4390,7 +4390,7 @@ async def get_manufacturing_requests(status: Optional[str] = None, current_user:
         mats = await db.raw_materials.find(
             {"id": {"$in": list(material_ids)}},
             {"_id": 0, "id": 1, "quantity": 1},
-        ).to_list(2000)
+        ).to_list(length=None)
         qty_by_id = {m["id"]: float(m.get("quantity") or 0) for m in mats}
         for req in requests:
             for it in (req.get("items") or []):
@@ -4752,7 +4752,7 @@ async def get_purchase_requests(status: Optional[str] = None):
     if status:
         query["status"] = status
     
-    requests = await db.purchase_requests.find(query, {"_id": 0}).sort("created_at", -1).to_list(1000)
+    requests = await db.purchase_requests.find(query, {"_id": 0}).sort("created_at", -1).to_list(length=None)
     return requests
 
 @router.put("/purchase-requests/{request_id}/status")
@@ -4869,7 +4869,7 @@ async def get_warehouse_transactions(type: Optional[str] = None):
     if type:
         query["type"] = type
     
-    transactions = await db.warehouse_transactions.find(query, {"_id": 0}).sort("created_at", -1).to_list(1000)
+    transactions = await db.warehouse_transactions.find(query, {"_id": 0}).sort("created_at", -1).to_list(length=None)
     return transactions
 
 # ==================== MANUFACTURING INVENTORY (مخزون التصنيع) ====================
@@ -4938,7 +4938,7 @@ async def get_manufacturing_inventory(current_user: dict = Depends(get_current_u
     لمنع ظهور "بدون اسم" حتى قبل تشغيل المزامنة الشاملة.
     """
     db = get_db()
-    inventory = await db.manufacturing_inventory.find({}, {"_id": 0}).to_list(1000)
+    inventory = await db.manufacturing_inventory.find({}, {"_id": 0}).to_list(length=None)
 
     # نُجمّع كل المعرّفات لاستعلام raw_materials دفعة واحدة (أداء أفضل)
     ids = list({(it.get("material_id") or it.get("raw_material_id")) for it in inventory if (it.get("material_id") or it.get("raw_material_id"))})
@@ -5230,7 +5230,7 @@ async def _enrich_unit_cost_fields(db, product: dict) -> dict:
 async def get_manufactured_products(current_user: dict = Depends(get_current_user)):
     """جلب جميع المنتجات المصنعة"""
     db = get_db()
-    products = await db.manufactured_products.find({}, {"_id": 0}).to_list(1000)
+    products = await db.manufactured_products.find({}, {"_id": 0}).to_list(length=None)
 
     # ⭐ المستهلَك كمكوّن في تصنيع منتجات أخرى (Nested Recipes) — يُخصم من المتبقي.
     # يُجمَع من حركات الاستهلاك (manufactured_consumption) فيُصحّح ذاتياً للبيانات القائمة.
@@ -5281,7 +5281,7 @@ async def get_missing_piece_definitions(current_user: dict = Depends(get_current
     query: Dict[str, Any] = {}
     if tenant_id:
         query["tenant_id"] = tenant_id
-    products = await db.manufactured_products.find(query, {"_id": 0}).to_list(5000)
+    products = await db.manufactured_products.find(query, {"_id": 0}).to_list(length=None)
     missing = []
     for p in products:
         main_unit = (p.get("unit") or "").strip()
@@ -5373,7 +5373,7 @@ async def sync_orphan_ingredients(
     if tenant_id:
         query["tenant_id"] = tenant_id
 
-    products = await db.manufactured_products.find(query, {"_id": 0}).to_list(2000)
+    products = await db.manufactured_products.find(query, {"_id": 0}).to_list(length=None)
 
     scanned = len(products)
     orphans_total = 0
@@ -5451,7 +5451,7 @@ async def sync_orphan_ingredients(
     # ─── 🔧 المرحلة الثانية: مزامنة manufacturing_inventory مع raw_materials ───
     # ربط السجلات بدون أسماء + مزامنة الوحدات والأسماء والتكاليف من المادة الخام الأصلية
     # ملاحظة: لا نُصفّي بـ tenant_id لأن `manufacturing_inventory` تاريخياً ليست مفصولة بالـ tenant
-    mi_items = await db.manufacturing_inventory.find({}, {"_id": 0}).to_list(5000)
+    mi_items = await db.manufacturing_inventory.find({}, {"_id": 0}).to_list(length=None)
     mi_synced = 0
     mi_orphans = []
     for mi in mi_items:
@@ -6549,7 +6549,7 @@ async def get_branch_orders(status: Optional[str] = None, branch_id: Optional[st
     if branch_id:
         query["to_branch_id"] = branch_id
     
-    orders = await db.branch_orders_new.find(query, {"_id": 0}).sort("created_at", -1).to_list(1000)
+    orders = await db.branch_orders_new.find(query, {"_id": 0}).sort("created_at", -1).to_list(length=None)
     return orders
 
 @router.patch("/branch-orders-new/{order_id}/status")
@@ -6622,7 +6622,7 @@ async def update_branch_order_status(order_id: str, status: str):
 async def get_branch_inventory(branch_id: str):
     """جلب مخزون فرع محدد"""
     db = get_db()
-    inventory = await db.branch_inventory.find({"branch_id": branch_id}, {"_id": 0}).to_list(1000)
+    inventory = await db.branch_inventory.find({"branch_id": branch_id}, {"_id": 0}).to_list(length=None)
     
     # حساب القيمة الإجمالية وضمان وجود الحقول الجديدة
     for item in inventory:
@@ -6713,16 +6713,16 @@ async def get_inventory_statistics(current_user: dict = Depends(get_current_user
     db = get_db()
     
     # إحصائيات المواد الخام
-    raw_materials = await db.raw_materials.find({}, {"_id": 0}).to_list(1000)
+    raw_materials = await db.raw_materials.find({}, {"_id": 0}).to_list(length=None)
     total_raw_value = sum(m.get("quantity", 0) * m.get("cost_per_unit", 0) for m in raw_materials)
     low_stock_raw = [m for m in raw_materials if m.get("quantity", 0) <= m.get("min_quantity", 0)]
     
     # إحصائيات التصنيع
-    manufacturing = await db.manufacturing_inventory.find({}, {"_id": 0}).to_list(1000)
+    manufacturing = await db.manufacturing_inventory.find({}, {"_id": 0}).to_list(length=None)
     total_manufacturing_value = sum(m.get("quantity", 0) * m.get("cost_per_unit", 0) for m in manufacturing)
     
     # إحصائيات المنتجات المصنعة
-    products = await db.manufactured_products.find({}, {"_id": 0}).to_list(1000)
+    products = await db.manufactured_products.find({}, {"_id": 0}).to_list(length=None)
     # ⭐ احتساب القيمة الإجمالية بسعر الوحدة الواحدة (وليس بتكلفة الدفعة كاملة)
     total_products_value = 0.0
     for p in products:
@@ -6869,7 +6869,7 @@ async def get_warehouse_notifications(status: Optional[str] = None):
     if status:
         query["status"] = status
     
-    notifications = await db.notifications.find(query, {"_id": 0}).sort("created_at", -1).to_list(100)
+    notifications = await db.notifications.find(query, {"_id": 0}).sort("created_at", -1).to_list(length=None)
     return notifications
 
 @router.post("/warehouse-notifications")
@@ -7063,7 +7063,7 @@ async def get_packaging_materials(
     if category:
         query["category"] = category
     
-    materials = await db.packaging_materials.find(query, {"_id": 0}).to_list(500)
+    materials = await db.packaging_materials.find(query, {"_id": 0}).to_list(length=None)
     
     # حساب الكميات وتنظيف البيانات
     result = []
@@ -7226,7 +7226,7 @@ async def get_packaging_requests(
     if status:
         query["status"] = status
     
-    requests = await db.packaging_requests.find(query, {"_id": 0}).sort("created_at", -1).to_list(200)
+    requests = await db.packaging_requests.find(query, {"_id": 0}).sort("created_at", -1).to_list(length=None)
     
     return requests
 
@@ -7444,7 +7444,7 @@ async def get_branch_packaging_inventory(
     elif branch_id:
         query["branch_id"] = branch_id
     
-    inventory = await db.branch_packaging_inventory.find(query, {"_id": 0}).to_list(500)
+    inventory = await db.branch_packaging_inventory.find(query, {"_id": 0}).to_list(length=None)
     
     # حساب الكميات المتبقية
     for item in inventory:
@@ -7548,7 +7548,7 @@ async def waste_efficiency_report(
     if branch_id:
         mfg_query["branch_id"] = branch_id
     
-    mfg_movements = await db.inventory_movements.find(mfg_query, {"_id": 0}).to_list(5000)
+    mfg_movements = await db.inventory_movements.find(mfg_query, {"_id": 0}).to_list(length=None)
     
     # === حركات التحويل للفروع (لمعرفة الفرع المستلم) ===
     transferred_products = set()  # set of product_ids transferred to receiving_branch_id
@@ -7762,7 +7762,7 @@ async def branch_waste_efficiency_report(
 
     day_orders = await db.orders.find(
         orders_query, {"_id": 0, "items": 1}
-    ).to_list(20000)
+    ).to_list(length=None)
 
     # تحميل المنتجات النهائية المرتبطة
     finished_ids = set()
@@ -7976,7 +7976,7 @@ async def branch_comparison_report(
     }
     if tenant_id:
         orders_query["tenant_id"] = tenant_id
-    day_orders = await db.orders.find(orders_query, {"_id": 0, "items": 1, "branch_id": 1}).to_list(50000)
+    day_orders = await db.orders.find(orders_query, {"_id": 0, "items": 1, "branch_id": 1}).to_list(length=None)
 
     # تحميل المنتجات النهائية + المُصنّعة دفعة واحدة
     finished_ids = set()
@@ -8274,7 +8274,7 @@ async def stockout_predictions(
             {"tenant_id": {"$exists": False}},
             {"tenant_id": None},
         ]
-    materials = await db.raw_materials.find(mq, {"_id": 0}).to_list(5000)
+    materials = await db.raw_materials.find(mq, {"_id": 0}).to_list(length=None)
     
     predictions = []
     for mat in materials:

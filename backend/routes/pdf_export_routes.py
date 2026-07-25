@@ -60,7 +60,7 @@ async def export_report_to_pdf(
         if effective_branch_id:
             query["branch_id"] = effective_branch_id
         
-        orders = await db.orders.find(query, {"_id": 0}).to_list(10000)
+        orders = await db.orders.find(query, {"_id": 0}).to_list(length=None)
         
         headers = ["#", "رقم الطلب", "التاريخ", "النوع", "طريقة الدفع", "المبلغ"]
         order_types = {"dine_in": "محلي", "takeaway": "سفري", "delivery": "توصيل"}
@@ -92,7 +92,7 @@ async def export_report_to_pdf(
         if effective_branch_id:
             query["branch_id"] = effective_branch_id
         
-        expenses = await db.expenses.find(query, {"_id": 0}).to_list(1000)
+        expenses = await db.expenses.find(query, {"_id": 0}).to_list(length=None)
         
         headers = ["#", "التاريخ", "الفئة", "الوصف", "المبلغ"]
         category_names = {
@@ -124,7 +124,7 @@ async def export_report_to_pdf(
         if effective_branch_id:
             query["branch_id"] = effective_branch_id
         
-        items = await db.inventory.find(query, {"_id": 0}).to_list(1000)
+        items = await db.inventory.find(query, {"_id": 0}).to_list(length=None)
         
         headers = ["#", "الصنف", "النوع", "الكمية", "الحد الأدنى", "سعر الوحدة", "القيمة"]
         type_names = {"raw": "خام", "finished": "منتج نهائي"}
@@ -157,7 +157,7 @@ async def export_report_to_pdf(
         if effective_branch_id:
             query["branch_id"] = effective_branch_id
         
-        employees = await db.employees.find(query, {"_id": 0}).to_list(500)
+        employees = await db.employees.find(query, {"_id": 0}).to_list(length=None)
         month = start_date[:7]
         month_start = f"{month}-01"
         month_end = f"{month}-31"
@@ -170,20 +170,20 @@ async def export_report_to_pdf(
             deductions = await db.deductions.find({
                 "employee_id": emp["id"],
                 "date": {"$gte": month_start, "$lte": month_end}
-            }, {"_id": 0}).to_list(100)
+            }, {"_id": 0}).to_list(length=None)
             emp_deductions = sum(_sn(d.get("amount")) for d in deductions)
             
             bonuses = await db.bonuses.find({
                 "employee_id": emp["id"],
                 "date": {"$gte": month_start, "$lte": month_end}
-            }, {"_id": 0}).to_list(100)
+            }, {"_id": 0}).to_list(length=None)
             emp_bonuses = sum(_sn(b.get("amount")) for b in bonuses)
             
             advances = await db.advances.find({
                 "employee_id": emp["id"],
                 "status": "approved",
                 "remaining_amount": {"$gt": 0}
-            }, {"_id": 0}).to_list(100)
+            }, {"_id": 0}).to_list(length=None)
             emp_advances = sum(a.get("monthly_deduction", 0) for a in advances)
             
             basic = _sn(emp.get("salary"))

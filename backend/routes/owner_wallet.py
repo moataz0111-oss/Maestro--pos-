@@ -85,19 +85,19 @@ async def get_wallet_summary(current_user: dict = Depends(get_current_user)):
     query = {"tenant_id": tenant_id} if tenant_id else {}
     
     # إجمالي الإيداعات
-    deposits = await db.owner_deposits.find(query, {"_id": 0}).to_list(1000)
+    deposits = await db.owner_deposits.find(query, {"_id": 0}).to_list(length=None)
     total_deposits = sum(d.get("amount", 0) for d in deposits)
     
     # إجمالي السحوبات
-    withdrawals = await db.owner_withdrawals.find(query, {"_id": 0}).to_list(1000)
+    withdrawals = await db.owner_withdrawals.find(query, {"_id": 0}).to_list(length=None)
     total_withdrawals = sum(w.get("amount", 0) for w in withdrawals)
     
     # إجمالي تحويلات الأرباح للخزينة
-    profit_transfers = await db.owner_profit_transfers.find(query, {"_id": 0}).to_list(1000)
+    profit_transfers = await db.owner_profit_transfers.find(query, {"_id": 0}).to_list(length=None)
     total_profit_transferred = sum(p.get("amount", 0) for p in profit_transfers)
     
     # إجمالي سحوبات الأرباح من الخزينة
-    profit_withdrawals = await db.owner_profit_withdrawals.find(query, {"_id": 0}).to_list(1000)
+    profit_withdrawals = await db.owner_profit_withdrawals.find(query, {"_id": 0}).to_list(length=None)
     total_profit_withdrawn = sum(w.get("amount", 0) for w in profit_withdrawals)
     
     # الرصيد المتاح = الإيداعات - السحوبات - التحويلات للخزينة
@@ -206,7 +206,7 @@ async def shift_deposit_branch_status(current_user: dict = Depends(get_current_u
     query = {"source": "shift_cash"}
     if tenant_id:
         query["tenant_id"] = tenant_id
-    deps = await db.owner_deposits.find(query, {"_id": 0, "branch_id": 1, "branch_name": 1, "amount": 1}).to_list(100000)
+    deps = await db.owner_deposits.find(query, {"_id": 0, "branch_id": 1, "branch_name": 1, "amount": 1}).to_list(length=None)
     branches: dict = {}
     undetermined = {"count": 0, "total": 0.0}
     for d in deps:
@@ -236,7 +236,7 @@ async def get_payment_methods(current_user: dict = Depends(get_current_user)):
     db = get_database()
     tenant_id = get_user_tenant_id(current_user)
     query = {"tenant_id": tenant_id} if tenant_id else {}
-    methods = await db.owner_payment_methods.find(query, {"_id": 0}).sort("name", 1).to_list(200)
+    methods = await db.owner_payment_methods.find(query, {"_id": 0}).sort("name", 1).to_list(length=None)
     return methods
 
 
@@ -250,10 +250,10 @@ async def get_monthly_breakdown(current_user: dict = Depends(get_current_user)):
     tenant_id = get_user_tenant_id(current_user)
     query = {"tenant_id": tenant_id} if tenant_id else {}
 
-    deposits = await db.owner_deposits.find(query, {"_id": 0}).to_list(5000)
-    withdrawals = await db.owner_withdrawals.find(query, {"_id": 0}).to_list(5000)
-    profit_transfers = await db.owner_profit_transfers.find(query, {"_id": 0}).to_list(5000)
-    profit_withdrawals = await db.owner_profit_withdrawals.find(query, {"_id": 0}).to_list(5000)
+    deposits = await db.owner_deposits.find(query, {"_id": 0}).to_list(length=None)
+    withdrawals = await db.owner_withdrawals.find(query, {"_id": 0}).to_list(length=None)
+    profit_transfers = await db.owner_profit_transfers.find(query, {"_id": 0}).to_list(length=None)
+    profit_withdrawals = await db.owner_profit_withdrawals.find(query, {"_id": 0}).to_list(length=None)
 
     def _month(s):
         return (s or "")[:7]  # YYYY-MM
@@ -325,7 +325,7 @@ async def get_deposits(
     if external_source:
         query["external_source"] = external_source
 
-    deposits = await db.owner_deposits.find(query, {"_id": 0}).sort("date", -1).to_list(2000)
+    deposits = await db.owner_deposits.find(query, {"_id": 0}).sort("date", -1).to_list(length=None)
     return deposits
 
 @router.post("/deposits")
@@ -402,7 +402,7 @@ async def get_withdrawals(
     if external_source:
         query["external_source"] = external_source
 
-    withdrawals = await db.owner_withdrawals.find(query, {"_id": 0}).sort("date", -1).to_list(2000)
+    withdrawals = await db.owner_withdrawals.find(query, {"_id": 0}).sort("date", -1).to_list(length=None)
     return withdrawals
 
 @router.post("/withdrawals")
@@ -464,7 +464,7 @@ async def get_profit_transfers(current_user: dict = Depends(get_current_user)):
     tenant_id = get_user_tenant_id(current_user)
     
     query = {"tenant_id": tenant_id} if tenant_id else {}
-    transfers = await db.owner_profit_transfers.find(query, {"_id": 0}).sort("month", -1).to_list(100)
+    transfers = await db.owner_profit_transfers.find(query, {"_id": 0}).sort("month", -1).to_list(length=None)
     return transfers
 
 @router.post("/profit-transfers")
@@ -521,11 +521,11 @@ async def create_profit_withdrawal(
     query = {"tenant_id": tenant_id} if tenant_id else {}
     
     # إجمالي الأرباح المحولة
-    profit_transfers = await db.owner_profit_transfers.find(query, {"_id": 0}).to_list(1000)
+    profit_transfers = await db.owner_profit_transfers.find(query, {"_id": 0}).to_list(length=None)
     total_transferred = sum(p.get("amount", 0) for p in profit_transfers)
     
     # إجمالي الأرباح المسحوبة
-    profit_withdrawals = await db.owner_profit_withdrawals.find(query, {"_id": 0}).to_list(1000)
+    profit_withdrawals = await db.owner_profit_withdrawals.find(query, {"_id": 0}).to_list(length=None)
     total_withdrawn = sum(w.get("amount", 0) for w in profit_withdrawals)
     
     # الرصيد المتاح
@@ -555,7 +555,7 @@ async def get_profit_withdrawals(current_user: dict = Depends(get_current_user))
     tenant_id = get_user_tenant_id(current_user)
     
     query = {"tenant_id": tenant_id} if tenant_id else {}
-    withdrawals = await db.owner_profit_withdrawals.find(query, {"_id": 0}).sort("created_at", -1).to_list(100)
+    withdrawals = await db.owner_profit_withdrawals.find(query, {"_id": 0}).sort("created_at", -1).to_list(length=None)
     return withdrawals
 
 @router.get("/monthly-closings")
@@ -565,7 +565,7 @@ async def get_monthly_closings(current_user: dict = Depends(get_current_user)):
     tenant_id = get_user_tenant_id(current_user)
     
     query = {"tenant_id": tenant_id} if tenant_id else {}
-    closings = await db.owner_monthly_closings.find(query, {"_id": 0}).sort("month", -1).to_list(24)
+    closings = await db.owner_monthly_closings.find(query, {"_id": 0}).sort("month", -1).to_list(length=None)
     return closings
 
 @router.post("/monthly-closings")
@@ -612,11 +612,11 @@ async def get_monthly_report(month: str, current_user: dict = Depends(get_curren
     date_query = {"$regex": f"^{month}"}
     
     # الإيداعات
-    deposits = await db.owner_deposits.find({**query, "date": date_query}, {"_id": 0}).to_list(100)
+    deposits = await db.owner_deposits.find({**query, "date": date_query}, {"_id": 0}).to_list(length=None)
     total_deposits = sum(d.get("amount", 0) for d in deposits)
     
     # السحوبات
-    withdrawals = await db.owner_withdrawals.find({**query, "date": date_query}, {"_id": 0}).to_list(100)
+    withdrawals = await db.owner_withdrawals.find({**query, "date": date_query}, {"_id": 0}).to_list(length=None)
     total_withdrawals = sum(w.get("amount", 0) for w in withdrawals)
     
     # تفاصيل السحوبات حسب الفئة

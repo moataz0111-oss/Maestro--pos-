@@ -211,7 +211,7 @@ async def get_order_escalations(branch_id: Optional[str] = None, limit: int = 20
     }
     if branch_id:
         pending_q["branch_id"] = branch_id
-    pending = await db.order_notifications.find(pending_q, {"_id": 0}).to_list(50)
+    pending = await db.order_notifications.find(pending_q, {"_id": 0}).to_list(length=None)
     for n in pending:
         branch = await db.branches.find_one({"id": n.get("branch_id")}, {"_id": 0, "name": 1})
         shift = await db.shifts.find_one(

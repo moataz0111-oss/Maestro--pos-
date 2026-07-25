@@ -1,0 +1,34 @@
+{
+  "summary": "Final backend regression passed: 5/5 focused tests covering 10 requested endpoints. /api/orders now returns 200 against existing legacy records and applies the new missing-field defaults. Profit-loss and sales each exactly matched MongoDB counts above 10,000 rows; cash-register-closings limit=0 and all basic collection regressions passed.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_final_regression_iter313.py",
+    "/app/test_reports/pytest/iter313_final_regression.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "Verified OrderResponse compatibility on existing heterogeneous Mongo rows: missing order_number, order_type, subtotal, and total serialize as 0/dine_in/0.0/0.0; missing items is safely omitted by response_model_exclude_none.",
+    "Verified the targeted reads use to_list(length=None): /api/orders, sales, profit-loss, weekly-low-profit, and recompute-costs. The two specifically reported 10,000 caps are removed."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_final_regression_iter313.py",
+    "/app/test_reports/iteration_313.json"
+  ],
+  "success_rate": {
+    "backend": "5/5 tests (100%); 10/10 requested endpoints returned 200",
+    "frontend": "skipped per request"
+  },
+  "seed_data_creation": "Temporarily inserted 10,001 TEST_ITER313_* paid orders for tenant default and business date 2026-07-25. Teardown deleted them and asserted zero matching rows remained.",
+  "should_call_test_agent_after_fix": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Final release-gate regression is green. The high-volume assertion compared report order counts to direct Mongo count_documents queries, not merely >10K. Public REACT_APP_BACKEND_URL was used for every API call.",
+  "rca_of_the_issue": "The prior /api/orders 500 was caused by strict required OrderResponse fields against legacy documents. Making order_number, order_type, items, subtotal, and total optional/defaulted restored serialization. The report truncation risk was removed by changing the affected Mongo reads from length=10000 to length=None."
+}

@@ -128,7 +128,7 @@ async def register_super_admin(request: SuperAdminRegisterRequest):
 @router.get("/super-admin/tenants")
 async def get_all_tenants(current_user: dict = Depends(verify_super_admin)):
     """جلب جميع العملاء (المستأجرين)"""
-    tenants = await db.tenants.find({}, {"_id": 0}).sort("created_at", -1).to_list(1000)
+    tenants = await db.tenants.find({}, {"_id": 0}).sort("created_at", -1).to_list(length=None)
     
     # إضافة إحصائيات لكل مستأجر
     for tenant in tenants:
@@ -595,9 +595,9 @@ async def get_tenant_details(tenant_id: str, current_user: dict = Depends(verify
         users = await db.users.find({
             **main_system_query,
             "role": {"$ne": UserRole.SUPER_ADMIN}
-        }, {"_id": 0, "password": 0}).to_list(100)
+        }, {"_id": 0, "password": 0}).to_list(length=None)
         
-        branches = await db.branches.find(main_system_query, {"_id": 0}).to_list(50)
+        branches = await db.branches.find(main_system_query, {"_id": 0}).to_list(length=None)
         
         # إحصائيات المبيعات للنظام الرئيسي
         today = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0).isoformat()
@@ -646,11 +646,11 @@ async def get_tenant_details(tenant_id: str, current_user: dict = Depends(verify
         raise HTTPException(status_code=404, detail="المستأجر غير موجود")
     
     # إحصائيات تفصيلية
-    users = await db.users.find({"tenant_id": tenant_id}, {"_id": 0, "password": 0}).to_list(100)
-    branches = await db.branches.find({"tenant_id": tenant_id}, {"_id": 0}).to_list(50)
+    users = await db.users.find({"tenant_id": tenant_id}, {"_id": 0, "password": 0}).to_list(length=None)
+    branches = await db.branches.find({"tenant_id": tenant_id}, {"_id": 0}).to_list(length=None)
     
     # جلب الأجهزة المرخصة
-    devices = await db.license_devices.find({"tenant_id": tenant_id}, {"_id": 0}).to_list(100)
+    devices = await db.license_devices.find({"tenant_id": tenant_id}, {"_id": 0}).to_list(length=None)
     
     # إحصائيات المبيعات
     today = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0).isoformat()
@@ -964,7 +964,7 @@ async def list_system_users(current_user: dict = Depends(verify_super_admin)):
     users = await db.users.find(
         {"role": {"$in": [UserRole.SUPER_ADMIN, UserRole.ADMIN, UserRole.GENERAL_MANAGER, UserRole.MANAGER]}},
         {"_id": 0, "password": 0, "password_hash": 0, "secret_key": 0, "super_admin_secret": 0}
-    ).sort("created_at", -1).to_list(1000)
+    ).sort("created_at", -1).to_list(length=None)
     # تمييز الحساب الحالي حتى لا يحذف نفسه
     for u in users:
         u["is_current"] = (u.get("id") == current_user.get("id"))
@@ -1143,7 +1143,7 @@ async def list_other_super_admins(current_user: dict = Depends(verify_super_admi
     others = await db.users.find(
         {"role": "super_admin", "id": {"$ne": current_user["id"]}},
         {"_id": 0, "id": 1, "email": 1, "username": 1, "created_at": 1, "is_active": 1}
-    ).to_list(100)
+    ).to_list(length=None)
     return {"count": len(others), "accounts": others}
 
 
@@ -1155,7 +1155,7 @@ async def delete_other_super_admins(current_user: dict = Depends(verify_super_ad
     to_delete = await db.users.find(
         {"role": "super_admin", "id": {"$ne": current_user["id"]}},
         {"_id": 0, "id": 1, "email": 1}
-    ).to_list(100)
+    ).to_list(length=None)
     
     if not to_delete:
         return {"deleted": 0, "message": "لا يوجد حسابات سوبر أدمن أخرى لحذفها", "accounts": []}
@@ -1317,7 +1317,7 @@ async def get_super_admin_stats(current_user: dict = Depends(verify_super_admin)
     demo_tenants = await db.tenants.count_documents({"$or": [{"is_demo": True}, {"subscription_type": "demo"}]})
     
     # جلب IDs جميع العملاء الموجودين
-    all_tenants = await db.tenants.find({}, {"id": 1}).to_list(1000)
+    all_tenants = await db.tenants.find({}, {"id": 1}).to_list(length=None)
     valid_tenant_ids = [t["id"] for t in all_tenants]
     
     # استبعاد مستخدمي النظام الرئيسي (super_admin و admin و default) والحسابات التجريبية
@@ -1325,7 +1325,7 @@ async def get_super_admin_stats(current_user: dict = Depends(verify_super_admin)
     demo_tenant_ids = await db.tenants.find(
         {"$or": [{"is_demo": True}, {"subscription_type": "demo"}]},
         {"id": 1}
-    ).to_list(100)
+    ).to_list(length=None)
     demo_ids = [t["id"] for t in demo_tenant_ids]
     
     total_users = await db.users.count_documents({
@@ -1353,7 +1353,7 @@ async def get_super_admin_stats(current_user: dict = Depends(verify_super_admin)
     subscription_stats = await db.tenants.aggregate([
         {"$match": {"is_demo": {"$ne": True}}},
         {"$group": {"_id": "$subscription_type", "count": {"$sum": 1}}}
-    ]).to_list(10)
+    ]).to_list(length=None)
     
     # أحدث المستأجرين
     recent_tenants = await db.tenants.find({}, {"_id": 0}).sort("created_at", -1).limit(5).to_list(5)
@@ -1483,13 +1483,13 @@ async def get_expiring_subscriptions(current_user: dict = Depends(verify_super_a
     expiring = await db.tenants.find({
         "is_active": True,
         "expires_at": {"$lte": target_date, "$gte": now}
-    }, {"_id": 0}).to_list(100)
+    }, {"_id": 0}).to_list(length=None)
     
     # جلب الاشتراكات المنتهية بالفعل
     expired = await db.tenants.find({
         "is_active": True,
         "expires_at": {"$lt": now}
-    }, {"_id": 0}).to_list(100)
+    }, {"_id": 0}).to_list(length=None)
     
     return {
         "expiring_soon": expiring,
@@ -1510,7 +1510,7 @@ async def get_security_log(current_user: dict = Depends(verify_super_admin), lim
     tenant_ids = list({e.get("tenant_id") for e in events if e.get("tenant_id")})
     tdocs = await db.tenants.find(
         {"id": {"$in": tenant_ids}}, {"_id": 0, "id": 1, "name": 1, "name_ar": 1, "slug": 1}
-    ).to_list(2000)
+    ).to_list(length=None)
     tmap = {t["id"]: (t.get("name") or t.get("name_ar") or t.get("slug")) for t in tdocs}
     for e in events:
         e["tenant_name"] = tmap.get(e.get("tenant_id")) or e.get("tenant_id") or "—"
@@ -1519,7 +1519,7 @@ async def get_security_log(current_user: dict = Depends(verify_super_admin), lim
     all_tenants = await db.tenants.find(
         {}, {"_id": 0, "id": 1, "name": 1, "name_ar": 1, "slug": 1, "is_active": 1,
              "expires_at": 1, "subscription_type": 1, "is_demo": 1}
-    ).to_list(5000)
+    ).to_list(length=None)
     active = [t for t in all_tenants if t.get("is_active")]
     disabled = [t for t in all_tenants if not t.get("is_active")]
 
@@ -1570,7 +1570,7 @@ async def get_security_log(current_user: dict = Depends(verify_super_admin), lim
 @router.get("/super-admin/blocked-ips")
 async def list_blocked_ips(current_user: dict = Depends(verify_super_admin)):
     """قائمة عناوين IP المحظورة"""
-    docs = await db.blocked_ips.find({}, {"_id": 0}).sort("blocked_at", -1).to_list(1000)
+    docs = await db.blocked_ips.find({}, {"_id": 0}).sort("blocked_at", -1).to_list(length=None)
     return {"blocked": docs}
 
 
@@ -1633,7 +1633,7 @@ async def unblock_ip(payload: dict = Body(...), request: Request = None, current
 @router.get("/super-admin/trusted-devices")
 async def list_trusted_devices(current_user: dict = Depends(verify_super_admin)):
     """قائمة الأجهزة الموثوقة (موظفون/سائقون/زبائن) مع بيانات مالكيها."""
-    docs = await db.trusted_devices.find({"revoked": {"$ne": True}}, {"_id": 0}).sort("last_seen_at", -1).to_list(2000)
+    docs = await db.trusted_devices.find({"revoked": {"$ne": True}}, {"_id": 0}).sort("last_seen_at", -1).to_list(length=None)
     # إثراء بالاسم
     for d in docs:
         st = d.get("subject_type")
@@ -1678,7 +1678,7 @@ async def list_pending_2fa_codes(current_user: dict = Depends(verify_super_admin
         {"pending_delivery": True, "consumed": False, "expires_at": {"$gt": now}},
         {"_id": 0, "id": 1, "subject_type": 1, "subject_name": 1, "channel": 1,
          "destination": 1, "created_at": 1, "expires_at": 1}
-    ).sort("created_at", -1).to_list(200)
+    ).sort("created_at", -1).to_list(length=None)
     return {"pending": docs, "count": len(docs),
             "twilio_configured": _twilio_verify.is_configured()}
 
@@ -1700,11 +1700,11 @@ async def security_status(current_user: dict = Depends(verify_super_admin)):
 @router.get("/super-admin/2fa-readiness")
 async def two_fa_readiness(current_user: dict = Depends(verify_super_admin)):
     """جاهزية التفعيل: المستخدمون/السائقون الناقصة بياناتهم لاستلام رمز التحقق."""
-    users = await db.users.find({"role": {"$ne": UserRole.SUPER_ADMIN}}, {"_id": 0, "id": 1, "full_name": 1, "email": 1, "phone": 1, "role": 1}).to_list(2000)
+    users = await db.users.find({"role": {"$ne": UserRole.SUPER_ADMIN}}, {"_id": 0, "id": 1, "full_name": 1, "email": 1, "phone": 1, "role": 1}).to_list(length=None)
     users_no_phone = [{"id": u.get("id"), "name": u.get("full_name") or u.get("email"), "email": u.get("email"), "role": u.get("role")}
                       for u in users if not (u.get("phone") or "").strip()]
     users_no_contact = [u for u in users_no_phone if not (dict(u).get("email") or "").strip()]
-    drivers = await db.drivers.find({}, {"_id": 0, "id": 1, "name": 1, "phone": 1}).to_list(2000)
+    drivers = await db.drivers.find({}, {"_id": 0, "id": 1, "name": 1, "phone": 1}).to_list(length=None)
     drivers_no_phone = [{"id": d.get("id"), "name": d.get("name")} for d in drivers if not (d.get("phone") or "").strip()]
     return {
         "twilio_configured": _twilio_verify.is_configured(),
@@ -1943,7 +1943,7 @@ async def purge_dummy_data(payload: dict = Body(default={}), request: Request = 
 
     async def _scan(coll, name_fields, extra_ids=None):
         found = []
-        docs = await db[coll].find({}, {"_id": 0}).to_list(5000)
+        docs = await db[coll].find({}, {"_id": 0}).to_list(length=None)
         for d in docs:
             nm = None
             for f in name_fields:
@@ -1996,7 +1996,7 @@ async def get_subscriptions_dashboard(current_user: dict = Depends(verify_super_
     all_tenants = await db.tenants.find(
         {"is_demo": {"$ne": True}},
         {"_id": 0}
-    ).to_list(1000)
+    ).to_list(length=None)
     
     # تصنيف الاشتراكات
     active_subscriptions = []
@@ -2262,7 +2262,7 @@ async def get_tenant_live_stats(tenant_id: str, current_user: dict = Depends(ver
     today = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0).isoformat()
     
     today_query = {**tenant_query, "created_at": {"$gte": today}}
-    today_orders = await db.orders.find(today_query, {"_id": 0}).to_list(500)
+    today_orders = await db.orders.find(today_query, {"_id": 0}).to_list(length=None)
     
     # حساب الإحصائيات
     total_today = sum((o.get("total") or 0) for o in today_orders if o.get("status") != "cancelled")
@@ -2315,14 +2315,14 @@ async def get_tenant_orders(tenant_id: str, date: Optional[str] = None, status: 
     if status:
         query["status"] = status
     
-    orders = await db.orders.find(query, {"_id": 0}).sort("created_at", -1).limit(100).to_list(100)
+    orders = await db.orders.find(query, {"_id": 0}).sort("created_at", -1).limit(100).to_list(length=None)
     return orders
 
 @router.get("/super-admin/tenants/{tenant_id}/products")
 async def get_tenant_products(tenant_id: str, current_user: dict = Depends(verify_super_admin)):
     """جلب منتجات عميل معين"""
     
-    products = await db.products.find({"tenant_id": tenant_id}, {"_id": 0}).to_list(500)
+    products = await db.products.find({"tenant_id": tenant_id}, {"_id": 0}).to_list(length=None)
     return products
 
 @router.delete("/super-admin/tenants/{tenant_id}/permanent")
@@ -2774,7 +2774,7 @@ async def reset_tenant_hr(tenant_id: str, confirm: bool = False, current_user: d
     employees_to_delete = await db.employees.find(
         {**query, "biometric_uid": {"$ne": None, "$exists": True}},
         {"_id": 0, "biometric_uid": 1, "name": 1}
-    ).to_list(1000)
+    ).to_list(length=None)
     biometric_uids_to_delete = [
         {"uid": int(e["biometric_uid"]), "name": e.get("name", "")}
         for e in employees_to_delete

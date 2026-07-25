@@ -1,0 +1,64 @@
+{
+  "summary": "Backend-only iter312 regression: 8 focused tests executed; 6 passed and 2 failed. The target profit-loss KeyError is fixed: with 10,001 controlled orders including one legacy order missing total, /reports/profit-loss returned 200 and counted all rows. /reports/sales also processed >10K, cash closings limit=0 passed, health/2FA and all five requested collection endpoints passed. Two iter311 regressions remain: /api/orders returns 500 on existing legacy rows and /api/reports/comprehensive remains 404.",
+  "backend_issues": {
+    "critical": [
+      {
+        "endpoint": "/api/orders",
+        "issue": "Still returns 500. Current backend traceback shows 60 FastAPI ResponseValidationError entries because existing orders omit required response fields (order_number/order_type/subtotal/items/total). Reproduced again after high-volume fixture cleanup, so this is not caused by the temporary test rows.",
+        "priority": "CRITICAL"
+      },
+      {
+        "endpoint": "/api/reports/comprehensive",
+        "issue": "Still returns 404 Not Found; the comprehensive totals contract remains unavailable.",
+        "priority": "HIGH"
+      }
+    ],
+    "minor": [
+      {
+        "endpoint": "backend query audit",
+        "issue": "The claim that all hardcoded to_list limits were removed is not fully true: 19 numeric/non-None calls remain. Two are explicit 10,000-order caps: server.py:8273 recompute-costs and reports_routes.py:509 weekly-low-profit; the others are mostly intentional aggregation/single-result limits and should be documented."
+      },
+      {
+        "endpoint": "CORS preflight via public preview ingress",
+        "issue": "OPTIONS from https://evil.example returned Access-Control-Allow-Origin: * and no Allow-Credentials. Application code uses credentialed explicit/regex origins, so the wildcard appears ingress-generated; verify production ingress does not override credentialed CORS unexpectedly."
+      }
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_report_regression_iter312.py",
+    "/app/test_reports/pytest/iter312_report_regression.xml",
+    "/app/test_reports/pytest/iter312_legacy_retry.xml"
+  ],
+  "action_items": [
+    "Normalize legacy orders before returning /api/orders or make appropriate OrderResponse fields optional/defaulted; retest against current seeded history.",
+    "Implement or remove/clarify the expected /api/reports/comprehensive route and contract.",
+    "Remove or explicitly preserve/document the remaining 10,000-row caps at reports_routes.py:509 and server.py:8273.",
+    "Verify the production ingress CORS policy because public preview preflight currently emits wildcard origin instead of the app's explicit credentialed policy.",
+    "Re-run iter312 regression before release."
+  ],
+  "critical_code_review_comments": [
+    "reports_routes.py:788 now safely uses float(o.get('total') or 0); runtime proof with a missing-total legacy row and >10K total rows passed.",
+    "GET /api/orders uses a strict response model against heterogeneous historical documents; logs at backend.err lines 60824+ show missing required fields across existing seeded rows, causing endpoint-wide 500.",
+    "The bulk limit removal is incomplete: reports_routes.py:509 and server.py:8273 still cap order reads at 10,000.",
+    "Auth spot checks passed: admin bcrypt password/password_hash prefixes are $2b$, successful trusted-device login sets HttpOnly access_token, a new device triggers 2FA, code enforces five-failure protection, and app CORS uses explicit origins/regex. Admin seed is not fully password-idempotent: init_database only creates admin in the fresh-database branch and does not update an existing admin when configured password changes.",
+    "server.py remains over 18,000 lines, creating substantial regression risk."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_report_regression_iter312.py",
+    "/app/test_reports/iteration_312.json"
+  ],
+  "success_rate": {
+    "backend": "6/8 (75%)",
+    "frontend": "skipped per request"
+  },
+  "seed_data_creation": "Temporarily inserted 10,001 TEST_ITER312_* completed orders for tenant default/date 2026-07-25; one intentionally omitted total. Fixture cleanup verified zero matching rows remain.",
+  "should_call_test_agent_after_fix": true,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Use public REACT_APP_BACKEND_URL and trusted device test-device-iter295. Profit-loss and sales high-volume regressions now pass. /api/orders and /api/reports/comprehensive each failed twice after cleanup. The focused fixture is self-cleaning and leaves qa_orders=0.",
+  "rca_of_the_issue": "Profit-loss was fixed by replacing direct total indexing with numeric-safe .get and now handles incomplete history. Remaining /orders failure is response-schema incompatibility with legacy Mongo documents (60 validation errors on current data). Comprehensive failure is route absence (404). Remaining hard caps indicate the bulk mechanical replacement missed at least two order-fetch paths."
+}

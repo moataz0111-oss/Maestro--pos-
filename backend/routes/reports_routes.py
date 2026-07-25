@@ -266,9 +266,9 @@ async def get_sales_report(
         "created_at": 1,
         "items": 1
     }
-    orders = await db.orders.find(query, projection).to_list(10000)
+    orders = await db.orders.find(query, projection).to_list(length=None)
     
-    delivery_apps = await db.delivery_apps.find({}, {"_id": 0}).to_list(100)
+    delivery_apps = await db.delivery_apps.find({}, {"_id": 0}).to_list(length=None)
     app_names = {app["id"]: app["name"] for app in delivery_apps}
 
     # ⭐ خريطة موحّدة بالتكاليف الحالية (تستخدم نفس منطق POS عبر manufactured_links)
@@ -506,7 +506,7 @@ async def get_weekly_low_profit_products(
     if branch_id:
         query = build_branch_query(branch_id, query)
 
-    paid_orders = await db.orders.find(query, {"_id": 0}).to_list(length=10000)
+    paid_orders = await db.orders.find(query, {"_id": 0}).to_list(length=None)
 
     # ⭐ خريطة موحّدة بالتكاليف الحالية (تستخدم نفس منطق POS عبر manufactured_links)
     tenant_id = get_user_tenant_id(current_user)
@@ -591,7 +591,7 @@ async def get_purchases_report(
 
     query = _apply_business_date_filter(query, start_date, end_date)
 
-    purchases = await db.purchases_new.find(query, {"_id": 0}).to_list(5000)
+    purchases = await db.purchases_new.find(query, {"_id": 0}).to_list(length=None)
 
     total_purchases = 0.0
     total_paid = 0.0
@@ -661,7 +661,7 @@ async def get_inventory_report(branch_id: Optional[str] = None, current_user: di
     elif branch_id:
         query["branch_id"] = branch_id
     
-    items = await db.inventory.find(query, {"_id": 0}).to_list(1000)
+    items = await db.inventory.find(query, {"_id": 0}).to_list(length=None)
     
     low_stock = [i for i in items if i["quantity"] <= i["min_quantity"]]
     raw_materials = [i for i in items if i.get("item_type") == "raw"]
@@ -718,7 +718,7 @@ async def get_expenses_report(
     # فلتر بالـ business_date مع fallback لـ date القديم
     query = _apply_business_date_filter(query, start_date, end_date, legacy_field="date")
     
-    expenses = await db.expenses.find(query, {"_id": 0}).to_list(1000)
+    expenses = await db.expenses.find(query, {"_id": 0}).to_list(length=None)
     
     total_expenses = sum(e["amount"] for e in expenses)
     by_category = {}
@@ -783,9 +783,9 @@ async def get_profit_loss_report(
     
     sales_query = _apply_business_date_filter(sales_query, start_date, end_date)
     
-    orders = await db.orders.find(sales_query, {"_id": 0}).to_list(10000)
+    orders = await db.orders.find(sales_query, {"_id": 0}).to_list(length=None)
     
-    total_revenue = sum(o["total"] for o in orders)
+    total_revenue = sum(float(o.get("total") or 0) for o in orders)
     # ⭐ COGS يُحسب ديناميكياً من unified costs map (نفس منطق POS و sales report)
     # — لا من order.total_cost المخزّن (قد يكون قديماً قبل إصلاحات التكلفة).
     _costs_map = await _build_current_costs_map(db, tenant_id)
@@ -823,7 +823,7 @@ async def get_profit_loss_report(
     if end_date:
         expense_query.setdefault("date", {})["$lte"] = end_date
     
-    expenses = await db.expenses.find(expense_query, {"_id": 0}).to_list(1000)
+    expenses = await db.expenses.find(expense_query, {"_id": 0}).to_list(length=None)
     total_expenses = sum(e["amount"] for e in expenses)
     
     # ==================== حساب التكاليف التشغيلية ====================
@@ -842,7 +842,7 @@ async def get_profit_loss_report(
             {"branch_type": {"$nin": NON_BRANCH_TYPES}},
         ]
     
-    branches = await db.branches.find(branches_query, {"_id": 0}).to_list(100)
+    branches = await db.branches.find(branches_query, {"_id": 0}).to_list(length=None)
     # الفلتر الدفاعي: استبعاد أي قسم إداري قد يتسلل
     if not branch_id:
         branches = [b for b in branches if (b.get("branch_type") or "branch") == "branch"]
@@ -861,7 +861,7 @@ async def get_profit_loss_report(
     elif user_branch_id and user_role not in [UserRole.SUPER_ADMIN, UserRole.ADMIN, UserRole.GENERAL_MANAGER, UserRole.MANAGER]:
         employees_query["branch_id"] = user_branch_id
     
-    employees = await db.employees.find(employees_query, {"_id": 0, "salary": 1}).to_list(1000)
+    employees = await db.employees.find(employees_query, {"_id": 0, "salary": 1}).to_list(length=None)
     total_salaries = sum(e.get("salary", 0) for e in employees)
     
     # حساب عدد الأيام في الفترة
@@ -975,14 +975,14 @@ async def get_delivery_credits_report(
         query["delivery_app"] = delivery_app
     query = _apply_business_date_filter(query, start_date, end_date)
     
-    orders = await db.orders.find(query, {"_id": 0}).to_list(10000)
+    orders = await db.orders.find(query, {"_id": 0}).to_list(length=None)
     
     # نِسَب العمولة محفوظة فعلياً في delivery_app_settings (مفتاحها app_id) — وليست في delivery_apps
-    app_settings = await db.delivery_app_settings.find(build_tenant_query(current_user), {"_id": 0}).to_list(100)
+    app_settings = await db.delivery_app_settings.find(build_tenant_query(current_user), {"_id": 0}).to_list(length=None)
     app_rates = {s["app_id"]: s.get("commission_rate", 0) for s in app_settings}
     app_names = {s["app_id"]: s.get("name") for s in app_settings if s.get("name")}
     # دمج مع الشركات الافتراضية لجلب الاسم عند عدم وجود إعداد
-    delivery_apps_list = await db.delivery_apps.find({}, {"_id": 0}).to_list(100)
+    delivery_apps_list = await db.delivery_apps.find({}, {"_id": 0}).to_list(length=None)
     for app in delivery_apps_list:
         app_names.setdefault(app.get("id"), app.get("name"))
         app_rates.setdefault(app.get("id"), app.get("commission_rate", 0))
@@ -996,7 +996,7 @@ async def get_delivery_credits_report(
     if end_date:
         collections_query.setdefault("date", {})["$lte"] = end_date
     
-    delivery_collections = await db.delivery_collections.find(collections_query, {"_id": 0}).to_list(1000)
+    delivery_collections = await db.delivery_collections.find(collections_query, {"_id": 0}).to_list(length=None)
     
     # حساب المبالغ المحصلة لكل شركة توصيل
     collected_by_app = {}
@@ -1178,7 +1178,7 @@ async def get_products_report(
     else:
         product_query["$or"] = [{"tenant_id": {"$exists": False}}, {"tenant_id": None}]
     
-    products = await db.products.find(product_query, {"_id": 0}).to_list(1000)
+    products = await db.products.find(product_query, {"_id": 0}).to_list(length=None)
     
     order_query = {"status": {"$ne": OrderStatus.CANCELLED}}
     
@@ -1197,7 +1197,7 @@ async def get_products_report(
     
     order_query = _apply_business_date_filter(order_query, start_date, end_date)
     
-    orders = await db.orders.find(order_query, {"_id": 0}).to_list(10000)
+    orders = await db.orders.find(order_query, {"_id": 0}).to_list(length=None)
     
     product_sales = {}
     for o in orders:
@@ -1271,7 +1271,7 @@ async def get_products_by_channel(
 
     order_query = _apply_business_date_filter(order_query, start_date, end_date)
 
-    orders = await db.orders.find(order_query, {"_id": 0}).to_list(20000)
+    orders = await db.orders.find(order_query, {"_id": 0}).to_list(length=None)
 
     # جلب أسماء شركات التوصيل لعرضها
     delivery_apps = {}
@@ -1399,7 +1399,7 @@ async def get_cancellations_report(
     elif branch_id:
         query["branch_id"] = branch_id
     
-    cancelled_orders = await db.orders.find(query, {"_id": 0}).to_list(500)
+    cancelled_orders = await db.orders.find(query, {"_id": 0}).to_list(length=None)
     
     total_query = {"created_at": {"$gte": start_date, "$lte": end_date + "T23:59:59"}}
     if tenant_id:
@@ -1462,7 +1462,7 @@ async def get_discounts_report(
     elif branch_id:
         query["branch_id"] = branch_id
     
-    orders = await db.orders.find(query, {"_id": 0}).to_list(500)
+    orders = await db.orders.find(query, {"_id": 0}).to_list(length=None)
     
     sales_query = {"created_at": {"$gte": start_date, "$lte": end_date + "T23:59:59"}, "status": {"$ne": "cancelled"}}
     if tenant_id:
@@ -1473,7 +1473,7 @@ async def get_discounts_report(
         sales_query["branch_id"] = user_branch_id
     elif branch_id:
         sales_query["branch_id"] = branch_id
-    all_orders = await db.orders.find(sales_query, {"total": 1}).to_list(5000)
+    all_orders = await db.orders.find(sales_query, {"total": 1}).to_list(length=None)
     total_sales = sum(o.get("total", 0) for o in all_orders)
     
     total_discounts = sum(o.get("discount", 0) for o in orders)
@@ -1526,13 +1526,13 @@ async def get_credit_report(
     elif branch_id:
         query["branch_id"] = branch_id
     
-    orders = await db.orders.find(query, {"_id": 0}).to_list(500)
+    orders = await db.orders.find(query, {"_id": 0}).to_list(length=None)
     
     # جلب سجلات التحصيل لهذه الطلبات
     order_ids = [o.get("id") for o in orders]
     collections = await db.credit_collections.find(
         {"order_id": {"$in": order_ids}}, {"_id": 0}
-    ).to_list(1000)
+    ).to_list(length=None)
     
     # حساب المبالغ المحصلة لكل طلب
     collected_by_order = {}
@@ -1664,7 +1664,7 @@ async def get_credit_collections(
     if end_date:
         query.setdefault("date", {})["$lte"] = end_date
     
-    collections = await db.credit_collections.find(query, {"_id": 0}).to_list(1000)
+    collections = await db.credit_collections.find(query, {"_id": 0}).to_list(length=None)
     
     return {
         "collections": collections,
@@ -1758,7 +1758,7 @@ async def collect_delivery(
         oq = {"id": {"$in": order_ids}}
         if tenant_id:
             oq["tenant_id"] = tenant_id
-        ords = await db.orders.find(oq, {"_id": 0, "total": 1, "branch_id": 1, "branch_name": 1}).to_list(10000)
+        ords = await db.orders.find(oq, {"_id": 0, "total": 1, "branch_id": 1, "branch_name": 1}).to_list(length=None)
         per_branch = {}
         grand_total = 0.0
         for o in ords:
@@ -1863,7 +1863,7 @@ async def reset_delivery_collections(
     if payload.end_date:
         query.setdefault("date", {})["$lte"] = payload.end_date
 
-    collections = await db.delivery_collections.find(query, {"_id": 0}).to_list(5000)
+    collections = await db.delivery_collections.find(query, {"_id": 0}).to_list(length=None)
     if not collections:
         return {"deleted_collections": 0, "deleted_deposits": 0, "restored_orders": 0, "amount_reversed": 0,
                 "message": "لا توجد تحصيلات لهذه الشركة"}
@@ -1937,8 +1937,8 @@ async def get_unassigned_delivery_orders(
         query["$or"] = [{"tenant_id": {"$exists": False}}, {"tenant_id": None}]
     query = _apply_business_date_filter(query, start_date, end_date)
 
-    candidates = await db.orders.find(query, {"_id": 0}).sort("created_at", -1).to_list(20000)
-    delivery_apps = await db.delivery_apps.find({}, {"_id": 0}).to_list(100)
+    candidates = await db.orders.find(query, {"_id": 0}).sort("created_at", -1).to_list(length=None)
+    delivery_apps = await db.delivery_apps.find({}, {"_id": 0}).to_list(length=None)
     app_names = {app["id"]: app["name"] for app in delivery_apps}
 
     is_company_count = 0
@@ -2062,7 +2062,7 @@ async def reassign_unassigned_delivery_orders(
         {"app_id": payload.delivery_company_id, **({"tenant_id": tenant_id} if tenant_id else {})}, {"_id": 0})
     rate = (settings or {}).get("commission_rate", 0) or 0
 
-    orders = await db.orders.find(oq, {"_id": 0, "id": 1, "total": 1}).to_list(5000)
+    orders = await db.orders.find(oq, {"_id": 0, "id": 1, "total": 1}).to_list(length=None)
     updated = 0
     for o in orders:
         commission = round((o.get("total", 0) or 0) * rate / 100, 2) if rate else 0
@@ -2120,7 +2120,7 @@ async def get_delivery_collections(
     if end_date:
         query.setdefault("date", {})["$lte"] = end_date
     
-    collections = await db.delivery_collections.find(query, {"_id": 0}).to_list(1000)
+    collections = await db.delivery_collections.find(query, {"_id": 0}).to_list(length=None)
 
     # ⭐ احتساب "كلفة المواد" لكل سجل تحصيل ديناميكياً من طلباته (لدعم السجلات القديمة
     # التي أُنشئت قبل تخزين total_materials_cost). يستخدم نفس مصدر تقرير المبيعات.
@@ -2167,7 +2167,7 @@ async def get_delivery_collections(
         branch_docs = await db.branches.find(
             {"tenant_id": tenant_id} if tenant_id else {},
             {"_id": 0, "id": 1, "name": 1}
-        ).to_list(1000)
+        ).to_list(length=None)
         branch_name_by_id = {b.get("id"): b.get("name") for b in branch_docs if b.get("id")}
 
         for c in collections:
@@ -2216,13 +2216,13 @@ async def get_card_report(
     elif branch_id:
         query["branch_id"] = branch_id
     
-    orders = await db.orders.find(query, {"_id": 0}).to_list(500)
+    orders = await db.orders.find(query, {"_id": 0}).to_list(length=None)
     
     # جلب سجلات التحصيل لهذه الطلبات
     order_ids = [o.get("id") for o in orders]
     collections = await db.card_collections.find(
         {"order_id": {"$in": order_ids}}, {"_id": 0}
-    ).to_list(1000)
+    ).to_list(length=None)
     
     # حساب المبالغ المحصلة لكل طلب
     collected_by_order = {}
@@ -2352,7 +2352,7 @@ async def get_card_collections(
     if end_date:
         query.setdefault("date", {})["$lte"] = end_date
     
-    collections = await db.card_collections.find(query, {"_id": 0}).to_list(1000)
+    collections = await db.card_collections.find(query, {"_id": 0}).to_list(length=None)
     
     return {
         "collections": collections,

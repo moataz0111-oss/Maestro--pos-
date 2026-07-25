@@ -179,7 +179,7 @@ async def biometric_health_dashboard(
         dev_q["tenant_id"] = tenant_id
     if branch_id:
         dev_q["branch_id"] = branch_id
-    devices = await db.biometric_devices.find(dev_q, {"_id": 0}).to_list(1000)
+    devices = await db.biometric_devices.find(dev_q, {"_id": 0}).to_list(length=None)
     
     branches_map = {}
     async for br in db.branches.find({} if not tenant_id else {"tenant_id": tenant_id}, {"_id": 0, "id": 1, "name": 1}):

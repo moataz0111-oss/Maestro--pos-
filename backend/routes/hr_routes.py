@@ -117,7 +117,7 @@ async def get_employees(
         # القائمة الافتراضية: تستثني المنتهية خدماتهم نهائياً (تبقى المنتهية مؤقتاً بخط أحمر)
         query["employment_status"] = {"$ne": "terminated"}
 
-    employees = await db.employees.find(query, {"_id": 0}).to_list(1000)
+    employees = await db.employees.find(query, {"_id": 0}).to_list(length=None)
     return employees
 
 @router.get("/employees/{employee_id}", response_model=EmployeeResponse)
@@ -364,7 +364,7 @@ async def get_attendance(
         query["employee_id"] = employee_id
     if branch_id:
         # جلب الموظفين في الفرع
-        employees = await db.employees.find({"branch_id": branch_id}, {"id": 1}).to_list(1000)
+        employees = await db.employees.find({"branch_id": branch_id}, {"id": 1}).to_list(length=None)
         emp_ids = [e["id"] for e in employees]
         query["employee_id"] = {"$in": emp_ids}
     if start_date:
@@ -372,7 +372,7 @@ async def get_attendance(
     if end_date:
         query.setdefault("date", {})["$lte"] = end_date
     
-    records = await db.attendance.find(query, {"_id": 0}).sort("date", -1).to_list(1000)
+    records = await db.attendance.find(query, {"_id": 0}).sort("date", -1).to_list(length=None)
     
     # تحديث أسماء الموظفين من البيانات الحالية (لحل مشكلة الأسماء المشفرة)
     if records:
@@ -380,7 +380,7 @@ async def get_attendance(
         if emp_ids:
             current_employees = await db.employees.find(
                 {"id": {"$in": emp_ids}}, {"_id": 0, "id": 1, "name": 1}
-            ).to_list(1000)
+            ).to_list(length=None)
             emp_name_map = {e["id"]: e.get("name", "") for e in current_employees}
             for record in records:
                 eid = record.get("employee_id")
@@ -456,9 +456,9 @@ async def create_advance(advance: AdvanceCreate, current_user: dict = Depends(ge
         branch_q = {"branch_id": advance_branch}
         if advance_tenant:
             branch_q["tenant_id"] = advance_tenant
-        _deps = await db.owner_deposits.find(branch_q, {"_id": 0}).to_list(5000)
-        _wds = await db.owner_withdrawals.find(branch_q, {"_id": 0}).to_list(5000)
-        _tfs = await db.owner_profit_transfers.find(branch_q, {"_id": 0}).to_list(5000)
+        _deps = await db.owner_deposits.find(branch_q, {"_id": 0}).to_list(length=None)
+        _wds = await db.owner_withdrawals.find(branch_q, {"_id": 0}).to_list(length=None)
+        _tfs = await db.owner_profit_transfers.find(branch_q, {"_id": 0}).to_list(length=None)
         branch_balance = (
             sum(d.get("amount", 0) for d in _deps)
             - sum(w.get("amount", 0) for w in _wds)
@@ -511,13 +511,13 @@ async def get_advances(
     if status:
         query["status"] = status
     
-    advances = await db.advances.find(query, {"_id": 0}).sort("created_at", -1).to_list(500)
+    advances = await db.advances.find(query, {"_id": 0}).sort("created_at", -1).to_list(length=None)
     
     # تحديث أسماء الموظفين من البيانات الحالية
     if advances:
         emp_ids = list(set(a.get("employee_id") for a in advances if a.get("employee_id")))
         if emp_ids:
-            emps = await db.employees.find({"id": {"$in": emp_ids}}, {"_id": 0, "id": 1, "name": 1}).to_list(500)
+            emps = await db.employees.find({"id": {"$in": emp_ids}}, {"_id": 0, "id": 1, "name": 1}).to_list(length=None)
             name_map = {e["id"]: e.get("name", "") for e in emps}
             for a in advances:
                 eid = a.get("employee_id")
@@ -534,7 +534,7 @@ async def reset_employee_advances(employee_id: str, current_user: dict = Depends
     query = build_tenant_query(current_user)
     query["employee_id"] = employee_id
     query["remaining_amount"] = {"$gt": 0}
-    advances = await db.advances.find(query, {"_id": 0}).to_list(1000)
+    advances = await db.advances.find(query, {"_id": 0}).to_list(length=None)
     cleared_total = sum((a.get("remaining_amount", 0) or 0) for a in advances)
     res = await db.advances.update_many(
         {"id": {"$in": [a["id"] for a in advances]}},
@@ -566,7 +566,7 @@ async def reset_advances_before_month(month: str, current_user: dict = Depends(g
             {"created_at": {"$lt": cutoff}}
         ]}
     ]
-    advances = await db.advances.find(query, {"_id": 0}).to_list(5000)
+    advances = await db.advances.find(query, {"_id": 0}).to_list(length=None)
     cleared_total = sum((a.get("remaining_amount", 0) or 0) for a in advances)
     res = await db.advances.update_many(
         {"id": {"$in": [a["id"] for a in advances]}},

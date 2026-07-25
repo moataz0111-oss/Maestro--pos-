@@ -50,7 +50,7 @@ class PromotionCreate(BaseModel):
 async def get_coupons(current_user: dict = Depends(get_current_user)):
     """قائمة الكوبونات"""
     query = build_tenant_query(current_user)
-    coupons = await db.coupons.find(query, {"_id": 0}).sort("created_at", -1).to_list(200)
+    coupons = await db.coupons.find(query, {"_id": 0}).sort("created_at", -1).to_list(length=None)
     return coupons
 
 @router.post("/coupons")
@@ -256,7 +256,7 @@ async def search_coupons_by_customer_prefix(
             },
         ],
     })
-    candidates = await db.coupons.find(base, {"_id": 0}).to_list(100)
+    candidates = await db.coupons.find(base, {"_id": 0}).to_list(length=None)
 
     valid = []
     for c in candidates:
@@ -319,7 +319,7 @@ async def lookup_coupon_by_customer(
             },
         ],
     })
-    candidates = await db.coupons.find(base, {"_id": 0}).to_list(50)
+    candidates = await db.coupons.find(base, {"_id": 0}).to_list(length=None)
 
     best = None
     best_discount = -1.0
@@ -413,7 +413,7 @@ async def use_coupon(
 async def get_promotions(current_user: dict = Depends(get_current_user)):
     """قائمة العروض"""
     query = build_tenant_query(current_user)
-    promotions = await db.promotions.find(query, {"_id": 0}).sort("created_at", -1).to_list(100)
+    promotions = await db.promotions.find(query, {"_id": 0}).sort("created_at", -1).to_list(length=None)
     return promotions
 
 @router.post("/promotions")
@@ -464,7 +464,7 @@ async def get_active_promotions(current_user: dict = Depends(get_current_user)):
         "valid_until": {"$gte": now}
     })
     
-    promotions = await db.promotions.find(query, {"_id": 0}).to_list(50)
+    promotions = await db.promotions.find(query, {"_id": 0}).to_list(length=None)
     
     # تصفية Happy Hour
     active_promotions = []
