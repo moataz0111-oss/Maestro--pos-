@@ -119,6 +119,22 @@ jobs:
           # ضمان عمل الشبكة
           docker network create maestro_maestro-network 2>/dev/null || true
 
+          # =============================================
+          # 🧹 تنظيف الـ stack القديم من /root/maestro (إن وُجد)
+          # يمنع تعارض البورت 80 ويضمن أن النسخة الجديدة فقط تستقبل الحركة
+          # البيانات في volume منفصل — آمنة 100%
+          # =============================================
+          echo "🧹 تنظيف أي stack قديم بأسماء maestro-* (البيانات في volumes منفصلة — آمنة)..."
+          if [ -d /root/maestro ] && [ -f /root/maestro/docker-compose.yml ]; then
+            cd /root/maestro && (docker-compose down 2>/dev/null || docker compose down 2>/dev/null || true)
+            cd /var/www/maestro
+          fi
+          # إزالة أي حاويات متبقية بالاسم القديم (ما عدا maestro-mongodb الذي نحتاجه)
+          for c in maestro-nginx maestro-backend maestro-frontend maestro-wa-service maestro-certbot maestro-portainer maestro-netdata; do
+            docker rm -f "$c" 2>/dev/null || true
+          done
+          echo "✅ تم تنظيف الـ stack القديم"
+
           # دالة: ضمان أن nginx يعمل (تُعيد الموقع فوراً)
           ensure_nginx() {
             if ! docker ps --format '{{.Names}}' | grep -q '^nginx$'; then
@@ -288,4 +304,15 @@ jobs:
 
           # تنظيف
           docker image prune -f 2>/dev/null || true
+
+          # =============================================
+          # 🔒 ضمان نهائي: لا يوجد stack قديم عالق بعد النشر
+          # (يحمي من حالات race condition أو إعادة تشغيل جزئي)
+          # =============================================
+          for c in maestro-nginx maestro-backend maestro-frontend maestro-wa-service; do
+            if docker ps --format '{{.Names}}' | grep -q "^$c$"; then
+              echo "⚠️ عثرنا على حاوية قديمة $c ما زالت تعمل — إزالتها"
+              docker rm -f "$c" 2>/dev/null || true
+            fi
+          done
           echo "✅ انتهى!"
