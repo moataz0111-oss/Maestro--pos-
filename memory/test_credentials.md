@@ -205,3 +205,41 @@
 - Cashier: closefix-cashier@maestroegp.com / test1234 (احمد اختبار، فرع 76f56acc-...)
 - Re-seed: cd /app/backend && python3 seed_owner_cashier_close_test.py (وردية مالك 79,500 أقدم + وردية كاشير 802,750)
 - الاستخدام: GET /api/cash-register/summary?shift_id=... و POST /api/cash-register/close مع shift_id
+
+## Enterprise Mode — Phase 1 (Feb 2026)
+- **Default Project (auto-created)**: name=`default`, tenant=`default`, activity=`restaurant`
+- **Sample project**: `صالون الأناقة` (activity=salon) — created for isolation testing
+- **Salon Project Admin**: salon@test.com / salon1234 (role=`project_admin`, restricted to salon project only)
+- **Trusted device (bypasses 2FA)**: use `device_id=e2e-tester-persistent` for admin@maestroegp.com or `salon-test-device` for salon@test.com
+- Endpoints:
+  - GET /api/projects
+  - POST /api/projects (owner-only)
+  - PUT /api/projects/{id}
+  - DELETE /api/projects/{id} (soft delete; default project protected)
+  - POST /api/projects/{id}/assign-admin (owner-only)
+  - GET /api/projects/{id}/users
+- Frontend route: /settings/projects (Projects management page)
+- ProjectContext provider wraps entire app in App.js (before BranchProvider)
+
+## Multi-Currency Support — Feb 28, 2026 (fork)
+- **ProjectCreate/ProjectUpdate** يقبلان `exchange_rate: Optional[float]` — سعر صرف عملة المشروع مقابل عملة المؤسسة الرئيسية.
+- المشروع الافتراضي = عملة المؤسسة الرئيسية (`exchange_rate=1.0` دائماً).
+- عند إنشاء/تعديل مشروع بعملة ≠ العملة الرئيسية، الفرونت يعرض حقل "💱 سعر الصرف" إجبارياً (بلوك أصفر بارز).
+- عرض بطاقة المشروع تُظهر العملتين معاً + `1 [PROJ] = X [MAIN]` عندما تختلف العملتان.
+- Test-ids: `exchange-rate-box`, `project-exchange-rate-input`.
+- `ProjectsSettings.jsx` — تحويل حقلي "العملة" و "المنطقة الزمنية" من `<Input>` نصي إلى `<Select>` منسدلة.
+- **30 عملة** جاهزة (IQD, USD, EUR, GBP + كل عملات الخليج والشرق الأوسط والعالم).
+- **29 منطقة زمنية** جاهزة (بغداد، الرياض، دبي، القاهرة، إسطنبول، لندن، نيويورك، UTC…).
+- Test-ids: `project-currency-select`, `project-timezone-select`.
+- `CashRegisterClosingTab` — فلتر المشروع يظهر أولاً (قبل الفرع)، وفلتر الفروع يعرض فروع المشروع المختار فقط عبر `useMemo(filteredBranches)`.
+- إذا كان المشروع المختار بلا فروع (مثل صالون الأناقة) → **فلتر الفرع يختفي كلياً** (`{filteredBranches.length > 0 && (…)}`)
+- عند تغيير المشروع → فرع مختار قديم يُعاد تلقائياً لـ "جميع الفروع" لتجنّب فلترة خاطئة (`useEffect` يراقب `localProjectId`).
+- **Frontend interceptor** (`/app/frontend/src/utils/api.js`): axios request يضيف `X-Project-Id` header + `project_id` query تلقائياً من `localStorage.selectedProjectId` (بلا تدخل يدوي).
+- **Backend helper** (`routes/shared.py::resolve_project_id_for_create`): يقرأ user.project_id → header → query → fallback إلى المشروع الافتراضي.
+- **نقاط الإنشاء المُحدَّثة لتحقن `project_id` تلقائياً**: `/api/categories`, `/api/products`, `/api/branches`, `/api/raw-materials-new`, `/api/manufactured-products`, `/api/packaging-materials`.
+- **حد الفروع بالمشروع**: `POST /api/branches` يستخدم `max_branches_per_project` عندما `enterprise_enabled=true` بدلاً من `max_branches` الكلي.
+- **Header rebranding**: عند تفعيل Enterprise Mode، الترويسة تستبدل "مطعم" بـ "مؤسسة" في اسم العميل تلقائياً (regex `/مطعم/g`). Test-id: `tenant-header-title`, `tenant-header-logo`.
+- **Project-aware header**: اختيار مشروع من المنسدلة يعرض اسم/شعار المشروع + نوع النشاط في الترويسة (Dashboard.js line 2062-2118).
+- **Settings tab rename**: تبويب "المطعم" أصبح "المؤسسة" ديناميكياً (بناءً على `enterpriseEnabled`). Test-id: `settings-tab-enterprise`. جميع النصوص داخل التبويب (اسم/شعار/زر الحفظ) تتبدّل تبعاً للحالة.
+- **Projects tab inline**: تبويب "🏢 المشاريع" في Settings يعرض `ProjectsSettings` مباشرة (لم يعد ينتقل لصفحة منفصلة). Test-id: `settings-tab-projects`, `projects-tab-content`, `add-project-btn`, `project-card-{id}`, `assign-admin-btn-{id}`.
+- **Project → Branch filter cascade**: BranchContext.fetchBranches يرسل `project_id` تلقائياً عند تغير المشروع (event `project-changed`)، فلا تظهر إلا فروع المشروع المختار.

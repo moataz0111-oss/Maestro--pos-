@@ -143,5 +143,34 @@ def get_socket_app():
     return socketio.ASGIApp(sio)
 
 
+# ==================== Enterprise Mode Live Updates ====================
+async def notify_enterprise_update(tenant_id: str, project_id: str, event_type: str, data: dict = None):
+    """
+    بث حدث لحوض المؤسسة — يستمع مالك المؤسسة لتحديث Enterprise Dashboard لحظياً.
+    event_type: order_created | order_updated | expense_added | shift_closed
+    """
+    room = f'enterprise_{tenant_id}'
+    payload = {
+        'type': event_type,
+        'tenant_id': tenant_id,
+        'project_id': project_id,
+        'data': data or {},
+    }
+    await sio.emit('enterprise_update', payload, room=room)
+    logger.info(f"📊 Enterprise update: {event_type} tenant={tenant_id} project={project_id}")
+
+
+@sio.event
+async def join_enterprise(sid, data):
+    """اشتراك مالك المؤسسة في تحديثات كل مشاريعه"""
+    tenant_id = data.get('tenant_id')
+    if not tenant_id:
+        return {'status': 'error', 'message': 'tenant_id required'}
+    room = f'enterprise_{tenant_id}'
+    await sio.enter_room(sid, room)
+    logger.info(f"🏢 Owner joined enterprise room: {room}")
+    return {'status': 'ok', 'room': room}
+
+
 # للاستخدام المباشر
 socket_app = get_socket_app()

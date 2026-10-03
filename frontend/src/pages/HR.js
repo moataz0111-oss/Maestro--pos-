@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { useAuth } from '../context/AuthContext';
 import { useBranch } from '../context/BranchContext';
+import { useProject } from '../context/ProjectContext';
 import { useOffline } from '../context/OfflineContext';
 import offlineStorage from '../lib/offlineStorage';
 import db, { STORES } from '../lib/offlineDB';
@@ -155,6 +156,7 @@ export default function HR() {
   const navigate = useNavigate();
   const { user, hasRole } = useAuth();
   const { selectedBranchId, branches: contextBranches, getBranchIdForApi } = useBranch();
+  const { enterpriseEnabled, projects } = useProject();
   const { t, isRTL } = useTranslation();
   const { isOnline, isOffline, syncStatus, updateSyncStatus } = useOffline();
   const [activeTab, setActiveTab] = useState('employees');
@@ -240,7 +242,7 @@ export default function HR() {
   // Forms
   const [employeeForm, setEmployeeForm] = useState({
     name: '', name_en: '', phone: '', email: '', national_id: '', position: '', department: '',
-    branch_id: '', hire_date: '', salary: '', salary_type: 'monthly', work_hours_per_day: 8,
+    project_id: '', branch_id: '', hire_date: '', salary: '', salary_type: 'monthly', work_hours_per_day: 8,
     shift_start: '09:00', shift_end: '17:00', break_start: '', break_end: '', work_days: [0, 1, 2, 3, 4, 5],
     is_general_manager: false
   });
@@ -2885,34 +2887,73 @@ export default function HR() {
                             <Label>{t('القسم')}</Label>
                             <Input value={employeeForm.department} onChange={(e) => setEmployeeForm({...employeeForm, department: e.target.value})} />
                           </div>
-                          <div>
-                            <Label>{t('الفرع')} *</Label>
-                            <Select value={employeeForm.branch_id} onValueChange={(v) => setEmployeeForm({...employeeForm, branch_id: v})}>
-                              <SelectTrigger><SelectValue placeholder={t('اختر الفرع')} /></SelectTrigger>
-                              <SelectContent>
-                                {/* الفروع العادية */}
-                                {branches.filter(b => !b.branch_type || b.branch_type === 'branch').map(b => (
-                                  <SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>
-                                ))}
-                                {/* الأقسام (مطبخ مركزي / مخزن / مشتريات) */}
-                                {branches.filter(b => b.branch_type && b.branch_type !== 'branch').length > 0 && (
-                                  <>
-                                    <div className="px-2 py-1 text-xs text-muted-foreground border-t mt-1 pt-2">
-                                      {t('الأقسام (خارج الفروع)')}
-                                    </div>
-                                    {branches.filter(b => b.branch_type && b.branch_type !== 'branch').map(b => (
-                                      <SelectItem key={b.id} value={b.id}>
-                                        {b.branch_type === 'central_kitchen' && '🍳 '}
-                                        {b.branch_type === 'warehouse' && '📦 '}
-                                        {b.branch_type === 'purchasing' && '🛒 '}
-                                        {b.name}
-                                      </SelectItem>
+                          {/* 🏢 المشروع (Enterprise Mode) — يُختار أولاً ليفلتر الفروع */}
+                          {enterpriseEnabled && projects && projects.length > 0 && (
+                            <div>
+                              <Label>{t('المشروع')} *</Label>
+                              <Select
+                                value={employeeForm.project_id}
+                                onValueChange={(v) => setEmployeeForm({...employeeForm, project_id: v, branch_id: ''})}
+                              >
+                                <SelectTrigger data-testid="hr-employee-project"><SelectValue placeholder={t('اختر المشروع')} /></SelectTrigger>
+                                <SelectContent>
+                                  {projects.map(p => (
+                                    <SelectItem key={p.id} value={p.id}>🏢 {p.name}</SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                            </div>
+                          )}
+                          {/* الفرع — يظهر فقط إذا كان للمشروع فروع (أو enterprise غير مفعّل) */}
+                          {(() => {
+                            // في وضع المؤسسة: فلتر الفروع بالمشروع المختار
+                            const scopedBranches = enterpriseEnabled && employeeForm.project_id
+                              ? branches.filter(b => b.project_id === employeeForm.project_id)
+                              : branches;
+                            const regularBranches = scopedBranches.filter(b => !b.branch_type || b.branch_type === 'branch');
+                            const departmentBranches = scopedBranches.filter(b => b.branch_type && b.branch_type !== 'branch');
+                            // في enterprise إذا اختير مشروع بلا أي فروع/أقسام → أخفِ الحقل بالكامل
+                            if (enterpriseEnabled && employeeForm.project_id && scopedBranches.length === 0) {
+                              return (
+                                <div>
+                                  <Label className="text-muted-foreground">{t('الفرع')}</Label>
+                                  <div className="mt-1 p-2 rounded border border-dashed text-xs text-muted-foreground">
+                                    ⚠️ هذا المشروع بلا فروع بعد. أنشئ فرعاً من الإعدادات ← المشاريع.
+                                  </div>
+                                </div>
+                              );
+                            }
+                            return (
+                              <div>
+                                <Label>{t('الفرع')} *</Label>
+                                <Select value={employeeForm.branch_id} onValueChange={(v) => setEmployeeForm({...employeeForm, branch_id: v})}>
+                                  <SelectTrigger><SelectValue placeholder={t('اختر الفرع')} /></SelectTrigger>
+                                  <SelectContent>
+                                    {/* الفروع العادية */}
+                                    {regularBranches.map(b => (
+                                      <SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>
                                     ))}
-                                  </>
-                                )}
-                              </SelectContent>
-                            </Select>
-                          </div>
+                                    {/* الأقسام (مطبخ مركزي / مخزن / مشتريات) */}
+                                    {departmentBranches.length > 0 && (
+                                      <>
+                                        <div className="px-2 py-1 text-xs text-muted-foreground border-t mt-1 pt-2">
+                                          {t('الأقسام (خارج الفروع)')}
+                                        </div>
+                                        {departmentBranches.map(b => (
+                                          <SelectItem key={b.id} value={b.id}>
+                                            {b.branch_type === 'central_kitchen' && '🍳 '}
+                                            {b.branch_type === 'warehouse' && '📦 '}
+                                            {b.branch_type === 'purchasing' && '🛒 '}
+                                            {b.name}
+                                          </SelectItem>
+                                        ))}
+                                      </>
+                                    )}
+                                  </SelectContent>
+                                </Select>
+                              </div>
+                            );
+                          })()}
                           <div>
                             <Label>{t('تاريخ التعيين')} *</Label>
                             <Input type="date" value={employeeForm.hire_date} onChange={(e) => setEmployeeForm({...employeeForm, hire_date: e.target.value})} required />

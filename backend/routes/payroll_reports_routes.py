@@ -1,7 +1,12 @@
 """Payroll Reports + Salary Payments (extracted from server.py)"""
-from fastapi import APIRouter
-from server import *  # noqa: F401,F403
-from server import (_sn)
+from fastapi import APIRouter, Depends, HTTPException
+from fastapi.responses import StreamingResponse
+from pydantic import BaseModel
+from typing import Optional
+from datetime import datetime, timezone, timedelta
+import uuid
+from server import *  # noqa: F401,F403,F405
+from server import (_sn, db, get_current_user, get_user_tenant_id, UserRole)
 
 router = APIRouter()
 

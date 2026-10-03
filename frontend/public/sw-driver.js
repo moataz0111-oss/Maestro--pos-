@@ -64,14 +64,14 @@ self.addEventListener('notificationclick', (event) => {
   const isCall = ndata.type === 'incoming_call';
   const urlToOpen = ndata.url || '/driver-app';
   event.waitUntil(
-    clients.matchAll({ type: 'window', includeUncontrolled: true }).then((list) => {
+    self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((list) => {
       for (const client of list) {
         if (client.url.includes(self.location.origin) && 'focus' in client) {
           if (!isCall) client.navigate(urlToOpen);
           return client.focus();
         }
       }
-      if (clients.openWindow) return clients.openWindow(urlToOpen);
+      if (self.clients.openWindow) return self.clients.openWindow(urlToOpen);
     })
   );
 });

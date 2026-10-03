@@ -1043,6 +1043,7 @@ async def get_shift_receipts(
     date_from: Optional[str] = None,
     date_to: Optional[str] = None,
     branch_id: Optional[str] = None,
+    project_id: Optional[str] = None,
     current_user: dict = Depends(get_current_user)
 ):
     """كشف الاستلامات — يعرض كل عمليات استلام النقد من الشفتات المغلقة (قديمة وجديدة).
@@ -1064,7 +1065,8 @@ async def get_shift_receipts(
     if current_user.get("role", "") not in ["admin", "general_manager", "super_admin", "manager", "branch_manager", "owner"]:
         raise HTTPException(status_code=403, detail="غير مصرح")
     
-    tq = {"tenant_id": tenant_id} if tenant_id else {}
+    from routes.shared import scoped_query_for_user
+    tq = scoped_query_for_user(current_user, base={"tenant_id": tenant_id} if tenant_id else {}, explicit_project_id=project_id)
     
     # جمع البيانات من مصدرين: shifts + cash_register_closings (كلاهما قد يحوي received_at)
     query = {**tq, "received_at": {"$exists": True, "$ne": None}}

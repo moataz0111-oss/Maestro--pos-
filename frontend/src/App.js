@@ -4,6 +4,7 @@ import { Toaster } from "./components/ui/sonner";
 import { AuthProvider, useAuth } from "./context/AuthContext";
 import { ThemeProvider } from "./context/ThemeContext";
 import { BranchProvider } from "./context/BranchContext";
+import { ProjectProvider } from "./context/ProjectContext";
 import { CurrencyProvider } from "./context/CurrencyContext";
 import { LanguageProvider } from "./context/LanguageContext";
 import { OfflineProvider } from "./context/OfflineContext";
@@ -53,6 +54,11 @@ import WarehouseManufacturing from "./pages/WarehouseManufacturing";
 import Expenses from "./pages/Expenses";
 import Reports from "./pages/Reports";
 import Settings from "./pages/Settings";
+import ProjectsSettings from "./pages/ProjectsSettings";
+import EnterpriseDashboard from "./pages/EnterpriseDashboard";
+import Marketplace from "./pages/Marketplace";
+import PartnerPortal from "./pages/PartnerPortal";
+import EnterpriseConfigPanel from "./pages/EnterpriseConfigPanel";
 
 // الصفحات الثانوية - مع lazy loading
 const Inventory = lazy(() => import("./pages/Inventory"));
@@ -360,6 +366,39 @@ function AppRoutes() {
             <PermissionRoute permission="settings">
               <Settings />
             </PermissionRoute>
+          </ProtectedRoute>
+        } 
+      />
+      <Route 
+        path="/settings/projects" 
+        element={
+          <ProtectedRoute>
+            <ProjectsSettings />
+          </ProtectedRoute>
+        } 
+      />
+      <Route 
+        path="/enterprise-dashboard" 
+        element={
+          <ProtectedRoute>
+            <EnterpriseDashboard />
+          </ProtectedRoute>
+        } 
+      />
+      <Route 
+        path="/marketplace/:projectId" 
+        element={
+          <ProtectedRoute>
+            <Marketplace />
+          </ProtectedRoute>
+        } 
+      />
+      <Route path="/partner/:partnerId" element={<PartnerPortal />} />
+      <Route 
+        path="/super-admin/enterprise-config" 
+        element={
+          <ProtectedRoute>
+            <EnterpriseConfigPanel />
           </ProtectedRoute>
         } 
       />
@@ -686,33 +725,35 @@ function App() {
         <LanguageProvider>
           <AuthProvider>
             <CurrencyProvider>
-              <BranchProvider>
-                <OfflineProvider>
-                  <div className="App">
-                    <BrowserRouter>
-                      <OfflineBanner />
-                      <WeeklyLowProfitAlert />
-                      <StockCountAlert />
-                      <AppRoutes />
-                      <AutoSyncRunner />
-                      <StartupSplash />
-                      <PostLoginSplash />
-                      <ApiErrorModal />
-                      <Toaster position="top-center" richColors />
-                      {/* Incoming Call Popup - يظهر في جميع الصفحات */}
-                      <IncomingCallPopup />
-                      {/* إشعار طلب جديد للكاشير على شكل مكالمة واردة */}
-                      <IncomingOrderCall />
-                      {/* تنبيهات الإدارة: تأخر/رفض الكاشير لطلب */}
-                      <ManagementOrderAlerts />
-                      {/* PWA Install Prompt */}
-                      <InstallPWA />
-                      {/* حارس التبويب الواحد — يمنع فتح النظام في أكثر من نافذة/تبويب */}
-                      <SingleTabGuard />
-                    </BrowserRouter>
-                  </div>
-                </OfflineProvider>
-              </BranchProvider>
+              <ProjectProvider>
+                <BranchProvider>
+                  <OfflineProvider>
+                    <div className="App">
+                      <BrowserRouter>
+                        <OfflineBanner />
+                        <WeeklyLowProfitAlert />
+                        <StockCountAlert />
+                        <AppRoutes />
+                        <AutoSyncRunner />
+                        <StartupSplash />
+                        <PostLoginSplash />
+                        <ApiErrorModal />
+                        <Toaster position="top-center" richColors />
+                        {/* Incoming Call Popup - يظهر في جميع الصفحات */}
+                        <IncomingCallPopup />
+                        {/* إشعار طلب جديد للكاشير على شكل مكالمة واردة */}
+                        <IncomingOrderCall />
+                        {/* تنبيهات الإدارة: تأخر/رفض الكاشير لطلب */}
+                        <ManagementOrderAlerts />
+                        {/* PWA Install Prompt */}
+                        <InstallPWA />
+                        {/* حارس التبويب الواحد — يمنع فتح النظام في أكثر من نافذة/تبويب */}
+                        <SingleTabGuard />
+                      </BrowserRouter>
+                    </div>
+                  </OfflineProvider>
+                </BranchProvider>
+              </ProjectProvider>
             </CurrencyProvider>
           </AuthProvider>
         </LanguageProvider>

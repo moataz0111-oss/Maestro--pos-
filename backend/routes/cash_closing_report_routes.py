@@ -1,7 +1,14 @@
 """Cash Register Closing Report (extracted from server.py)"""
-from fastapi import APIRouter
-from server import *  # noqa: F401,F403
-from server import (_sn)
+from fastapi import APIRouter, Depends, HTTPException
+from typing import Optional
+from datetime import datetime, timezone, timedelta
+from pydantic import BaseModel
+import uuid
+import re
+
+from server import *  # noqa: F401,F403,F405
+from server import (_sn, iraq_date_from_utc, db, get_current_user, build_tenant_query)
+from routes.shared import scoped_query_for_user
 
 router = APIRouter()
 
@@ -99,10 +106,11 @@ async def get_cash_register_closing_report(
     branch_id: Optional[str] = None,
     cashier_id: Optional[str] = None,
     shift_id: Optional[str] = None,
+    project_id: Optional[str] = None,
     current_user: dict = Depends(get_current_user)
 ):
     """تقرير إغلاق الصندوق الشامل - يعرض المبيعات والمصروفات ومطابقة الصندوق"""
-    query = build_tenant_query(current_user)
+    query = scoped_query_for_user(current_user, base=build_tenant_query(current_user), explicit_project_id=project_id)
     
     if branch_id:
         query["branch_id"] = branch_id
@@ -158,7 +166,7 @@ async def get_cash_register_closing_report(
     cancellation_count = len(cancelled_orders)
     
     # جلب المصروفات (بدون المرتجعات)
-    expenses_query = build_tenant_query(current_user)
+    expenses_query = scoped_query_for_user(current_user, base=build_tenant_query(current_user), explicit_project_id=project_id)
     expenses_query["category"] = {"$ne": "refund"}
     if branch_id:
         expenses_query["branch_id"] = branch_id
@@ -176,7 +184,7 @@ async def get_cash_register_closing_report(
     expenses = await db.expenses.find(expenses_query, {"_id": 0}).to_list(length=None)
     
     # جلب إغلاقات الصندوق
-    closings_query = build_tenant_query(current_user)
+    closings_query = scoped_query_for_user(current_user, base=build_tenant_query(current_user), explicit_project_id=project_id)
     if branch_id:
         closings_query["branch_id"] = branch_id
     if cashier_id:
@@ -526,7 +534,7 @@ async def create_cash_register_closing(
     }
     
     await db.cash_register_closings.insert_one(closing_record)
-    
+    closing_record.pop("_id", None)
     return {"message": "تم إغلاق الصندوق بنجاح", "closing": closing_record}
 
 @router.get("/reports/cash-register-closings")
@@ -535,11 +543,12 @@ async def get_cash_register_closings_history(
     end_date: Optional[str] = None,
     branch_id: Optional[str] = None,
     cashier_id: Optional[str] = None,
+    project_id: Optional[str] = None,
     limit: int = 0,
     current_user: dict = Depends(get_current_user)
 ):
     """سجل إغلاقات الصندوق السابقة — بدون حد أقصى افتراضياً (limit=0 = الكل)"""
-    query = build_tenant_query(current_user)
+    query = scoped_query_for_user(current_user, base=build_tenant_query(current_user), explicit_project_id=project_id)
     
     if branch_id:
         query["branch_id"] = branch_id
@@ -782,10 +791,11 @@ async def get_delivery_credits_report(
     start_date: Optional[str] = None,
     end_date: Optional[str] = None,
     branch_id: Optional[str] = None,
+    project_id: Optional[str] = None,
     current_user: dict = Depends(get_current_user)
 ):
     """تقرير آجل شركات التوصيل - فقط شركات التوصيل (بدون توصيل السائقين العاديين)"""
-    query = build_tenant_query(current_user)
+    query = scoped_query_for_user(current_user, base=build_tenant_query(current_user), explicit_project_id=project_id)
     
     # فقط طلبات التوصيل التي تنتمي لشركة توصيل
     query["order_type"] = "delivery"
@@ -874,11 +884,12 @@ async def get_delivery_credits_report(
 async def get_products_report(
     period: str = "month",
     branch_id: Optional[str] = None,
+    project_id: Optional[str] = None,
     limit: int = 10,
     current_user: dict = Depends(get_current_user)
 ):
     """تقرير المنتجات الأكثر مبيعاً"""
-    query = build_tenant_query(current_user)
+    query = scoped_query_for_user(current_user, base=build_tenant_query(current_user), explicit_project_id=project_id)
     
     if branch_id:
         query["branch_id"] = branch_id
@@ -952,10 +963,11 @@ async def get_products_report(
 async def get_hourly_report(
     date: Optional[str] = None,
     branch_id: Optional[str] = None,
+    project_id: Optional[str] = None,
     current_user: dict = Depends(get_current_user)
 ):
     """تقرير المبيعات حسب الساعة"""
-    query = build_tenant_query(current_user)
+    query = scoped_query_for_user(current_user, base=build_tenant_query(current_user), explicit_project_id=project_id)
     
     if branch_id:
         query["branch_id"] = branch_id
@@ -982,7 +994,7 @@ async def get_hourly_report(
             if hour in hourly_data:
                 hourly_data[hour]["orders"] += 1
                 hourly_data[hour]["sales"] += _sn(order.get("total"))
-        except:
+        except Exception:
             pass
     
     return {

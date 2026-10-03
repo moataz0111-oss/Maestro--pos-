@@ -1,7 +1,19 @@
 """Customer Menu App APIs (extracted from server.py)"""
-from fastapi import APIRouter
-from server import *  # noqa: F401,F403
-from server import (_client_ip, _phone_to_e164, _wa_free, _distance_fee_for, _get_welcome_config, _resolve_business_date, _sn)
+from fastapi import APIRouter, HTTPException, Request, Body
+from typing import Optional, List
+from datetime import datetime, timezone
+from pydantic import BaseModel
+import uuid
+import asyncio
+import logging
+
+from server import *  # noqa: F401,F403,F405
+from server import (_client_ip, _phone_to_e164, _wa_free, _distance_fee_for,
+                    _get_welcome_config, _resolve_business_date, _sn,
+                    db, enforce_rate_limit, sanitize_text, start_2fa_verification,
+                    Verify2FARequest, verify_2fa_code, two_fa_enabled)
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -130,8 +142,8 @@ async def get_menu_manifest(tenant_id: str):
 
 
 @router.get("/customer/menu/{tenant_id}")
-async def get_customer_menu(tenant_id: str):
-    """جلب قائمة الطعام للعملاء - بدون توثيق"""
+async def get_customer_menu(tenant_id: str, project_id: Optional[str] = None):
+    """جلب قائمة الطعام للعملاء - بدون توثيق. Enterprise: يفلتر حسب project_id إن مرّر."""
     # البحث عن tenant
     tenant = await db.tenants.find_one(
         {"$or": [{"id": tenant_id}, {"menu_slug": tenant_id}]},
@@ -150,15 +162,26 @@ async def get_customer_menu(tenant_id: str):
     
     tid = tenant.get("id", tenant_id)
     
-    # جلب الفئات - فقط للعميل المحدد
+    # === Enterprise: فلتر project_id إن مرّر (يعزل قوائم المشاريع للزبون) ===
+    proj_filter = {}
+    if project_id:
+        proj_filter["$or"] = [
+            {"project_id": project_id},
+            {"project_id": {"$exists": False}},
+            {"project_id": None},
+        ]
+    
+    # جلب الفئات - فقط للعميل المحدد + المشروع
+    cat_query = {"tenant_id": tid, **proj_filter}
     categories = await db.categories.find(
-        {"tenant_id": tid},
+        cat_query,
         {"_id": 0}
     ).sort("sort_order", 1).to_list(length=None)
     
-    # جلب المنتجات - فقط للعميل المحدد (مع إخفاء الحقول الحساسة: التكلفة/الربح/الوصفة)
+    # جلب المنتجات - فقط للعميل المحدد + المشروع
+    prod_query = {"tenant_id": tid, "is_available": {"$ne": False}, **proj_filter}
     products = await db.products.find(
-        {"tenant_id": tid, "is_available": {"$ne": False}},
+        prod_query,
         {
             "_id": 0, "cost": 0, "operating_cost": 0, "recipe": 0,
             "recipe_quantities": 0, "ingredients": 0, "raw_materials": 0, "bom": 0,

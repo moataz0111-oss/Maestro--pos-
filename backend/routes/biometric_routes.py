@@ -1,7 +1,15 @@
 """Biometric Device Routes (extracted from server.py)"""
-from fastapi import APIRouter
-from server import *  # noqa: F401,F403
-from server import (_calc_worked_hours_hhmm)
+from fastapi import APIRouter, Depends, HTTPException, Request, Body
+from typing import Optional
+from datetime import datetime, timezone, timedelta
+from pydantic import BaseModel
+import uuid
+import logging
+
+from server import *  # noqa: F401,F403,F405
+from server import (_calc_worked_hours_hhmm, db, get_current_user, get_user_tenant_id)
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -975,7 +983,7 @@ async def _auto_process_attendance_internal(current_user: dict):
                 actual = datetime.strptime(check_in, "%H:%M")
                 if actual > scheduled:
                     late_minutes = (actual - scheduled).seconds // 60
-            except:
+            except Exception:
                 pass
         
         # حساب الخروج المبكر
@@ -986,7 +994,7 @@ async def _auto_process_attendance_internal(current_user: dict):
                 actual_end = datetime.strptime(check_out, "%H:%M")
                 if actual_end < scheduled_end:
                     early_leave_minutes = (scheduled_end - actual_end).seconds // 60
-            except:
+            except Exception:
                 pass
         
         # تحديد الحالة

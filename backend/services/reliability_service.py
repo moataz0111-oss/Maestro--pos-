@@ -95,7 +95,7 @@ async def get_database_stats(db) -> Dict:
             stats["database_size"] = f"{db_stats.get('dataSize', 0) / (1024*1024):.2f} MB"
             stats["storage_size"] = f"{db_stats.get('storageSize', 0) / (1024*1024):.2f} MB"
             stats["indexes_size"] = f"{db_stats.get('indexSize', 0) / (1024*1024):.2f} MB"
-        except:
+        except Exception:
             pass
         
         return stats
@@ -153,14 +153,14 @@ async def cleanup_old_data(db, days_to_keep: int = 365) -> Dict:
     try:
         result = await db.notifications.delete_many({"created_at": {"$lt": cutoff_date}})
         results["notifications_deleted"] = result.deleted_count
-    except:
+    except Exception:
         pass
     
     # تنظيف سجلات التدقيق القديمة
     try:
         result = await db.audit_logs.delete_many({"created_at": {"$lt": cutoff_date}})
         results["audit_logs_deleted"] = result.deleted_count
-    except:
+    except Exception:
         pass
     
     return results

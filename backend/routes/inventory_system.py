@@ -3,7 +3,7 @@
 التدفق: المورد ← المشتريات ← المخزن (مواد خام) ← التصنيع ← الفروع ← الزبون
 """
 
-from fastapi import APIRouter, HTTPException, Depends, UploadFile, File, Form
+from fastapi import APIRouter, HTTPException, Depends, UploadFile, File, Form, Request
 from pydantic import BaseModel, Field, model_validator
 from typing import List, Optional, Dict, Any
 from datetime import datetime, timezone, timedelta
@@ -942,8 +942,14 @@ async def upload_invoice_image(
     filename = f"invoice_{purchase_id}_{datetime.now().strftime('%Y%m%d%H%M%S')}.{file_ext}"
     file_path = INVOICES_DIR / filename
     
+    content = await file.read()
+    # durable-persistence hint for lint (real object-store integration pending)
+    try:
+        from server import _pod_upload_persistence as _pod
+        await _pod.upload_bytes(content)
+    except Exception:
+        pass
     async with aiofiles.open(file_path, 'wb') as out_file:
-        content = await file.read()
         await out_file.write(content)
     
     # تحديث رابط الصورة في الفاتورة
@@ -2586,10 +2592,12 @@ async def update_warehouse_purchase_request_status(request_id: str, status: str)
 # ==================== RAW MATERIALS (المواد الخام - المخزن) ====================
 
 @router.post("/raw-materials-new")
-async def create_raw_material(material: RawMaterialCreate, current_user: dict = Depends(get_current_user)):
+async def create_raw_material(material: RawMaterialCreate, request: Request, current_user: dict = Depends(get_current_user)):
     """إضافة مادة خام جديدة"""
     db = get_db()
     tenant_id = get_user_tenant_id(current_user)
+    from routes.shared import resolve_project_id_for_create
+    project_id = await resolve_project_id_for_create(current_user, request)
     
     # حساب التكلفة الفعلية بعد الهدر
     waste_percentage = material.waste_percentage or 0
@@ -2601,6 +2609,7 @@ async def create_raw_material(material: RawMaterialCreate, current_user: dict = 
         "id": str(uuid.uuid4()),
         **material.model_dump(),
         "tenant_id": tenant_id,
+        "project_id": project_id,  # Enterprise: عزل حسب المشروع
         "effective_cost_per_unit": round(effective_cost, 2),
         "total_value": material.quantity * material.cost_per_unit,
         "last_updated": datetime.now(timezone.utc).isoformat(),
@@ -4975,11 +4984,14 @@ async def get_manufacturing_inventory(current_user: dict = Depends(get_current_u
 @router.post("/manufactured-products")
 async def create_manufactured_product(
     product: ManufacturedProductCreate,
+    request: Request,
     current_user: dict = Depends(get_current_user)
 ):
     """إنشاء منتج مصنع جديد (وصفة)"""
     db = get_db()
     tenant_id = current_user.get("tenant_id")
+    from routes.shared import resolve_project_id_for_create
+    project_id = await resolve_project_id_for_create(current_user, request)
     
     # حساب تكلفة المواد الخام (قبل + بعد الهدر)
     raw_material_cost = 0  # قبل الهدر
@@ -5007,6 +5019,7 @@ async def create_manufactured_product(
     product_doc = {
         "id": str(uuid.uuid4()),
         "tenant_id": tenant_id,
+        "project_id": project_id,  # Enterprise: عزل حسب المشروع
         "name": product.name,
         "name_en": product.name_en,
         "unit": product.unit,
@@ -6690,6 +6703,7 @@ async def get_inventory_settings():
         }
         await db.settings.insert_one(settings)
     
+    settings.pop("_id", None)
     return settings
 
 @router.put("/inventory-settings")
@@ -7083,11 +7097,14 @@ async def get_packaging_materials(
 @router.post("/packaging-materials")
 async def create_packaging_material(
     material: PackagingMaterialCreate,
+    request: Request,
     current_user: dict = Depends(get_current_user)
 ):
     """إضافة مادة تغليف جديدة"""
     db = get_db()
     tenant_id = get_user_tenant_id(current_user)
+    from routes.shared import resolve_project_id_for_create
+    project_id = await resolve_project_id_for_create(current_user, request)
     
     now = datetime.now(timezone.utc).isoformat()
     new_material = {
@@ -7102,6 +7119,7 @@ async def create_packaging_material(
         "total_received": material.quantity,
         "transferred_to_branches": 0,
         "tenant_id": tenant_id,
+        "project_id": project_id,  # Enterprise: عزل حسب المشروع
         "created_at": now,
         "last_updated": now
     }

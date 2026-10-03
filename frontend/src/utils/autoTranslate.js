@@ -1698,6 +1698,7 @@ const translationMap = {
   'التحكم في اسم النظام وهوية لوحة التحكم': { en: 'Control system name and dashboard identity', ku: '' },
   'اسم النظام (يظهر في Dashboard)': { en: 'System Name (shown in Dashboard)', ku: '' },
   'الاسم بالعربي (اختياري)': { en: 'Arabic Name (optional)', ku: '' },
+  'نظام إدارة المؤسسات': { en: 'Enterprise Management System', ku: '' },
   'نظام إدارة المطاعم': { en: 'Restaurant Management System', ku: '' },
   'الاسم بالإنجليزي (اختياري)': { en: 'English Name (optional)', ku: '' },
   'مشرف': { en: 'Supervisor', ku: '' },

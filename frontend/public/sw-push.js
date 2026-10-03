@@ -12,7 +12,7 @@ self.addEventListener('install', (event) => {
 // تفعيل Service Worker
 self.addEventListener('activate', (event) => {
   console.log('[SW] Activating service worker...');
-  event.waitUntil(clients.claim());
+  event.waitUntil(self.clients.claim());
 });
 
 // استقبال إشعارات Push
@@ -62,7 +62,7 @@ self.addEventListener('notificationclick', (event) => {
   const urlToOpen = ndata.url || '/';
 
   event.waitUntil(
-    clients.matchAll({ type: 'window', includeUncontrolled: true })
+    self.clients.matchAll({ type: 'window', includeUncontrolled: true })
       .then((clientList) => {
         // إذا كان التطبيق مفتوحاً، ركز عليه (للمكالمة لا نعيد التوجيه كي تبقى شاشة التتبّع وتظهر المكالمة)
         for (const client of clientList) {
@@ -72,8 +72,8 @@ self.addEventListener('notificationclick', (event) => {
           }
         }
         // وإلا افتح نافذة جديدة
-        if (clients.openWindow) {
-          return clients.openWindow(urlToOpen);
+        if (self.clients.openWindow) {
+          return self.clients.openWindow(urlToOpen);
         }
       })
   );

@@ -1,7 +1,11 @@
 """Smart Reports + Export (extracted from server.py)"""
-from fastapi import APIRouter
-from server import *  # noqa: F401,F403
-from server import (_sn)
+from fastapi import APIRouter, Depends, HTTPException
+from fastapi.responses import StreamingResponse
+from typing import Optional
+from datetime import datetime, timezone, timedelta
+from io import BytesIO
+from server import *  # noqa: F401,F403,F405
+from server import (_sn, db, get_current_user, build_tenant_query, get_user_tenant_id, UserRole)
 
 router = APIRouter()
 
@@ -524,7 +528,7 @@ async def export_smart_report_excel(
                 if hour in hourly_data:
                     hourly_data[hour]["orders"] += 1
                     hourly_data[hour]["sales"] += _sn(order.get("total"))
-            except:
+            except Exception:
                 pass
         
         ws.merge_cells('A1:D1')
@@ -558,7 +562,7 @@ async def export_smart_report_excel(
             try:
                 if len(str(cell.value)) > max_length:
                     max_length = len(str(cell.value))
-            except:
+            except Exception:
                 pass
         ws.column_dimensions[column].width = max(max_length + 2, 12)
     
@@ -687,7 +691,7 @@ async def export_smart_report_pdf(
                 if hour in hourly_data:
                     hourly_data[hour]["orders"] += 1
                     hourly_data[hour]["sales"] += _sn(order.get("total"))
-            except:
+            except Exception:
                 pass
         
         headers = ["الساعة", "عدد الطلبات", "المبيعات"]

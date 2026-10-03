@@ -37,7 +37,7 @@ class TestEmployeeBreakFields:
                     f"{BASE_URL}/api/employees/{self.test_employee_id}",
                     headers={"Authorization": f"Bearer {self.token}"}
                 )
-            except:
+            except Exception:
                 pass
     
     def test_01_login_success(self):

@@ -1,6 +1,13 @@
 """Coupons & Promotions (extracted from server.py)"""
-from fastapi import APIRouter
-from server import *  # noqa: F401,F403
+from fastapi import APIRouter, Depends, HTTPException
+from typing import Optional, List
+from datetime import datetime, timezone
+from pydantic import BaseModel
+import uuid
+import re
+
+from server import *  # noqa: F401,F403,F405
+from server import (db, get_current_user, get_user_tenant_id, build_tenant_query, UserRole)
 
 router = APIRouter()
 

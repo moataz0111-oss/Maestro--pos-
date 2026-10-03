@@ -1,7 +1,19 @@
 """Export to PDF (extracted from server.py)"""
 from fastapi import APIRouter
 from server import *  # noqa: F401,F403
-from server import (_sn)
+from server import (  # noqa: F401
+    _sn,
+    Optional,
+    Depends,
+    get_current_user,
+    get_user_tenant_id,
+    datetime,
+    timezone,
+    UserRole,
+    BytesIO,
+    db,
+    StreamingResponse,
+)
 
 router = APIRouter()
 
@@ -282,7 +294,7 @@ async def export_employee_salary_slip_pdf(
     from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
     
     # Get salary slip data
-    slip_data = await get_employee_salary_slip(employee_id, month, current_user)
+    slip_data = await get_employee_salary_slip(employee_id, month, current_user)  # noqa: F405
     employee = slip_data["employee"]
     
     buffer = BytesIO()

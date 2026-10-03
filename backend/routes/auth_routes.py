@@ -15,6 +15,15 @@ from .shared import (
 def _get_server_helpers():
     from server import encrypt_plain_password, issue_user_session
     return encrypt_plain_password, issue_user_session
+
+# Re-exports (lazy) — يُملأان عند أول استخدام
+encrypt_plain_password = None  # type: ignore
+issue_user_session = None  # type: ignore
+
+def _ensure_server_helpers():
+    global encrypt_plain_password, issue_user_session
+    if encrypt_plain_password is None or issue_user_session is None:
+        encrypt_plain_password, issue_user_session = _get_server_helpers()
 from ..models import (
     UserCreate, UserLogin, UserResponse, UserUpdate, PasswordReset
 )
@@ -31,6 +40,7 @@ async def register(user: UserCreate):
     if existing:
         raise HTTPException(status_code=400, detail="المستخدم موجود بالفعل")
     
+    _ensure_server_helpers()
     user_doc = {
         "id": str(uuid.uuid4()),
         "username": user.username,
@@ -101,6 +111,7 @@ async def login(credentials: UserLogin):
         del user["password_hash"]
     
     # ✅ جلسة نشطة واحدة لكل مستخدم (باستثناء admin/super_admin)
+    _ensure_server_helpers()
     _sid = await issue_user_session(user["id"], user.get("role"))
     token = create_token(user["id"], user["role"], user.get("branch_id"), user.get("tenant_id"), session_id=_sid)
     return {"user": user, "token": token}
@@ -164,6 +175,7 @@ async def impersonate_user(user_id: str, current_user: dict = Depends(get_curren
     }
     await db.impersonation_logs.insert_one(audit_log)
     
+    _ensure_server_helpers()
     _sid = await issue_user_session(target_user["id"], target_user.get("role"))
     token = create_token(target_user["id"], target_user["role"], target_user.get("branch_id"), target_user.get("tenant_id"), session_id=_sid)
     

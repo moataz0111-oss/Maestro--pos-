@@ -46,7 +46,7 @@ class TestExtrasQuantity:
         for order_id in self.created_order_ids:
             try:
                 self.session.delete(f"{BASE_URL}/api/orders/{order_id}")
-            except:
+            except Exception:
                 pass
     
     def test_01_login_success(self):

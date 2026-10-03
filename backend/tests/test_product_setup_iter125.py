@@ -65,7 +65,7 @@ class TestProductSetup:
         for product_id in self.test_product_ids:
             try:
                 self.session.delete(f"{BASE_URL}/api/products/{product_id}")
-            except:
+            except Exception:
                 pass
     
     # ==================== API Health Check ====================

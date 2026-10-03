@@ -80,7 +80,7 @@ async def create_reservation(reservation: ReservationCreate, current_user: dict 
     if last_reservation and last_reservation.get("reservation_number"):
         try:
             res_num = int(last_reservation["reservation_number"].replace("RES-", "")) + 1
-        except:
+        except Exception:
             res_num = 1
     
     reservation_doc = {

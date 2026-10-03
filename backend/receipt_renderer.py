@@ -53,7 +53,7 @@ def _tw(draw, text, font):
     try:
         bb = draw.textbbox((0, 0), display_text, font=font)
         return bb[2] - bb[0], bb[3] - bb[1]
-    except:
+    except Exception:
         return 100, 16
 
 
@@ -62,7 +62,7 @@ def _txt(draw, text, x, y, font, anchor='lt'):
     display_text = _reshape(str(text))
     try:
         draw.text((x, y), display_text, font=font, fill=0, anchor=anchor)
-    except:
+    except Exception:
         draw.text((x, y), display_text, font=font, fill=0)
 
 
@@ -164,7 +164,7 @@ def render_receipt_image(order, config=None):
             logo_img.thumbnail((180, 90), Image.LANCZOS)
             img.paste(logo_img, ((PW - logo_img.width) // 2, y))
             y += logo_img.height + 4
-        except:
+        except Exception:
             pass
 
     # ══════════ RESTAURANT NAME ══════════

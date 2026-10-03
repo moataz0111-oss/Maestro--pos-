@@ -1,7 +1,7 @@
 {
   "short_name": "Maestro EGP",
-  "name": "Maestro EGP - نظام إدارة المطاعم",
-  "description": "نظام متكامل لإدارة المطاعم والمبيعات",
+  "name": "Maestro EGP — نظام إدارة المؤسسات",
+  "description": "نظام متكامل لإدارة المؤسسات متعددة الأنشطة (مطاعم، صالونات، عيادات، متاجر، شركات توصيل)",
   "icons": [
     {
       "src": "/icons/admin-icon-192.png",

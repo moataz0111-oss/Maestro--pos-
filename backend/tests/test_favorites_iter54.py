@@ -31,7 +31,7 @@ class TestFavoritesAPI:
                     f"{BASE_URL}/api/customer/favorites/{self.test_favorite_id}",
                     params={"phone": TEST_PHONE}
                 )
-            except:
+            except Exception:
                 pass
     
     def test_add_favorite(self):

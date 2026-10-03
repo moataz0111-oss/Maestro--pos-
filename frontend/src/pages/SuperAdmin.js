@@ -5674,7 +5674,7 @@ export default function SuperAdmin() {
                       <Label className="text-gray-300">{t('الاسم بالعربي (اختياري)')}</Label>
                       <Input
                         type="text"
-                        placeholder={t('نظام إدارة المطاعم')}
+                        placeholder={t('نظام إدارة المؤسسات')}
                         value={invoiceSettings.system_name_ar || ''}
                         onChange={(e) => setInvoiceSettings({...invoiceSettings, system_name_ar: e.target.value})}
                         className="bg-[#1A284E]/50 border-[#2A3A66] text-white"

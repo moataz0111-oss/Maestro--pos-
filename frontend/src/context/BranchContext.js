@@ -49,6 +49,17 @@ export const BranchProvider = ({ children }) => {
     }
   }, [isAuthenticated, user]);
 
+  // إعادة جلب الفروع عند تغيير المشروع
+  useEffect(() => {
+    const handler = () => {
+      if (isAuthenticated && user) {
+        fetchBranches();
+      }
+    };
+    window.addEventListener('project-changed', handler);
+    return () => window.removeEventListener('project-changed', handler);
+  }, [isAuthenticated, user]);
+
   // جلب عدد الطلبات المعلقة لكل فرع
   const fetchPendingOrdersCounts = useCallback(async (branchesList) => {
     if (!branchesList || branchesList.length === 0) return;
@@ -165,7 +176,14 @@ export const BranchProvider = ({ children }) => {
       const isFirstLoad = sessionStorage.getItem('branches_loaded') !== 'true';
       // لا نغير حالة التحميل أبداً بعد التحميل الأول
       
-      const res = await axios.get(`${API}/branches`);
+      const res = await axios.get(`${API}/branches`, {
+        params: (() => {
+          const selectedProjectId = localStorage.getItem('selectedProjectId');
+          return selectedProjectId && selectedProjectId !== 'all'
+            ? { project_id: selectedProjectId }
+            : {};
+        })()
+      });
       const branchesData = res.data || [];
       setBranches(branchesData);
       

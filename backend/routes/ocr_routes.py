@@ -1,7 +1,16 @@
 """OCR Invoice Extraction (extracted from server.py)"""
-from fastapi import APIRouter
-from server import *  # noqa: F401,F403
-from server import (_sn)
+from fastapi import APIRouter, Depends, HTTPException
+from typing import Optional
+from datetime import datetime, timezone
+from pydantic import BaseModel
+import uuid
+import os
+import asyncio
+import logging
+
+from server import *  # noqa: F401,F403,F405
+from server import (_sn, db, get_current_user, get_user_tenant_id, build_tenant_query,
+                    PurchaseOrderCreate, PurchaseOrderStatusUpdate, RawMaterialCreate)
 
 router = APIRouter()
 
@@ -197,7 +206,7 @@ async def create_purchase_order(order: PurchaseOrderCreate, current_user: dict =
     if last_order and last_order.get("order_number"):
         try:
             order_num = int(last_order["order_number"].replace("PO-", "")) + 1
-        except:
+        except Exception:
             order_num = 1
     
     order_doc = {

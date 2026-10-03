@@ -758,7 +758,7 @@ export default function EnterprisePreview() {
         </button>
       </div>
 
-      <div className="sticky top-0 z-30 bg-[#0D1A2E]/95 backdrop-blur-xl border-b border-[#253959] px-4 md:px-6">
+      <div className="sticky top-0 z-30 bg-[#0D1A2E]/95 backdrop-blur-xl border-b border-[#253959] px-4 md:px-6 hidden">
         <div className="flex overflow-x-auto no-scrollbar gap-1 py-3">
           {TABS.map(({ key, label, Icon }) => (
             <button

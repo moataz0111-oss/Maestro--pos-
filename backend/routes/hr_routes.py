@@ -1,7 +1,16 @@
 """HR Routes (extracted from server.py)"""
-from fastapi import APIRouter
-from server import *  # noqa: F401,F403
-from server import (_resolve_business_date)
+from fastapi import APIRouter, Depends, HTTPException, Request, Query
+from typing import Optional, List, Dict, Any
+from datetime import datetime, timezone
+import uuid
+import logging
+
+from server import *  # noqa: F401,F403,F405
+from server import (_resolve_business_date, db, get_current_user, get_user_tenant_id,
+                    build_tenant_query, UserRole, EmployeeResponse, EmployeeCreate, EmployeeUpdate,
+                    AttendanceResponse, AttendanceCreate, AdvanceResponse, AdvanceCreate)
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -10,7 +19,7 @@ router = APIRouter()
 # --- الموظفين ---
 
 @router.post("/employees", response_model=EmployeeResponse)
-async def create_employee(employee: EmployeeCreate, current_user: dict = Depends(get_current_user)):
+async def create_employee(employee: EmployeeCreate, request: Request, current_user: dict = Depends(get_current_user)):
     """إنشاء موظف جديد + مزامنة تلقائية لكل أجهزة البصمة في فرعه.
     
     🔥 عند إنشاء موظف جديد بـ biometric_uid، تُنشأ جوبات push تلقائياً لكل أجهزة
@@ -22,10 +31,15 @@ async def create_employee(employee: EmployeeCreate, current_user: dict = Depends
     # قبول biometric_id كـ alias لـ biometric_uid (backwards compat)
     payload_dict = employee.model_dump()
     extra_bio = getattr(employee, 'biometric_id', None) if hasattr(employee, 'biometric_id') else None
+    # 🏢 حقن project_id (من body أو X-Project-Id header أو المشروع الافتراضي)
+    from .shared import resolve_project_id_for_create
+    project_id = payload_dict.pop("project_id", None)
+    resolved_project = await resolve_project_id_for_create(current_user, request, project_id)
     employee_doc = {
         "id": str(uuid.uuid4()),
         **payload_dict,
         "tenant_id": tenant_id,
+        "project_id": resolved_project,  # Enterprise: عزل الموظف بالمشروع
         "is_active": True,
         "created_at": datetime.now(timezone.utc).isoformat()
     }

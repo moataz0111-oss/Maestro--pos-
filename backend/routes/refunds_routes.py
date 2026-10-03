@@ -1,7 +1,12 @@
 """Refund/Return Routes (extracted from server.py)"""
-from fastapi import APIRouter
-from server import *  # noqa: F401,F403
-from server import (_sn)
+from fastapi import APIRouter, Depends, HTTPException, Query
+from typing import Optional, List, Dict, Any
+from datetime import datetime, timezone
+from pydantic import BaseModel, ConfigDict
+import uuid
+
+from server import *  # noqa: F401,F403,F405
+from server import (_sn, db, get_current_user, get_user_tenant_id, build_tenant_query, UserRole)
 
 router = APIRouter()
 

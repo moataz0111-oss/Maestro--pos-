@@ -206,7 +206,7 @@ def check_printer_status(ip, port, timeout=2):
         sock.connect((ip, int(port)))
         sock.close()
         return True
-    except:
+    except Exception:
         return False
 
 

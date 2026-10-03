@@ -363,4 +363,104 @@ async def resolve_business_date(tenant_id: Optional[str], branch_id: Optional[st
         if started:
             return iraq_date_from_utc(started)
     return iraq_date_from_utc()
-iraq_date_from_utc()
+
+
+# ==================== ENTERPRISE PROJECT SCOPE HELPER ====================
+def user_project_scope(user: dict) -> Optional[str]:
+    """يُرجع project_id للمستخدم إذا كان مقيداً بمشروع، وإلا None (Enterprise Owner)."""
+    ENTERPRISE_WIDE = {"super_admin", "admin", "general_manager", "enterprise_owner"}
+    if user.get("role") in ENTERPRISE_WIDE:
+        return None
+    return user.get("project_id")
+
+
+def scoped_query_for_user(user: dict, base: Optional[dict] = None,
+                          explicit_project_id: Optional[str] = None) -> dict:
+    """
+    يبني Mongo query يضيف فلتر tenant_id + project_id تلقائياً.
+    استخدمه في أي endpoint يقرأ بيانات قد تحوي project_id لضمان العزل.
+    - Enterprise owner: يشوف كل شيء (اختياري: يفلتر بمشروع إذا مرّر explicit_project_id)
+    - Project-restricted user: إجباري يفلتر بمشروعه.
+    """
+    query = dict(base or {})
+    tenant_id = get_user_tenant_id(user)
+    if tenant_id and user.get("role") != UserRole.SUPER_ADMIN:
+        query["tenant_id"] = tenant_id
+
+    scope = user_project_scope(user)
+    if scope:
+        # مقيد بمشروع → عزل صارم (يشمل الوثائق القديمة بلا project_id ضمن نفس tenant)
+        query["$or"] = [
+            {"project_id": scope},
+            {"project_id": {"$exists": False}},
+            {"project_id": None},
+        ]
+    elif explicit_project_id and explicit_project_id != "all":
+        query["project_id"] = explicit_project_id
+    return query
+
+
+async def resolve_project_id_for_create(user: dict, request=None, explicit: Optional[str] = None) -> Optional[str]:
+    """
+    يقرر project_id الذي يجب حفظه عند إنشاء مورد جديد (فئة/منتج/فرع/مادة خام…).
+    الترتيب:
+      1) user مقيد بمشروع  → إجبارياً project_id الخاص به.
+      2) explicit param أو X-Project-Id header (Enterprise owner اختار مشروعاً) → استخدمه.
+      3) fallback → المشروع الافتراضي للمستأجر (is_default=True).
+    """
+    scope = user_project_scope(user)
+    if scope:
+        return scope
+    candidate = explicit
+    if (not candidate) and request is not None:
+        try:
+            candidate = request.headers.get("x-project-id") or request.headers.get("X-Project-Id")
+        except Exception:
+            candidate = None
+        if not candidate:
+            try:
+                candidate = request.query_params.get("project_id")
+            except Exception:
+                pass
+    if candidate and candidate not in ("all", "null", "undefined"):
+        return candidate
+    tenant_id = get_user_tenant_id(user)
+    if tenant_id:
+        db = get_database()
+        proj = await db.projects.find_one(
+            {"tenant_id": tenant_id, "is_default": True},
+            {"id": 1, "_id": 0}
+        )
+        if proj:
+            return proj.get("id")
+    return None
+
+
+# ==================== MULTI-CURRENCY CONVERSION HELPERS ====================
+async def get_project_rates_map(tenant_id: str) -> dict:
+    """
+    يُرجع dict {project_id: exchange_rate} لكل مشاريع المستأجر.
+    يستخدم في التقارير المجمّعة لتحويل المبالغ من عملة المشروع لعملة المؤسسة الرئيسية.
+    """
+    if not tenant_id:
+        return {}
+    db = get_database()
+    projects = await db.projects.find(
+        {"tenant_id": tenant_id, "is_active": True},
+        {"id": 1, "exchange_rate": 1, "currency": 1, "_id": 0}
+    ).to_list(length=None)
+    return {p["id"]: {"rate": p.get("exchange_rate") or 1.0, "currency": p.get("currency", "IQD")} for p in projects}
+
+
+def convert_to_main_currency(amount: float, project_id: Optional[str], rates_map: dict) -> float:
+    """
+    يحوّل مبلغاً من عملة المشروع إلى العملة الرئيسية للمؤسسة.
+    - إذا لم يكن للمشروع rate أو كان = 1.0 → المبلغ كما هو.
+    - وثائق قديمة بلا project_id → يفترض العملة الرئيسية (rate=1.0).
+    """
+    if not amount or not project_id:
+        return amount or 0.0
+    info = rates_map.get(project_id)
+    if not info:
+        return amount
+    return round(float(amount) * float(info.get("rate") or 1.0), 4)

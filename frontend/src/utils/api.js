@@ -1,3 +1,5 @@
+import axios from 'axios';
+
 // ملف مركزي لتحديد رابط الـ API
 // يعمل تلقائياً مع بيئة المعاينة والإنتاج والتطوير
 
@@ -63,5 +65,32 @@ export const clearCache = (urlPattern) => {
     apiCache.clear();
   }
 };
+
+// ==================== ENTERPRISE PROJECT SCOPE INTERCEPTOR ====================
+// عند تفعيل وضع المؤسسة واختيار مشروع محدد، يُضاف تلقائياً X-Project-Id لكل طلب
+// + project_id لطلبات GET/DELETE. الخلفية تستخدمه لعزل القراءة/الكتابة بالمشروع.
+if (typeof window !== 'undefined' && !window.__PROJECT_INTERCEPTOR_INSTALLED__) {
+  window.__PROJECT_INTERCEPTOR_INSTALLED__ = true;
+  axios.interceptors.request.use((config) => {
+    try {
+      const pid = localStorage.getItem('selectedProjectId');
+      if (pid && pid !== 'all' && pid !== 'null' && pid !== 'undefined') {
+        config.headers = config.headers || {};
+        // إذا لم يمرَّر header يدوياً، اضفه
+        if (!config.headers['X-Project-Id'] && !config.headers['x-project-id']) {
+          config.headers['X-Project-Id'] = pid;
+        }
+        const method = (config.method || 'get').toLowerCase();
+        if (method === 'get' || method === 'delete') {
+          const currentParams = config.params || {};
+          if (currentParams.project_id === undefined) {
+            config.params = { ...currentParams, project_id: pid };
+          }
+        }
+      }
+    } catch (e) { /* noop */ }
+    return config;
+  });
+}
 
 export default API_URL;

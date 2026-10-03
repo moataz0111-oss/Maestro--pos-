@@ -5,6 +5,7 @@ import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { useAuth } from '../context/AuthContext';
 import { useBranch } from '../context/BranchContext';
+import { useProject } from '../context/ProjectContext';
 import { useTranslation } from '../hooks/useTranslation';
 import { formatPrice, formatPriceCompact } from '../utils/currency';
 import { Button } from '../components/ui/button';
@@ -1241,7 +1242,7 @@ const CreditReportTab = ({ creditReport, t, formatPrice, fetchReports, handlePri
 };
 
 // ===================== Cash Register Closing Report Tab (تبويب إغلاق الصندوق) =====================
-const CashRegisterClosingTab = ({ t, formatPrice, selectedBranchId, branches, getBranchIdForApi }) => {
+const CashRegisterClosingTab = ({ t, formatPrice, selectedBranchId, branches, getBranchIdForApi, enterpriseEnabled, projects, selectedProjectId }) => {
   const [report, setReport] = useState(null);
   const [loading, setLoading] = useState(false);
   // فلاتر التاريخ الخاصة بتقرير إغلاق الصندوق
@@ -1251,6 +1252,23 @@ const CashRegisterClosingTab = ({ t, formatPrice, selectedBranchId, branches, ge
   });
   const [closingsHistory, setClosingsHistory] = useState([]);
   const [localBranchId, setLocalBranchId] = useState(selectedBranchId || '');
+  const [localProjectId, setLocalProjectId] = useState(selectedProjectId || 'all');
+
+  // فروع المشروع المختار فقط. إذا "كل المشاريع" → كل الفروع.
+  const filteredBranches = React.useMemo(() => {
+    if (!enterpriseEnabled || !localProjectId || localProjectId === 'all') {
+      return branches || [];
+    }
+    return (branches || []).filter(b => b.project_id === localProjectId);
+  }, [branches, localProjectId, enterpriseEnabled]);
+
+  // عند تغيير المشروع: إن كان الفرع المحدد لا ينتمي للفروع المفلترة، أعد الاختيار إلى "جميع الفروع".
+  useEffect(() => {
+    if (!localBranchId) return;
+    const stillValid = filteredBranches.some(b => b.id === localBranchId);
+    if (!stillValid) setLocalBranchId('');
+  }, [localProjectId, filteredBranches]); // eslint-disable-line react-hooks/exhaustive-deps
+
   const [viewMode, setViewMode] = useState('individual'); // 'individual' = كل شفت لوحده، 'all' = مجمّع، 'cashier' = حسب الكاشير
   const [expandedCashier, setExpandedCashier] = useState(null);
   const [integrity, setIntegrity] = useState(null);
@@ -1574,6 +1592,10 @@ const CashRegisterClosingTab = ({ t, formatPrice, selectedBranchId, branches, ge
       params.append('end_date', dateRange.end + 'T23:59:59');
       const branchId = localBranchId || getBranchIdForApi();
       if (branchId && branchId !== 'all') params.append('branch_id', branchId);
+      // فلتر المشروع (Enterprise Mode) — يُلحق فقط عند اختيار مشروع محدد
+      if (enterpriseEnabled && localProjectId && localProjectId !== 'all') {
+        params.append('project_id', localProjectId);
+      }
       
       const token = localStorage.getItem('token');
       const headers = token ? { Authorization: `Bearer ${token}` } : {};
@@ -1825,19 +1847,40 @@ const CashRegisterClosingTab = ({ t, formatPrice, selectedBranchId, branches, ge
             className="bg-[#070E22]/50 border-emerald-700/50 text-white w-40"
           />
         </div>
-        <div>
-          <Label className="text-emerald-300">{t('الفرع')}</Label>
-          <select
-            value={localBranchId}
-            onChange={(e) => setLocalBranchId(e.target.value)}
-            className="bg-[#070E22]/50 border border-emerald-700/50 text-white rounded-md px-3 py-2 w-44"
-          >
-            <option value="">{t('جميع الفروع')}</option>
-            {branches?.map(branch => (
-              <option key={branch.id} value={branch.id}>{branch.name}</option>
-            ))}
-          </select>
-        </div>
+        {/* 🏢 فلتر المشروع (Enterprise Mode فقط) — يظهر أولاً ليؤثر على قائمة الفروع */}
+        {enterpriseEnabled && projects && projects.length > 0 && (
+          <div>
+            <Label className="text-emerald-300">🏢 {t('المشروع')}</Label>
+            <select
+              value={localProjectId}
+              onChange={(e) => setLocalProjectId(e.target.value)}
+              className="bg-[#070E22]/50 border border-emerald-700/50 text-white rounded-md px-3 py-2 w-48"
+              data-testid="cash-report-project-filter"
+            >
+              <option value="all">{t('كل المشاريع')}</option>
+              {projects.map(p => (
+                <option key={p.id} value={p.id}>{p.name}</option>
+              ))}
+            </select>
+          </div>
+        )}
+        {/* فلتر الفرع — يختفي إذا كان المشروع المختار بلا فروع */}
+        {filteredBranches.length > 0 && (
+          <div>
+            <Label className="text-emerald-300">{t('الفرع')}</Label>
+            <select
+              value={localBranchId}
+              onChange={(e) => setLocalBranchId(e.target.value)}
+              className="bg-[#070E22]/50 border border-emerald-700/50 text-white rounded-md px-3 py-2 w-44"
+              data-testid="cash-report-branch-filter"
+            >
+              <option value="">{t('جميع الفروع')}</option>
+              {filteredBranches.map(branch => (
+                <option key={branch.id} value={branch.id}>{branch.name}</option>
+              ))}
+            </select>
+          </div>
+        )}
         <Button onClick={fetchReport} disabled={loading} className="bg-emerald-600 hover:bg-emerald-700">
           <RefreshCw className={`h-4 w-4 ml-2 ${loading ? 'animate-spin' : ''}`} />
           {t('تحديث')}
@@ -4306,6 +4349,7 @@ const DeliveryReportTab = ({ deliveryCreditsReport, t, formatPrice, fetchReports
 export default function Reports() {
   const { user, hasRole } = useAuth();
   const { selectedBranchId, branches, getBranchIdForApi, canSelectAllBranches } = useBranch();
+  const { enterpriseEnabled, projects, selectedProjectId } = useProject();
   const { t, isRTL } = useTranslation();
   const navigate = useNavigate();
   
@@ -5381,6 +5425,9 @@ export default function Reports() {
               selectedBranchId={selectedBranchId}
               branches={branches}
               getBranchIdForApi={getBranchIdForApi}
+              enterpriseEnabled={enterpriseEnabled}
+              projects={projects}
+              selectedProjectId={selectedProjectId}
             />
           </TabsContent>
 

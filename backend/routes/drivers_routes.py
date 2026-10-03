@@ -64,6 +64,7 @@ async def create_driver(driver: DriverCreate, current_user: dict = Depends(get_c
         "pin": driver.pin,  # حفظ الرمز السري
         "user_id": driver.user_id,
         "tenant_id": get_user_tenant_id(current_user),
+        "project_id": current_user.get("project_id"),
         "is_active": True,
         "is_available": True,
         "current_order_id": None,
@@ -78,12 +79,21 @@ async def create_driver(driver: DriverCreate, current_user: dict = Depends(get_c
     return driver_doc
 
 @router.get("", response_model=List[DriverResponse])
-async def get_drivers(branch_id: Optional[str] = None, include_orders: bool = False, current_user: dict = Depends(get_current_user)):
-    """جلب قائمة السائقين"""
+async def get_drivers(branch_id: Optional[str] = None, include_orders: bool = False,
+                      project_id: Optional[str] = None,
+                      current_user: dict = Depends(get_current_user)):
+    """جلب قائمة السائقين - مع عزل حسب المشروع"""
     db = get_database()
     query = build_tenant_query(current_user)
     if branch_id:
         query["branch_id"] = branch_id
+    # === Enterprise: عزل حسب المشروع ===
+    upid = current_user.get("project_id")
+    ER = [UserRole.SUPER_ADMIN, UserRole.ADMIN, UserRole.GENERAL_MANAGER, "enterprise_owner"]
+    if upid and current_user.get("role") not in ER:
+        query["$or"] = [{"project_id": upid}, {"project_id": {"$exists": False}}, {"project_id": None}]
+    elif project_id and project_id != "all":
+        query["project_id"] = project_id
     drivers = await db.drivers.find(query, {"_id": 0}).to_list(length=None)
     
     if include_orders:

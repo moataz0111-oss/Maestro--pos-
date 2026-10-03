@@ -5,6 +5,7 @@ import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { useAuth } from '../context/AuthContext';
 import { useBranch } from '../context/BranchContext';
+import { useProject } from '../context/ProjectContext';
 import { useOffline } from '../context/OfflineContext';
 import { getLocalTenantInfo, getLocalStats, getLocalDashboardSettings, getTodayOrders } from '../lib/offlineStorage';
 import db, { STORES } from '../lib/offlineDB';
@@ -116,6 +117,7 @@ export default function Dashboard() {
   const { user, logout, hasRole } = useAuth();
   const { theme, setTheme, isDark } = useTheme();
   const { selectedBranchId, branches, getBranchIdForApi } = useBranch();
+  const { enterpriseEnabled, getSelectedProject } = useProject();
   const { t, lang, isRTL } = useTranslation();
   const { isOnline, isOffline } = useOffline();
   const navigate = useNavigate();
@@ -2057,28 +2059,70 @@ export default function Dashboard() {
       <header className={`sticky ${isImpersonating ? 'top-[40px]' : 'top-0'} z-50 glass border-b border-border/50 px-3 sm:px-6 py-4`}>
         <div className="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-center gap-4">
-            {/* Logo - يعرض شعار العميل إذا وجد - دائري */}
-            <div className="w-12 h-12 bg-primary rounded-full flex items-center justify-center overflow-hidden shadow-lg">
-              {tenantInfo?.logo_url ? (
-                <img 
-                  src={tenantInfo.logo_url.startsWith('http') ? tenantInfo.logo_url : `${BACKEND_URL}${tenantInfo.logo_url}`} 
-                  alt="Logo" 
-                  className="w-full h-full object-cover"
-                  onError={(e) => {
-                    e.target.style.display = 'none';
-                    e.target.nextElementSibling && (e.target.nextElementSibling.style.display = 'flex');
-                  }}
-                />
-              ) : null}
-              <span className={`text-xl font-black text-primary-foreground font-cairo ${tenantInfo?.logo_url ? 'hidden' : 'flex'}`}>
-                {tenantInfo?.name?.charAt(0) || 'M'}
-              </span>
+            {/* Logo - يعرض شعار المشروع المحدد (Enterprise) أو شعار العميل - دائري */}
+            <div className="w-12 h-12 bg-primary rounded-full flex items-center justify-center overflow-hidden shadow-lg" data-testid="tenant-header-logo">
+              {(() => {
+                const selectedProject = getSelectedProject && getSelectedProject();
+                const activeLogoUrl = (enterpriseEnabled && selectedProject?.logo_url)
+                  ? selectedProject.logo_url
+                  : tenantInfo?.logo_url;
+                const activeName = (enterpriseEnabled && selectedProject)
+                  ? selectedProject.name
+                  : tenantInfo?.name;
+                return (
+                  <>
+                    {activeLogoUrl ? (
+                      <img
+                        src={activeLogoUrl.startsWith('http') ? activeLogoUrl : `${BACKEND_URL}${activeLogoUrl}`}
+                        alt="Logo"
+                        className="w-full h-full object-cover"
+                        onError={(e) => {
+                          e.target.style.display = 'none';
+                          e.target.nextElementSibling && (e.target.nextElementSibling.style.display = 'flex');
+                        }}
+                      />
+                    ) : null}
+                    <span className={`text-xl font-black text-primary-foreground font-cairo ${activeLogoUrl ? 'hidden' : 'flex'}`}>
+                      {activeName?.charAt(0) || 'M'}
+                    </span>
+                  </>
+                );
+              })()}
             </div>
             <div>
-              <h1 className="text-xl font-bold font-cairo text-foreground">
-                {lang === 'en' ? (tenantInfo?.name_en || tenantInfo?.name || 'Maestro') : (tenantInfo?.name || tenantInfo?.name_en || 'Maestro')}
+              <h1 className="text-xl font-bold font-cairo text-foreground" data-testid="tenant-header-title">
+                {(() => {
+                  const selectedProject = getSelectedProject && getSelectedProject();
+                  // Enterprise mode + مشروع محدد → اسم المشروع
+                  if (enterpriseEnabled && selectedProject) {
+                    return lang === 'en'
+                      ? (selectedProject.name_en || selectedProject.name)
+                      : (selectedProject.name || selectedProject.name_en);
+                  }
+                  // Enterprise mode + كل المشاريع → استبدل "مطعم" بـ "مؤسسة"
+                  const baseName = lang === 'en'
+                    ? (tenantInfo?.name_en || tenantInfo?.name || 'Maestro')
+                    : (tenantInfo?.name || tenantInfo?.name_en || 'Maestro');
+                  if (enterpriseEnabled) {
+                    // استبدال "مطعم" بـ "مؤسسة" في الاسم — وإن لم يوجد "مطعم" أضف "مؤسسة" كبادئة
+                    if (/مطعم/.test(baseName)) return baseName.replace(/مطعم/g, t('مؤسسة'));
+                    if (/restaurant/i.test(baseName)) return baseName.replace(/restaurant/gi, 'Enterprise');
+                    return `${t('مؤسسة')} ${baseName}`;
+                  }
+                  return baseName;
+                })()}
               </h1>
-              <p className="text-sm text-muted-foreground">{t('مرحباً')}، {lang === 'en' ? (user?.full_name_en || user?.full_name || user?.username || user?.email?.split('@')[0]) : (user?.full_name || user?.full_name_en || user?.username || user?.email?.split('@')[0])}</p>
+              <p className="text-sm text-muted-foreground">
+                {(() => {
+                  const selectedProject = getSelectedProject && getSelectedProject();
+                  if (enterpriseEnabled && selectedProject) {
+                    const activityLabels = { restaurant: 'مطعم', salon: 'صالون', clinic: 'عيادة', supermarket: 'سوبرماركت', distribution: 'توزيع', delivery_company: 'شركة توصيل', manufacturing: 'تصنيع', retail: 'تجزئة', other: 'أخرى' };
+                    const activity = activityLabels[selectedProject.activity_type] || '';
+                    return `${activity ? `${t(activity)} · ` : ''}${t('مرحباً')}، ${lang === 'en' ? (user?.full_name_en || user?.full_name || user?.username || user?.email?.split('@')[0]) : (user?.full_name || user?.full_name_en || user?.username || user?.email?.split('@')[0])}`;
+                  }
+                  return `${t('مرحباً')}، ${lang === 'en' ? (user?.full_name_en || user?.full_name || user?.username || user?.email?.split('@')[0]) : (user?.full_name || user?.full_name_en || user?.username || user?.email?.split('@')[0])}`;
+                })()}
+              </p>
             </div>
           </div>
 

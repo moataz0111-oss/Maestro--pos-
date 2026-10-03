@@ -1,9 +1,29 @@
 """Super Admin routes (extracted from server.py)"""
-from fastapi import APIRouter
-from server import *  # noqa: F401,F403
+from fastapi import APIRouter, Depends, HTTPException, Request, BackgroundTasks, Body
+from typing import Optional
+from datetime import datetime, timezone, timedelta
+from pydantic import BaseModel
+import uuid
+import os
+import bcrypt
+import asyncio
+import logging
+
+from server import *  # noqa: F401,F403,F405
 from server import (_client_ip, _load_email_config, _mask_phone, _phone_to_e164,
                     _refresh_blocked_ips, _refresh_security_config, _save_owner_ip, _sn,
-                    _re_rbac, _twilio_verify, _wa_free, get_owner_recovery_emails)
+                    _re_rbac, _twilio_verify, _wa_free, get_owner_recovery_emails,
+                    db, encrypt_plain_password, record_audit, verify_super_admin, UserRole,
+                    check_login_lock, record_login_fail, clear_login_attempts,
+                    SUPER_ADMIN_SECRET, verify_password, hash_password, create_token,
+                    two_fa_enabled, is_device_trusted, start_2fa_verification,
+                    OWNER_RECOVERY_EMAILS, trust_device, issue_user_session,
+                    TenantCreate, send_welcome_email, SMTP_HOST, SMTP_PORT, SMTP_USER,
+                    SMTP_FROM_NAME, SENDER_EMAIL, build_branded_email_html, send_system_email,
+                    NotificationSettings, sanitize_text, email_transport_configured,
+                    MAX_LOGIN_FAILS, decrypt_plain_password)
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -844,7 +864,7 @@ async def update_tenant(tenant_id: str, updates: dict, background_tasks: Backgro
             if isinstance(current_end, str):
                 try:
                     base_date = datetime.fromisoformat(current_end.replace('Z', '+00:00'))
-                except:
+                except Exception:
                     base_date = datetime.now()
             else:
                 base_date = current_end
@@ -1330,7 +1350,7 @@ async def get_super_admin_stats(current_user: dict = Depends(verify_super_admin)
     
     total_users = await db.users.count_documents({
         "role": {"$nin": [UserRole.SUPER_ADMIN, UserRole.ADMIN]},
-        "tenant_id": {"$exists": True, "$ne": None, "$ne": "default", "$nin": demo_ids}
+        "tenant_id": {"$exists": True, "$nin": [None, "default", *demo_ids]}
     })
     
     # حساب الطلبات فقط للعملاء الموجودين فعلاً (استبعاد الطلبات اليتيمة)
@@ -2089,7 +2109,7 @@ async def get_subscriptions_dashboard(current_user: dict = Depends(verify_super_
                 exp_date = datetime.fromisoformat(tenant["expires_at"].replace("Z", "+00:00"))
                 days_left = (exp_date - now).days
                 tenant["days_left"] = max(0, days_left)
-            except:
+            except Exception:
                 tenant["days_left"] = None
     
     for tenant in already_expired:
@@ -2098,7 +2118,7 @@ async def get_subscriptions_dashboard(current_user: dict = Depends(verify_super_
                 exp_date = datetime.fromisoformat(tenant["expires_at"].replace("Z", "+00:00"))
                 days_ago = (now - exp_date).days
                 tenant["days_expired"] = days_ago
-            except:
+            except Exception:
                 tenant["days_expired"] = None
     
     return {

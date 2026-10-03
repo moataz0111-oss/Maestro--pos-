@@ -1,6 +1,23 @@
 """Printer Routes (extracted from server.py)"""
 from fastapi import APIRouter
 from server import *  # noqa: F401,F403
+from server import (  # noqa: F401
+    Optional,
+    Depends,
+    HTTPException,
+    Request,
+    BaseModel,
+    ConfigDict,
+    get_current_user,
+    get_user_tenant_id,
+    build_tenant_query,
+    datetime,
+    timezone,
+    UserRole,
+    uuid,
+    db,
+    ROOT_DIR,
+)
 
 router = APIRouter()
 
@@ -23,15 +40,18 @@ class PrinterCreate(BaseModel):
     auto_print_on_order: bool = True  # طباعة تلقائية عند الطلب
 
 @router.post("/printers")
-async def create_printer(printer: PrinterCreate, current_user: dict = Depends(get_current_user)):
+async def create_printer(printer: PrinterCreate, request: Request, current_user: dict = Depends(get_current_user)):
     if current_user["role"] not in [UserRole.ADMIN, UserRole.GENERAL_MANAGER, UserRole.MANAGER, UserRole.SUPER_ADMIN]:
         raise HTTPException(status_code=403, detail="غير مصرح")
     
     tenant_id = get_user_tenant_id(current_user)
+    from routes.shared import resolve_project_id_for_create
+    project_id = await resolve_project_id_for_create(current_user, request)
     printer_doc = {
         "id": str(uuid.uuid4()),
         **printer.model_dump(),
         "tenant_id": tenant_id,  # ربط الطابعة بالعميل
+        "project_id": project_id,  # Enterprise: عزل حسب المشروع
         "is_active": True,
         "is_online": False,
         "last_check": None

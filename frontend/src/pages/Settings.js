@@ -3,10 +3,12 @@ import { API_URL, BACKEND_URL } from '../utils/api';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { useAuth } from '../context/AuthContext';
+import { useProject } from '../context/ProjectContext';
 import { useTheme } from '../context/ThemeContext';
 import { formatPrice, setCurrency } from '../utils/currency';
 import { useTranslation } from '../hooks/useTranslation';
 import { checkAgentStatus, sendTestPrint, checkPrinterOnline, listAgentPrinters, agentSupportsUsb, checkAgentVersionMatch, getSavedAgentStatus } from '../utils/printService';
+import ProjectsSettings from './ProjectsSettings';
 import { AgentUpdateBanner } from '../utils/AgentUpdateChecker';
 import { 
   playClick, 
@@ -301,6 +303,7 @@ const AgentsMonitorPanel = ({ t }) => {
 
 export default function Settings() {
   const { user, hasRole, logout, hasPermission } = useAuth();
+  const { enterpriseEnabled } = useProject();
   const { theme, setTheme } = useTheme();
   const { t, lang, changeLanguage, isRTL } = useTranslation();
   const navigate = useNavigate();
@@ -939,7 +942,7 @@ export default function Settings() {
       
       // جلب مواد التغليف
       try {
-        const packagingRes = await axios.get(`${API}/packaging-materials`, { headers });
+        const packagingRes = await axios.get(`${API}/packaging-materials`);
         setPackagingMaterials(packagingRes.data || []);
       } catch (err) {
         console.log('No packaging materials found');
@@ -2099,7 +2102,7 @@ export default function Settings() {
   const handleDeleteKitchenSection = async (sectionId) => {
     if (!confirm(t('هل أنت متأكد من حذف قسم المطبخ؟'))) return;
     try {
-      await axios.delete(`${API}/kitchen-sections/${sectionId}`, { headers });
+      await axios.delete(`${API}/kitchen-sections/${sectionId}`);
       toast.success(t('تم حذف قسم المطبخ'));
       fetchData();
     } catch (error) {
@@ -2170,7 +2173,7 @@ export default function Settings() {
     if (!window.confirm(t('هل أنت متأكد من حذف شركة التوصيل؟'))) return;
     
     try {
-      await axios.delete(`${API}/delivery-app-settings/${appId}`, { headers });
+      await axios.delete(`${API}/delivery-app-settings/${appId}`);
       toast.success(t('تم حذف شركة التوصيل'));
       fetchData();
     } catch (error) {
@@ -2492,12 +2495,22 @@ export default function Settings() {
               >
                 {t('المظهر')}
               </TabsTrigger>
+              {enterpriseEnabled && hasRole(['admin', 'general_manager', 'super_admin']) && (
+                <TabsTrigger
+                  value="projects"
+                  className="flex-shrink-0 px-4 py-2.5 text-sm font-medium rounded-lg bg-gradient-to-r from-primary/10 to-primary/5 border border-primary/30 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground"
+                  data-testid="settings-tab-projects"
+                >
+                  🏢 {t('المشاريع')}
+                </TabsTrigger>
+              )}
               {hasRole(['admin', 'general_manager', 'super_admin']) && (
                 <TabsTrigger 
                   value="restaurant"
                   className="flex-shrink-0 px-4 py-2.5 text-sm font-medium rounded-lg data-[state=active]:bg-primary data-[state=active]:text-primary-foreground"
+                  data-testid="settings-tab-enterprise"
                 >
-                  {t('المطعم')}
+                  {enterpriseEnabled ? t('المؤسسة') : t('المطعم')}
                 </TabsTrigger>
               )}
               {/* super_admin يدير المستخدمين من لوحة تحكم المالك فقط */}
@@ -2655,47 +2668,49 @@ export default function Settings() {
             </Card>
           </TabsContent>
 
-          {/* Restaurant Settings - إعدادات المطعم */}
+          {/* Restaurant Settings - إعدادات المطعم / المؤسسة */}
           {hasRole(['admin', 'general_manager', 'super_admin']) && (
             <TabsContent value="restaurant">
               <Card className="border-border/50 bg-card">
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2 text-foreground">
                     <Store className="h-5 w-5" />
-                    {t('إعدادات المطعم')}
+                    {enterpriseEnabled ? t('إعدادات المؤسسة') : t('إعدادات المطعم')}
                   </CardTitle>
                   <p className="text-sm text-muted-foreground">
-                    {t('تظهر هذه البيانات في تطبيق العملاء')}
+                    {enterpriseEnabled
+                      ? t('البيانات العامة للمؤسسة (الاسم والشعار الرئيسي). كل مشروع لهو بياناته الخاصة من تبويب "المشاريع".')
+                      : t('تظهر هذه البيانات في تطبيق العملاء')}
                   </p>
                 </CardHeader>
                 <CardContent className="space-y-6">
-                  {/* اسم المطعم */}
+                  {/* اسم المطعم/المؤسسة */}
                   <div className="space-y-4">
                     <div>
-                      <Label className="text-foreground">{t('اسم المطعم (عربي)')}</Label>
+                      <Label className="text-foreground">{enterpriseEnabled ? t('اسم المؤسسة (عربي)') : t('اسم المطعم (عربي)')}</Label>
                       <Input
                         value={restaurantSettings.name_ar || restaurantSettings.name || ''}
                         onChange={(e) => setRestaurantSettings({...restaurantSettings, name_ar: e.target.value, name: e.target.value})}
-                        placeholder={t('مثال: مطعم الشام')}
+                        placeholder={enterpriseEnabled ? t('مثال: مؤسسة الشام') : t('مثال: مطعم الشام')}
                         className="mt-1"
                       />
                     </div>
                     
                     <div>
-                      <Label className="text-foreground">{t('اسم المطعم (إنجليزي)')}</Label>
+                      <Label className="text-foreground">{enterpriseEnabled ? t('اسم المؤسسة (إنجليزي)') : t('اسم المطعم (إنجليزي)')}</Label>
                       <Input
                         value={restaurantSettings.name || ''}
                         onChange={(e) => setRestaurantSettings({...restaurantSettings, name: e.target.value})}
-                        placeholder="Example: Al Sham Restaurant"
+                        placeholder={enterpriseEnabled ? 'Example: Al Sham Enterprise' : 'Example: Al Sham Restaurant'}
                         className="mt-1"
                         dir="ltr"
                       />
                     </div>
                   </div>
 
-                  {/* شعار المطعم */}
+                  {/* شعار المطعم/المؤسسة */}
                   <div className="space-y-3">
-                    <Label className="text-foreground">{t('شعار المطعم')}</Label>
+                    <Label className="text-foreground">{enterpriseEnabled ? t('شعار المؤسسة') : t('شعار المطعم')}</Label>
                     <div className="flex items-start gap-4">
                       <div className="w-24 h-24 rounded-xl bg-gradient-to-br from-amber-400 to-yellow-500 flex items-center justify-center overflow-hidden border-2 border-border/50">
                         {(restaurantLogoPreview || restaurantSettings.logo_url) ? (
@@ -2788,10 +2803,17 @@ export default function Settings() {
                     disabled={savingRestaurant}
                     className="w-full"
                   >
-                    {savingRestaurant ? t('جارِ الحفظ...') : t('حفظ إعدادات المطعم')}
+                    {savingRestaurant ? t('جارِ الحفظ...') : (enterpriseEnabled ? t('حفظ إعدادات المؤسسة') : t('حفظ إعدادات المطعم'))}
                   </Button>
                 </CardContent>
               </Card>
+            </TabsContent>
+          )}
+
+          {/* Projects Settings - إدارة المشاريع (Enterprise Mode) */}
+          {enterpriseEnabled && hasRole(['admin', 'general_manager', 'super_admin']) && (
+            <TabsContent value="projects" data-testid="projects-tab-content">
+              <ProjectsSettings />
             </TabsContent>
           )}
 
