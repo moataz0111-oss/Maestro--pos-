@@ -1,7 +1,7 @@
 """
 Drivers Routes - إدارة السائقين والتوصيل
 """
-from fastapi import APIRouter, Depends, HTTPException, Body
+from fastapi import APIRouter, Depends, HTTPException, Body, Request
 from pydantic import BaseModel, ConfigDict
 from typing import Optional, List, Dict, Any
 from datetime import datetime, timezone, timedelta
@@ -49,12 +49,15 @@ class DriverLocationUpdate(BaseModel):
 
 # ==================== DRIVER CRUD ====================
 @router.post("", response_model=DriverResponse)
-async def create_driver(driver: DriverCreate, current_user: dict = Depends(get_current_user)):
-    """إنشاء سائق جديد"""
+async def create_driver(driver: DriverCreate, request: Request, current_user: dict = Depends(get_current_user)):
+    """إنشاء سائق جديد — Enterprise: يُحفظ project_id من رأس X-Project-Id (أو مشروع المستخدم)"""
     db = get_database()
     if current_user["role"] not in [UserRole.ADMIN, UserRole.GENERAL_MANAGER, UserRole.MANAGER, UserRole.SUPER_ADMIN]:
         raise HTTPException(status_code=403, detail="غير مصرح")
-    
+
+    from routes.shared import resolve_project_id_for_create
+    project_id = await resolve_project_id_for_create(current_user, request)
+
     driver_doc = {
         "id": str(uuid.uuid4()),
         "name": driver.name,
@@ -64,7 +67,7 @@ async def create_driver(driver: DriverCreate, current_user: dict = Depends(get_c
         "pin": driver.pin,  # حفظ الرمز السري
         "user_id": driver.user_id,
         "tenant_id": get_user_tenant_id(current_user),
-        "project_id": current_user.get("project_id"),
+        "project_id": project_id,  # Enterprise: عزل حسب المشروع
         "is_active": True,
         "is_available": True,
         "current_order_id": None,

@@ -59,6 +59,10 @@ async def _send_shift_close_report(db, shift: dict, closing_record: dict, tenant
     
     يحوي: الكاشير، الفرع، اليوم التشغيلي، إجمالي المبيعات، تفصيل حسب طريقة الدفع،
     النقد المتوقع، النقد الفعلي، المصاريف، الفرق (زيادة/نقص).
+
+    🔒 Idempotency: يسجّل علامة `shift_close_report_sent_at` على الوردية بعد الإرسال.
+    لن يُرسل مرة ثانية لنفس الوردية أبداً — يمنع تكرار الرسائل بعد إعادة تشغيل الخدمة
+    أو مع تشغيل workers متعددة (طلب العميل أكتوبر 2026).
     """
     try:
         prefs = await _get_notification_prefs(db, tenant_id)
@@ -66,6 +70,20 @@ async def _send_shift_close_report(db, shift: dict, closing_record: dict, tenant
                 prefs.get("shift_close_report_email") or
                 prefs.get("shift_close_report_bell")):
             return  # كل القنوات معطّلة
+
+        # 🔒 حارس idempotency: لا نُرسل تقريراً لنفس الوردية مرتين
+        shift_id = shift.get("id")
+        if shift_id:
+            try:
+                fresh = await db.shifts.find_one(
+                    {"id": shift_id},
+                    {"_id": 0, "shift_close_report_sent_at": 1}
+                )
+                if fresh and fresh.get("shift_close_report_sent_at"):
+                    logger.info(f"⏭️ shift_close_report already sent for {shift_id} at {fresh['shift_close_report_sent_at']} — skipping")
+                    return
+            except Exception:
+                pass
         
         cashier = shift.get("cashier_name") or "غير معروف"
         branch = shift.get("branch_name") or closing_record.get("branch_name") or "غير محدد"
@@ -112,7 +130,7 @@ async def _send_shift_close_report(db, shift: dict, closing_record: dict, tenant
         
         try:
             from server import notify_owner_multichannel
-            await notify_owner_multichannel(
+            _delivery_result = await notify_owner_multichannel(
                 title=title,
                 message=message,
                 severity="critical" if abs(diff) > (total_sales * 0.05) and total_sales > 0 else "info",
@@ -132,8 +150,73 @@ async def _send_shift_close_report(db, shift: dict, closing_record: dict, tenant
                     "difference": diff,
                 },
             )
+            # 🔒 سجّل أن التقرير أُرسل — يمنع التكرار نهائياً حتى بعد إعادة التشغيل
+            if shift_id:
+                try:
+                    await db.shifts.update_one(
+                        {"id": shift_id},
+                        {"$set": {"shift_close_report_sent_at": datetime.now(timezone.utc).isoformat()}}
+                    )
+                except Exception:
+                    pass
+            # 🧾 سجل تدقيق للـ SuperAdmin — بدون أي أرقام مالية (الخصوصية مكفولة)
+            try:
+                tenant_name = None
+                if tenant_id:
+                    _tn = await db.tenants.find_one({"id": tenant_id}, {"_id": 0, "name": 1})
+                    tenant_name = (_tn or {}).get("name")
+                wa_ok = bool(_delivery_result.get("whatsapp"))
+                bell_ok = bool(_delivery_result.get("bell"))
+                email_ok = bool(_delivery_result.get("email"))
+                any_sent = wa_ok or bell_ok or email_ok
+                audit_doc = {
+                    "id": str(uuid.uuid4()),
+                    "tenant_id": tenant_id,
+                    "tenant_name": tenant_name,
+                    "shift_id": shift.get("id"),
+                    "cashier_name": cashier,
+                    "branch_name": branch,
+                    "business_date": biz_date,
+                    # قنوات (success per channel) — بدون أي أرقام مالية
+                    "channel_whatsapp": wa_ok,
+                    "channel_email": email_ok,
+                    "channel_bell": bell_ok,
+                    "status": "delivered" if any_sent else "failed",
+                    "whatsapp_recipients": int(_delivery_result.get("whatsapp_recipients", 0) or 0),
+                    "email_recipients": int(_delivery_result.get("email_recipients", 0) or 0),
+                    "error_reason": _delivery_result.get("whatsapp_skip_reason"),
+                    "sent_at": datetime.now(timezone.utc).isoformat(),
+                }
+                await db.shift_report_audit.insert_one(audit_doc)
+            except Exception as _ae:
+                logger.warning(f"shift_report_audit insert failed: {_ae}")
         except Exception as _e:
             logger.warning(f"shift_close_report notify_owner_multichannel failed: {_e}")
+            # في فشل كامل — سجّل failure في التدقيق أيضاً
+            try:
+                tenant_name = None
+                if tenant_id:
+                    _tn = await db.tenants.find_one({"id": tenant_id}, {"_id": 0, "name": 1})
+                    tenant_name = (_tn or {}).get("name")
+                await db.shift_report_audit.insert_one({
+                    "id": str(uuid.uuid4()),
+                    "tenant_id": tenant_id,
+                    "tenant_name": tenant_name,
+                    "shift_id": shift.get("id"),
+                    "cashier_name": cashier,
+                    "branch_name": branch,
+                    "business_date": biz_date,
+                    "channel_whatsapp": False,
+                    "channel_email": False,
+                    "channel_bell": False,
+                    "status": "failed",
+                    "whatsapp_recipients": 0,
+                    "email_recipients": 0,
+                    "error_reason": str(_e)[:200],
+                    "sent_at": datetime.now(timezone.utc).isoformat(),
+                })
+            except Exception:
+                pass
     except Exception as e:
         logger.warning(f"_send_shift_close_report failed: {e}")
 

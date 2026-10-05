@@ -765,11 +765,38 @@ async def _is_ip_blocked(ip):
 
 async def _ban_ip_permanent(ip, reason: str, request=None):
     """حظر دائم لعنوان IP بعد تجاوز محاولات الدخول الفاشلة (يمنع كل الأجهزة على الشبكة).
-    يُستثنى عنوان المالك دائماً."""
+    يُستثنى عنوان المالك دائماً.
+    🛡️ حماية إضافية (أكتوبر 2026): لا نحظر دائماً عنواناً سجّل منه موظف ناجحٌ دخول خلال آخر 7 أيام
+       — نكتفي بتجميد مؤقت 15 دقيقة لتجنّب قفل مكاتب مشتركة فيها كاشيرون كُثر."""
     if not ip or ip == "unknown":
         return False
     if await _is_owner_ip(ip):
         return False
+    # 🛡️ لا تحظر عنواناً عليه دخول ناجح مؤخراً — تلك شبكة فيها موظفون فعليون
+    try:
+        _since = datetime.now(timezone.utc) - timedelta(days=7)
+        trusted = await db.audit_logs.find_one({
+            "ip": ip,
+            "event": {"$regex": "login\\.success$"},
+            "ts": {"$gte": _since},
+        })
+        if trusted:
+            # تجميد مؤقت فقط (15 دقيقة) بدل الحظر الدائم
+            try:
+                locked_until = (datetime.now(timezone.utc) + timedelta(minutes=LOGIN_LOCK_MINUTES)).isoformat()
+                await db.login_attempts.update_one(
+                    {"key": f"ip_cool:{ip}"},
+                    {"$set": {"key": f"ip_cool:{ip}", "ip": ip, "locked_until": locked_until,
+                              "reason": "soft_cool_down_trusted_ip"}},
+                    upsert=True,
+                )
+                await record_audit("security.soft_cool_down", request=request, status=429,
+                                   details={"ip": ip, "reason": "trusted_ip_recent_login", "minutes": LOGIN_LOCK_MINUTES})
+            except Exception:
+                pass
+            return False
+    except Exception:
+        pass
     try:
         await db.blocked_ips.update_one(
             {"ip": ip},
@@ -1446,8 +1473,17 @@ async def _run_deferred_startup_tasks():
 
     # ═══ 🩹 إصلاح أسماء المشاريع الافتراضية (UUID → اسم حقيقي) ═══
     try:
-        from routes.projects_routes import fix_default_project_names_v1
+        from routes.projects_routes import (
+            fix_default_project_names_v1,
+            unmark_default_for_real_tenants_v1,
+            migrate_tenants_to_customer_tier_v1,
+        )
         await fix_default_project_names_v1(db)
+        # ⭐ رفع علامة "المشروع الرئيسي" عن مشاريع العملاء الفعليين (ليس trial/demo)
+        await unmark_default_for_real_tenants_v1(db)
+        # 🔒 ضبط العملاء الحاليين الذين بدون account_tier → customer آمن افتراضياً
+        #    (إخفاء إدارة المشاريع حتى يُفعّل Super Admin المؤسسة يدوياً — بدون أي فقدان بيانات)
+        await migrate_tenants_to_customer_tier_v1(db)
     except Exception as e:
         logger.error(f"⚠️ fix_default_project_names_v1 error: {e}")
 
@@ -2225,12 +2261,29 @@ class TenantCreate(BaseModel):
     owner_phone: Optional[str] = ""  # رقم الهاتف (اختياري)
     # 🔑 كلمة مرور المالك المُدخَلة من الفورم — تُحفظ كما هي (hash + vault) لتُرسَل مطابقة
     owner_password: Optional[str] = None
-    subscription_type: str = "trial"  # trial, bronze, silver, gold, basic, premium, demo
+    subscription_type: str = "trial"  # trial, bronze, silver, gold, basic, premium, demo, enterprise
     subscription_duration: int = 1  # مدة الاشتراك بالأشهر (1, 3, 6, 12)
-    max_branches: int = 1
-    max_users: int = 5
+    max_branches: int = 1  # (قديم) الحد الكلي للفروع — يبقى للتوافق
+    max_users: int = 5  # (قديم) الحد الكلي للمستخدمين — يبقى للتوافق
     logo_url: Optional[str] = None  # شعار المطعم
     is_demo: bool = False  # هل هو حساب تجريبي
+    # ⭐ نوع النشاط — يظهر في رسائل الواتساب كـ "🍽️ GRaffiti BURGER — مطعم"
+    activity_type: Optional[str] = "restaurant"
+    # ⭐ أكتوبر 2026: مستوى الحساب (3 أنواع)
+    #    trial = حساب تجريبي 14 يوم (is_default=True)
+    #    customer = عميل فعال مشترك (مدفوع)
+    #    enterprise = مؤسسة بصلاحيات موسعة (كل الـ features)
+    account_tier: Optional[str] = "trial"
+    # ⭐ حدود المؤسسة (طلب العميل أكتوبر 2026):
+    #    - max_projects: عدد المشاريع المسموحة (مطعم/صالون/عيادة...)
+    #    - max_branches_per_project: فروع لكل مشروع
+    #    - max_users_per_branch: مستخدمين لكل فرع
+    #    - max_admins_per_project: مديرين لكل مشروع
+    #    trial: 1/1/5/1, customer: 1/N/N/1, enterprise: N/N/N/N
+    max_projects: Optional[int] = 1
+    max_branches_per_project: Optional[int] = 1
+    max_users_per_branch: Optional[int] = 5
+    max_admins_per_project: Optional[int] = 1
 
 class TenantFeatures(BaseModel):
     """ميزات العميل المتاحة"""
@@ -3389,7 +3442,7 @@ async def clear_login_attempts(key: str):
 import hashlib as _hashlib
 import secrets as _secrets_2fa
 
-_OTP_TTL_MINUTES = 1
+_OTP_TTL_MINUTES = 5
 _OTP_MAX_ATTEMPTS = 5
 
 def _new_device_id() -> str:
@@ -4378,6 +4431,28 @@ async def get_me(current_user: dict = Depends(get_current_user)):
     user = dict(current_user)
     if "password" in user:
         del user["password"]
+    # ⭐ أكتوبر 2026: إرفاق معلومات مستوى الحساب للـ frontend
+    # (لإخفاء UI المؤسسة عن العملاء العاديين حتى يُفعّلهم super_admin)
+    try:
+        _tid = user.get("tenant_id")
+        if _tid:
+            _tn = await db.tenants.find_one(
+                {"id": _tid},
+                {"_id": 0, "account_tier": 1, "is_enterprise": 1, "enterprise_enabled": 1,
+                 "is_demo": 1, "max_projects": 1, "max_branches_per_project": 1,
+                 "max_users_per_branch": 1, "max_admins_per_project": 1}
+            )
+            if _tn:
+                user["tenant_account_tier"] = _tn.get("account_tier") or "trial"
+                user["tenant_is_enterprise"] = bool(_tn.get("is_enterprise"))
+                user["tenant_enterprise_enabled"] = bool(_tn.get("enterprise_enabled"))
+                user["tenant_is_demo"] = bool(_tn.get("is_demo"))
+                user["tenant_max_projects"] = _tn.get("max_projects") or 1
+                user["tenant_max_branches_per_project"] = _tn.get("max_branches_per_project") or 1
+                user["tenant_max_users_per_branch"] = _tn.get("max_users_per_branch") or 5
+                user["tenant_max_admins_per_project"] = _tn.get("max_admins_per_project") or 1
+    except Exception:
+        pass
     return user
 
 @api_router.post("/auth/logout")
@@ -6596,7 +6671,7 @@ async def delete_table(table_id: str, current_user: dict = Depends(get_current_u
 # ==================== CUSTOMER ROUTES - إدارة العملاء ====================
 
 @api_router.post("/customers", response_model=CustomerResponse)
-async def create_customer(customer: CustomerCreate, current_user: dict = Depends(get_current_user)):
+async def create_customer(customer: CustomerCreate, request: Request, current_user: dict = Depends(get_current_user)):
     # التحقق من عدم وجود العميل بنفس الرقم في نفس الـ tenant
     tenant_id = get_user_tenant_id(current_user)
     query = {"phone": customer.phone}
@@ -6605,11 +6680,16 @@ async def create_customer(customer: CustomerCreate, current_user: dict = Depends
     existing = await db.customers.find_one(query)
     if existing:
         raise HTTPException(status_code=400, detail="رقم الهاتف موجود مسبقاً")
-    
+
+    # Enterprise: عزل حسب المشروع (يُقرأ من X-Project-Id أو مشروع المستخدم أو الافتراضي)
+    from routes.shared import resolve_project_id_for_create
+    project_id = await resolve_project_id_for_create(current_user, request)
+
     customer_doc = {
         "id": str(uuid.uuid4()),
         **customer.model_dump(),
         "tenant_id": tenant_id,  # فصل البيانات
+        "project_id": project_id,  # Enterprise: عزل حسب المشروع
         "total_orders": 0,
         "total_spent": 0.0,
         "last_order_date": None,

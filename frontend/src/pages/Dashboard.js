@@ -3021,7 +3021,6 @@ export default function Dashboard() {
                           toast.success(t('تم فتح الوردية باسمك'));
                           fetchData();
                           fetchDayStatus();
-                          checkAndOpenShift();
                         } catch (err) {
                           showApiError(err, t('فشل في فتح الوردية'));
                         }

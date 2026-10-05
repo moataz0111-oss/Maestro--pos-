@@ -1,69 +1,79 @@
-# Maestro EGP — Multi-Tenant POS → Enterprise Management
+# Maestro EGP — Enterprise Management System
 
 ## Problem Statement
-Multi-tenant POS system scaling into a Multi-Activity Enterprise Management System. Live production serving real customers (GRaffiti BURGER, 10 branches, 70,619 orders, $757K sales). Users: owner (super_admin), tenant admins, cashiers, managers.
+Multi-tenant POS → Enterprise Management System. Live production serving real customers (GRaffiti BURGER: 10 branches, 70k+ orders, $757K sales).
 
 ## Users
-- **Super Admin (Owner)**: Creates tenants, manages SMTP, monitors all tenants (bilateral: owner@maestroegp.com + MoatazMehana/27/10/2018 + secret key)
-- **Admin (Tenant Owner)**: One per tenant (GRaffiti BURGER / hanialdujaili@gmail.com)
-- **Cashier / Manager / Delivery / Employee**: Per-branch isolated roles
+- **Super Admin** (owner@maestroegp.com): Creates tenants, converts tiers, sets limits
+- **Admin** (tenant owner, 1 per tenant): Full control within tenant
+- **Cashier/Manager/Delivery/Employee**: Per-branch isolated
 
-## Core Requirements (Enforced)
-1. Strict shift isolation per cashier
-2. Business-date aware auto-close (Iraq TZ UTC+3)
-3. Enterprise Mode: Project-level isolation across tenants
-4. Multi-currency per project (exchange rate history)
-5. Biometric sync across branches via local agent + queue
-6. Multichannel notifications: UI bell + WhatsApp (Baileys) + Email (SMTP)
-7. Offline-capable with cached auth + IndexedDB
+## Account Tiers (Oct 2026)
+| Tier | enterprise_enabled | Projects UI | Limits |
+|------|---------|-------------|--------|
+| **تجريبي (trial)** | ✅ True | ✅ Shown | 🆓 Unlimited (test as enterprise) |
+| **عميل فعال (customer)** | ❌ False | ❌ Hidden | 1 project only, no multi-project UI |
+| **مؤسسة (enterprise)** | ✅ True | ✅ Shown | max_projects / max_branches_per_project / max_users_per_branch / max_admins_per_project (set by super admin) |
+
+Tier conversion: Super Admin edits tenant → changes `account_tier` → backend auto-flips `enterprise_enabled` + updates `is_default` on projects.
 
 ## Live Deployment
-- VPS: 158.220.118.54, domain: maestroegp.com
-- CI/CD: GitHub Actions → builds on GH runners → pushes to GHCR → deploys via SSH
-- Deploy folder on VPS: `/var/www/maestro` (not `/root/maestro` which is legacy)
-- Containers: nginx, backend, frontend, wa-service, maestro-mongodb, netdata, portainer, certbot
+- VPS: 158.220.118.54 → maestroegp.com
+- CI/CD: GitHub Actions → GHCR → SSH deploy to `/var/www/maestro`
+- Stack: nginx, backend, frontend, wa-service, maestro-mongodb, netdata, portainer, certbot
+- Auto-cleans legacy `/root/maestro` compose stack before deploy
+- `cancel-in-progress: true`, 20min timeout, docker log rotation 50m×3, weekly cron prune
 
 ## Session Fixes (Oct 2026)
-### 🚨 Production Outage Recovery (Oct 3-4)
-- Root cause: disk 100% full → Docker log explosion (no rotation configured)
-- Fix: cleared logs/journals → freed 93G
-- **Permanent**: added `/etc/docker/daemon.json` log rotation (50m × 3) + weekly cron prune
+### Performance (3-5x)
+- Backend: uvicorn `--workers 2 --loop uvloop --http httptools`
+- Scheduler file-lock (only 1 worker runs cron)
+- Nginx: keepalive 64, gzip comp 5, proxy_read_timeout 180s, buffering on
 
-### ⚡ Backend Performance (3-5x speedup)
-- `backend/Dockerfile`: `uvicorn ... --workers 2 --loop uvloop --http httptools`
-- `backend/requirements.txt`: `uvicorn[standard]==0.25.0` for uvloop/httptools
-- `backend/server.py`: `is_scheduler_worker()` file lock → only 1 worker runs cron schedulers
+### Auth
+- `AuthContext.logout()` wipes 16 keys + sessionStorage (fixed Owner-after-employee login)
 
-### 🌐 Nginx (reports stopped failing)
-- `nginx.conf`: keepalive 64 upstream, gzip comp_level 5, proxy_read_timeout 60s→180s, proxy_buffering on, proxy_next_upstream retry
+### Enterprise Mode: Projects
+- `create_tenant` auto-creates project with tenant.name + activity_type + is_default=(tier==trial) + enterprise_enabled=(tier in trial/enterprise)
+- `update_tenant` auto-flips enterprise_enabled when account_tier changes
+- `/auth/me` returns tenant_account_tier + tenant_enterprise_enabled + limits
+- Migrations: `fix_default_project_names_v1` (UUID→name), `unmark_default_for_real_tenants_v1`
+- **🔒 `migrate_tenants_to_customer_tier_v1` (Feb 2026)**: أي عميل قديم بدون `account_tier` → `customer` + `enterprise_enabled=False` (إدارة المشاريع مخفية حتى يُفعّل Super Admin المؤسسة عبر زر 👑). **قرار المالك**: ممنوع auto-trial على السيرفر — "تجريبي" يُنشأ يدوياً فقط. البيانات (projects/branches/orders/users) تبقى كما هي 100% — عند تفعيل المؤسسة لاحقاً كل المشاريع القديمة تعود للظهور ببياناتها. (`/app/backend/tests/test_tenant_tier_migration.py` — 5/5 tests pass)
 
-### 🛠️ CI/CD Hardening
-- `.github/workflows/deploy.yml`: 
-  - `cancel-in-progress: true` (prev false → stuck 15m)
-  - `command_timeout: 60m → 20m`
-  - Auto-stops old `/root/maestro` stack + removes `maestro-*` zombie containers before deploy
-  - Final sweep removes stragglers after deploy
+### Shift Report Audit (Private) + OTP/Auth Hardening (Feb 2026)
+- **📊 `shift_report_audit` collection**: كل مرة تُغلَق فيها وردية ويُرسَل التقرير لمالك المطعم، نكتب سجل تدقيق **بدون أي أرقام مالية** (فقط tenant_name/cashier/branch/business_date/channels/status/error).
+- `GET /api/super-admin/shift-reports-audit` (SuperAdmin only) → `{summary:{total,delivered,failed}, items:[…], tenants:[…], filters:{…}}`. يدعم فلاتر: `tenant_id`, `status`, `date_from`, `date_to`, `limit`, `skip`.
+- `GET /api/super-admin/shift-reports-audit.csv` → تصدير CSV (UTF-8 BOM لدعم Excel عربي) بنفس الفلاتر.
+- SuperAdmin UI: تاب جديد "تقارير الورديات" يعرض الجدول + badges للقنوات (📱✉️🔔) + فلاتر (العميل/الحالة/من/إلى تاريخ) + زر "تصدير CSV" — صاحب النظام يرى حالة الوصول فقط، ولا يرى الأرقام المالية (الخصوصية مكفولة للعميل).
+- **🔐 OTP TTL**: زِيد من 1 دقيقة إلى 5 دقائق (يتحمّل تأخير واتساب الفعلي ولا يُقفل عملاء بسبب رسائل متأخرة).
+- **🛡️ `_ban_ip_permanent`**: لا يحظر دائماً عنواناً عليه دخول ناجح خلال آخر 7 أيام (شبكة مكتبية فيها كاشيرون). يُستبدل بتجميد ناعم 15 دقيقة ويُسجَّل `security.soft_cool_down`. العناوين المجهولة ما زالت تُحظر دائمياً كما كان.
+- (`/app/backend/tests/test_shift_report_audit_and_otp.py` — 4/4 tests pass)
 
-### 🔐 Auth: Owner login after employee logout
-- `AuthContext.logout()` previously left behind `super_admin_token`, `super_admin_user`, `original_super_admin_token`, `pending_impersonation`, `impersonated*` keys → forced browser restart
-- Fix: single `authKeys` array wipes 16 keys + full sessionStorage
+### Project→Branch pattern on Drivers / Customers (Feb 2026)
+- `POST /api/drivers`: الآن يقبل `Request` ويقرأ `project_id` من رأس `X-Project-Id` عبر `resolve_project_id_for_create` (نفس نمط Printer/Branch). كان يستخدم فقط `current_user.project_id` → كسر عزل Enterprise owner.
+- `POST /api/customers`: نفس التحسين — يُحفظ `project_id` تلقائياً مع كل عميل جديد.
+- Enterprise Dashboard موجود (`GET /api/enterprise/dashboard`) يرجع لكل مشروع: `revenue, expenses, net_profit, orders_count, branches_count, employees_count`. المسار `/enterprise-dashboard` مربوط في `App.js`.
+- (`/app/backend/tests/test_project_isolation_and_audit_filters.py` — 4/4 tests pass)
+- UI: "تعديل الاسم" button on every project card
+- `enforce_project_limit`: trial=∞, customer=1, enterprise=max_projects
+- Super Admin dialog: 3 account type buttons + conditional enterprise limits section + 20 activity types
 
-### 🏢 Enterprise Mode: Project naming
-- Create tenant now auto-creates default project with `tenant.name` + links categories + admin user
-- `fix_default_project_names_v1` migration: renames existing UUID-named projects using tenants.name → settings → users.restaurant_name fallbacks
-- UI: added "تعديل الاسم" button on every project card (even default), kept "تعيين مدير"
-- Removed "افتراضي" badge → "المشروع الرئيسي" neutral label
+### WhatsApp
+- Project line "🍽️ Name — Activity" in message template (21 activity types mapped to emoji+Arabic)
+- Activity type selector in create tenant dialog
+- `shift_close_report_sent_at` idempotency marker (prevents duplicate reports after restart)
+- **CRITICAL**: Baileys `getMessage` callback + 1000-msg in-memory store (48h TTL) + `makeCacheableSignalKeyStore` + `retryRequestDelayMs: 2000` → fixed "Waiting for this message" permanent block
 
-## Backlog
+## Backlog (P1-P3)
 - P1: Daily shift report via WhatsApp (replaces generic "Integrity Check")
 - P1: Apply Project→Branch pattern to Driver/Customer/Printer forms
+- P1: Enforce `max_branches_per_project` and `max_users_per_branch` on branch/user creation
 - P2: Enterprise Dashboard (cross-project comparison)
-- P2: Colored project badges on cards
-- P3: Refactor `server.py` 18k monolith → routes/
+- P2: Colored project badges
+- P3: Refactor `server.py` 18k monolith → `/app/backend/routes/`
 
 ## Known Tech Debt
-- Dual stacks (legacy `/root/maestro` + new `/var/www/maestro`) resolved via CI auto-cleanup
-- MongoDB auth: created with `MONGO_INITDB_ROOT_*` but new backend connects no-auth to existing volume — works but inconsistent
+- MongoDB auth: tenant uses `MONGO_INITDB_ROOT_*` but backend connects no-auth
 
 ## Credentials
 See `/app/memory/test_credentials.md`

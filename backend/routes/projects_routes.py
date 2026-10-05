@@ -172,9 +172,47 @@ async def create_project(
     db = get_database()
     tenant_id = get_user_tenant_id(current_user) or "default"
 
-    # التحقق من حد المشاريع + تفعيل وضع المؤسسة
-    from .enterprise_config_routes import enforce_project_limit
-    await enforce_project_limit(db, tenant_id)
+    # ⭐ أكتوبر 2026: تطبيق حدود الحسابات (طلب العميل)
+    #    • trial: بدون قيود — يستطيع تجربة كل شيء كأنه مؤسسة (المشاريع، الفروع، المستخدمين)
+    #    • customer: مشروع واحد فقط
+    #    • enterprise: حسب max_projects المشترى على tenant
+    tenant_doc = await db.tenants.find_one(
+        {"id": tenant_id},
+        {"_id": 0, "max_projects": 1, "account_tier": 1, "is_demo": 1, "subscription_type": 1}
+    )
+    tenant_doc = tenant_doc or {}
+    _tier = tenant_doc.get("account_tier")
+    _is_trial = (
+        _tier == "trial"
+        or bool(tenant_doc.get("is_demo"))
+        or (tenant_doc.get("subscription_type") in ("trial", "demo"))
+    )
+
+    if _is_trial:
+        # 🆓 حساب تجريبي: بدون قيود — يُجرب كل الميزات بلا حدود
+        max_projects = 10**9
+    elif _tier == "enterprise":
+        max_projects = int(tenant_doc.get("max_projects") or 1)
+    else:
+        # عميل عادي: مشروع واحد فقط
+        max_projects = 1
+
+    current_count = await db.projects.count_documents({"tenant_id": tenant_id, "is_active": True})
+    if current_count >= max_projects:
+        raise HTTPException(
+            status_code=403,
+            detail=(
+                f"وصلت للحد الأقصى من المشاريع ({max_projects}). "
+                f"{'ترقية الاشتراك إلى مؤسسة لإضافة المزيد.' if _tier != 'enterprise' else 'تواصل مع الدعم لرفع الحد.'}"
+            )
+        )
+
+    # (توافق قديم) التحقق من حد المشاريع عبر الوحدة المركزية إن وُجدت
+    try:
+        from .enterprise_config_routes import enforce_project_limit
+        await enforce_project_limit(db, tenant_id)
+    except Exception:
+        pass
 
     project_doc = {
         "id": str(uuid.uuid4()),
@@ -580,6 +618,107 @@ async def run_enterprise_backfill_migration(db):
     }
 
 
+async def migrate_tenants_to_customer_tier_v1(db):
+    """🔒 أكتوبر 2026 — ضبط افتراضي آمن لكل العملاء الحاليين على السيرفر الفعلي:
+    - أي تينانت لا يملك حقل account_tier (قديم) → يُحوَّل إلى **customer** حصراً
+      مع enterprise_enabled=False (إخفاء "إدارة المشاريع" حتى يفعّلها Super Admin يدوياً عبر زر 👑).
+    - ❗ قرار المالك: لا يُسمَح بتحويل أي حساب موجود إلى **trial** تلقائياً على السيرفر —
+      "تجريبي" يُنشأ فقط عبر Super Admin يدوياً من واجهة إنشاء التينانت. (أي حسابات is_demo
+      قديمة مُسبقة التصنيف تبقى آمنة كـ customer حتى يرقّيها Super Admin يدوياً.)
+    - لا يُمَس أي بيان (مشاريع، فروع، موظفين، طلبات، مصاريف) — تبقى كلها في DB كما هي.
+      عند تفعيل المؤسسة لاحقاً من Super Admin، تظهر كل المشاريع القديمة ببياناتها كاملةً.
+    idempotent — آمن لإعادة التشغيل في كل إقلاع."""
+    marker = await db.migrations.find_one({"name": "migrate_tenants_to_customer_tier_v1"})
+    if marker and marker.get("applied"):
+        return {"skipped": True}
+    try:
+        now_iso = datetime.now(timezone.utc).isoformat()
+
+        # كل تينانت بدون account_tier → customer (بدون أي استثناء)
+        customer_result = await db.tenants.update_many(
+            {"account_tier": {"$exists": False}},
+            {"$set": {
+                "account_tier": "customer",
+                "enterprise_enabled": False,
+                "is_enterprise": False,
+                "max_projects": 1,
+                "tier_migrated_at": now_iso,
+                "tier_migrated_from": "legacy_auto",
+            }}
+        )
+        customer_updated = customer_result.modified_count
+
+        logger.info(
+            f"🔒 migrate_tenants_to_customer_tier_v1: {customer_updated} legacy tenant(s) → customer "
+            f"(data preserved, UI hidden until Super Admin activates). No auto-trial on server per owner policy."
+        )
+
+        await db.migrations.update_one(
+            {"name": "migrate_tenants_to_customer_tier_v1"},
+            {"$set": {
+                "name": "migrate_tenants_to_customer_tier_v1",
+                "applied": True,
+                "applied_at": now_iso,
+                "customer_updated": customer_updated,
+                "trial_updated": 0,  # policy: never auto-mark trial on server
+            }},
+            upsert=True,
+        )
+        return {
+            "success": True,
+            "trial_updated": 0,
+            "customer_updated": customer_updated,
+        }
+    except Exception as e:
+        logger.warning(f"migrate_tenants_to_customer_tier_v1 failed: {e}")
+        return {"success": False, "error": str(e)}
+
+
+async def unmark_default_for_real_tenants_v1(db):
+    """🏷️ أكتوبر 2026: يرفع علامة is_default=False عن مشاريع العملاء الفعليين.
+    قاعدة العميل: "المشروع الرئيسي" يبقى فقط للحسابات التجريبية (trial/demo).
+    idempotent — يعمل في كل إقلاع بأمان (update_many رخيصة)."""
+    marker = await db.migrations.find_one({"name": "unmark_default_for_real_tenants_v1"})
+    if marker and marker.get("applied"):
+        return {"skipped": True}
+    try:
+        # اجلب كل العملاء الفعليين (ليس trial/demo وليس is_demo=True)
+        real_tenants = await db.tenants.find(
+            {
+                "$and": [
+                    {"$or": [{"is_demo": {"$ne": True}}, {"is_demo": {"$exists": False}}]},
+                    {"subscription_type": {"$nin": ["trial", "demo"]}},
+                ]
+            },
+            {"_id": 0, "id": 1}
+        ).to_list(length=None)
+        real_tenant_ids = [t["id"] for t in real_tenants if t.get("id")]
+        if not real_tenant_ids:
+            logger.info("🏷️ unmark_default_for_real_tenants_v1: no real tenants found")
+            unmarked = 0
+        else:
+            result = await db.projects.update_many(
+                {"tenant_id": {"$in": real_tenant_ids}, "is_default": True},
+                {"$set": {"is_default": False, "updated_at": datetime.now(timezone.utc).isoformat()}}
+            )
+            unmarked = result.modified_count
+            logger.info(f"🏷️ unmark_default_for_real_tenants_v1: unmarked {unmarked} project(s) in {len(real_tenant_ids)} real tenant(s)")
+        await db.migrations.update_one(
+            {"name": "unmark_default_for_real_tenants_v1"},
+            {"$set": {
+                "name": "unmark_default_for_real_tenants_v1",
+                "applied": True,
+                "applied_at": datetime.now(timezone.utc).isoformat(),
+                "unmarked_count": unmarked,
+            }},
+            upsert=True,
+        )
+        return {"success": True, "unmarked": unmarked}
+    except Exception as e:
+        logger.warning(f"unmark_default_for_real_tenants_v1 failed: {e}")
+        return {"success": False, "error": str(e)}
+
+
 @router.post("/_migration/run", include_in_schema=False)
 async def trigger_migration(current_user: dict = Depends(get_current_user)):
     """تشغيل migration Enterprise Mode يدوياً - Super Admin فقط"""
@@ -596,7 +735,11 @@ async def fix_default_project_names_v1(db):
     2) settings.system_info.value.name
     3) settings.system_invoice_settings.value.business_name/restaurant_name
     4) users.restaurant_name (أول مستخدم admin في الـ tenant)
-    idempotent — يعمل في الخلفية مرات متعددة بأمان."""
+    idempotent — يعمل في الخلفية مرات متعددة بأمان.
+
+    ⭐ أكتوبر 2026: يُصحّح أيضاً is_default=False لجميع العملاء الفعليين
+    (ليس تجريبي). "المشروع الرئيسي" يبقى فقط للحسابات التجريبية التي لم تُفعّل بعد.
+    """
     marker = await db.migrations.find_one({"name": "fix_default_project_names_v1"})
     if marker and marker.get("applied"):
         logger.info("🟢 Migration fix_default_project_names_v1 already applied, skipping")
@@ -604,6 +747,7 @@ async def fix_default_project_names_v1(db):
 
     logger.info("🩹 Starting fix_default_project_names_v1 migration...")
     fixed_count = 0
+    unmarked_count = 0  # عدد المشاريع التي رُفعت عنها علامة "رئيسي"
 
     # اجلب كل المشاريع التي اسمها UUID (أي name == tenant_id)
     async for project in db.projects.find({}, {"_id": 0}):
@@ -612,58 +756,80 @@ async def fix_default_project_names_v1(db):
         current_name = project.get("name") or ""
         if not tid or not pid:
             continue
-        # اسم المشروع هو نفسه الـ tenant_id → ربما UUID غير مُسمى
-        if current_name != tid:
-            continue
 
-        real_name = None
+        updates = {}
 
-        # محاولة 1: tenants.name
-        try:
-            t = await db.tenants.find_one({"id": tid}, {"_id": 0, "name": 1, "name_ar": 1, "business_name": 1})
-            if t:
-                real_name = t.get("name") or t.get("name_ar") or t.get("business_name")
-        except Exception:
-            pass
+        # ━━━ 1) تصحيح الاسم إن كان UUID ━━━
+        if current_name == tid:
+            real_name = None
 
-        # محاولة 2: settings.system_info
-        if not real_name:
+            # محاولة 1: tenants.name
             try:
-                s = await db.settings.find_one({"tenant_id": tid, "type": "system_info"})
-                if s and s.get("value", {}).get("name"):
-                    real_name = s["value"]["name"]
+                t = await db.tenants.find_one({"id": tid}, {"_id": 0, "name": 1, "name_ar": 1, "business_name": 1})
+                if t:
+                    real_name = t.get("name") or t.get("name_ar") or t.get("business_name")
             except Exception:
                 pass
 
-        # محاولة 3: settings.system_invoice_settings
-        if not real_name:
-            try:
-                s = await db.settings.find_one({"tenant_id": tid, "type": "system_invoice_settings"})
-                if s:
-                    val = s.get("value", {})
-                    real_name = val.get("business_name") or val.get("restaurant_name")
-            except Exception:
-                pass
+            # محاولة 2: settings.system_info
+            if not real_name:
+                try:
+                    s = await db.settings.find_one({"tenant_id": tid, "type": "system_info"})
+                    if s and s.get("value", {}).get("name"):
+                        real_name = s["value"]["name"]
+                except Exception:
+                    pass
 
-        # محاولة 4: users.restaurant_name (أول admin)
-        if not real_name:
+            # محاولة 3: settings.system_invoice_settings
+            if not real_name:
+                try:
+                    s = await db.settings.find_one({"tenant_id": tid, "type": "system_invoice_settings"})
+                    if s:
+                        val = s.get("value", {})
+                        real_name = val.get("business_name") or val.get("restaurant_name")
+                except Exception:
+                    pass
+
+            # محاولة 4: users.restaurant_name (أول admin)
+            if not real_name:
+                try:
+                    u = await db.users.find_one(
+                        {"tenant_id": tid, "role": "admin"},
+                        {"_id": 0, "restaurant_name": 1, "full_name": 1}
+                    )
+                    if u:
+                        real_name = u.get("restaurant_name") or u.get("full_name")
+                except Exception:
+                    pass
+
+            if real_name and real_name.strip() and real_name.strip() != tid:
+                updates["name"] = real_name.strip()
+
+        # ━━━ 2) رفع علامة is_default إن كان العميل فعلي (ليس تجريبي) ━━━
+        # قاعدة العميل: "المشروع الرئيسي" يبقى فقط للحسابات التجريبية
+        if project.get("is_default"):
             try:
-                u = await db.users.find_one(
-                    {"tenant_id": tid, "role": "admin"},
-                    {"_id": 0, "restaurant_name": 1, "full_name": 1}
+                t = await db.tenants.find_one(
+                    {"id": tid},
+                    {"_id": 0, "is_demo": 1, "subscription_type": 1}
                 )
-                if u:
-                    real_name = u.get("restaurant_name") or u.get("full_name")
+                if t:
+                    is_trial = (
+                        bool(t.get("is_demo"))
+                        or (t.get("subscription_type") in ("trial", "demo"))
+                    )
+                    if not is_trial:
+                        updates["is_default"] = False
+                        unmarked_count += 1
             except Exception:
                 pass
 
-        if real_name and real_name.strip() and real_name.strip() != tid:
-            await db.projects.update_one(
-                {"id": pid},
-                {"$set": {"name": real_name.strip(), "updated_at": datetime.now(timezone.utc).isoformat()}}
-            )
-            fixed_count += 1
-            logger.info(f"   ✅ Renamed project {pid[:8]}... → '{real_name.strip()}'")
+        if updates:
+            updates["updated_at"] = datetime.now(timezone.utc).isoformat()
+            await db.projects.update_one({"id": pid}, {"$set": updates})
+            if "name" in updates:
+                fixed_count += 1
+                logger.info(f"   ✅ Renamed project {pid[:8]}... → '{updates['name']}'")
 
     # وضع علامة الانتهاء
     await db.migrations.update_one(
@@ -673,8 +839,9 @@ async def fix_default_project_names_v1(db):
             "applied": True,
             "applied_at": datetime.now(timezone.utc).isoformat(),
             "fixed_count": fixed_count,
+            "unmarked_default_count": unmarked_count,
         }},
         upsert=True,
     )
-    logger.info(f"✅ fix_default_project_names_v1 complete: {fixed_count} project(s) renamed")
-    return {"success": True, "fixed_count": fixed_count}
+    logger.info(f"✅ fix_default_project_names_v1 complete: {fixed_count} renamed, {unmarked_count} unmarked as default")
+    return {"success": True, "fixed_count": fixed_count, "unmarked_default_count": unmarked_count}

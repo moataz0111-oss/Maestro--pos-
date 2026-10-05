@@ -207,6 +207,22 @@ async def create_tenant(tenant: TenantCreate, background_tasks: BackgroundTasks,
         "max_users": tenant.max_users,
         "is_active": True,
         "is_demo": getattr(tenant, 'is_demo', False),
+        # ⭐ أكتوبر 2026: مستوى الحساب (3 أنواع)
+        "account_tier": getattr(tenant, 'account_tier', None) or "trial",
+        # ⭐ المؤسسة تحصل تلقائياً على كل الميزات
+        "is_enterprise": (getattr(tenant, 'account_tier', None) == "enterprise"),
+        # ⭐ enterprise_enabled: يُفعّل UI إدارة المشاريع
+        #    trial: مفعّل (يُجرب كمؤسسة)
+        #    customer: معطّل (مشروع واحد ضمني — لا UI للتعدد)
+        #    enterprise: مفعّل
+        "enterprise_enabled": (
+            getattr(tenant, 'account_tier', None) in ("trial", "enterprise")
+        ),
+        # ⭐ حدود المؤسسة (طلب العميل)
+        "max_projects": getattr(tenant, 'max_projects', 1) or 1,
+        "max_branches_per_project": getattr(tenant, 'max_branches_per_project', 1) or 1,
+        "max_users_per_branch": getattr(tenant, 'max_users_per_branch', 5) or 5,
+        "max_admins_per_project": getattr(tenant, 'max_admins_per_project', 1) or 1,
         "created_at": datetime.now(timezone.utc).isoformat(),
         "expires_at": expires_at,
         "created_by": current_user["id"]
@@ -253,23 +269,31 @@ async def create_tenant(tenant: TenantCreate, background_tasks: BackgroundTasks,
     # 🏢 Enterprise Mode: إنشاء مشروع افتراضي بنفس اسم المطعم
     # يضمن ظهور الاسم الحقيقي في إدارة المشاريع (بدلاً من UUID)
     # وربط كل البيانات الجديدة بالمشروع تلقائياً
+    #
+    # ⭐ قاعدة العميل (أكتوبر 2026): is_default=True فقط للحسابات التجريبية.
+    # عند تحويل الحساب لعميل فعلي، يُلغى تصنيف "المشروع الرئيسي" تلقائياً.
     # ═══════════════════════════════════════════════════════════════
     try:
         default_project_id = str(uuid.uuid4())
         now_iso = datetime.now(timezone.utc).isoformat()
+        _is_trial_or_demo = (
+            getattr(tenant, "is_demo", False)
+            or tenant.subscription_type in ("trial", "demo")
+            or (getattr(tenant, "account_tier", None) == "trial")
+        )
         await db.projects.insert_one({
             "id": default_project_id,
             "tenant_id": tenant_id,
             "name": tenant.name,
             "name_en": None,
-            "activity_type": "restaurant",
+            "activity_type": getattr(tenant, "activity_type", None) or "restaurant",
             "logo_url": None,
             "currency": "IQD",
             "timezone": "Asia/Baghdad",
             "exchange_rate": 1.0,
             "description": None,
             "is_active": True,
-            "is_default": True,
+            "is_default": _is_trial_or_demo,  # ⭐ فقط للتجريبي
             "admin_user_id": admin_doc["id"],
             "created_by": current_user.get("id"),
             "created_at": now_iso,
@@ -860,7 +884,10 @@ async def update_tenant(tenant_id: str, updates: dict, background_tasks: Backgro
     allowed_updates = [
         "name", "name_en", "name_ar", "owner_name", "owner_email", "owner_phone", 
         "subscription_type", "subscription_end", "max_branches", "max_users", 
-        "is_active", "expires_at", "logo_url"
+        "is_active", "expires_at", "logo_url",
+        # ⭐ أكتوبر 2026: حقول المؤسسة
+        "account_tier", "max_projects", "max_branches_per_project",
+        "max_users_per_branch", "max_admins_per_project",
     ]
     update_data = {k: v for k, v in updates.items() if k in allowed_updates}
     
@@ -931,6 +958,39 @@ async def update_tenant(tenant_id: str, updates: dict, background_tasks: Backgro
     
     if update_data:
         await db.tenants.update_one({"id": tenant_id}, {"$set": update_data})
+
+    # ⭐ قاعدة العميل: "المشروع الرئيسي" يبقى فقط للحسابات التجريبية
+    # إن تغيّر الاشتراك من trial/demo إلى خطة فعلية، نرفع علامة is_default عن مشاريع التينانت.
+    new_sub = update_data.get("subscription_type") or tenant.get("subscription_type")
+    if new_sub and new_sub not in ("trial", "demo"):
+        try:
+            await db.projects.update_many(
+                {"tenant_id": tenant_id, "is_default": True},
+                {"$set": {"is_default": False, "updated_at": datetime.now(timezone.utc).isoformat()}}
+            )
+        except Exception as _e:
+            logger.warning(f"failed to unmark is_default for tenant={tenant_id}: {_e}")
+
+    # ⭐ أكتوبر 2026: إدارة enterprise_enabled حسب account_tier
+    #    customer: معطّل (مشروع واحد ضمني — لا UI للتعدد)
+    #    trial/enterprise: مفعّل
+    new_tier = updates.get("account_tier") or tenant.get("account_tier")
+    if new_tier in ("trial", "enterprise"):
+        try:
+            await db.tenants.update_one(
+                {"id": tenant_id},
+                {"$set": {"enterprise_enabled": True, "is_enterprise": (new_tier == "enterprise")}}
+            )
+        except Exception:
+            pass
+    elif new_tier == "customer":
+        try:
+            await db.tenants.update_one(
+                {"id": tenant_id},
+                {"$set": {"enterprise_enabled": False, "is_enterprise": False}}
+            )
+        except Exception:
+            pass
     
     # تحديث حالة المستخدمين عند تغيير is_active
     if "is_active" in updates:
@@ -1488,6 +1548,107 @@ async def clear_all_notifications(current_user: dict = Depends(verify_super_admi
     """حذف جميع الإشعارات"""
     await db.notifications.delete_many({})
     return {"message": "تم حذف جميع الإشعارات"}
+
+# ==================== 📊 سجل تدقيق تقارير الورديات (SuperAdmin — بدون أرقام مالية) ====================
+# يُظهر هذا السجل حالة إرسال تقارير إغلاق الورديات لكل عميل:
+#   - اسم العميل، رقم الوردية، الكاشير، الفرع، التاريخ، القنوات، الحالة، سبب الفشل.
+# ❌ لا يحوي أي أرقام مالية (مبيعات/نقد/عجز) — الخصوصية مكفولة.
+def _build_shift_audit_query(tenant_id: Optional[str], status: Optional[str],
+                             date_from: Optional[str], date_to: Optional[str]) -> dict:
+    query: dict = {}
+    if tenant_id:
+        query["tenant_id"] = tenant_id
+    if status in ("delivered", "failed"):
+        query["status"] = status
+    date_q: dict = {}
+    if date_from:
+        date_q["$gte"] = str(date_from).strip()
+    if date_to:
+        date_q["$lte"] = str(date_to).strip() + "T23:59:59Z"
+    if date_q:
+        query["sent_at"] = date_q
+    return query
+
+
+@router.get("/super-admin/shift-reports-audit")
+async def list_shift_reports_audit(
+    current_user: dict = Depends(verify_super_admin),
+    tenant_id: Optional[str] = None,
+    status: Optional[str] = None,   # delivered | failed
+    date_from: Optional[str] = None,  # ISO 'YYYY-MM-DD'
+    date_to: Optional[str] = None,    # ISO 'YYYY-MM-DD'
+    limit: int = 100,
+    skip: int = 0,
+):
+    """قائمة سجلات إرسال تقارير الورديات (بدون أي أرقام مالية)."""
+    query = _build_shift_audit_query(tenant_id, status, date_from, date_to)
+
+    total = await db.shift_report_audit.count_documents(query)
+    delivered = await db.shift_report_audit.count_documents({**query, "status": "delivered"})
+    failed = await db.shift_report_audit.count_documents({**query, "status": "failed"})
+
+    items = await db.shift_report_audit.find(
+        query, {"_id": 0}
+    ).sort("sent_at", -1).skip(max(0, int(skip))).limit(max(1, min(500, int(limit)))).to_list(length=None)
+
+    # tenants للمختار + filters
+    tenants_list = await db.tenants.find({}, {"_id": 0, "id": 1, "name": 1}).to_list(length=None)
+    return {
+        "summary": {"total": total, "delivered": delivered, "failed": failed},
+        "items": items,
+        "tenants": tenants_list,
+        "filters": {"tenant_id": tenant_id, "status": status, "date_from": date_from, "date_to": date_to},
+    }
+
+
+@router.get("/super-admin/shift-reports-audit.csv")
+async def export_shift_reports_audit_csv(
+    current_user: dict = Depends(verify_super_admin),
+    tenant_id: Optional[str] = None,
+    status: Optional[str] = None,
+    date_from: Optional[str] = None,
+    date_to: Optional[str] = None,
+    limit: int = 5000,
+):
+    """تصدير CSV لسجل تقارير الورديات (بدون أي أرقام مالية — خصوصية مكفولة)."""
+    import io
+    import csv
+    from fastapi.responses import StreamingResponse
+
+    query = _build_shift_audit_query(tenant_id, status, date_from, date_to)
+    items = await db.shift_report_audit.find(
+        query, {"_id": 0}
+    ).sort("sent_at", -1).limit(max(1, min(50000, int(limit)))).to_list(length=None)
+
+    buf = io.StringIO()
+    buf.write("\ufeff")  # BOM لدعم Excel العربي
+    w = csv.writer(buf)
+    w.writerow([
+        "sent_at", "tenant_name", "cashier_name", "branch_name", "business_date",
+        "channel_whatsapp", "channel_email", "channel_bell",
+        "whatsapp_recipients", "email_recipients",
+        "status", "error_reason", "shift_id",
+    ])
+    for it in items:
+        w.writerow([
+            it.get("sent_at") or "", it.get("tenant_name") or "",
+            it.get("cashier_name") or "", it.get("branch_name") or "",
+            it.get("business_date") or "",
+            "yes" if it.get("channel_whatsapp") else "no",
+            "yes" if it.get("channel_email") else "no",
+            "yes" if it.get("channel_bell") else "no",
+            int(it.get("whatsapp_recipients") or 0),
+            int(it.get("email_recipients") or 0),
+            it.get("status") or "", it.get("error_reason") or "",
+            it.get("shift_id") or "",
+        ])
+    buf.seek(0)
+    _fname = f"shift_reports_audit_{datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S')}.csv"
+    return StreamingResponse(
+        iter([buf.getvalue().encode("utf-8")]),
+        media_type="text/csv; charset=utf-8",
+        headers={"Content-Disposition": f'attachment; filename="{_fname}"'},
+    )
 
 # ==================== إعدادات الإشعارات ====================
 

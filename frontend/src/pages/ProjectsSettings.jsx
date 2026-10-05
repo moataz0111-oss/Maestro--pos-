@@ -408,7 +408,7 @@ export default function ProjectsSettings() {
                       <CardDescription className="text-xs">{meta.label}</CardDescription>
                     </div>
                   </div>
-                  {p.is_default && <Badge variant="outline" className="text-[10px] opacity-60">المشروع الرئيسي</Badge>}
+                  {p.is_default && <Badge variant="outline" className="text-[10px] opacity-60">تجريبي</Badge>}
                 </div>
               </CardHeader>
               <CardContent className="space-y-3">

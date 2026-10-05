@@ -504,6 +504,16 @@ export default function SuperAdmin() {
   const [tenants, setTenants] = useState([]);
   const [stats, setStats] = useState(null);
   const [selectedTenant, setSelectedTenant] = useState(null);
+  // ⭐ أكتوبر 2026: Dialog تحويل مستوى الحساب (تجريبي/عميل فعال/مؤسسة)
+  const [showChangeTier, setShowChangeTier] = useState(false);
+  const [tierForm, setTierForm] = useState({
+    account_tier: 'customer',
+    max_projects: 1,
+    max_branches_per_project: 5,
+    max_users_per_branch: 10,
+    max_admins_per_project: 1,
+  });
+  const [tierSaving, setTierSaving] = useState(false);
   const [tenantDetails, setTenantDetails] = useState(null);
   const [liveStats, setLiveStats] = useState(null);
   
@@ -601,7 +611,13 @@ export default function SuperAdmin() {
     subscription_duration: 1,
     max_branches: 1,
     max_users: 5,
-    is_demo: false
+    is_demo: true,
+    activity_type: 'restaurant',
+    account_tier: 'trial',  // 'trial' | 'customer' | 'enterprise'
+    max_projects: 1,
+    max_branches_per_project: 1,
+    max_users_per_branch: 5,
+    max_admins_per_project: 1,
   });
   
   // Edit tenant form
@@ -704,6 +720,55 @@ export default function SuperAdmin() {
   // 🛡️ إدارة IPs المحظورة (24h + دائم)
   const [ipBans, setIpBans] = useState({ permanent_bans: [], temporary_blocks: [] });
   const [loadingIpBans, setLoadingIpBans] = useState(false);
+
+  // 📊 سجل تدقيق تقارير الورديات (SuperAdmin - بدون أرقام مالية - الخصوصية مكفولة)
+  const [shiftReportsAudit, setShiftReportsAudit] = useState({ summary: { total: 0, delivered: 0, failed: 0 }, items: [], tenants: [] });
+  const [loadingShiftReportsAudit, setLoadingShiftReportsAudit] = useState(false);
+  const [shiftAuditFilters, setShiftAuditFilters] = useState({ tenant_id: '', status: '', date_from: '', date_to: '' });
+
+  const fetchShiftReportsAudit = async () => {
+    setLoadingShiftReportsAudit(true);
+    try {
+      const tok = localStorage.getItem('super_admin_token') || localStorage.getItem('token');
+      const qs = new URLSearchParams();
+      qs.set('limit', '200');
+      if (shiftAuditFilters.tenant_id) qs.set('tenant_id', shiftAuditFilters.tenant_id);
+      if (shiftAuditFilters.status) qs.set('status', shiftAuditFilters.status);
+      if (shiftAuditFilters.date_from) qs.set('date_from', shiftAuditFilters.date_from);
+      if (shiftAuditFilters.date_to) qs.set('date_to', shiftAuditFilters.date_to);
+      const res = await axios.get(`${API}/super-admin/shift-reports-audit?${qs.toString()}`, { headers: { Authorization: `Bearer ${tok}` } });
+      setShiftReportsAudit(res.data || { summary: { total: 0, delivered: 0, failed: 0 }, items: [], tenants: [] });
+    } catch (e) {
+      console.error('fetchShiftReportsAudit', e);
+    } finally {
+      setLoadingShiftReportsAudit(false);
+    }
+  };
+
+  const exportShiftReportsAuditCsv = async () => {
+    try {
+      const tok = localStorage.getItem('super_admin_token') || localStorage.getItem('token');
+      const qs = new URLSearchParams();
+      if (shiftAuditFilters.tenant_id) qs.set('tenant_id', shiftAuditFilters.tenant_id);
+      if (shiftAuditFilters.status) qs.set('status', shiftAuditFilters.status);
+      if (shiftAuditFilters.date_from) qs.set('date_from', shiftAuditFilters.date_from);
+      if (shiftAuditFilters.date_to) qs.set('date_to', shiftAuditFilters.date_to);
+      const res = await axios.get(`${API}/super-admin/shift-reports-audit.csv?${qs.toString()}`, {
+        headers: { Authorization: `Bearer ${tok}` },
+        responseType: 'blob',
+      });
+      const url = window.URL.createObjectURL(new Blob([res.data], { type: 'text/csv;charset=utf-8' }));
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `shift_reports_audit_${new Date().toISOString().slice(0,10)}.csv`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(url);
+    } catch (e) {
+      console.error('exportShiftReportsAuditCsv', e);
+    }
+  };
   
   const fetchIpBans = async () => {
     setLoadingIpBans(true);
@@ -1633,7 +1698,13 @@ export default function SuperAdmin() {
         subscription_duration: 1,
         max_branches: 1,
         max_users: 5,
-        is_demo: false
+        is_demo: true,
+        activity_type: 'restaurant',
+        account_tier: 'trial',
+        max_projects: 1,
+        max_branches_per_project: 1,
+        max_users_per_branch: 5,
+        max_admins_per_project: 1,
       });
     } catch (error) {
       console.error('Create tenant error:', error);
@@ -1877,6 +1948,14 @@ export default function SuperAdmin() {
 
   const openEditTenant = (tenant) => {
     setSelectedTenant(tenant);
+    // ⭐ أكتوبر 2026: استعادة قيم tier الحالية للعميل
+    setTierForm({
+      account_tier: tenant.account_tier || (tenant.is_demo ? 'trial' : 'customer'),
+      max_projects: tenant.max_projects || 1,
+      max_branches_per_project: tenant.max_branches_per_project || 5,
+      max_users_per_branch: tenant.max_users_per_branch || 10,
+      max_admins_per_project: tenant.max_admins_per_project || 1,
+    });
     setEditTenantForm({
       name: tenant.name || '',
       name_ar: tenant.name_ar || '',
@@ -2949,6 +3028,44 @@ export default function SuperAdmin() {
           <Button variant="ghost" size="icon" onClick={() => openFeaturesModal(tenant)} className="hover:bg-gray-600" title={t('الميزات والصلاحيات')}>
             <Settings className="h-4 w-4 text-amber-400" />
           </Button>
+          {/* ⭐ تحويل مستوى الحساب (تجريبي / عميل فعال / مؤسسة) */}
+          <Button
+            variant="ghost" size="icon"
+            onClick={() => {
+              setSelectedTenant(tenant);
+              const currentTier = tenant.account_tier || (tenant.is_demo ? 'trial' : 'customer');
+              // ⚡ إن كان عميل فعال → افتراضياً اختر "مؤسسة" (ترقية سريعة)
+              setTierForm({
+                account_tier: currentTier === 'customer' ? 'enterprise' : currentTier,
+                max_projects: tenant.max_projects || 3,
+                max_branches_per_project: tenant.max_branches_per_project || 5,
+                max_users_per_branch: tenant.max_users_per_branch || 10,
+                max_admins_per_project: tenant.max_admins_per_project || 1,
+              });
+              setShowChangeTier(true);
+            }}
+            className={
+              tenant.account_tier === 'enterprise'
+                ? 'hover:bg-amber-600/30 border border-amber-500/40 bg-amber-500/10'
+                : tenant.account_tier === 'customer' || (!tenant.account_tier && !tenant.is_demo)
+                  ? 'hover:bg-amber-600/30 border border-amber-500/40 bg-amber-500/10 animate-pulse'
+                  : 'hover:bg-gray-600'
+            }
+            title={
+              tenant.account_tier === 'enterprise'
+                ? t('تعديل حدود المؤسسة')
+                : (tenant.account_tier === 'customer' || (!tenant.account_tier && !tenant.is_demo))
+                  ? t('⚡ ترقية إلى مؤسسة — فتح إدارة المشاريع')
+                  : t('تحويل مستوى الحساب')
+            }
+            data-testid={`change-tier-${tenant.id}`}
+          >
+            <Crown className={`h-4 w-4 ${
+              tenant.account_tier === 'enterprise' ? 'text-amber-400' :
+              tenant.account_tier === 'customer' || (!tenant.account_tier && !tenant.is_demo) ? 'text-amber-300' :
+              'text-yellow-500'
+            }`} />
+          </Button>
           {/* التفاصيل */}
           <Button variant="ghost" size="icon" onClick={() => viewTenantDetails(tenant)} className="hover:bg-gray-600" title={t('التفاصيل')}>
             <Eye className="h-4 w-4 text-gray-400" />
@@ -3421,8 +3538,8 @@ export default function SuperAdmin() {
           </CardHeader>
           <CardContent>
             {/* تبويبات لفصل العملاء الفعليين عن الحسابات التجريبية */}
-            <Tabs defaultValue="active" className="w-full" onValueChange={(v) => { if (v === 'security' && !securityLog) fetchSecurityLog(); }}>
-              <TabsList className="grid w-full grid-cols-7 mb-4 bg-[#1A284E]/50">
+            <Tabs defaultValue="active" className="w-full" onValueChange={(v) => { if (v === 'security' && !securityLog) fetchSecurityLog(); if (v === 'shift-audit') fetchShiftReportsAudit(); }}>
+              <TabsList className="grid w-full grid-cols-8 mb-4 bg-[#1A284E]/50">
                 <TabsTrigger value="active" className="data-[state=active]:bg-green-600">
                   <Users className="h-4 w-4 ml-2" />
                   {t('العملاء')} ({tenants.filter(t => !t.is_demo && t.subscription_type !== 'demo').length})
@@ -3446,6 +3563,10 @@ export default function SuperAdmin() {
                 <TabsTrigger value="messages" className="data-[state=active]:bg-teal-600" data-testid="messages-log-tab">
                   <Mail className="h-4 w-4 ml-2" />
                   {t('سجل الرسائل')}
+                </TabsTrigger>
+                <TabsTrigger value="shift-audit" className="data-[state=active]:bg-emerald-600" data-testid="shift-audit-tab">
+                  <Calendar className="h-4 w-4 ml-2" />
+                  {t('تقارير الورديات')}
                 </TabsTrigger>
                 <TabsTrigger value="security" className="data-[state=active]:bg-red-600" data-testid="security-log-tab">
                   <Shield className="h-4 w-4 ml-2" />
@@ -3920,6 +4041,162 @@ export default function SuperAdmin() {
               {/* سجل الرسائل المُرسَلة (WhatsApp + Email + Bell) */}
               <TabsContent value="messages">
                 <MessagesLogCard />
+              </TabsContent>
+
+              {/* 📊 تقارير الورديات المُرسَلة — بدون أرقام مالية (الخصوصية مكفولة للعميل) */}
+              <TabsContent value="shift-audit">
+                <div className="space-y-4" data-testid="shift-audit-content">
+                  <div className="flex items-center justify-between flex-wrap gap-2">
+                    <div className="flex items-center gap-2 text-emerald-400">
+                      <Calendar className="h-5 w-5" />
+                      <span className="font-bold">{t('سجل إرسال تقارير إغلاق الورديات')}</span>
+                      <span className="text-xs text-gray-400">
+                        🔒 {t('خصوصية: لا تظهر أرقام مالية — فقط حالة الإرسال')}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Button onClick={exportShiftReportsAuditCsv} variant="outline" size="sm" className="border-emerald-700 text-emerald-300 hover:bg-emerald-900/20" data-testid="shift-audit-csv-btn">
+                        ⬇️ {t('تصدير CSV')}
+                      </Button>
+                      <Button onClick={fetchShiftReportsAudit} variant="outline" size="sm" className="border-[#2A3A66]" data-testid="shift-audit-refresh">
+                        <RefreshCw className={`h-4 w-4 ${loadingShiftReportsAudit ? 'animate-spin' : ''}`} />
+                      </Button>
+                    </div>
+                  </div>
+
+                  {/* فلاتر */}
+                  <div className="grid grid-cols-1 md:grid-cols-5 gap-2 bg-[#0F1A3B] p-3 rounded border border-[#2A3A66]">
+                    <div>
+                      <label className="text-xs text-gray-400 block mb-1">{t('العميل')}</label>
+                      <select
+                        value={shiftAuditFilters.tenant_id}
+                        onChange={(e) => setShiftAuditFilters({ ...shiftAuditFilters, tenant_id: e.target.value })}
+                        className="w-full bg-[#1A284E] text-white text-sm rounded px-2 py-1 border border-[#2A3A66]"
+                        data-testid="shift-audit-tenant-filter"
+                      >
+                        <option value="">{t('الكل')}</option>
+                        {(shiftReportsAudit.tenants || []).map((tn) => (
+                          <option key={tn.id} value={tn.id}>{tn.name || tn.id}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="text-xs text-gray-400 block mb-1">{t('الحالة')}</label>
+                      <select
+                        value={shiftAuditFilters.status}
+                        onChange={(e) => setShiftAuditFilters({ ...shiftAuditFilters, status: e.target.value })}
+                        className="w-full bg-[#1A284E] text-white text-sm rounded px-2 py-1 border border-[#2A3A66]"
+                        data-testid="shift-audit-status-filter"
+                      >
+                        <option value="">{t('الكل')}</option>
+                        <option value="delivered">✅ {t('وصل')}</option>
+                        <option value="failed">❌ {t('فشل')}</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="text-xs text-gray-400 block mb-1">{t('من تاريخ')}</label>
+                      <input
+                        type="date"
+                        value={shiftAuditFilters.date_from}
+                        onChange={(e) => setShiftAuditFilters({ ...shiftAuditFilters, date_from: e.target.value })}
+                        className="w-full bg-[#1A284E] text-white text-sm rounded px-2 py-1 border border-[#2A3A66]"
+                        data-testid="shift-audit-datefrom"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-xs text-gray-400 block mb-1">{t('إلى تاريخ')}</label>
+                      <input
+                        type="date"
+                        value={shiftAuditFilters.date_to}
+                        onChange={(e) => setShiftAuditFilters({ ...shiftAuditFilters, date_to: e.target.value })}
+                        className="w-full bg-[#1A284E] text-white text-sm rounded px-2 py-1 border border-[#2A3A66]"
+                        data-testid="shift-audit-dateto"
+                      />
+                    </div>
+                    <div className="flex items-end">
+                      <Button onClick={fetchShiftReportsAudit} className="w-full bg-emerald-600 hover:bg-emerald-700 text-white" size="sm" data-testid="shift-audit-apply">
+                        {t('تطبيق')}
+                      </Button>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-3 gap-3">
+                    <div className="bg-[#0F1A3B] rounded p-3 border border-[#2A3A66]">
+                      <p className="text-xs text-gray-400">{t('الإجمالي')}</p>
+                      <p className="text-2xl font-bold text-white" data-testid="shift-audit-total">
+                        {shiftReportsAudit?.summary?.total ?? 0}
+                      </p>
+                    </div>
+                    <div className="bg-[#0F1A3B] rounded p-3 border border-emerald-800">
+                      <p className="text-xs text-emerald-400">{t('✅ وصلت')}</p>
+                      <p className="text-2xl font-bold text-emerald-300" data-testid="shift-audit-delivered">
+                        {shiftReportsAudit?.summary?.delivered ?? 0}
+                      </p>
+                    </div>
+                    <div className="bg-[#0F1A3B] rounded p-3 border border-red-800">
+                      <p className="text-xs text-red-400">{t('❌ فشلت')}</p>
+                      <p className="text-2xl font-bold text-red-300" data-testid="shift-audit-failed">
+                        {shiftReportsAudit?.summary?.failed ?? 0}
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="bg-[#0F1A3B] rounded border border-[#2A3A66] overflow-hidden">
+                    {loadingShiftReportsAudit ? (
+                      <p className="text-center text-gray-400 py-8">{t('جار التحميل…')}</p>
+                    ) : (shiftReportsAudit?.items?.length || 0) === 0 ? (
+                      <p className="text-center text-gray-400 py-8" data-testid="shift-audit-empty">
+                        {t('لا توجد تقارير مُرسَلة بعد')}
+                      </p>
+                    ) : (
+                      <div className="overflow-x-auto">
+                        <table className="w-full text-sm">
+                          <thead className="bg-[#1A284E] text-gray-300">
+                            <tr>
+                              <th className="p-2 text-right">{t('العميل')}</th>
+                              <th className="p-2 text-right">{t('الكاشير')}</th>
+                              <th className="p-2 text-right">{t('الفرع')}</th>
+                              <th className="p-2 text-right">{t('اليوم التشغيلي')}</th>
+                              <th className="p-2 text-center">{t('القنوات')}</th>
+                              <th className="p-2 text-center">{t('الحالة')}</th>
+                              <th className="p-2 text-right">{t('وقت الإرسال')}</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {shiftReportsAudit.items.map((row, idx) => (
+                              <tr key={row.id || idx} className="border-t border-[#2A3A66]/50" data-testid={`shift-audit-row-${idx}`}>
+                                <td className="p-2 text-white">{row.tenant_name || row.tenant_id || '—'}</td>
+                                <td className="p-2 text-gray-200">{row.cashier_name || '—'}</td>
+                                <td className="p-2 text-gray-200">{row.branch_name || '—'}</td>
+                                <td className="p-2 text-gray-400 font-mono text-xs">{row.business_date || '—'}</td>
+                                <td className="p-2 text-center">
+                                  <div className="flex items-center justify-center gap-1 text-xs">
+                                    <span title="WhatsApp" className={row.channel_whatsapp ? 'text-emerald-400' : 'text-gray-600'}>📱</span>
+                                    <span title="Email" className={row.channel_email ? 'text-emerald-400' : 'text-gray-600'}>✉️</span>
+                                    <span title="Bell" className={row.channel_bell ? 'text-emerald-400' : 'text-gray-600'}>🔔</span>
+                                  </div>
+                                </td>
+                                <td className="p-2 text-center">
+                                  {row.status === 'delivered' ? (
+                                    <span className="text-emerald-400">✅ {t('وصل')}</span>
+                                  ) : (
+                                    <span className="text-red-400" title={row.error_reason || ''}>
+                                      ❌ {t('فشل')}
+                                      {row.error_reason && <span className="text-xs text-gray-500 block">{row.error_reason}</span>}
+                                    </span>
+                                  )}
+                                </td>
+                                <td className="p-2 text-gray-400 font-mono text-xs">
+                                  {row.sent_at ? new Date(row.sent_at).toLocaleString('ar-IQ') : '—'}
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    )}
+                  </div>
+                </div>
               </TabsContent>
 
               {/* السجل الأمني — خاص بمالك النظام الأعلى */}
@@ -4436,31 +4713,74 @@ export default function SuperAdmin() {
             <DialogTitle className="text-xl">{t('إنشاء عميل جديد')}</DialogTitle>
           </DialogHeader>
           <div className="space-y-4 py-4">
-            {/* اختيار نوع الحساب */}
+            {/* اختيار نوع الحساب — 3 أنواع (تجريبي / عميل فعال / مؤسسة) */}
             <div className="space-y-2">
               <Label className="text-base font-medium">{t('نوع الحساب')} *</Label>
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-3 gap-3">
+                {/* 1️⃣ حساب تجريبي = الافتراضي */}
                 <Button
                   type="button"
-                  variant={newTenantForm.is_demo ? "outline" : "default"}
-                  className={`h-20 flex flex-col items-center justify-center gap-2 ${
-                    !newTenantForm.is_demo ? 'bg-green-600 hover:bg-green-700 border-green-500' : 'border-[#2A3A66] hover:bg-[#1A284E]'
+                  variant="outline"
+                  className={`h-24 flex flex-col items-center justify-center gap-2 ${
+                    newTenantForm.account_tier === 'trial'
+                      ? 'bg-yellow-600 hover:bg-yellow-700 border-yellow-500 text-white'
+                      : 'border-[#2A3A66] hover:bg-[#1A284E]'
                   }`}
-                  onClick={() => setNewTenantForm({...newTenantForm, is_demo: false, subscription_type: 'trial'})}
-                >
-                  <Building2 className="h-6 w-6" />
-                  <span>{t('عميل فعلي')}</span>
-                </Button>
-                <Button
-                  type="button"
-                  variant={newTenantForm.is_demo ? "default" : "outline"}
-                  className={`h-20 flex flex-col items-center justify-center gap-2 ${
-                    newTenantForm.is_demo ? 'bg-yellow-600 hover:bg-yellow-700 border-yellow-500' : 'border-[#2A3A66] hover:bg-[#1A284E]'
-                  }`}
-                  onClick={() => setNewTenantForm({...newTenantForm, is_demo: true, subscription_type: 'demo'})}
+                  onClick={() => setNewTenantForm({
+                    ...newTenantForm,
+                    account_tier: 'trial',
+                    is_demo: true,
+                    subscription_type: 'trial',
+                  })}
+                  data-testid="account-type-trial-btn"
                 >
                   <Play className="h-6 w-6" />
-                  <span>{t('حساب تجريبي')}</span>
+                  <span className="text-sm font-semibold">{t('تجريبي')}</span>
+                  <span className="text-[10px] opacity-80">{t('14 يوم مجاناً')}</span>
+                </Button>
+
+                {/* 2️⃣ عميل فعال (مشترك) */}
+                <Button
+                  type="button"
+                  variant="outline"
+                  className={`h-24 flex flex-col items-center justify-center gap-2 ${
+                    newTenantForm.account_tier === 'customer'
+                      ? 'bg-green-600 hover:bg-green-700 border-green-500 text-white'
+                      : 'border-[#2A3A66] hover:bg-[#1A284E]'
+                  }`}
+                  onClick={() => setNewTenantForm({
+                    ...newTenantForm,
+                    account_tier: 'customer',
+                    is_demo: false,
+                    subscription_type: 'basic',
+                  })}
+                  data-testid="account-type-customer-btn"
+                >
+                  <Building2 className="h-6 w-6" />
+                  <span className="text-sm font-semibold">{t('عميل فعال')}</span>
+                  <span className="text-[10px] opacity-80">{t('اشتراك مدفوع')}</span>
+                </Button>
+
+                {/* 3️⃣ مؤسسة — صلاحيات موسعة */}
+                <Button
+                  type="button"
+                  variant="outline"
+                  className={`h-24 flex flex-col items-center justify-center gap-2 ${
+                    newTenantForm.account_tier === 'enterprise'
+                      ? 'bg-amber-600 hover:bg-amber-700 border-amber-500 text-white'
+                      : 'border-[#2A3A66] hover:bg-[#1A284E]'
+                  }`}
+                  onClick={() => setNewTenantForm({
+                    ...newTenantForm,
+                    account_tier: 'enterprise',
+                    is_demo: false,
+                    subscription_type: 'enterprise',
+                  })}
+                  data-testid="account-type-enterprise-btn"
+                >
+                  <Crown className="h-6 w-6" />
+                  <span className="text-sm font-semibold">{t('مؤسسة')}</span>
+                  <span className="text-[10px] opacity-80">{t('صلاحيات موسعة')}</span>
                 </Button>
               </div>
             </div>
@@ -4473,6 +4793,8 @@ export default function SuperAdmin() {
                   value={newTenantForm.name}
                   onChange={(e) => setNewTenantForm({...newTenantForm, name: e.target.value})}
                   className="bg-[#1A284E]/50 border-[#2A3A66]"
+                  data-testid="new-tenant-name-input"
+                />
                 />
               </div>
               <div className="space-y-2">
@@ -4574,6 +4896,109 @@ export default function SuperAdmin() {
               </div>
             )}
             
+            {/* ⭐ نوع النشاط — يظهر في رسائل الواتساب "🍽️ اسم العميل — مطعم" */}
+            <div className="space-y-2">
+              <Label className="flex items-center gap-2">
+                {t('نوع النشاط')} *
+                <span className="text-xs text-amber-300/80">({t('يظهر في رسائل الواتساب والتقارير')})</span>
+              </Label>
+              <Select
+                value={newTenantForm.activity_type || 'restaurant'}
+                onValueChange={(v) => setNewTenantForm({...newTenantForm, activity_type: v})}
+              >
+                <SelectTrigger className="bg-[#1A284E]/50 border-[#2A3A66]" data-testid="new-tenant-activity-select">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent className="bg-[#0F1A3A] border-[#2A3A66] max-h-80">
+                  <SelectItem value="restaurant">🍽️ {t('مطعم')}</SelectItem>
+                  <SelectItem value="cafe">☕ {t('كافيه')}</SelectItem>
+                  <SelectItem value="salon">💈 {t('صالون')}</SelectItem>
+                  <SelectItem value="beauty">💅 {t('مركز تجميل')}</SelectItem>
+                  <SelectItem value="clinic">🏥 {t('عيادة')}</SelectItem>
+                  <SelectItem value="pharmacy">💊 {t('صيدلية')}</SelectItem>
+                  <SelectItem value="supermarket">🛒 {t('سوبرماركت')}</SelectItem>
+                  <SelectItem value="grocery">🛍️ {t('بقالة')}</SelectItem>
+                  <SelectItem value="bakery">🥐 {t('مخبز')}</SelectItem>
+                  <SelectItem value="sweets">🍰 {t('حلويات')}</SelectItem>
+                  <SelectItem value="juice">🥤 {t('عصائر')}</SelectItem>
+                  <SelectItem value="butchery">🥩 {t('ملحمة')}</SelectItem>
+                  <SelectItem value="hotel">🏨 {t('فندق')}</SelectItem>
+                  <SelectItem value="gym">🏋️ {t('صالة رياضية')}</SelectItem>
+                  <SelectItem value="laundry">🧺 {t('مغسلة')}</SelectItem>
+                  <SelectItem value="retail">🛍️ {t('متجر')}</SelectItem>
+                  <SelectItem value="service">🛠️ {t('خدمات')}</SelectItem>
+                  <SelectItem value="workshop">🔧 {t('ورشة')}</SelectItem>
+                  <SelectItem value="company">🏢 {t('شركة')}</SelectItem>
+                  <SelectItem value="office">🏢 {t('مكتب')}</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* ⭐ حدود المؤسسة — تظهر فقط عند اختيار "مؤسسة" */}
+            {newTenantForm.account_tier === 'enterprise' && (
+              <div className="space-y-3 p-4 border border-amber-500/40 rounded-lg bg-amber-500/5">
+                <div className="flex items-center gap-2 pb-1 border-b border-amber-500/30">
+                  <Crown className="h-4 w-4 text-amber-400" />
+                  <span className="font-semibold text-amber-300 text-sm">{t('حدود المؤسسة')}</span>
+                  <span className="text-[11px] text-amber-200/70">({t('المالك يستطيع إضافة ضمن هذه الحدود')})</span>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1.5">
+                    <Label className="text-xs">{t('عدد المشاريع المسموح')}</Label>
+                    <Input
+                      type="number"
+                      min="1"
+                      value={newTenantForm.max_projects}
+                      onChange={(e) => setNewTenantForm({...newTenantForm, max_projects: parseInt(e.target.value) || 1})}
+                      className="bg-[#1A284E]/50 border-[#2A3A66]"
+                      data-testid="new-tenant-max-projects"
+                    />
+                    <p className="text-[10px] text-gray-400">{t('كم مطعم/صالون/عيادة... يستطيع إنشاءه')}</p>
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <Label className="text-xs">{t('فروع لكل مشروع')}</Label>
+                    <Input
+                      type="number"
+                      min="1"
+                      value={newTenantForm.max_branches_per_project}
+                      onChange={(e) => setNewTenantForm({...newTenantForm, max_branches_per_project: parseInt(e.target.value) || 1})}
+                      className="bg-[#1A284E]/50 border-[#2A3A66]"
+                      data-testid="new-tenant-max-branches-per-project"
+                    />
+                    <p className="text-[10px] text-gray-400">{t('كم فرع لكل مشروع')}</p>
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <Label className="text-xs">{t('مستخدمين لكل فرع')}</Label>
+                    <Input
+                      type="number"
+                      min="1"
+                      value={newTenantForm.max_users_per_branch}
+                      onChange={(e) => setNewTenantForm({...newTenantForm, max_users_per_branch: parseInt(e.target.value) || 5})}
+                      className="bg-[#1A284E]/50 border-[#2A3A66]"
+                      data-testid="new-tenant-max-users-per-branch"
+                    />
+                    <p className="text-[10px] text-gray-400">{t('كاشير + مدير + موظفين')}</p>
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <Label className="text-xs">{t('مديرين لكل مشروع')}</Label>
+                    <Input
+                      type="number"
+                      min="1"
+                      value={newTenantForm.max_admins_per_project}
+                      onChange={(e) => setNewTenantForm({...newTenantForm, max_admins_per_project: parseInt(e.target.value) || 1})}
+                      className="bg-[#1A284E]/50 border-[#2A3A66]"
+                      data-testid="new-tenant-max-admins-per-project"
+                    />
+                    <p className="text-[10px] text-gray-400">{t('كم مدير إدارة لكل مشروع')}</p>
+                  </div>
+                </div>
+              </div>
+            )}
+
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label>{t('الحد الأقصى للفروع')}</Label>
@@ -4604,6 +5029,155 @@ export default function SuperAdmin() {
             <Button onClick={createTenant} className="bg-amber-600 hover:bg-amber-700">
               <Plus className="h-4 w-4 ml-2" />
               {t('إنشاء العميل')}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ⭐ أكتوبر 2026: Dialog تحويل مستوى الحساب (تجريبي/عميل فعال/مؤسسة) */}
+      <Dialog open={showChangeTier} onOpenChange={setShowChangeTier}>
+        <DialogContent className="bg-[#0F1A3A] border-[#2A3A66] text-white max-w-2xl">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Crown className="h-5 w-5 text-amber-400" />
+              {t('تحويل مستوى الحساب')} — {selectedTenant?.name}
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div className="grid grid-cols-3 gap-3">
+              <Button
+                type="button"
+                variant="outline"
+                className={`h-24 flex flex-col items-center justify-center gap-1 ${
+                  tierForm.account_tier === 'trial'
+                    ? 'bg-yellow-600 hover:bg-yellow-700 border-yellow-500 text-white'
+                    : 'border-[#2A3A66] hover:bg-[#1A284E]'
+                }`}
+                onClick={() => setTierForm({...tierForm, account_tier: 'trial'})}
+                data-testid="tier-change-trial"
+              >
+                <Play className="h-5 w-5" />
+                <span className="text-sm font-semibold">{t('تجريبي')}</span>
+                <span className="text-[10px] opacity-80">{t('بدون قيود')}</span>
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                className={`h-24 flex flex-col items-center justify-center gap-1 ${
+                  tierForm.account_tier === 'customer'
+                    ? 'bg-green-600 hover:bg-green-700 border-green-500 text-white'
+                    : 'border-[#2A3A66] hover:bg-[#1A284E]'
+                }`}
+                onClick={() => setTierForm({...tierForm, account_tier: 'customer'})}
+                data-testid="tier-change-customer"
+              >
+                <Building2 className="h-5 w-5" />
+                <span className="text-sm font-semibold">{t('عميل فعال')}</span>
+                <span className="text-[10px] opacity-80">{t('مشروع واحد')}</span>
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                className={`h-24 flex flex-col items-center justify-center gap-1 ${
+                  tierForm.account_tier === 'enterprise'
+                    ? 'bg-amber-600 hover:bg-amber-700 border-amber-500 text-white'
+                    : 'border-[#2A3A66] hover:bg-[#1A284E]'
+                }`}
+                onClick={() => setTierForm({...tierForm, account_tier: 'enterprise'})}
+                data-testid="tier-change-enterprise"
+              >
+                <Crown className="h-5 w-5" />
+                <span className="text-sm font-semibold">{t('مؤسسة')}</span>
+                <span className="text-[10px] opacity-80">{t('صلاحيات موسعة')}</span>
+              </Button>
+            </div>
+
+            {/* حدود المؤسسة — تظهر فقط عند اختيار "مؤسسة" */}
+            {tierForm.account_tier === 'enterprise' && (
+              <div className="space-y-3 p-4 border border-amber-500/40 rounded-lg bg-amber-500/5">
+                <div className="flex items-center gap-2 pb-1 border-b border-amber-500/30">
+                  <Crown className="h-4 w-4 text-amber-400" />
+                  <span className="font-semibold text-amber-300 text-sm">{t('حدود المؤسسة')}</span>
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1.5">
+                    <Label className="text-xs">{t('عدد المشاريع المسموح')}</Label>
+                    <Input
+                      type="number" min="1"
+                      value={tierForm.max_projects}
+                      onChange={(e) => setTierForm({...tierForm, max_projects: parseInt(e.target.value) || 1})}
+                      className="bg-[#1A284E]/50 border-[#2A3A66]"
+                      data-testid="tier-max-projects"
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label className="text-xs">{t('فروع لكل مشروع')}</Label>
+                    <Input
+                      type="number" min="1"
+                      value={tierForm.max_branches_per_project}
+                      onChange={(e) => setTierForm({...tierForm, max_branches_per_project: parseInt(e.target.value) || 1})}
+                      className="bg-[#1A284E]/50 border-[#2A3A66]"
+                      data-testid="tier-max-branches"
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label className="text-xs">{t('مستخدمين لكل فرع')}</Label>
+                    <Input
+                      type="number" min="1"
+                      value={tierForm.max_users_per_branch}
+                      onChange={(e) => setTierForm({...tierForm, max_users_per_branch: parseInt(e.target.value) || 5})}
+                      className="bg-[#1A284E]/50 border-[#2A3A66]"
+                      data-testid="tier-max-users"
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label className="text-xs">{t('مديرين لكل مشروع')}</Label>
+                    <Input
+                      type="number" min="1"
+                      value={tierForm.max_admins_per_project}
+                      onChange={(e) => setTierForm({...tierForm, max_admins_per_project: parseInt(e.target.value) || 1})}
+                      className="bg-[#1A284E]/50 border-[#2A3A66]"
+                      data-testid="tier-max-admins"
+                    />
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowChangeTier(false)} className="border-[#2A3A66]">
+              {t('إلغاء')}
+            </Button>
+            <Button
+              onClick={async () => {
+                if (!selectedTenant) return;
+                try {
+                  setTierSaving(true);
+                  const payload = { account_tier: tierForm.account_tier };
+                  if (tierForm.account_tier === 'enterprise') {
+                    Object.assign(payload, {
+                      max_projects: tierForm.max_projects,
+                      max_branches_per_project: tierForm.max_branches_per_project,
+                      max_users_per_branch: tierForm.max_users_per_branch,
+                      max_admins_per_project: tierForm.max_admins_per_project,
+                    });
+                  }
+                  await axios.put(`${API}/super-admin/tenants/${selectedTenant.id}`, payload);
+                  toast.success(t('تم تحويل مستوى الحساب بنجاح'));
+                  setShowChangeTier(false);
+                  fetchTenants();
+                } catch (e) {
+                  toast.error(e.response?.data?.detail || t('فشل التحويل'));
+                } finally {
+                  setTierSaving(false);
+                }
+              }}
+              disabled={tierSaving}
+              className="bg-amber-600 hover:bg-amber-700"
+              data-testid="tier-change-save"
+            >
+              {tierSaving ? <Loader2 className="h-4 w-4 animate-spin ml-2" /> : <Crown className="h-4 w-4 ml-2" />}
+              {t('حفظ التحويل')}
             </Button>
           </DialogFooter>
         </DialogContent>
