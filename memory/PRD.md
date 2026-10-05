@@ -50,8 +50,23 @@ Tier conversion: Super Admin edits tenant → changes `account_tier` → backend
 - (`/app/backend/tests/test_shift_report_audit_and_otp.py` — 4/4 tests pass)
 
 ### Bug Fixes (Feb 2026 — same session)
-- **🐛 👑 "فشل التحويل"**: زر ترقية الطبقة في SuperAdmin كان لا يُرسل Authorization صراحةً — عند تحديث الصفحة يُفقد super_admin token من `axios.defaults` → 401. الحل: إرسال `Bearer super_admin_token` صراحةً مع كل PUT.
-- **🐛 "المشاريع" يظهر لأدمن تينانت customer**: ProjectContext.js كان يُفعّل enterprise تلقائياً لأي user بدور `admin` أو `general_manager` بغض النظر عن `tenant.enterprise_enabled`. الحل: فصلتُ `SYSTEM_OWNER_ROLES=[super_admin,enterprise_owner]` (دائماً enterprise) عن `ENTERPRISE_WIDE_ROLES` (العرض فقط). الآن admin تينانت customer **لا يرى** تاب المشاريع حتى يفعّل SuperAdmin المؤسسة بزر 👑.
+- **🐛 👑 "فشل التحويل"**: أُرسلت Authorization صراحةً مع كل PUT.
+- **🐛 "المشاريع" يظهر لأدمن تينانت customer**: فصلتُ `SYSTEM_OWNER_ROLES=[super_admin,enterprise_owner]` عن أدوار العرض — admin تينانت customer **لا يرى** تاب المشاريع حتى يفعّل SuperAdmin المؤسسة بزر 👑.
+### Bug Fixes (Feb 2026 — same session)
+- **🐛 👑 "فشل التحويل" في جميع الاتجاهات (customer↔trial↔enterprise)**: السبب الحقيقي كان **خطأ مرجعي صامت** — زر "حفظ التحويل" يستدعي `fetchTenants()` بعد نجاح الـPUT، لكن الدالة الفعلية اسمها `fetchData()`. ReferenceError يُلتقط في `catch` → يظهر toast "فشل التحويل" **رغم أن التحويل نجح فعلياً في الباك-إند**. الحل: استبدال الاستدعاء إلى `fetchData()`. الآن كل الاتجاهات الستّة تعمل بسلاسة.
+- **🐛 "المشاريع" يظهر لأدمن تينانت customer**: فصلتُ `SYSTEM_OWNER_ROLES=[super_admin,enterprise_owner]` — admin تينانت customer لا يرى تاب المشاريع حتى يفعّل SuperAdmin بزر 👑.
+- **🐛 "فشل تسجيل الدخول" بعد تبديل المستخدم (كان يحتاج إغلاق التبويب)**:
+  - `logout()` الآن يحذف الكوكيز المرئية كلها + ينظّف `caches` + `window.location.replace('/login?_=TS')` لإجبار تحميل جديد يتجاوز أي كاش
+  - fallback لـ`super_admin_token` في `/auth/logout`
+  - صفحة `/login` تُنظّف دفاعياً أي بقايا مصادقة عند mount
+  - أضفتُ `selectedProjectId`, `projects`, `auth_checked` لقائمة المفاتيح المحذوفة
+- **🐛 حدود مؤسسة أدنى من الاستهلاك الحالي**: الدايلوج يحسب الحد تلقائياً.
+- **🐛 الدايلوج يفتح على مؤسسة بدلاً من "عميل فعال"**: وحّدتُ موضعين منفصلين (`openEditTenant` + زر 👑 المباشر) — كلاهما الآن يفتح على `account_tier='customer'` + `max_projects=1` دائماً. SuperAdmin هو من يُقرّر الترقية يدوياً.
+- **🔒 حماية المسارات على مستوى الصفحة**: `/enterprise-dashboard` و `/super-admin/enterprise-config` يُعيدان التوجيه للرئيسية إذا لم يكن المستخدم مُفعّلاً كمؤسسة أو ليس super_admin.
+- **التحقق**: 15/15 pytest tests passed + تحقق curl للاتجاهات الستّة (customer↔trial↔enterprise) جميعها.
+- **🐛 حدود مؤسسة أدنى من الاستهلاك الحالي**: الدايلوج الآن يحسب الحد تلقائياً.
+- **🐛 الدايلوج يفتح على مؤسسة بدلاً من "عميل فعال"**: `openEditTenant` الآن يفتح دائماً على **customer + 1 مشروع** (المربع الوسط). SuperAdmin هو من يُقرّر الترقية بالنقر على مربع "مؤسسة" يدوياً. حقول حدود المؤسسة تظهر فقط بعد اختيار "مؤسسة" (كان موجوداً من قبل، تم التأكيد).
+- **🔒 حماية المسارات على مستوى الصفحة**: `/enterprise-dashboard` و `/super-admin/enterprise-config` الآن يُعيدان التوجيه للرئيسية (`<Navigate to="/" />`) إذا لم يكن المستخدم مُفعّلاً كمؤسسة أو ليس super_admin. حماية دفاع-في-عمق فوق إخفاء التبويبات.
 - (`/app/backend/tests/test_tier_upgrade_endpoint.py` — 2/2 pass)
 - UI: "تعديل الاسم" button on every project card
 - `enforce_project_limit`: trial=∞, customer=1, enterprise=max_projects

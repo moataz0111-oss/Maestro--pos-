@@ -142,6 +142,21 @@ export default function Login() {
 
   const { login, completeTwoFactor, resendTwoFactor } = useAuth();
   const navigate = useNavigate();
+
+  // 🔒 Feb 2026: تنظيف دفاعي لأي حالة مصادقة متبقية عند دخول صفحة تسجيل الدخول.
+  //    يمنع "فشل تسجيل الدخول" بعد تبديل المستخدم (كان يحتاج إغلاق التبويب).
+  useEffect(() => {
+    try {
+      delete axios.defaults.headers.common['Authorization'];
+    } catch (_e) { /* ignore */ }
+    // إن وصلنا هنا دون logout (مثل Session Expired)، نظّف الـtokens القديمة
+    const noForceCleanup = sessionStorage.getItem('__login_cleanup_done');
+    if (!noForceCleanup) {
+      ['token', 'super_admin_token', 'cached_user', 'user_verified', 'auth_checked']
+        .forEach((k) => { try { localStorage.removeItem(k); } catch (_e) {} });
+      sessionStorage.setItem('__login_cleanup_done', '1');
+    }
+  }, []);
   
   // Function to initialize database - requires secret key
   const initializeDatabase = async () => {

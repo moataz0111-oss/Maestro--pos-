@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import axios from 'axios';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Navigate } from 'react-router-dom';
+import { useAuth } from '../context/AuthContext';
 import { API_URL } from '../utils/api';
 import { toast } from 'sonner';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
@@ -12,10 +13,16 @@ import { Badge } from '../components/ui/badge';
 import { ArrowLeft, Building2, Users, Briefcase, Save, Crown } from 'lucide-react';
 
 export default function EnterpriseConfigPanel() {
+  const { user } = useAuth();
   const navigate = useNavigate();
   const [tenants, setTenants] = useState([]);
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState({});
+
+  // 🔒 حماية (Feb 2026): لوحة إعدادات المؤسسة لـ Super Admin فقط.
+  if (user && user.role !== 'super_admin') {
+    return <Navigate to="/" replace />;
+  }
 
   const load = () => {
     setLoading(true);

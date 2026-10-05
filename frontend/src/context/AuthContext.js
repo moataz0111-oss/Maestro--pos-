@@ -18,7 +18,10 @@ axios.defaults.withCredentials = true;
 let __authInterceptorRegistered = false;
 if (!__authInterceptorRegistered) {
   axios.interceptors.request.use((config) => {
-    const tok = localStorage.getItem('token');
+    // ⭐ fallback: Super Admin يُخزَّن توكنُه في super_admin_token (ليس token).
+    //    بدون هذا الـfallback، عند فقدان axios.defaults بعد refresh/عمليات،
+    //    تُرسَل طلبات SuperAdmin بدون Authorization → 401 → "فشل تسجيل الدخول" وهمي.
+    const tok = localStorage.getItem('token') || localStorage.getItem('super_admin_token');
     if (tok && !config.headers?.Authorization) {
       config.headers = config.headers || {};
       config.headers.Authorization = `Bearer ${tok}`;
@@ -440,8 +443,8 @@ export const AuthProvider = ({ children }) => {
   };
 
   const logout = () => {
-    // تسجيل حدث الخروج في سجل المراقبة
-    const currentToken = localStorage.getItem('token');
+    // تسجيل حدث الخروج في سجل المراقبة + حذف الكوكيز HttpOnly من الباك-إند
+    const currentToken = localStorage.getItem('token') || localStorage.getItem('super_admin_token');
     if (currentToken) {
       axios.post(`${API}/auth/logout`, null, {
         headers: { Authorization: `Bearer ${currentToken}` }
@@ -467,6 +470,9 @@ export const AuthProvider = ({ children }) => {
       'user_verified',
       'selected_project_id',
       'selected_project',
+      'selectedProjectId',
+      'projects',
+      'auth_checked',
     ];
     authKeys.forEach((k) => {
       try { localStorage.removeItem(k); } catch (_e) {}
@@ -478,9 +484,25 @@ export const AuthProvider = ({ children }) => {
     setUser(null);
     setCurrentShift(null);
     setIsOfflineLogin(false);
-    
-    // التوجيه لصفحة تسجيل الدخول
-    window.location.href = '/login';
+
+    // 🔒 Feb 2026: حذف كل الكوكيز المرئية + تنظيف Service Worker caches للمصادقة
+    //    منع "فشل تسجيل الدخول" بعد تبديل المستخدم (كان لا يعمل إلا بإغلاق التبويب وفتحه).
+    try {
+      document.cookie.split(';').forEach((c) => {
+        const name = c.split('=')[0].trim();
+        if (!name) return;
+        document.cookie = `${name}=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/`;
+        document.cookie = `${name}=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/; domain=${window.location.hostname}`;
+      });
+    } catch (_e) { /* ignore */ }
+    try {
+      if ('caches' in window) {
+        caches.keys().then((names) => names.forEach((n) => caches.delete(n))).catch(() => {});
+      }
+    } catch (_e) { /* ignore */ }
+
+    // التوجيه لصفحة تسجيل الدخول — replace + timestamp لتجاوز أي كاش متبقٍ
+    window.location.replace(`/login?_=${Date.now()}`);
   };
 
   const hasPermission = (permission) => {

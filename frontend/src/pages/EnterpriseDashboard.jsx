@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { io } from 'socket.io-client';
 import axios from 'axios';
 import { useAuth } from '../context/AuthContext';
+import { useProject } from '../context/ProjectContext';
 import { API_URL } from '../utils/api';
 import { toast } from 'sonner';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../components/ui/card';
@@ -11,18 +12,25 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '../components/ui/select';
 import { Briefcase, TrendingUp, TrendingDown, Users, Building2, DollarSign, ShoppingCart, ArrowLeft, Radio } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Navigate } from 'react-router-dom';
 
 const fmt = (n, cur = 'IQD') => `${Number(n || 0).toLocaleString('en-US')} ${cur}`;
 
 export default function EnterpriseDashboard() {
   const { user } = useAuth();
+  const { enterpriseEnabled } = useProject();
   const navigate = useNavigate();
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [period, setPeriod] = useState('30');
   const [liveConnected, setLiveConnected] = useState(false);
   const [lastEvent, setLastEvent] = useState(null);
+
+  // 🔒 حماية (Feb 2026): لا تدخل لوحة المؤسسة ما لم يُفعّلها Super Admin (enterprise_enabled=true)
+  //    super_admin فقط يُستثنى (يرى كل شيء دائماً).
+  if (user && user.role !== 'super_admin' && enterpriseEnabled === false) {
+    return <Navigate to="/" replace />;
+  }
 
   const isOwner = ['super_admin', 'admin', 'general_manager', 'enterprise_owner'].includes(user?.role);
 

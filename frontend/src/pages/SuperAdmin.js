@@ -1948,13 +1948,19 @@ export default function SuperAdmin() {
 
   const openEditTenant = (tenant) => {
     setSelectedTenant(tenant);
-    // ⭐ أكتوبر 2026: استعادة قيم tier الحالية للعميل
+    // ⭐ قرار المالك (Feb 2026): الدايلوج دائماً يفتح على "عميل فعال" (المربع الوسط) + مشروع واحد.
+    //    SuperAdmin هو من يُقرّر الترقية إلى "مؤسسة" يدوياً بالنقر على مربع المؤسسة.
+    //    القيم المقترحة لحدود المؤسسة تُحسَب تلقائياً بناءً على استهلاك العميل الحالي —
+    //    لن تظهر إلا بعد أن يختار SuperAdmin "مؤسسة".
+    const _curBranches = Number(tenant.branches_count || 0);
+    const _curUsers = Number(tenant.users_count || 0);
     setTierForm({
-      account_tier: tenant.account_tier || (tenant.is_demo ? 'trial' : 'customer'),
-      max_projects: tenant.max_projects || 1,
-      max_branches_per_project: tenant.max_branches_per_project || 5,
-      max_users_per_branch: tenant.max_users_per_branch || 10,
-      max_admins_per_project: tenant.max_admins_per_project || 1,
+      account_tier: 'customer',  // ✅ دائماً المربع الوسط (مربع واحد مع مشروع واحد)
+      max_projects: 1,
+      // ↓ هذه القيم تظهر فقط إذا رقّى SuperAdmin الحساب إلى مؤسسة:
+      max_branches_per_project: Math.max(_curBranches, 5),
+      max_users_per_branch: Math.max(_curBranches ? Math.ceil(_curUsers / _curBranches) : 0, 10),
+      max_admins_per_project: 2,
     });
     setEditTenantForm({
       name: tenant.name || '',
@@ -3033,14 +3039,17 @@ export default function SuperAdmin() {
             variant="ghost" size="icon"
             onClick={() => {
               setSelectedTenant(tenant);
-              const currentTier = tenant.account_tier || (tenant.is_demo ? 'trial' : 'customer');
-              // ⚡ إن كان عميل فعال → افتراضياً اختر "مؤسسة" (ترقية سريعة)
+              // ⭐ قرار المالك (Feb 2026): الدايلوج دائماً يفتح على "عميل فعال" (المربع الوسط) + مشروع واحد.
+              //    SuperAdmin هو من يُقرّر الترقية إلى "مؤسسة" يدوياً بالنقر على مربع المؤسسة.
+              const _curBranches = Number(tenant.branches_count || 0);
+              const _curUsers = Number(tenant.users_count || 0);
               setTierForm({
-                account_tier: currentTier === 'customer' ? 'enterprise' : currentTier,
-                max_projects: tenant.max_projects || 3,
-                max_branches_per_project: tenant.max_branches_per_project || 5,
-                max_users_per_branch: tenant.max_users_per_branch || 10,
-                max_admins_per_project: tenant.max_admins_per_project || 1,
+                account_tier: 'customer',  // ✅ المربع الوسط دائماً
+                max_projects: 1,
+                // قيم مقترحة تظهر فقط بعد النقر على "مؤسسة":
+                max_branches_per_project: Math.max(_curBranches, 5),
+                max_users_per_branch: Math.max(_curBranches ? Math.ceil(_curUsers / _curBranches) : 0, 10),
+                max_admins_per_project: 2,
               });
               setShowChangeTier(true);
             }}
@@ -5171,7 +5180,7 @@ export default function SuperAdmin() {
                   );
                   toast.success(t('تم تحويل مستوى الحساب بنجاح'));
                   setShowChangeTier(false);
-                  fetchTenants();
+                  fetchData();
                 } catch (e) {
                   toast.error(e.response?.data?.detail || t('فشل التحويل'));
                 } finally {
