@@ -5160,32 +5160,41 @@ export default function SuperAdmin() {
             <Button
               onClick={async () => {
                 if (!selectedTenant) return;
+                setTierSaving(true);
+                const payload = { account_tier: tierForm.account_tier };
+                if (tierForm.account_tier === 'enterprise') {
+                  Object.assign(payload, {
+                    max_projects: tierForm.max_projects,
+                    max_branches_per_project: tierForm.max_branches_per_project,
+                    max_users_per_branch: tierForm.max_users_per_branch,
+                    max_admins_per_project: tierForm.max_admins_per_project,
+                  });
+                }
+                // 🔑 إرسال super_admin token صراحةً
+                const _tok = localStorage.getItem('super_admin_token') || localStorage.getItem('token');
+                // ⚠️ Feb 2026: اعزل فشل API عن أي خطأ محلي في post-save (مثل fetchData)
+                //    قبل: ReferenceError على fetchTenants() كان يُلتقط هنا ويظهر "فشل التحويل" وهمياً.
+                let _saved = false;
                 try {
-                  setTierSaving(true);
-                  const payload = { account_tier: tierForm.account_tier };
-                  if (tierForm.account_tier === 'enterprise') {
-                    Object.assign(payload, {
-                      max_projects: tierForm.max_projects,
-                      max_branches_per_project: tierForm.max_branches_per_project,
-                      max_users_per_branch: tierForm.max_users_per_branch,
-                      max_admins_per_project: tierForm.max_admins_per_project,
-                    });
-                  }
-                  // 🔑 إرسال super_admin token صراحةً (قد يُفقد من axios.defaults بعد تحديث الصفحة)
-                  const _tok = localStorage.getItem('super_admin_token') || localStorage.getItem('token');
-                  await axios.put(
+                  const res = await axios.put(
                     `${API}/super-admin/tenants/${selectedTenant.id}`,
                     payload,
                     { headers: { Authorization: `Bearer ${_tok}` } }
                   );
+                  _saved = res && res.status >= 200 && res.status < 300;
+                } catch (e) {
+                  console.error('tier update failed:', e?.response?.status, e?.response?.data);
+                  toast.error(e.response?.data?.detail || t('فشل التحويل'));
+                  setTierSaving(false);
+                  return;
+                }
+                if (_saved) {
                   toast.success(t('تم تحويل مستوى الحساب بنجاح'));
                   setShowChangeTier(false);
-                  fetchData();
-                } catch (e) {
-                  toast.error(e.response?.data?.detail || t('فشل التحويل'));
-                } finally {
-                  setTierSaving(false);
+                  // post-save refresh — أي خطأ هنا لا يؤثر على رسالة النجاح
+                  try { await fetchData(); } catch (_e) { console.warn('post-save refresh failed:', _e); }
                 }
+                setTierSaving(false);
               }}
               disabled={tierSaving}
               className="bg-amber-600 hover:bg-amber-700"

@@ -4348,7 +4348,7 @@ const DeliveryReportTab = ({ deliveryCreditsReport, t, formatPrice, fetchReports
 
 export default function Reports() {
   const { user, hasRole } = useAuth();
-  const { selectedBranchId, branches, getBranchIdForApi, canSelectAllBranches } = useBranch();
+  const { selectedBranchId, branches, getBranchIdForApi, canSelectAllBranches, selectBranch } = useBranch();
   const { enterpriseEnabled, projects, selectedProjectId } = useProject();
   const { t, isRTL } = useTranslation();
   const navigate = useNavigate();
@@ -4813,11 +4813,11 @@ export default function Reports() {
                 branches={branches}
                 selectedBranchId={selectedBranchId}
                 onBranchChange={async (val) => {
-                  // تغيير الفرع
+                  // تغيير الفرع عبر BranchContext
                   if (val === 'all') {
-                    setSelectedBranchId(null);
+                    selectBranch(null);
                   } else {
-                    setSelectedBranchId(val);
+                    selectBranch(val);
                   }
                 }}
                 startDate={startDate}
