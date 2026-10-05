@@ -448,14 +448,30 @@ export const AuthProvider = ({ children }) => {
       }).catch(() => {}); // لا نتوقف إذا فشل التسجيل
     }
     
-    // حذف جميع البيانات المخزنة (بما فيها بيانات الفروع لضمان عزل البيانات)
-    localStorage.removeItem('token');
-    localStorage.removeItem('offline_user');
-    localStorage.removeItem('cached_user');
-    localStorage.removeItem('currentShift');
-    localStorage.removeItem('selectedBranchId');
-    localStorage.removeItem('branches');
-    sessionStorage.clear();
+    // ⭐ حذف كل بيانات المصادقة بلا استثناء — يمنع تداخل جلسات المالك والموظف
+    // (كان الخروج القديم يحتفظ بـ super_admin_token/pending_impersonation فيفشل دخول المالك)
+    const authKeys = [
+      'token',
+      'offline_user',
+      'cached_user',
+      'currentShift',
+      'selectedBranchId',
+      'branches',
+      'user',
+      'super_admin_token',
+      'super_admin_user',
+      'original_super_admin_token',
+      'pending_impersonation',
+      'impersonated',
+      'impersonated_tenant',
+      'user_verified',
+      'selected_project_id',
+      'selected_project',
+    ];
+    authKeys.forEach((k) => {
+      try { localStorage.removeItem(k); } catch (_e) {}
+    });
+    try { sessionStorage.clear(); } catch (_e) {}
     
     delete axios.defaults.headers.common['Authorization'];
     setToken(null);

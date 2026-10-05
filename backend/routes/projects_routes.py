@@ -587,3 +587,94 @@ async def trigger_migration(current_user: dict = Depends(get_current_user)):
         raise HTTPException(status_code=403, detail="غير مصرح")
     db = get_database()
     return await run_enterprise_backfill_migration(db)
+
+
+async def fix_default_project_names_v1(db):
+    """🩹 يُصحّح أسماء المشاريع الافتراضية التي صارت UUID (بسبب غياب settings وقت الترحيل).
+    يستخدم مصادر متعددة لاستنتاج اسم المؤسسة الحقيقي:
+    1) tenants.name
+    2) settings.system_info.value.name
+    3) settings.system_invoice_settings.value.business_name/restaurant_name
+    4) users.restaurant_name (أول مستخدم admin في الـ tenant)
+    idempotent — يعمل في الخلفية مرات متعددة بأمان."""
+    marker = await db.migrations.find_one({"name": "fix_default_project_names_v1"})
+    if marker and marker.get("applied"):
+        logger.info("🟢 Migration fix_default_project_names_v1 already applied, skipping")
+        return {"skipped": True}
+
+    logger.info("🩹 Starting fix_default_project_names_v1 migration...")
+    fixed_count = 0
+
+    # اجلب كل المشاريع التي اسمها UUID (أي name == tenant_id)
+    async for project in db.projects.find({}, {"_id": 0}):
+        tid = project.get("tenant_id")
+        pid = project.get("id")
+        current_name = project.get("name") or ""
+        if not tid or not pid:
+            continue
+        # اسم المشروع هو نفسه الـ tenant_id → ربما UUID غير مُسمى
+        if current_name != tid:
+            continue
+
+        real_name = None
+
+        # محاولة 1: tenants.name
+        try:
+            t = await db.tenants.find_one({"id": tid}, {"_id": 0, "name": 1, "name_ar": 1, "business_name": 1})
+            if t:
+                real_name = t.get("name") or t.get("name_ar") or t.get("business_name")
+        except Exception:
+            pass
+
+        # محاولة 2: settings.system_info
+        if not real_name:
+            try:
+                s = await db.settings.find_one({"tenant_id": tid, "type": "system_info"})
+                if s and s.get("value", {}).get("name"):
+                    real_name = s["value"]["name"]
+            except Exception:
+                pass
+
+        # محاولة 3: settings.system_invoice_settings
+        if not real_name:
+            try:
+                s = await db.settings.find_one({"tenant_id": tid, "type": "system_invoice_settings"})
+                if s:
+                    val = s.get("value", {})
+                    real_name = val.get("business_name") or val.get("restaurant_name")
+            except Exception:
+                pass
+
+        # محاولة 4: users.restaurant_name (أول admin)
+        if not real_name:
+            try:
+                u = await db.users.find_one(
+                    {"tenant_id": tid, "role": "admin"},
+                    {"_id": 0, "restaurant_name": 1, "full_name": 1}
+                )
+                if u:
+                    real_name = u.get("restaurant_name") or u.get("full_name")
+            except Exception:
+                pass
+
+        if real_name and real_name.strip() and real_name.strip() != tid:
+            await db.projects.update_one(
+                {"id": pid},
+                {"$set": {"name": real_name.strip(), "updated_at": datetime.now(timezone.utc).isoformat()}}
+            )
+            fixed_count += 1
+            logger.info(f"   ✅ Renamed project {pid[:8]}... → '{real_name.strip()}'")
+
+    # وضع علامة الانتهاء
+    await db.migrations.update_one(
+        {"name": "fix_default_project_names_v1"},
+        {"$set": {
+            "name": "fix_default_project_names_v1",
+            "applied": True,
+            "applied_at": datetime.now(timezone.utc).isoformat(),
+            "fixed_count": fixed_count,
+        }},
+        upsert=True,
+    )
+    logger.info(f"✅ fix_default_project_names_v1 complete: {fixed_count} project(s) renamed")
+    return {"success": True, "fixed_count": fixed_count}

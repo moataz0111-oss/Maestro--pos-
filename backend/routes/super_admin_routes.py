@@ -249,6 +249,46 @@ async def create_tenant(tenant: TenantCreate, background_tasks: BackgroundTasks,
     for cat in default_categories:
         await db.categories.insert_one(cat)
     
+    # ═══════════════════════════════════════════════════════════════
+    # 🏢 Enterprise Mode: إنشاء مشروع افتراضي بنفس اسم المطعم
+    # يضمن ظهور الاسم الحقيقي في إدارة المشاريع (بدلاً من UUID)
+    # وربط كل البيانات الجديدة بالمشروع تلقائياً
+    # ═══════════════════════════════════════════════════════════════
+    try:
+        default_project_id = str(uuid.uuid4())
+        now_iso = datetime.now(timezone.utc).isoformat()
+        await db.projects.insert_one({
+            "id": default_project_id,
+            "tenant_id": tenant_id,
+            "name": tenant.name,
+            "name_en": None,
+            "activity_type": "restaurant",
+            "logo_url": None,
+            "currency": "IQD",
+            "timezone": "Asia/Baghdad",
+            "exchange_rate": 1.0,
+            "description": None,
+            "is_active": True,
+            "is_default": True,
+            "admin_user_id": admin_doc["id"],
+            "created_by": current_user.get("id"),
+            "created_at": now_iso,
+            "updated_at": now_iso,
+        })
+        # ربط فئات المستأجر الافتراضية بالمشروع
+        await db.categories.update_many(
+            {"tenant_id": tenant_id, "project_id": {"$exists": False}},
+            {"$set": {"project_id": default_project_id}}
+        )
+        # ربط المالك بالمشروع الافتراضي
+        await db.users.update_one(
+            {"id": admin_doc["id"]},
+            {"$set": {"project_id": default_project_id}}
+        )
+    except Exception as _proj_err:
+        # لا نُفشل إنشاء العميل إن فشل إنشاء المشروع — ترحيل خلفي يُصلحه لاحقاً
+        pass
+    
     del tenant_doc["_id"]
     
     # إرسال بريد ترحيبي تلقائياً

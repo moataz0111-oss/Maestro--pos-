@@ -163,7 +163,7 @@ export default function ProjectsSettings() {
   };
 
   const handleDelete = async (p) => {
-    if (p.is_default) { toast.error('لا يمكن حذف المشروع الافتراضي'); return; }
+    if (p.is_default) { toast.error('لا يمكن حذف المشروع الرئيسي'); return; }
     if (!window.confirm(`تعطيل مشروع "${p.name}"؟`)) return;
     try {
       await axios.delete(`${API_URL}/projects/${p.id}`);
@@ -171,6 +171,22 @@ export default function ProjectsSettings() {
       refreshProjects();
     } catch (e) {
       toast.error(e.response?.data?.detail || 'فشل الحذف');
+    }
+  };
+
+  // ⭐ تعديل اسم المشروع (مسموح حتى للمشروع الرئيسي — طلب العميل: اسم المطعم الحقيقي)
+  const handleRename = async (p) => {
+    const current = p.name || '';
+    const next = window.prompt(`اسم جديد للمشروع:`, current);
+    if (next === null) return;
+    const trimmed = next.trim();
+    if (!trimmed || trimmed === current) return;
+    try {
+      await axios.put(`${API_URL}/projects/${p.id}`, { name: trimmed });
+      toast.success('تم تحديث اسم المشروع');
+      refreshProjects();
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'فشل تحديث الاسم');
     }
   };
 
@@ -392,7 +408,7 @@ export default function ProjectsSettings() {
                       <CardDescription className="text-xs">{meta.label}</CardDescription>
                     </div>
                   </div>
-                  {p.is_default && <Badge variant="secondary" className="text-xs">افتراضي</Badge>}
+                  {p.is_default && <Badge variant="outline" className="text-[10px] opacity-60">المشروع الرئيسي</Badge>}
                 </div>
               </CardHeader>
               <CardContent className="space-y-3">
@@ -421,6 +437,16 @@ export default function ProjectsSettings() {
                   {p.admin_user_id && <Badge variant="outline" className="text-xs">مدير مُعيّن</Badge>}
                 </div>
                 <div className="flex gap-2 pt-2 border-t">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="flex-1 gap-1"
+                    onClick={() => handleRename(p)}
+                    data-testid={`rename-project-btn-${p.id}`}
+                  >
+                    <Edit className="h-3.5 w-3.5" />
+                    تعديل الاسم
+                  </Button>
                   <Button
                     size="sm"
                     variant="outline"

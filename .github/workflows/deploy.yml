@@ -6,11 +6,11 @@ on:
   workflow_dispatch:
 
 # 🔒 قفل تزامن: نشر واحد فقط في كل مرة.
-# ⚠️ لا نُلغي النشر الجاري (cancel-in-progress=false) لأن إلغاءه في منتصف إعادة تشغيل
-#    الحاويات (بعد إيقاف nginx وقبل تشغيله) كان يُسقط الموقع. الآن تُصطفّ عمليات النشر بالتتابع.
+# ✅ نسمح الآن بإلغاء النشر الجاري عند دفع commit جديد (cancel-in-progress=true)
+#    لأن سكريبت النشر الجديد محمي بـ ensure_nginx يُعيد الموقع فوراً بعد أي إلغاء.
 concurrency:
   group: deploy-maestro-vps
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 # 🟢 فرض تشغيل جميع إجراءات JavaScript على Node.js 24 → يُزيل تحذير إهمال Node 20 نهائياً من اللوق
 env:
@@ -107,7 +107,7 @@ jobs:
         username: root
         key: ${{ secrets.VPS_SSH_KEY }}
         port: 22
-        command_timeout: 60m
+        command_timeout: 20m
         envs: GHCR_TOKEN,GHCR_USER,FRONTEND_IMAGE,BACKEND_IMAGE,WA_IMAGE,GIT_SHA
         script: |
           echo "🚀 بدء النشر..."

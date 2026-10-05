@@ -545,7 +545,28 @@ async def notify_owner_multichannel(
                     if len(normalized_pairs) >= NOTIFY_MAX_RECIPIENTS:
                         logger.warning(f"notify_owner_multichannel: قصّرت المستقبِلين على {NOTIFY_MAX_RECIPIENTS} (كان هناك أكثر — تحقق من إعدادات التينانت)")
                         break
-                # إرسال متزامن لكل الأرقام (بهوية Maestro EGP الموحّدة: شعار + قالب)
+                # إرسال متزامن لكل الأرقام (بهوية Maestro EGP الموحّدة: شعار + قالب + سطر المشروع)
+                # ⭐ جلب اسم ونوع نشاط المشروع من المشروع الافتراضي للتينانت
+                #    يظهر كسطر "🍽️ GRaffiti BURGER — مطعم" تحت فاصل Maestro EGP
+                _project_name = None
+                _project_logo = None
+                _project_activity = None
+                if tenant_id:
+                    try:
+                        _proj = await db.projects.find_one(
+                            {"tenant_id": tenant_id, "is_default": True},
+                            {"_id": 0, "name": 1, "logo_url": 1, "activity_type": 1}
+                        )
+                        if _proj:
+                            _project_name = _proj.get("name")
+                            _project_logo = _proj.get("logo_url")
+                            _project_activity = _proj.get("activity_type")
+                        # fallback: اسم المطعم من tenants
+                        if not _project_name:
+                            _tn2 = await db.tenants.find_one({"id": tenant_id}, {"_id": 0, "name": 1}) or {}
+                            _project_name = _tn2.get("name")
+                    except Exception:
+                        pass
                 sent_count = 0
                 _wa_errors = []
                 for e164, _raw in normalized_pairs:
@@ -553,6 +574,8 @@ async def notify_owner_multichannel(
                         ok, _err = await _wa_free.send_message(
                             e164, message, purpose=f"owner_{category}",
                             tenant_id=tenant_id, title=title, with_logo=True,
+                            project_name=_project_name, project_logo=_project_logo,
+                            project_activity=_project_activity,
                         )
                         if ok:
                             sent_count += 1
@@ -1420,6 +1443,13 @@ async def _run_deferred_startup_tasks():
         await run_enterprise_backfill_migration(db)
     except Exception as e:
         logger.error(f"⚠️ Enterprise backfill migration error: {e}")
+
+    # ═══ 🩹 إصلاح أسماء المشاريع الافتراضية (UUID → اسم حقيقي) ═══
+    try:
+        from routes.projects_routes import fix_default_project_names_v1
+        await fix_default_project_names_v1(db)
+    except Exception as e:
+        logger.error(f"⚠️ fix_default_project_names_v1 error: {e}")
 
 async def purge_pentest_probe_data_v1():
     """تنظيف تلقائي (idempotent) لأي سجلات دخيلة أنشأها فاحص اختراق (مثل 'RW Probe').

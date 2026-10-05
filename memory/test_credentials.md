@@ -221,7 +221,14 @@
 - Frontend route: /settings/projects (Projects management page)
 - ProjectContext provider wraps entire app in App.js (before BranchProvider)
 
-## Multi-Currency Support — Feb 28, 2026 (fork)
+## Enterprise Mode — Oct 2026 fixes (Owner session + Project naming)
+- **Bug fixed**: Owner login failing after employee logout — `AuthContext.logout()` now wipes 16 auth keys (super_admin_token, super_admin_user, original_super_admin_token, pending_impersonation, impersonated, impersonated_tenant, user_verified, selected_project_id, selected_project + legacy keys) + full sessionStorage. No more browser restart needed.
+- **Bug fixed**: Default project name = UUID — new tenants (POST /api/super-admin/tenants) now auto-create a project with `tenant.name` and link admin + categories to it.
+- **Migration `fix_default_project_names_v1`** (runs in deferred startup, idempotent): renames existing UUID-named projects using sources in order: tenants.name → settings.system_info → settings.system_invoice_settings → users.restaurant_name.
+- **UI**: ProjectsSettings cards now show "تعديل الاسم" button (handleRename → PUT /api/projects/{id}) on EVERY project. "افتراضي" badge replaced with "المشروع الرئيسي" neutral label.
+- **Prod VPS cleanup script** `/app/scripts/server_maintenance_setup.sh` installed. Docker log rotation enabled (50m × 3). Weekly cron prune at Sunday 3am.
+- **CI/CD** auto-stops legacy `/root/maestro` compose stack before starting new `/var/www/maestro` stack. cancel-in-progress=true (was false → got stuck).
+- **Perf**: Backend 2 workers + uvloop/httptools; nginx keepalive 64 + proxy_read_timeout 180s + buffering → reports no longer time out.
 - **ProjectCreate/ProjectUpdate** يقبلان `exchange_rate: Optional[float]` — سعر صرف عملة المشروع مقابل عملة المؤسسة الرئيسية.
 - المشروع الافتراضي = عملة المؤسسة الرئيسية (`exchange_rate=1.0` دائماً).
 - عند إنشاء/تعديل مشروع بعملة ≠ العملة الرئيسية، الفرونت يعرض حقل "💱 سعر الصرف" إجبارياً (بلوك أصفر بارز).

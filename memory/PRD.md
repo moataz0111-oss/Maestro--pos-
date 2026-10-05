@@ -1,110 +1,69 @@
-# Maestro EGP — PRD (Enterprise Mode complete)
+# Maestro EGP — Multi-Tenant POS → Enterprise Management
 
-## 🎯 Problem Statement
-مؤسسة متعددة الأنشطة (مطاعم، صالونات، عيادات، سوبرماركت، شركات توصيل) تدار من مالك واحد، **عزل صارم للبيانات بين المشاريع** بلا تغيير الـ 28 شاشة الأصلية.
+## Problem Statement
+Multi-tenant POS system scaling into a Multi-Activity Enterprise Management System. Live production serving real customers (GRaffiti BURGER, 10 branches, 70,619 orders, $757K sales). Users: owner (super_admin), tenant admins, cashiers, managers.
 
-## 🏗️ Stack
-FastAPI + Motor MongoDB + React CRA + Baileys WhatsApp + Socket.IO
+## Users
+- **Super Admin (Owner)**: Creates tenants, manages SMTP, monitors all tenants (bilateral: owner@maestroegp.com + MoatazMehana/27/10/2018 + secret key)
+- **Admin (Tenant Owner)**: One per tenant (GRaffiti BURGER / hanialdujaili@gmail.com)
+- **Cashier / Manager / Delivery / Employee**: Per-branch isolated roles
 
-## ✅ Enterprise Mode — كامل بجميع مراحله (Feb 2026)
+## Core Requirements (Enforced)
+1. Strict shift isolation per cashier
+2. Business-date aware auto-close (Iraq TZ UTC+3)
+3. Enterprise Mode: Project-level isolation across tenants
+4. Multi-currency per project (exchange rate history)
+5. Biometric sync across branches via local agent + queue
+6. Multichannel notifications: UI bell + WhatsApp (Baileys) + Email (SMTP)
+7. Offline-capable with cached auth + IndexedDB
 
-### Backend
-- `projects` collection + `/api/projects` CRUD + assign-admin + users
-- `/api/enterprise/dashboard` + `/api/enterprise/marketplace/*` + `/api/enterprise/activity-templates/*`
-- `/api/partner-portal/*` — بوابة تاجر مستقلة (access_code, بدون login)
-- Migration تلقائي: 184+ وثيقة ربطت بمشاريع افتراضية عبر مستأجرين
-- Roles: `enterprise_owner`, `project_admin`, `project_manager`, `project_employee`
-- **العزل المُطبَّق على جميع endpoints**:
-  - `/api/branches`, `/api/orders`, `/api/expenses`, `/api/products`
-  - `/api/categories`, `/api/customers`, `/api/drivers` (كلاهما راوتر)
-  - `/api/recipes/materials`, `/api/driver/orders` (بوابة السائق)
-  - `/api/customer/menu/{tenant}?project_id=X` (بوابة الزبون)
-- Helper `scoped_query_for_user()` بـ `shared.py` جاهز للـ endpoints المتبقية
-- Activity templates: 7 أنواع مع تصنيفات تلقائية عند إنشاء المشروع
-- **WebSocket live updates**: emit `enterprise_update` عند إنشاء الطلبات → owner dashboard يحدث لحظياً
-- driver create يضيف `project_id` من المستخدم منشئ السائق
+## Live Deployment
+- VPS: 158.220.118.54, domain: maestroegp.com
+- CI/CD: GitHub Actions → builds on GH runners → pushes to GHCR → deploys via SSH
+- Deploy folder on VPS: `/var/www/maestro` (not `/root/maestro` which is legacy)
+- Containers: nginx, backend, frontend, wa-service, maestro-mongodb, netdata, portainer, certbot
 
-### Frontend
-- `ProjectContext` + `ProjectBranchSelector` هرمي (مشروع ← فرع)
-- Routes:
-  - `/settings/projects` — إدارة المشاريع
-  - `/enterprise-dashboard` — لوحة المؤسسة (مع WebSocket)
-  - `/marketplace/:projectId` — Marketplace التوصيل
-  - `/partner/:partnerId` — Portal مستقل للتاجر (بدون login)
-- Zero visual disruption على الـ 28 شاشة
+## Session Fixes (Oct 2026)
+### 🚨 Production Outage Recovery (Oct 3-4)
+- Root cause: disk 100% full → Docker log explosion (no rotation configured)
+- Fix: cleared logs/journals → freed 93G
+- **Permanent**: added `/etc/docker/daemon.json` log rotation (50m × 3) + weekly cron prune
 
-## 🧪 Isolation Verification (Live, Full Test)
-| Endpoint | Owner | Salon Admin |
-|---|---|---|
-| categories | 8 | 0 ✅ |
-| customers | 15 | 0 ✅ |
-| drivers | 4 | 0 ✅ |
-| recipes/materials | 2 | 0 ✅ |
-| orders | 55 | 0 ✅ |
-| products | 8 | 0 ✅ |
-| expenses | 10 | 0 ✅ |
-| branches | 1 | 0 ✅ |
-| Enterprise Dashboard | ✅ | 403 ✅ |
-| Marketplace other project | ✅ | 403 ✅ |
-| Customer Menu (project_id) | filters correctly ✅ |
-| Partner Portal (access_code) | works ✅ / bad code = 401 ✅ |
+### ⚡ Backend Performance (3-5x speedup)
+- `backend/Dockerfile`: `uvicorn ... --workers 2 --loop uvloop --http httptools`
+- `backend/requirements.txt`: `uvicorn[standard]==0.25.0` for uvloop/httptools
+- `backend/server.py`: `is_scheduler_worker()` file lock → only 1 worker runs cron schedulers
 
-## 📁 Key Files
-- `/app/backend/routes/projects_routes.py`
-- `/app/backend/routes/enterprise_routes.py`
-- `/app/backend/routes/partner_portal_routes.py`
-- `/app/backend/routes/drivers_routes.py` (project isolation added)
-- `/app/backend/routes/customer_menu_api_routes.py` (project_id param)
-- `/app/backend/services/websocket_service.py` (notify_enterprise_update)
-- `/app/backend/routes/shared.py` (scoped_query_for_user)
-- `/app/frontend/src/context/ProjectContext.js`
-- `/app/frontend/src/components/ProjectBranchSelector.js`
-- `/app/frontend/src/pages/ProjectsSettings.jsx`
-- `/app/frontend/src/pages/EnterpriseDashboard.jsx`
-- `/app/frontend/src/pages/Marketplace.jsx`
-- `/app/frontend/src/pages/PartnerPortal.jsx`
+### 🌐 Nginx (reports stopped failing)
+- `nginx.conf`: keepalive 64 upstream, gzip comp_level 5, proxy_read_timeout 60s→180s, proxy_buffering on, proxy_next_upstream retry
 
-## 🧪 Test Credentials
-- Owner: `admin@maestroegp.com / admin123` + trusted device `e2e-tester-persistent`
-- Salon admin (isolated): `salon@test.com / salon1234` + trusted device `salon-test-device`
+### 🛠️ CI/CD Hardening
+- `.github/workflows/deploy.yml`: 
+  - `cancel-in-progress: true` (prev false → stuck 15m)
+  - `command_timeout: 60m → 20m`
+  - Auto-stops old `/root/maestro` stack + removes `maestro-*` zombie containers before deploy
+  - Final sweep removes stragglers after deploy
 
-## 📋 Optional Future Enhancements
-- Apply `scoped_query_for_user()` to remaining niche endpoints (payroll, biometric, purchases, warehouses)
-- WhatsApp daily digest للمالك عبر كل المشاريع
-- Real-time expense/shift-close SIO events (already available in helper)
-- Refactor `server.py` (18k+ سطر)
+### 🔐 Auth: Owner login after employee logout
+- `AuthContext.logout()` previously left behind `super_admin_token`, `super_admin_user`, `original_super_admin_token`, `pending_impersonation`, `impersonated*` keys → forced browser restart
+- Fix: single `authKeys` array wipes 16 keys + full sessionStorage
 
-## ✅ Enterprise Auto-Injection + Backfill — Feb 28, 2026 (fork)
-### تعليقات المستخدم على اللقطات (Screenshot 2026-09-28 …) المُنفَّذة:
-1. **الترويسة**: عند تفعيل Enterprise يستبدل "مطعم" بـ "مؤسسة" في اسم العميل تلقائياً (regex `/مطعم/g` → `مؤسسة`). عند اختيار مشروع محدد تظهر اسم/شعار المشروع + نوع النشاط. Test-id: `tenant-header-title`, `tenant-header-logo`.
-2. **تبويب الإعدادات**: "المطعم" → "المؤسسة" ديناميكياً بناءً على `enterpriseEnabled`. جميع النصوص داخل التبويب (اسم/شعار/زر الحفظ) تتبدّل. Test-id: `settings-tab-enterprise`.
-3. **تبويب "🏢 المشاريع"**: يعرض `ProjectsSettings` inline (بدل الانتقال لصفحة منفصلة). زر "مشروع جديد" (add-project-btn) + بطاقة لكل مشروع مع شعار/نوع نشاط + أزرار "تعيين مدير" و"حذف".
-4. **الفلتر الهرمي مشروع→فرع**: BranchContext يعيد جلب الفروع بمعامل `project_id` عند حدث `project-changed`؛ فلا تظهر إلا فروع المشروع المختار.
+### 🏢 Enterprise Mode: Project naming
+- Create tenant now auto-creates default project with `tenant.name` + links categories + admin user
+- `fix_default_project_names_v1` migration: renames existing UUID-named projects using tenants.name → settings → users.restaurant_name fallbacks
+- UI: added "تعديل الاسم" button on every project card (even default), kept "تعيين مدير"
+- Removed "افتراضي" badge → "المشروع الرئيسي" neutral label
 
-### Files modified
-- `/app/frontend/src/pages/Dashboard.js` — header rebranding + project-aware logo/subtitle
-- `/app/frontend/src/pages/Settings.js` — tab rename + Projects TabsContent + import ProjectsSettings
-- `/app/frontend/src/pages/ProjectsSettings.jsx` — (كما هو، يُعرض الآن inline)
+## Backlog
+- P1: Daily shift report via WhatsApp (replaces generic "Integrity Check")
+- P1: Apply Project→Branch pattern to Driver/Customer/Printer forms
+- P2: Enterprise Dashboard (cross-project comparison)
+- P2: Colored project badges on cards
+- P3: Refactor `server.py` 18k monolith → routes/
 
-### Lint fixes
-- `backend/routes/pdf_export_routes.py` و `printer_routes.py`: إضافة imports صريحة من `server` لحل جميع F405 (star imports) — 99 error → 0.
+## Known Tech Debt
+- Dual stacks (legacy `/root/maestro` + new `/var/www/maestro`) resolved via CI auto-cleanup
+- MongoDB auth: created with `MONGO_INITDB_ROOT_*` but new backend connects no-auth to existing volume — works but inconsistent
 
-### Backend endpoints المُحدَّثة (حقن `project_id` تلقائياً عند الإنشاء) — إجمالي 8 collections:
-- `POST /api/categories` (server.py)
-- `POST /api/products` (server.py)
-- `POST /api/branches` (server.py) — يحترم `max_branches_per_project` عند تفعيل المؤسسة
-- `POST /api/expenses` (server.py) — عزل المصاريف بالمشروع
-- `POST /api/printers` (routes/printer_routes.py)
-- `POST /api/invoices/printers` (server.py)
-- `POST /api/raw-materials-new` (routes/inventory_system.py)
-- `POST /api/manufactured-products` (routes/inventory_system.py)
-- `POST /api/packaging-materials` (routes/inventory_system.py)
-
-### Backfill script — 241 وثيقة قديمة مُرحَّلة
-- `/app/backend/backfill_project_ids.py` — ربط الوثائق القديمة (بلا `project_id`) بالمشروع الافتراضي لكل مستأجر.
-- شامل: categories, products, branches, raw_materials, manufactured_products, packaging_materials, printers, expenses, orders, customers, recipes, packaging_requests, branch_requests, branch_orders.
-- تحقق حي: 100% تغطية الآن — `19/19` categories, `97/97` manufactured, `10/10` expenses…
-
-### Axios Interceptor (Frontend)
-- `utils/api.js`: يقرأ `selectedProjectId` من localStorage ويُضيف `X-Project-Id` header + `project_id` query تلقائياً لكل طلب.
-- Enterprise Owner يختار مشروعاً من الترويسة → كل إنشاء/قراءة تُحصر بذلك المشروع تلقائياً بلا تعديل واجهات إضافية.
+## Credentials
+See `/app/memory/test_credentials.md`

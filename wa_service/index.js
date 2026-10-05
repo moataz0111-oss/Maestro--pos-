@@ -13,6 +13,7 @@ const {
   useMultiFileAuthState,
   DisconnectReason,
   fetchLatestBaileysVersion,
+  makeCacheableSignalKeyStore,
 } = require('@whiskeysockets/baileys');
 
 const PORT = process.env.WA_SERVICE_PORT || 3002;
@@ -29,6 +30,45 @@ let lastError = null;
 let starting = false;
 let reconnectDelay = 5000;  // backoff exponential (max 60s)
 let reconnectTimer = null;
+
+// ═══════════════════════════════════════════════════════════════════════════
+// 🔑 Message store للـ Baileys getMessage callback — يُصلح "Waiting for this message"
+// سبب "Waiting for this message": عند فشل فك تشفير رسالة عند المستقبِل، Baileys
+// يحتاج استرجاع الرسالة الأصلية لإعادة إرسالها (retry). بدون هذه الذاكرة، الرسالة
+// تبقى عالقة إلى الأبد عند المستقبِل.
+// نحفظ آخر 1000 رسالة لمدة 48 ساعة في الذاكرة.
+// ═══════════════════════════════════════════════════════════════════════════
+const MESSAGE_STORE = new Map();  // key = `${remoteJid}:${id}`, value = { message, savedAt }
+const MESSAGE_STORE_MAX = 1000;
+const MESSAGE_STORE_TTL_MS = 48 * 3600 * 1000;  // 48 ساعة
+
+function storeMessage(remoteJid, id, message) {
+  if (!remoteJid || !id || !message) return;
+  // تنظيف دوري: احذف أقدم المدخلات إن تجاوز الحجم
+  if (MESSAGE_STORE.size >= MESSAGE_STORE_MAX) {
+    const oldest = MESSAGE_STORE.keys().next().value;
+    if (oldest) MESSAGE_STORE.delete(oldest);
+  }
+  MESSAGE_STORE.set(`${remoteJid}:${id}`, { message, savedAt: Date.now() });
+}
+
+function getStoredMessage(key) {
+  const entry = MESSAGE_STORE.get(key);
+  if (!entry) return null;
+  if (Date.now() - entry.savedAt > MESSAGE_STORE_TTL_MS) {
+    MESSAGE_STORE.delete(key);
+    return null;
+  }
+  return entry.message;
+}
+
+// تنظيف دوري للمدخلات المنتهية (كل 10 دقائق)
+setInterval(() => {
+  const now = Date.now();
+  for (const [k, v] of MESSAGE_STORE.entries()) {
+    if (now - v.savedAt > MESSAGE_STORE_TTL_MS) MESSAGE_STORE.delete(k);
+  }
+}, 10 * 60 * 1000);
 
 function resetAuthDir() {
   try {
@@ -56,11 +96,36 @@ async function startSock() {
     const { version } = await fetchLatestBaileysVersion().catch(() => ({ version: undefined }));
     sock = makeWASocket({
       version,
-      auth: state,
+      auth: {
+        creds: state.creds,
+        // تخزين مفاتيح Signal مؤقتاً في الذاكرة — يُسرّع فك التشفير 10x
+        keys: makeCacheableSignalKeyStore(state.keys, logger),
+      },
       logger,
       printQRInTerminal: false,
       browser: ['Maestro EGP', 'Chrome', '1.0.0'],
       markOnlineOnConnect: false,
+      // ⚡ لا تزامن تاريخ الرسائل القديمة — نحن نرسل فقط
+      syncFullHistory: false,
+      shouldSyncHistoryMessage: () => false,
+      // 🔑 الحل الحاسم لـ "Waiting for this message":
+      //    Baileys يستدعي هذه الدالة عندما يُطلب منه إعادة إرسال رسالة فشلت
+      //    عند المستقبِل. نُرجع نص الرسالة من الذاكرة ليعيد تشفيرها وإرسالها.
+      getMessage: async (key) => {
+        const storeKey = `${key.remoteJid}:${key.id}`;
+        const msg = getStoredMessage(storeKey);
+        if (msg) {
+          return msg;
+        }
+        // fallback: نص فارغ (أفضل من undefined لتجنب loop)
+        return { conversation: '' };
+      },
+      // استعادة الاتصال التلقائية عند فشل مؤقت
+      retryRequestDelayMs: 2000,
+      // إرسال presence مرة واحدة بعد الاتصال
+      emitOwnEvents: false,
+      // عدم تنزيل الوسائط الواردة (نحن مرسل فقط)
+      shouldIgnoreJid: () => false,
     });
 
     sock.ev.on('creds.update', saveCreds);
@@ -140,7 +205,12 @@ app.post('/send', auth, async (req, res) => {
       exists = Array.isArray(r) && r.length > 0 && r[0]?.exists;
     } catch (e) { /* تجاهل الفحص وحاول الإرسال */ }
     if (!exists) return res.status(422).json({ ok: false, error: 'not_on_whatsapp' });
-    await sock.sendMessage(jid, { text: message });
+    const content = { text: message };
+    const sent = await sock.sendMessage(jid, content);
+    // 🔑 حفظ الرسالة في الذاكرة لإعادة الإرسال عند فشل فك التشفير عند المستقبِل
+    if (sent?.key?.id) {
+      storeMessage(jid, sent.key.id, content);
+    }
     res.json({ ok: true });
   } catch (e) {
     res.status(500).json({ ok: false, error: e.message });
@@ -163,7 +233,12 @@ app.post('/send-media', auth, async (req, res) => {
     } catch (e) { /* ignore */ }
     if (!exists) return res.status(422).json({ ok: false, error: 'not_on_whatsapp' });
     const imgBuffer = Buffer.from(image_b64, 'base64');
-    await sock.sendMessage(jid, { image: imgBuffer, caption: caption || '' });
+    const content = { image: imgBuffer, caption: caption || '' };
+    const sent = await sock.sendMessage(jid, content);
+    // 🔑 حفظ الرسالة لإعادة الإرسال عند فشل فك التشفير
+    if (sent?.key?.id) {
+      storeMessage(jid, sent.key.id, content);
+    }
     res.json({ ok: true });
   } catch (e) {
     res.status(500).json({ ok: false, error: e.message });

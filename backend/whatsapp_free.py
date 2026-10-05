@@ -89,12 +89,21 @@ async def is_connected() -> bool:
 
 
 async def send_message(phone: str, message: str, purpose: str = "other", tenant_id=None, sent_by=None,
-                        with_logo: bool = True, title: str | None = None):
-    """يرسل رسالة واتساب بهوية Maestro EGP الموحّدة (شعار + قالب).
+                        with_logo: bool = True, title: str | None = None,
+                        project_name: str | None = None, project_logo: str | None = None,
+                        project_activity: str | None = None):
+    """يرسل رسالة واتساب بهوية Maestro EGP الموحّدة.
 
-    - with_logo=True (افتراضياً): يُرسل صورة الشعار مع الرسالة كـ caption.
-    - إن فشل إرسال الوسائط أو الواتساب لا يدعمه: يعود تلقائياً لنص فقط.
-    - يسجّل تلقائياً في wa_messages.
+    القالب النهائي:
+      [صورة Maestro EGP banner]
+      *🔔 Maestro EGP*
+      ━━━━━━━━━━━━━━━━━
+      🍽️ *GRaffiti BURGER — مطعم*   ← سطر المشروع (اسم + نوع النشاط)
+      *📊 تقرير إغلاق وردية ...*
+
+    - project_name/project_logo/project_activity (اختياري):
+      activity values: restaurant | salon | clinic | supermarket | company | hotel | pharmacy | cafe | service
+    - WhatsApp لا يسمح بصور داخل النص، نستخدم emoji يتغير حسب نوع النشاط.
     """
     # 🛡️ رفض الأرقام التجريبية/الوهمية قبل الإرسال
     if is_dummy_phone(phone):
@@ -104,8 +113,12 @@ async def send_message(phone: str, message: str, purpose: str = "other", tenant_
         return False, "dummy_phone_blocked"
     
     ok, err = False, None
-    # 1) القالب الموحّد: header + separator + content + footer
-    branded_text = _build_branded_text(message, title=title)
+    # 1) القالب الموحّد: header → separator → سطر المشروع → title → content → footer
+    branded_text = _build_branded_text(
+        message, title=title,
+        project_name=project_name, project_logo=project_logo,
+        project_activity=project_activity,
+    )
     try:
         async with httpx.AsyncClient(timeout=30) as c:
             if with_logo:
@@ -172,12 +185,49 @@ def _get_logo_b64() -> str:
     return _LOGO_B64_CACHE
 
 
-def _build_branded_text(message: str, title: str | None = None) -> str:
+# ==================== Activity type → Arabic label + emoji ====================
+# يُستخدم في سطر المشروع في رسائل الواتساب (طلب العميل أكتوبر 2026):
+#   "🍽️ GRaffiti BURGER — مطعم"
+_ACTIVITY_META = {
+    "restaurant":  ("🍽️", "مطعم"),
+    "cafe":        ("☕", "كافيه"),
+    "salon":       ("💈", "صالون"),
+    "beauty":      ("💅", "مركز تجميل"),
+    "clinic":      ("🏥", "عيادة"),
+    "pharmacy":    ("💊", "صيدلية"),
+    "supermarket": ("🛒", "سوبرماركت"),
+    "grocery":     ("🛒", "بقالة"),
+    "retail":      ("🛍️", "متجر"),
+    "bakery":      ("🥐", "مخبز"),
+    "hotel":       ("🏨", "فندق"),
+    "service":     ("🛠️", "خدمات"),
+    "workshop":    ("🔧", "ورشة"),
+    "company":     ("🏢", "شركة"),
+    "office":      ("🏢", "مكتب"),
+    "gym":         ("🏋️", "صالة رياضية"),
+    "laundry":     ("🧺", "مغسلة"),
+    "butchery":    ("🥩", "ملحمة"),
+    "sweets":      ("🍰", "حلويات"),
+    "juice":       ("🥤", "عصائر"),
+    "default":     ("🏢", "مؤسسة"),
+}
+
+
+def _activity_label(activity: str | None) -> tuple[str, str]:
+    """يُرجع (emoji, label_ar) لنوع النشاط. غير معروف → (🏢, مؤسسة)."""
+    key = (activity or "").strip().lower()
+    return _ACTIVITY_META.get(key, _ACTIVITY_META["default"])
+
+
+def _build_branded_text(message: str, title: str | None = None,
+                         project_name: str | None = None, project_logo: str | None = None,
+                         project_activity: str | None = None) -> str:
     """يبني نص موحّد للواتساب بهوية Maestro EGP.
 
     القالب:
       *🔔 Maestro EGP*
       ━━━━━━━━━━━━━━━━━
+      🍽️ *GRaffiti BURGER — مطعم*     ← سطر المشروع (اسم + نوع النشاط)
       {title إن وُجد}
 
       {content}
@@ -188,6 +238,12 @@ def _build_branded_text(message: str, title: str | None = None) -> str:
     _iraq_tz = timezone(timedelta(hours=3))
     _now = datetime.now(_iraq_tz).strftime("%Y-%m-%d %H:%M")
     parts = ["*🔔 Maestro EGP*", "━━━━━━━━━━━━━━━━━"]
+    # ⭐ سطر المشروع تحت الفاصل وفوق عنوان التقرير (طلب العميل أكتوبر 2026):
+    #    emoji يعكس نوع النشاط + اسم المشروع + صفة النشاط بالعربية
+    if project_name and str(project_name).strip():
+        _emoji, _ar_label = _activity_label(project_activity)
+        _label_suffix = f" — {_ar_label}" if _ar_label else ""
+        parts.append(f"{_emoji} *{str(project_name).strip()}{_label_suffix}*")
     if title:
         parts.append(f"*{title}*")
         parts.append("")
