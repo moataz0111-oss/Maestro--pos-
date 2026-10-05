@@ -5162,7 +5162,13 @@ export default function SuperAdmin() {
                       max_admins_per_project: tierForm.max_admins_per_project,
                     });
                   }
-                  await axios.put(`${API}/super-admin/tenants/${selectedTenant.id}`, payload);
+                  // 🔑 إرسال super_admin token صراحةً (قد يُفقد من axios.defaults بعد تحديث الصفحة)
+                  const _tok = localStorage.getItem('super_admin_token') || localStorage.getItem('token');
+                  await axios.put(
+                    `${API}/super-admin/tenants/${selectedTenant.id}`,
+                    payload,
+                    { headers: { Authorization: `Bearer ${_tok}` } }
+                  );
                   toast.success(t('تم تحويل مستوى الحساب بنجاح'));
                   setShowChangeTier(false);
                   fetchTenants();

@@ -7,8 +7,11 @@ const ProjectContext = createContext(null);
 
 const API = API_URL;
 
-// أدوار "مالك المؤسسة" - يشوفون كل المشاريع
+// أدوار "مالك المؤسسة" - يشوفون كل المشاريع (يُستخدم للعرض فقط — بعد تفعيل المؤسسة)
 const ENTERPRISE_WIDE_ROLES = ['super_admin', 'admin', 'general_manager', 'enterprise_owner'];
+// 🔒 أدوار تتخطّى علامة tenant.enterprise_enabled (ترى إدارة المشاريع دائماً — فقط مالك النظام الأعلى)
+//    admin/general_manager لتينانت customer يجب أن يحترموا الإعداد ولا يروا إدارة المشاريع.
+const SYSTEM_OWNER_ROLES = ['super_admin', 'enterprise_owner'];
 
 export const ProjectProvider = ({ children }) => {
   const { user, isAuthenticated } = useAuth();
@@ -43,7 +46,7 @@ export const ProjectProvider = ({ children }) => {
         entConfig = cfg.data;
       } catch (_) { /* fallback */ }
 
-      const enterpriseOn = entConfig?.enterprise_enabled === true || ENTERPRISE_WIDE_ROLES.includes(user?.role);
+      const enterpriseOn = entConfig?.enterprise_enabled === true || SYSTEM_OWNER_ROLES.includes(user?.role);
 
       if (!enterpriseOn) {
         // العميل لم يفعّل وضع المؤسسة — استخدم الوضع التقليدي

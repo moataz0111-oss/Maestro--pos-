@@ -49,11 +49,10 @@ Tier conversion: Super Admin edits tenant → changes `account_tier` → backend
 - **🛡️ `_ban_ip_permanent`**: لا يحظر دائماً عنواناً عليه دخول ناجح خلال آخر 7 أيام (شبكة مكتبية فيها كاشيرون). يُستبدل بتجميد ناعم 15 دقيقة ويُسجَّل `security.soft_cool_down`. العناوين المجهولة ما زالت تُحظر دائمياً كما كان.
 - (`/app/backend/tests/test_shift_report_audit_and_otp.py` — 4/4 tests pass)
 
-### Project→Branch pattern on Drivers / Customers (Feb 2026)
-- `POST /api/drivers`: الآن يقبل `Request` ويقرأ `project_id` من رأس `X-Project-Id` عبر `resolve_project_id_for_create` (نفس نمط Printer/Branch). كان يستخدم فقط `current_user.project_id` → كسر عزل Enterprise owner.
-- `POST /api/customers`: نفس التحسين — يُحفظ `project_id` تلقائياً مع كل عميل جديد.
-- Enterprise Dashboard موجود (`GET /api/enterprise/dashboard`) يرجع لكل مشروع: `revenue, expenses, net_profit, orders_count, branches_count, employees_count`. المسار `/enterprise-dashboard` مربوط في `App.js`.
-- (`/app/backend/tests/test_project_isolation_and_audit_filters.py` — 4/4 tests pass)
+### Bug Fixes (Feb 2026 — same session)
+- **🐛 👑 "فشل التحويل"**: زر ترقية الطبقة في SuperAdmin كان لا يُرسل Authorization صراحةً — عند تحديث الصفحة يُفقد super_admin token من `axios.defaults` → 401. الحل: إرسال `Bearer super_admin_token` صراحةً مع كل PUT.
+- **🐛 "المشاريع" يظهر لأدمن تينانت customer**: ProjectContext.js كان يُفعّل enterprise تلقائياً لأي user بدور `admin` أو `general_manager` بغض النظر عن `tenant.enterprise_enabled`. الحل: فصلتُ `SYSTEM_OWNER_ROLES=[super_admin,enterprise_owner]` (دائماً enterprise) عن `ENTERPRISE_WIDE_ROLES` (العرض فقط). الآن admin تينانت customer **لا يرى** تاب المشاريع حتى يفعّل SuperAdmin المؤسسة بزر 👑.
+- (`/app/backend/tests/test_tier_upgrade_endpoint.py` — 2/2 pass)
 - UI: "تعديل الاسم" button on every project card
 - `enforce_project_limit`: trial=∞, customer=1, enterprise=max_projects
 - Super Admin dialog: 3 account type buttons + conditional enterprise limits section + 20 activity types
