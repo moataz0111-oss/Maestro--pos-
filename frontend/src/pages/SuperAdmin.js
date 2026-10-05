@@ -3051,6 +3051,8 @@ export default function SuperAdmin() {
                 max_users_per_branch: Math.max(_curBranches ? Math.ceil(_curUsers / _curBranches) : 0, 10),
                 max_admins_per_project: 2,
               });
+              // 🧹 Feb 2026: امسح أي toast قديم عالق (مثل "فشل التحويل" من محاولة سابقة)
+              try { toast.dismiss(); } catch(_){}
               setShowChangeTier(true);
             }}
             className={

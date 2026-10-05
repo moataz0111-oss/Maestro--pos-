@@ -1,7 +1,7 @@
-// Service Worker for Offline Support - V5 (Auto-Update)
-// يدعم العمل بدون إنترنت لجميع الصفحات مع تحديث تلقائي
+// Service Worker for Offline Support - V6 (Network-First for hashed assets)
+// يدعم العمل بدون إنترنت لجميع الصفحات مع تحديث فوري عند النشر
 
-const CACHE_VERSION = 'v38';
+const CACHE_VERSION = 'v39';
 const CACHE_NAME = `maestro-offline-${CACHE_VERSION}`;
 const STATIC_CACHE = `maestro-static-${CACHE_VERSION}`;
 const DATA_CACHE = `maestro-data-${CACHE_VERSION}`;
@@ -94,7 +94,8 @@ self.addEventListener('activate', (event) => {
       );
     }).then(() => {
       console.log('[SW-Offline] Activated');
-      // لا نستخدم clients.claim() لمنع إعادة التحميل
+      // v39: نُفعّل clients.claim() لضمان أن تأخذ النسخة الجديدة التحكم فوراً بعد قبول المستخدم
+      return self.clients.claim();
     })
   );
 });
@@ -142,7 +143,27 @@ self.addEventListener('fetch', (event) => {
     return;
   }
   
-  // للملفات الثابتة (JS, CSS, Images, Fonts) - Cache First ثم Network
+  // ⚡ v39: الملفات الثابتة ذات الـ hash (مثل /static/js/main.abc123.js) — Network First
+  //    هذا يحل مشكلة "النسخة القديمة لا تختفي" بعد النشر على PWA المثبّت.
+  //    الملفات ذات الـ hash غيّر اسمها عند كل build، لذا الـcache بأمان لنفس الـURL.
+  const isHashedAsset = url.pathname.match(/\/static\/(js|css|media)\//) ||
+                         url.pathname.match(/\.[a-f0-9]{8,}\.(js|css|woff|woff2)$/i);
+  if (isHashedAsset) {
+    event.respondWith(
+      fetch(request).then((networkResponse) => {
+        if (networkResponse && networkResponse.ok) {
+          const responseClone = networkResponse.clone();
+          caches.open(CACHE_NAME).then((cache) => {
+            cache.put(request, responseClone);
+          });
+        }
+        return networkResponse;
+      }).catch(() => caches.match(request).then((cached) => cached || new Response('', { status: 503 })))
+    );
+    return;
+  }
+
+  // باقي الملفات الثابتة (Images, Fonts, legacy JS) - Cache First + Background Refresh
   if (request.destination === 'script' || 
       request.destination === 'style' || 
       request.destination === 'image' ||
@@ -150,9 +171,7 @@ self.addEventListener('fetch', (event) => {
       url.pathname.match(/\.(js|css|png|jpg|jpeg|gif|svg|woff|woff2|ttf|eot)$/)) {
     event.respondWith(
       caches.match(request).then((cachedResponse) => {
-        // إذا موجود في الكاش، أرجعه
         if (cachedResponse) {
-          // تحديث الكاش في الخلفية (Stale-While-Revalidate)
           fetch(request).then((networkResponse) => {
             if (networkResponse && networkResponse.ok) {
               caches.open(CACHE_NAME).then((cache) => {
@@ -163,7 +182,6 @@ self.addEventListener('fetch', (event) => {
           return cachedResponse;
         }
         
-        // إذا غير موجود، جلب من الشبكة وتخزين
         return fetch(request).then((networkResponse) => {
           if (networkResponse && networkResponse.ok) {
             const responseClone = networkResponse.clone();
@@ -173,7 +191,6 @@ self.addEventListener('fetch', (event) => {
           }
           return networkResponse;
         }).catch(() => {
-          // إذا فشل ولا يوجد cache
           console.log('[SW-Offline] Failed to fetch:', request.url);
           return new Response('', { status: 503, statusText: 'Service Unavailable' });
         });

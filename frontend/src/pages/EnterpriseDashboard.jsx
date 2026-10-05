@@ -26,12 +26,6 @@ export default function EnterpriseDashboard() {
   const [liveConnected, setLiveConnected] = useState(false);
   const [lastEvent, setLastEvent] = useState(null);
 
-  // 🔒 حماية (Feb 2026): لا تدخل لوحة المؤسسة ما لم يُفعّلها Super Admin (enterprise_enabled=true)
-  //    super_admin فقط يُستثنى (يرى كل شيء دائماً).
-  if (user && user.role !== 'super_admin' && enterpriseEnabled === false) {
-    return <Navigate to="/" replace />;
-  }
-
   const isOwner = ['super_admin', 'admin', 'general_manager', 'enterprise_owner'].includes(user?.role);
 
   const reload = () => {
@@ -64,6 +58,12 @@ export default function EnterpriseDashboard() {
     return () => { socket.disconnect(); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOwner, user?.tenant_id]);
+
+  // 🔒 حماية (Feb 2026): لا تدخل لوحة المؤسسة ما لم يُفعّلها Super Admin (enterprise_enabled=true)
+  //    super_admin فقط يُستثنى (يرى كل شيء دائماً). — بعد كل الـ hooks لتجنّب خطأ قواعد الـ hooks
+  if (user && user.role !== 'super_admin' && enterpriseEnabled === false) {
+    return <Navigate to="/" replace />;
+  }
 
   if (!isOwner) {
     return (

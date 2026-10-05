@@ -33,7 +33,8 @@ const registerServiceWorker = async () => {
         }
       });
 
-      // شريط «نسخة جديدة متوفرة» — تحديث بضغطة واحدة (آمن، بطلب المستخدم)
+      // شريط «نسخة جديدة متوفرة» — تحديث تلقائي بعد 5 ثواني (أو يدوي فوري)
+      // v39 (Feb 2026): جعلنا القبول تلقائياً لحل مشكلة PWA العالقة على نسخة قديمة
       const showUpdateBanner = (worker) => {
         if (!worker || document.getElementById('sw-update-banner')) return;
         const bar = document.createElement('div');
@@ -41,19 +42,33 @@ const registerServiceWorker = async () => {
         bar.setAttribute('dir', 'rtl');
         bar.style.cssText = 'position:fixed;bottom:18px;left:50%;transform:translateX(-50%);z-index:2147483647;background:#0f766e;color:#fff;padding:12px 16px;border-radius:14px;box-shadow:0 10px 30px rgba(0,0,0,.35);display:flex;gap:14px;align-items:center;font-family:inherit;font-size:14px;max-width:92vw;';
         const txt = document.createElement('span');
-        txt.textContent = 'يتوفر تحديث جديد للنظام';
+        let secondsLeft = 5;
+        txt.textContent = `يتوفر تحديث جديد — جارٍ التثبيت خلال ${secondsLeft}ث`;
         const btn = document.createElement('button');
         btn.textContent = 'تحديث الآن';
         btn.style.cssText = 'background:#fff;color:#0f766e;border:none;padding:8px 18px;border-radius:9px;font-weight:700;cursor:pointer;white-space:nowrap;';
-        btn.onclick = () => {
+        const triggerUpdate = () => {
+          if (userAcceptedUpdate) return;
           userAcceptedUpdate = true;
           btn.textContent = 'جارٍ التحديث…';
           btn.disabled = true;
+          txt.textContent = 'جارٍ تطبيق التحديث…';
           worker.postMessage({ type: 'SKIP_WAITING' });
         };
+        btn.onclick = triggerUpdate;
         bar.appendChild(txt);
         bar.appendChild(btn);
         document.body.appendChild(bar);
+        // عدّاد تنازلي + قبول تلقائي بعد 5 ثواني
+        const ticker = setInterval(() => {
+          secondsLeft -= 1;
+          if (secondsLeft > 0 && !userAcceptedUpdate) {
+            txt.textContent = `يتوفر تحديث جديد — جارٍ التثبيت خلال ${secondsLeft}ث`;
+          } else {
+            clearInterval(ticker);
+            triggerUpdate();
+          }
+        }, 1000);
       };
 
       if (registration.waiting) showUpdateBanner(registration.waiting);
