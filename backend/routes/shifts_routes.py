@@ -143,6 +143,9 @@ async def _send_shift_close_report(db, shift: dict, closing_record: dict, tenant
                     "cashier_id": shift.get("cashier_id"),
                     "cashier_name": cashier,
                     "branch_id": shift.get("branch_id"),
+                    # 🏷️ Feb 2026: نُمرّر project_id ليظهر اسم المشروع الصحيح في رأس
+                    #    رسالة الواتساب (بدل الاكتفاء بمشروع التينانت الافتراضي).
+                    "project_id": shift.get("project_id") or closing_record.get("project_id"),
                     "business_date": biz_date,
                     "total_sales": total_sales,
                     "expected_cash": expected_cash,

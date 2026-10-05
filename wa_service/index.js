@@ -36,11 +36,46 @@ let reconnectTimer = null;
 // سبب "Waiting for this message": عند فشل فك تشفير رسالة عند المستقبِل، Baileys
 // يحتاج استرجاع الرسالة الأصلية لإعادة إرسالها (retry). بدون هذه الذاكرة، الرسالة
 // تبقى عالقة إلى الأبد عند المستقبِل.
-// نحفظ آخر 1000 رسالة لمدة 48 ساعة في الذاكرة.
+// v2 Feb 2026: الذاكرة + ملف Persistent (يبقى بين إعادة التشغيل)
+// نحفظ آخر 2000 رسالة لمدة 7 أيام (WhatsApp retry window ≈ 7 أيام)
 // ═══════════════════════════════════════════════════════════════════════════
 const MESSAGE_STORE = new Map();  // key = `${remoteJid}:${id}`, value = { message, savedAt }
-const MESSAGE_STORE_MAX = 1000;
-const MESSAGE_STORE_TTL_MS = 48 * 3600 * 1000;  // 48 ساعة
+const MESSAGE_STORE_MAX = 2000;
+const MESSAGE_STORE_TTL_MS = 7 * 24 * 3600 * 1000;  // 7 أيام (نافذة إعادة الإرسال في WhatsApp)
+const MESSAGE_STORE_FILE = path.join(AUTH_DIR, 'message-store.json');
+
+// تحميل الذاكرة من القرص عند الإقلاع
+function loadMessageStore() {
+  try {
+    if (!fs.existsSync(MESSAGE_STORE_FILE)) return;
+    const raw = fs.readFileSync(MESSAGE_STORE_FILE, 'utf8');
+    const data = JSON.parse(raw);
+    const now = Date.now();
+    let loaded = 0;
+    for (const [k, v] of Object.entries(data || {})) {
+      if (v && v.savedAt && (now - v.savedAt) < MESSAGE_STORE_TTL_MS) {
+        MESSAGE_STORE.set(k, v);
+        loaded++;
+      }
+    }
+    console.log(`[MessageStore] Loaded ${loaded} messages from disk`);
+  } catch (e) { console.error('[MessageStore] Load failed:', e.message); }
+}
+
+// حفظ دوري على القرص (كل دقيقتين)
+let saveStoreScheduled = false;
+function scheduleSaveStore() {
+  if (saveStoreScheduled) return;
+  saveStoreScheduled = true;
+  setTimeout(() => {
+    try {
+      if (!fs.existsSync(AUTH_DIR)) fs.mkdirSync(AUTH_DIR, { recursive: true });
+      const obj = Object.fromEntries(MESSAGE_STORE);
+      fs.writeFileSync(MESSAGE_STORE_FILE, JSON.stringify(obj), 'utf8');
+    } catch (e) { /* ignore */ }
+    saveStoreScheduled = false;
+  }, 120000);  // كل دقيقتين
+}
 
 function storeMessage(remoteJid, id, message) {
   if (!remoteJid || !id || !message) return;
@@ -50,6 +85,7 @@ function storeMessage(remoteJid, id, message) {
     if (oldest) MESSAGE_STORE.delete(oldest);
   }
   MESSAGE_STORE.set(`${remoteJid}:${id}`, { message, savedAt: Date.now() });
+  scheduleSaveStore();
 }
 
 function getStoredMessage(key) {
@@ -61,6 +97,9 @@ function getStoredMessage(key) {
   }
   return entry.message;
 }
+
+// تحميل الذاكرة فور الإقلاع
+loadMessageStore();
 
 // تنظيف دوري للمدخلات المنتهية (كل 10 دقائق)
 setInterval(() => {
@@ -111,17 +150,19 @@ async function startSock() {
       // 🔑 الحل الحاسم لـ "Waiting for this message":
       //    Baileys يستدعي هذه الدالة عندما يُطلب منه إعادة إرسال رسالة فشلت
       //    عند المستقبِل. نُرجع نص الرسالة من الذاكرة ليعيد تشفيرها وإرسالها.
+      //    v2: نعيد undefined (ليس ''), وذلك يُشير لـBaileys بتوليد sessionReset
+      //    لإصلاح جلسة Signal التالفة بدل الحلقة اللانهائية.
       getMessage: async (key) => {
         const storeKey = `${key.remoteJid}:${key.id}`;
         const msg = getStoredMessage(storeKey);
-        if (msg) {
-          return msg;
-        }
-        // fallback: نص فارغ (أفضل من undefined لتجنب loop)
-        return { conversation: '' };
+        if (msg) return msg;
+        // fallback: undefined → Baileys سيُنشئ session reset (أفضل من string فارغ)
+        return undefined;
       },
-      // استعادة الاتصال التلقائية عند فشل مؤقت
-      retryRequestDelayMs: 2000,
+      // استعادة الاتصال التلقائية عند فشل مؤقت (أسرع = أفضل)
+      retryRequestDelayMs: 1000,
+      // الحد الأقصى لمحاولات إعادة الإرسال قبل الاستسلام (منع حلقات)
+      maxMsgRetryCount: 5,
       // إرسال presence مرة واحدة بعد الاتصال
       emitOwnEvents: false,
       // عدم تنزيل الوسائط الواردة (نحن مرسل فقط)
@@ -205,13 +246,16 @@ app.post('/send', auth, async (req, res) => {
       exists = Array.isArray(r) && r.length > 0 && r[0]?.exists;
     } catch (e) { /* تجاهل الفحص وحاول الإرسال */ }
     if (!exists) return res.status(422).json({ ok: false, error: 'not_on_whatsapp' });
+    // v2 Feb 2026: assertSessions قبل الإرسال — يُجبر Baileys على بناء جلسة Signal
+    //   جديدة إذا كانت الحالية تالفة. هذا يحل "Waiting for this message" للرسائل الجديدة.
+    try { await sock.assertSessions([jid], true); } catch (_) {}
     const content = { text: message };
     const sent = await sock.sendMessage(jid, content);
     // 🔑 حفظ الرسالة في الذاكرة لإعادة الإرسال عند فشل فك التشفير عند المستقبِل
     if (sent?.key?.id) {
       storeMessage(jid, sent.key.id, content);
     }
-    res.json({ ok: true });
+    res.json({ ok: true, id: sent?.key?.id });
   } catch (e) {
     res.status(500).json({ ok: false, error: e.message });
   }
@@ -233,13 +277,15 @@ app.post('/send-media', auth, async (req, res) => {
     } catch (e) { /* ignore */ }
     if (!exists) return res.status(422).json({ ok: false, error: 'not_on_whatsapp' });
     const imgBuffer = Buffer.from(image_b64, 'base64');
+    // v2 Feb 2026: assertSessions قبل الإرسال — يُصلح جلسة Signal التالفة
+    try { await sock.assertSessions([jid], true); } catch (_) {}
     const content = { image: imgBuffer, caption: caption || '' };
     const sent = await sock.sendMessage(jid, content);
     // 🔑 حفظ الرسالة لإعادة الإرسال عند فشل فك التشفير
     if (sent?.key?.id) {
       storeMessage(jid, sent.key.id, content);
     }
-    res.json({ ok: true });
+    res.json({ ok: true, id: sent?.key?.id });
   } catch (e) {
     res.status(500).json({ ok: false, error: e.message });
   }

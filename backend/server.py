@@ -546,17 +546,25 @@ async def notify_owner_multichannel(
                         logger.warning(f"notify_owner_multichannel: قصّرت المستقبِلين على {NOTIFY_MAX_RECIPIENTS} (كان هناك أكثر — تحقق من إعدادات التينانت)")
                         break
                 # إرسال متزامن لكل الأرقام (بهوية Maestro EGP الموحّدة: شعار + قالب + سطر المشروع)
-                # ⭐ جلب اسم ونوع نشاط المشروع من المشروع الافتراضي للتينانت
-                #    يظهر كسطر "🍽️ GRaffiti BURGER — مطعم" تحت فاصل Maestro EGP
+                # ⭐ v2 Feb 2026: نولّي الأولوية لـ metadata.project_id (مشروع الوردية الفعلي)
+                #    بدل المشروع الافتراضي للتينانت — مهم للتينانتس متعدّدة المشاريع (Enterprise).
                 _project_name = None
                 _project_logo = None
                 _project_activity = None
                 if tenant_id:
                     try:
-                        _proj = await db.projects.find_one(
-                            {"tenant_id": tenant_id, "is_default": True},
-                            {"_id": 0, "name": 1, "logo_url": 1, "activity_type": 1}
-                        )
+                        _specific_pid = (metadata or {}).get("project_id") if metadata else None
+                        _proj = None
+                        if _specific_pid:
+                            _proj = await db.projects.find_one(
+                                {"id": _specific_pid, "tenant_id": tenant_id},
+                                {"_id": 0, "name": 1, "logo_url": 1, "activity_type": 1}
+                            )
+                        if not _proj:
+                            _proj = await db.projects.find_one(
+                                {"tenant_id": tenant_id, "is_default": True},
+                                {"_id": 0, "name": 1, "logo_url": 1, "activity_type": 1}
+                            )
                         if _proj:
                             _project_name = _proj.get("name")
                             _project_logo = _proj.get("logo_url")
