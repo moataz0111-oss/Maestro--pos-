@@ -19,11 +19,6 @@ export default function EnterpriseConfigPanel() {
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState({});
 
-  // 🔒 حماية (Feb 2026): لوحة إعدادات المؤسسة لـ Super Admin فقط.
-  if (user && user.role !== 'super_admin') {
-    return <Navigate to="/" replace />;
-  }
-
   const load = () => {
     setLoading(true);
     axios.get(`${API_URL}/enterprise-config/tenants-list`)
@@ -32,6 +27,11 @@ export default function EnterpriseConfigPanel() {
       .finally(() => setLoading(false));
   };
   useEffect(load, []);
+
+  // 🔒 حماية (Feb 2026): لوحة إعدادات المؤسسة لـ Super Admin فقط. — بعد كل الـ hooks لتجنّب خطأ قواعد الـ hooks
+  if (user && user.role !== 'super_admin') {
+    return <Navigate to="/" replace />;
+  }
 
   const startEdit = (t) => {
     setEditing({

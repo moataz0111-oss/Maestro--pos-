@@ -50,9 +50,9 @@ jobs:
         username: ${{ github.actor }}
         password: ${{ secrets.GITHUB_TOKEN }}
 
+    # Feb 2026: أزلنا continue-on-error — فشل الواجهة كان يُخفي أخطاء البناء ويُبقي صورة قديمة مُنشورة
     - name: 🏗️ Build & push frontend image
-      continue-on-error: true
-      timeout-minutes: 10
+      timeout-minutes: 15
       uses: docker/build-push-action@v6
       with:
         context: ./frontend
