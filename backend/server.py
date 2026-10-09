@@ -9280,7 +9280,49 @@ async def update_restaurant_settings(settings: Dict[str, Any], current_user: dic
         }},
         upsert=True
     )
-    
+
+    # 🖼️ Feb 2026: مزامنة اللوجو مع كل المشاريع التي بدون لوجو — يحل مشكلة
+    #    "لوجو المطعم لا يظهر على بطاقة المشروع". آمن: لا يُلمس المشاريع التي لها لوجو.
+    try:
+        _logo = settings.get("logo_url")
+        _name = settings.get("name") or settings.get("name_ar")
+        if tenant_id:
+            _project_fields = {"updated_at": datetime.now(timezone.utc).isoformat()}
+            if _logo:
+                _project_fields["logo_url"] = _logo
+            if _name:
+                # املأ فقط الاسم الفارغ (لا نعدل اسم مشروع موجود)
+                await db.projects.update_many(
+                    {"tenant_id": tenant_id, "$or": [{"name": None}, {"name": ""}, {"name": {"$exists": False}}]},
+                    {"$set": {"name": _name, "updated_at": _project_fields["updated_at"]}}
+                )
+            if _logo:
+                await db.projects.update_many(
+                    {"tenant_id": tenant_id, "$or": [{"logo_url": None}, {"logo_url": ""}, {"logo_url": {"$exists": False}}]},
+                    {"$set": {"logo_url": _logo, "updated_at": _project_fields["updated_at"]}}
+                )
+    except Exception as _e:
+        logger.warning(f"project logo backfill from restaurant settings failed: {_e}")
+
+    # 🖼️ Feb 2026: احفظ أيضاً في system_info ليعمل الـ fallback في projects_routes.py
+    try:
+        _sys_val = {}
+        if settings.get("name"): _sys_val["name"] = settings.get("name")
+        if settings.get("name_ar"): _sys_val["name_ar"] = settings.get("name_ar")
+        if settings.get("logo_url"): _sys_val["logoUrl"] = settings.get("logo_url")
+        if _sys_val and tenant_id:
+            # دمج مع القيم الموجودة بدل الاستبدال
+            _existing = await db.settings.find_one({"tenant_id": tenant_id, "type": "system_info"}) or {}
+            _merged = {**(_existing.get("value") or {}), **_sys_val}
+            await db.settings.update_one(
+                {"tenant_id": tenant_id, "type": "system_info"},
+                {"$set": {"tenant_id": tenant_id, "type": "system_info", "value": _merged,
+                          "updated_at": datetime.now(timezone.utc).isoformat()}},
+                upsert=True
+            )
+    except Exception as _e:
+        logger.warning(f"system_info sync failed: {_e}")
+
     return {"message": "تم حفظ إعدادات المطعم بنجاح"}
 
 @api_router.get("/settings/restaurant")
