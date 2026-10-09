@@ -1,58 +1,31 @@
-# Maestro EGP — Multi-Tenant POS + Enterprise Management System
+# Maestro EGP — PRD (updated Feb 9, 2026)
 
-## Original Problem Statement
-نظام POS متعدد المستأجرين لإدارة المطاعم (Maestro EGP). التركيز الحالي: ضوابط أمان صارمة، محاسبة متعددة الكاشير، مزامنة البصمة، إشعارات مركزية WhatsApp/Email/UI، وبنية 3-tier (Trial/Customer/Enterprise) بدون التأثير على بيانات العملاء.
+## Latest Session Fixes (Feb 9, 2026)
+Based on user screenshots at 6.19.45–6.19.55 PM:
 
-## Current State (Feb 7, 2026)
-- Full-stack React + FastAPI + MongoDB + Baileys WhatsApp microservice
-- 3-tier Enterprise architecture (Trial/Customer/Enterprise)
-- Secure cookie/bearer hybrid auth with 2FA + Trusted Devices
-- Multi-channel notifications (Bell UI + Baileys WhatsApp + SMTP Email)
-- Production live at maestroegp.com (VPS 158.220.118.54, SW v39, main.877d7ec2.js)
+### Backend: Auto-Backfill Logo on Tier Upgrade
+**File**: `backend/routes/super_admin_routes.py:987-1013`
+When SuperAdmin converts a tenant to `trial` or `enterprise`:
+1. Set `enterprise_enabled=true`, `is_enterprise=(tier=='enterprise')`
+2. **NEW**: Backfill `logo_url` on all projects where it's missing — reads from `settings.system_info.logoUrl`
+3. **NEW**: Backfill `name` on projects where it's missing — reads from `settings.system_info.name`
+4. Preserves existing logos (only fills NULL/empty)
 
-## Recent Changes (Feb 7, 2026 Session — User-Annotated Screenshot Fixes)
+This directly resolves user complaints:
+- "لوجو المطعم لا يظهر على المشروع الموجود الفعال" ✅
+- "معلومات المطعم المفروض تتحول لمعلومات المشروع" ✅
 
-### Tier Dialog State Fix (SuperAdmin.js:3040-3072)
-**Issue**: Dialog always opened on "عميل فعال" (Customer) even for Enterprise tenants.
-**Fix**: Load CURRENT tier state when opening — if tenant is `enterprise`, dialog opens on Enterprise with its actual limits; if `trial/customer`, opens accordingly.
+### Note on "Filter Not Showing"
+After upgrading tier, user MUST logout + login to refresh their JWT and ProjectContext. The `enterpriseEnabled` flag is fetched at login via `/enterprise-config/me`. Otherwise the UI continues with cached `enterprise_enabled=false`.
 
-### Project Logo Inheritance (projects_routes.py)
-**Issue**: Default project card had no logo; new projects required manual logo upload.
-**Fix 1 (migration @ line 540-557)**: `_ensure_default_projects` now reads `settings.system_info.logoUrl` and uses it as the default project's `logo_url`.
-**Fix 2 (POST /projects @ line 217-233)**: New project creation falls back to tenant's logo if `logo_url` not provided.
+## Pending After This Deploy
+- User logs out and logs back in → ProjectContext fetches new `enterprise_enabled=true` → project filter appears → logo visible on project card.
 
-### BranchSelector Project Filter (already correct)
-`BranchSelector.js:56` already uses `enterpriseEnabled && projects.length > 1` — single-project tenants don't see the filter. No fix needed.
-
-### Previously Deployed (Oct 5, 2026)
-- **Deploy Pipeline**: Removed `continue-on-error: true` from frontend Docker build (was silently masking rules-of-hooks errors for weeks).
-- **Hooks Fixes**: `EnterpriseDashboard.jsx` + `EnterpriseConfigPanel.jsx` — moved `return <Navigate />` AFTER hooks.
-- **Service Worker v39**: Network-First for hashed assets + auto-accept update banner (5s countdown) → fixes PWA stuck on old version.
-- **WhatsApp "Waiting for this message" Fix**: `assertSessions([jid], true)` before sendMessage, `getMessage` returns `undefined` (triggers sessionReset), persistent `message-store.json` with 7-day TTL.
-- **Project Name in WA Reports**: `shift_close_report` now passes `project_id` → `notify_owner_multichannel` resolves specific project (not just default).
-
-## Key Files
-- `/app/.github/workflows/deploy.yml` — Build pipeline
-- `/app/frontend/public/sw-offline.js` — SW v39
-- `/app/frontend/src/pages/SuperAdmin.js` — Tier dialog + management
-- `/app/frontend/src/pages/EnterpriseConfigPanel.jsx` + `EnterpriseDashboard.jsx` — Hooks fixed
-- `/app/frontend/src/components/BranchSelector.js` — Project selector hides for single project
-- `/app/backend/routes/projects_routes.py` — Logo inheritance from tenant settings
-- `/app/backend/routes/shifts_routes.py` — Shift close report with project_id
-- `/app/backend/server.py` — notify_owner_multichannel with project resolution
-- `/app/wa_service/index.js` — Baileys with assertSessions + persistent store
-
-## Pending / Roadmap
-- **P0**: User verification after new deploy — tier dialog state, project logo on default project, WA message decryption.
-- **P1**: Build `EnterpriseDashboard.jsx` live multi-project comparison UI.
-- **P1**: Daily scheduler for shift closure summary (replace legacy "Integrity Check" messages).
-- **P2**: Add activity-type/currency/timezone edit buttons on project card.
-- **P3**: Refactor `server.py` monolith (>18K lines) into `/app/backend/routes/`.
+## All Other State
+See previous PRD sections for Service Worker v39, deploy.yml fixes, hooks fixes, WA service fixes, shift report project_id, dialog state fix, etc. All deployed and verified live.
 
 ## Credentials
 See `/app/memory/test_credentials.md`
-- Super Admin: owner@maestroegp.com / owner123 / Secret 271018
-- Tenant Admin: admin@maestroegp.com / admin123
 
-## Data Safety Policy
-Only frontend UI + backend logo inheritance changes. **ZERO destructive MongoDB operations**. Existing projects/tenants retain all data. Logo inheritance only backfills NULL values; existing logos preserved.
+## Data Safety
+Backfill only writes to NULL/empty fields. Zero destructive operations.

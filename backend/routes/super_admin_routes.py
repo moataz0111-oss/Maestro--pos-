@@ -983,6 +983,32 @@ async def update_tenant(tenant_id: str, updates: dict, background_tasks: Backgro
             )
         except Exception:
             pass
+
+        # 🖼️ Feb 2026: Backfill logo للمشاريع التي بلا لوجو من إعدادات المؤسسة
+        #    يحل مشكلة: "لوجو المطعم لا يظهر على المشروع الموجود الفعال"
+        try:
+            _tn_settings = await db.settings.find_one({"tenant_id": tenant_id, "type": "system_info"})
+            _tn_logo = None
+            _tn_name = None
+            if _tn_settings:
+                _val = _tn_settings.get("value") or {}
+                _tn_logo = _val.get("logoUrl") or _val.get("logo_url")
+                _tn_name = _val.get("name")
+            if _tn_logo:
+                _update_fields = {"logo_url": _tn_logo, "updated_at": datetime.now(timezone.utc).isoformat()}
+                # لا نُحدِث مشاريع لديها لوجو مسبقاً
+                await db.projects.update_many(
+                    {"tenant_id": tenant_id, "$or": [{"logo_url": None}, {"logo_url": ""}, {"logo_url": {"$exists": False}}]},
+                    {"$set": _update_fields}
+                )
+            # إذا كان اسم المشروع فارغ، اقتبسه من اسم المؤسسة
+            if _tn_name:
+                await db.projects.update_many(
+                    {"tenant_id": tenant_id, "$or": [{"name": None}, {"name": ""}, {"name": {"$exists": False}}]},
+                    {"$set": {"name": _tn_name, "updated_at": datetime.now(timezone.utc).isoformat()}}
+                )
+        except Exception as _e:
+            logger.warning(f"logo/name backfill failed for tenant={tenant_id}: {_e}")
     elif new_tier == "customer":
         try:
             await db.tenants.update_one(
