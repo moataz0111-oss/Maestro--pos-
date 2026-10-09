@@ -214,13 +214,23 @@ async def create_project(
     except Exception:
         pass
 
+    # 🖼️ Feb 2026: إذا لم يُحدَّد لوجو للمشروع الجديد، اقتبسه من إعدادات المؤسسة (settings.system_info.logoUrl)
+    _project_logo = project.logo_url
+    if not _project_logo:
+        try:
+            _tn_settings = await db.settings.find_one({"tenant_id": tenant_id, "type": "system_info"})
+            if _tn_settings:
+                _project_logo = (_tn_settings.get("value") or {}).get("logoUrl") or (_tn_settings.get("value") or {}).get("logo_url")
+        except Exception:
+            pass
+
     project_doc = {
         "id": str(uuid.uuid4()),
         "tenant_id": tenant_id,
         "name": project.name,
         "name_en": project.name_en,
         "activity_type": project.activity_type,
-        "logo_url": project.logo_url,
+        "logo_url": _project_logo,
         "currency": project.currency,
         "timezone": project.timezone,
         "description": project.description,
@@ -539,9 +549,14 @@ async def run_enterprise_backfill_migration(db):
         pid = str(uuid.uuid4())
         # حاول جلب اسم/شعار من settings الحالية
         tenant_name = tid
+        _tenant_logo = None
         settings = await db.settings.find_one({"tenant_id": tid, "type": "system_info"})
-        if settings and settings.get("value", {}).get("name"):
-            tenant_name = settings["value"]["name"]
+        if settings and settings.get("value"):
+            _val = settings.get("value") or {}
+            if _val.get("name"):
+                tenant_name = _val["name"]
+            # 🖼️ Feb 2026: اقتبس اللوجو من إعدادات المؤسسة إن وُجد
+            _tenant_logo = _val.get("logoUrl") or _val.get("logo_url")
 
         await db.projects.insert_one({
             "id": pid,
@@ -549,7 +564,7 @@ async def run_enterprise_backfill_migration(db):
             "name": tenant_name,
             "name_en": None,
             "activity_type": "restaurant",
-            "logo_url": None,
+            "logo_url": _tenant_logo,
             "currency": "IQD",
             "timezone": "Asia/Baghdad",
             "description": "المشروع الافتراضي - تم إنشاؤه تلقائياً",

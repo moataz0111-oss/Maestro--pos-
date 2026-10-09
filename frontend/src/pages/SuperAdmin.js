@@ -3039,17 +3039,28 @@ export default function SuperAdmin() {
             variant="ghost" size="icon"
             onClick={() => {
               setSelectedTenant(tenant);
-              // ⭐ قرار المالك (Feb 2026): الدايلوج دائماً يفتح على "عميل فعال" (المربع الوسط) + مشروع واحد.
-              //    SuperAdmin هو من يُقرّر الترقية إلى "مؤسسة" يدوياً بالنقر على مربع المؤسسة.
+              // ⭐ قرار المالك (Feb 7, 2026): الدايلوج يفتح على المستوى الفعلي الحالي للعميل.
+              //    - إذا كان enterprise  → يفتح على مؤسسة ويُظهر الحدود الحالية.
+              //    - إذا كان customer/trial → يفتح على المربع المناسب.
               const _curBranches = Number(tenant.branches_count || 0);
               const _curUsers = Number(tenant.users_count || 0);
+              const _curTier = tenant.account_tier === 'enterprise'
+                ? 'enterprise'
+                : (tenant.account_tier === 'trial' || tenant.is_demo)
+                  ? 'trial'
+                  : 'customer';
               setTierForm({
-                account_tier: 'customer',  // ✅ المربع الوسط دائماً
-                max_projects: 1,
-                // قيم مقترحة تظهر فقط بعد النقر على "مؤسسة":
-                max_branches_per_project: Math.max(_curBranches, 5),
-                max_users_per_branch: Math.max(_curBranches ? Math.ceil(_curUsers / _curBranches) : 0, 10),
-                max_admins_per_project: 2,
+                account_tier: _curTier,
+                max_projects: _curTier === 'enterprise' ? Number(tenant.max_projects || 1) : 1,
+                max_branches_per_project: _curTier === 'enterprise'
+                  ? Number(tenant.max_branches_per_project || Math.max(_curBranches, 5))
+                  : Math.max(_curBranches, 5),
+                max_users_per_branch: _curTier === 'enterprise'
+                  ? Number(tenant.max_users_per_branch || 10)
+                  : Math.max(_curBranches ? Math.ceil(_curUsers / _curBranches) : 0, 10),
+                max_admins_per_project: _curTier === 'enterprise'
+                  ? Number(tenant.max_admins_per_project || 2)
+                  : 2,
               });
               // 🧹 Feb 2026: امسح أي toast قديم عالق (مثل "فشل التحويل" من محاولة سابقة)
               try { toast.dismiss(); } catch(_){}
