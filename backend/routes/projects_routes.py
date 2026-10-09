@@ -154,6 +154,40 @@ async def list_projects(current_user: dict = Depends(get_current_user)):
         query["id"] = {"$in": allowed}
 
     projects = await db.projects.find(query, {"_id": 0}).sort("created_at", 1).to_list(length=None)
+
+    # 🖼️ Feb 2026: fallback فوري — لكل مشروع بدون logo_url، استخدم لوجو المؤسسة من إعدادات settings
+    #    يحل مشكلة "لوجو المطعم لا يظهر على بطاقة المشروع" بدون انتظار migration أو إعادة حفظ.
+    try:
+        missing_logo = [p for p in projects if not p.get("logo_url")]
+        if missing_logo and tenant_id:
+            # اقرأ لوجو المؤسسة من مصادر متعددة
+            _fallback_logo = None
+            _settings_rest = await db.settings.find_one({"type": "restaurant"})
+            if _settings_rest:
+                _fallback_logo = _settings_rest.get("logo_url")
+            if not _fallback_logo:
+                _settings_sys = await db.settings.find_one({"tenant_id": tenant_id, "type": "system_info"})
+                if _settings_sys:
+                    _fallback_logo = (_settings_sys.get("value") or {}).get("logoUrl") or (_settings_sys.get("value") or {}).get("logo_url")
+            if not _fallback_logo:
+                _tn = await db.tenants.find_one({"id": tenant_id}, {"_id": 0, "logo_url": 1})
+                if _tn:
+                    _fallback_logo = _tn.get("logo_url")
+            if _fallback_logo:
+                for p in projects:
+                    if not p.get("logo_url"):
+                        p["logo_url"] = _fallback_logo
+                # اكتب القيمة في قاعدة البيانات أيضاً حتى تثبت
+                try:
+                    await db.projects.update_many(
+                        {"tenant_id": tenant_id, "$or": [{"logo_url": None}, {"logo_url": ""}, {"logo_url": {"$exists": False}}]},
+                        {"$set": {"logo_url": _fallback_logo, "updated_at": datetime.now(timezone.utc).isoformat()}}
+                    )
+                except Exception:
+                    pass
+    except Exception as _e:
+        logger.warning(f"project logo fallback failed: {_e}")
+
     return projects
 
 
