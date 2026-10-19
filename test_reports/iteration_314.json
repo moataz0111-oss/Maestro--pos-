@@ -1,0 +1,44 @@
+{
+  "summary": "Iteration 314: tested project hard-delete, the full edit dialog, and logo upload for every image format, plus the branding endpoint and POS loading. Backend: 11/11 pytest pass. Logo upload accepts PNG, JPG, WEBP, SVG and HEIC (by extension) and rejects .txt with 400. A PUT that sets all fields saved them, confirmed by GET. Branding resolves the project from project_id and from branch_id. DELETE removes the project for good: GET returns 404 afterwards and its branch is deleted too. Frontend (Settings > المشاريع): creating a project with a PNG logo shows a preview and the new card shows the logo. The edit dialog opens with the name and current logo filled in, and the button reads 'حفظ التعديلات'. Changing the name, English name, activity (صالون), description and logo (WEBP) updated the card, and reopening the dialog showed the saved values. The delete dialog's confirm button stays disabled until the exact name is typed. After confirming, the success toast appears and the card disappears, and it does not come back after a page reload (count back to 9). POS loads with no page errors and calls /api/projects/branding/current with 200.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "POST /api/projects/{id}/logo", "issue": "SVG files are saved as uploaded, with no sanitizing, and served from the app's own origin as image/svg+xml. A malicious SVG containing <script> becomes stored XSS if someone opens the logo URL directly. Fix: sanitize the SVG (strip scripts and on* attributes), convert it to PNG, or serve it with Content-Disposition: attachment / a restrictive CSP."},
+      {"endpoint": "POST /api/projects/{id}/logo", "issue": "PNG uploads are converted to .jpg by process_and_save_image, so logos with a transparent background lose the transparency (it becomes black or white)."},
+      {"endpoint": "GET /api/projects/branding/current", "issue": "resolve_project_for_context does not read the X-Project-Id header. With no branch_id, it falls back to user.project_id, so an owner who switched to another project in the UI gets the branding of their assigned project instead."},
+      {"endpoint": "DELETE /api/projects/{id}", "issue": "The cascade only deletes documents that have both tenant_id and project_id/branch_id. Collections that store project or branch data without tenant_id are skipped and leave orphan data behind. Uploaded logo files are also not deleted from disk."},
+      {"endpoint": "POST /api/branches", "issue": "Ignores project_id in the request body and only uses the X-Project-Id header. A body-only request (the first test attempt) created a branch with project_id=null."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "ProjectsSettings handleUpdate/handleCreate", "issue": "If the logo upload fails, the user sees an error toast and then a success toast at the same time ('تم تحديث بيانات المشروع'), which contradict each other.", "selector": "[data-testid='save-project-btn']", "priority": "LOW"},
+      {"component": "ProjectLogoUpload in edit mode", "issue": "There is no way to remove a project's existing logo: the clear (X) button only shows for a newly picked file.", "selector": "[data-testid='project-logo-clear-btn']", "priority": "LOW"}
+    ],
+    "integration_issues": [
+      {"flow": "POS receipt branding", "issue": "When the project has no logo, POS sets invoice_logo to null, so the receipt prints with no logo at all instead of falling back to the organization logo. All 9 seeded projects currently have logo_url=null. Confirm this is intended.", "affected_selectors": []}
+    ],
+    "design_issues": [
+      {"screen": "POS", "issues": ["/api/projects/branding/current is called twice on load, a duplicate request."]}
+    ]
+  },
+  "test_report_links": ["/app/backend/tests/test_project_hard_delete_logo_branding.py", "/app/test_reports/pytest/pytest_iter314.xml"],
+  "action_items": [
+    "Sanitize SVG logos or convert them to PNG (stored XSS risk)",
+    "Keep PNG transparency (save as PNG/WEBP instead of JPG) for logos",
+    "Have resolve_project_for_context respect the X-Project-Id header",
+    "Avoid showing the success toast after a logo upload fails, and allow removing an existing logo in edit mode",
+    "Decide whether the receipt should fall back to the organization logo when the project has no logo"
+  ],
+  "critical_code_review_comments": [
+    "projects_routes.py is about 990 lines; consider splitting it",
+    "The delete cascade loops over every collection with delete_many. That works, but it is slow and risky; an explicit list of collections would be safer.",
+    "get_project does not filter on deleted_at. Legacy soft-deleted projects (if any remain in other tenants) can still be fetched by id. Consider removing old soft-deleted projects in a migration."
+  ],
+  "updated_files": ["/app/backend/tests/test_project_hard_delete_logo_branding.py"],
+  "success_rate": {"backend": "100%", "frontend": "100%"},
+  "seed_data_creation": "Created and then deleted the test projects 'TEST_proj_*' and 'مشروع اختبار حذف', plus the test branch TEST_br_proj. Seeded projects are left untouched (still 9).",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Tenant 'default' is enterprise with max_projects=10 and 9 seeded projects, so only 1 extra project can be created at a time. The Projects tab selector is [data-testid=settings-tab-projects]. There is no 'cafe' activity type; use the option role with name 'صالون'. When creating a branch in a specific project, send the X-Project-Id header."
+}

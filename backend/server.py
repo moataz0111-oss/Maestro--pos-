@@ -553,28 +553,24 @@ async def notify_owner_multichannel(
                 _project_activity = None
                 if tenant_id:
                     try:
-                        _specific_pid = (metadata or {}).get("project_id") if metadata else None
-                        _proj = None
-                        if _specific_pid:
-                            _proj = await db.projects.find_one(
-                                {"id": _specific_pid, "tenant_id": tenant_id},
-                                {"_id": 0, "name": 1, "logo_url": 1, "activity_type": 1}
-                            )
-                        if not _proj:
-                            _proj = await db.projects.find_one(
-                                {"tenant_id": tenant_id, "is_default": True},
-                                {"_id": 0, "name": 1, "logo_url": 1, "activity_type": 1}
-                            )
+                        from routes.projects_routes import resolve_project_for_context
+                        _meta = metadata or {}
+                        _proj = await resolve_project_for_context(
+                            db, tenant_id,
+                            project_id=_meta.get("project_id"),
+                            branch_id=_meta.get("branch_id"),
+                        )
                         if _proj:
                             _project_name = _proj.get("name")
                             _project_logo = _proj.get("logo_url")
                             _project_activity = _proj.get("activity_type")
-                        # fallback: اسم المطعم من tenants
-                        if not _project_name:
-                            _tn2 = await db.tenants.find_one({"id": tenant_id}, {"_id": 0, "name": 1}) or {}
-                            _project_name = _tn2.get("name")
-                    except Exception:
-                        pass
+                        else:
+                            _has_projects = await db.projects.count_documents({"tenant_id": tenant_id}, limit=1)
+                            if not _has_projects:
+                                _tn2 = await db.tenants.find_one({"id": tenant_id}, {"_id": 0, "name": 1}) or {}
+                                _project_name = _tn2.get("name")
+                    except Exception as _pe:
+                        logger.warning(f"notify project resolve failed: {_pe}")
                 sent_count = 0
                 _wa_errors = []
                 for e164, _raw in normalized_pairs:
@@ -9280,29 +9276,6 @@ async def update_restaurant_settings(settings: Dict[str, Any], current_user: dic
         }},
         upsert=True
     )
-
-    # 🖼️ Feb 2026: مزامنة اللوجو مع كل المشاريع التي بدون لوجو — يحل مشكلة
-    #    "لوجو المطعم لا يظهر على بطاقة المشروع". آمن: لا يُلمس المشاريع التي لها لوجو.
-    try:
-        _logo = settings.get("logo_url")
-        _name = settings.get("name") or settings.get("name_ar")
-        if tenant_id:
-            _project_fields = {"updated_at": datetime.now(timezone.utc).isoformat()}
-            if _logo:
-                _project_fields["logo_url"] = _logo
-            if _name:
-                # املأ فقط الاسم الفارغ (لا نعدل اسم مشروع موجود)
-                await db.projects.update_many(
-                    {"tenant_id": tenant_id, "$or": [{"name": None}, {"name": ""}, {"name": {"$exists": False}}]},
-                    {"$set": {"name": _name, "updated_at": _project_fields["updated_at"]}}
-                )
-            if _logo:
-                await db.projects.update_many(
-                    {"tenant_id": tenant_id, "$or": [{"logo_url": None}, {"logo_url": ""}, {"logo_url": {"$exists": False}}]},
-                    {"$set": {"logo_url": _logo, "updated_at": _project_fields["updated_at"]}}
-                )
-    except Exception as _e:
-        logger.warning(f"project logo backfill from restaurant settings failed: {_e}")
 
     # 🖼️ Feb 2026: احفظ أيضاً في system_info ليعمل الـ fallback في projects_routes.py
     try:

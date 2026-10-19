@@ -2,7 +2,8 @@
 Projects Routes - إدارة المشاريع (Enterprise Mode)
 كل مشروع = كيان مستقل تماماً (خزينة، موارد بشرية، مخزون، مستخدمون، تقارير).
 """
-from fastapi import APIRouter, Depends, HTTPException, Body
+from fastapi import APIRouter, Depends, HTTPException, Body, UploadFile, File, Request
+import re
 from pydantic import BaseModel, Field
 from typing import Optional, List
 from datetime import datetime, timezone
@@ -45,6 +46,8 @@ ACTIVITY_TYPES = [
     "retail",           # تجزئة
     "other",            # أخرى
 ]
+
+IMAGE_EXTS = {"jpg", "jpeg", "png", "gif", "webp", "heic", "heif", "bmp", "tiff", "tif", "avif", "svg", "ico", "jfif"}
 
 # ==================== MODELS ====================
 class ProjectCreate(BaseModel):
@@ -153,42 +156,56 @@ async def list_projects(current_user: dict = Depends(get_current_user)):
             return []
         query["id"] = {"$in": allowed}
 
+    query["deleted_at"] = {"$exists": False}
     projects = await db.projects.find(query, {"_id": 0}).sort("created_at", 1).to_list(length=None)
-
-    # 🖼️ Feb 2026: fallback فوري — لكل مشروع بدون logo_url، استخدم لوجو المؤسسة من إعدادات settings
-    #    يحل مشكلة "لوجو المطعم لا يظهر على بطاقة المشروع" بدون انتظار migration أو إعادة حفظ.
-    try:
-        missing_logo = [p for p in projects if not p.get("logo_url")]
-        if missing_logo and tenant_id:
-            # اقرأ لوجو المؤسسة من مصادر متعددة
-            _fallback_logo = None
-            _settings_rest = await db.settings.find_one({"type": "restaurant"})
-            if _settings_rest:
-                _fallback_logo = _settings_rest.get("logo_url")
-            if not _fallback_logo:
-                _settings_sys = await db.settings.find_one({"tenant_id": tenant_id, "type": "system_info"})
-                if _settings_sys:
-                    _fallback_logo = (_settings_sys.get("value") or {}).get("logoUrl") or (_settings_sys.get("value") or {}).get("logo_url")
-            if not _fallback_logo:
-                _tn = await db.tenants.find_one({"id": tenant_id}, {"_id": 0, "logo_url": 1})
-                if _tn:
-                    _fallback_logo = _tn.get("logo_url")
-            if _fallback_logo:
-                for p in projects:
-                    if not p.get("logo_url"):
-                        p["logo_url"] = _fallback_logo
-                # اكتب القيمة في قاعدة البيانات أيضاً حتى تثبت
-                try:
-                    await db.projects.update_many(
-                        {"tenant_id": tenant_id, "$or": [{"logo_url": None}, {"logo_url": ""}, {"logo_url": {"$exists": False}}]},
-                        {"$set": {"logo_url": _fallback_logo, "updated_at": datetime.now(timezone.utc).isoformat()}}
-                    )
-                except Exception:
-                    pass
-    except Exception as _e:
-        logger.warning(f"project logo fallback failed: {_e}")
-
     return projects
+
+
+@router.get("/branding/current")
+async def get_project_branding(
+    request: Request,
+    branch_id: Optional[str] = None,
+    project_id: Optional[str] = None,
+    current_user: dict = Depends(get_current_user)
+):
+    """اسم وشعار المشروع للفواتير والإيصالات (فقط عند تفعيل المؤسسة)"""
+    db = get_database()
+    tenant_id = get_user_tenant_id(current_user)
+    if not tenant_id:
+        return {}
+    tenant = await db.tenants.find_one({"id": tenant_id}, {"_id": 0, "enterprise_enabled": 1})
+    if not (tenant or {}).get("enterprise_enabled"):
+        return {}
+    proj = await resolve_project_for_context(db, tenant_id, project_id=project_id,
+                                             branch_id=branch_id, user=current_user,
+                                             header_project_id=request.headers.get("X-Project-Id"))
+    if not proj:
+        return {}
+    return {k: proj.get(k) for k in ("id", "name", "name_en", "logo_url", "activity_type")}
+
+
+async def resolve_project_for_context(db, tenant_id: str, project_id: Optional[str] = None,
+                                      branch_id: Optional[str] = None, user: Optional[dict] = None,
+                                      header_project_id: Optional[str] = None) -> Optional[dict]:
+    """يحدد المشروع الفعلي: project_id → مشروع الفرع → مشروع المستخدم → المشروع الوحيد/الافتراضي"""
+    base = {"tenant_id": tenant_id, "deleted_at": {"$exists": False}}
+    proj_fields = {"_id": 0, "id": 1, "name": 1, "name_en": 1, "logo_url": 1, "activity_type": 1, "is_default": 1}
+    candidates = [project_id]
+    if branch_id:
+        br = await db.branches.find_one({"id": branch_id, "tenant_id": tenant_id}, {"_id": 0, "project_id": 1})
+        candidates.append((br or {}).get("project_id"))
+    candidates.append(header_project_id)
+    if user:
+        candidates.append(user.get("project_id"))
+    for pid in candidates:
+        if pid and pid != "all":
+            proj = await db.projects.find_one({**base, "id": pid}, proj_fields)
+            if proj:
+                return proj
+    projs = await db.projects.find(base, proj_fields).sort("created_at", 1).to_list(length=2)
+    if len(projs) == 1:
+        return projs[0]
+    return next((p for p in projs if p.get("is_default")), None)
 
 
 @router.post("")
@@ -250,13 +267,6 @@ async def create_project(
 
     # 🖼️ Feb 2026: إذا لم يُحدَّد لوجو للمشروع الجديد، اقتبسه من إعدادات المؤسسة (settings.system_info.logoUrl)
     _project_logo = project.logo_url
-    if not _project_logo:
-        try:
-            _tn_settings = await db.settings.find_one({"tenant_id": tenant_id, "type": "system_info"})
-            if _tn_settings:
-                _project_logo = (_tn_settings.get("value") or {}).get("logoUrl") or (_tn_settings.get("value") or {}).get("logo_url")
-        except Exception:
-            pass
 
     project_doc = {
         "id": str(uuid.uuid4()),
@@ -457,12 +467,108 @@ async def delete_project(
     if project.get("is_default"):
         raise HTTPException(status_code=400, detail="لا يمكن حذف المشروع الافتراضي")
 
-    # soft delete
+    tid = project.get("tenant_id")
+    remaining = await db.projects.count_documents({
+        "tenant_id": tid, "id": {"$ne": project_id}, "deleted_at": {"$exists": False}
+    })
+    if remaining == 0:
+        raise HTTPException(status_code=400, detail="لا يمكن حذف آخر مشروع في المؤسسة")
+
+    # 🗑️ حذف نهائي: المشروع + كل بياناته (الفروع، الطلبات، المصاريف، المخزون، الموظفين...)
+    branch_ids = [b["id"] async for b in db.branches.find(
+        {"tenant_id": tid, "project_id": project_id}, {"_id": 0, "id": 1}) if b.get("id")]
+    data_filter = {"tenant_id": tid, "$or": [{"project_id": project_id}]}
+    if branch_ids:
+        data_filter["$or"].append({"branch_id": {"$in": branch_ids}})
+
+    owner_roles = list(ENTERPRISE_WIDE_ROLES)
+    await db.users.update_many(
+        {"tenant_id": tid, "role": {"$in": owner_roles}, "project_id": project_id},
+        {"$unset": {"project_id": ""}}
+    )
+    if branch_ids:
+        await db.users.update_many(
+            {"tenant_id": tid, "role": {"$in": owner_roles}, "branch_id": {"$in": branch_ids}},
+            {"$set": {"branch_id": None}}
+        )
+    deleted_users = await db.users.delete_many({**data_filter, "role": {"$nin": owner_roles}})
+
+    skip = {"projects", "users", "tenants", "migrations", "audit_logs", "system_email_logs"}
+    deleted_counts = {"users": deleted_users.deleted_count}
+    for coll_name in await db.list_collection_names():
+        if coll_name in skip or coll_name.startswith("system."):
+            continue
+        try:
+            res = await db[coll_name].delete_many(data_filter)
+            if res.deleted_count:
+                deleted_counts[coll_name] = res.deleted_count
+        except Exception as e:
+            logger.warning(f"project cascade delete {coll_name} failed: {e}")
+
+    await db.projects.delete_one({"id": project_id})
+    _logo = project.get("logo_url") or ""
+    if _logo.startswith("/api/uploads/logos/"):
+        try:
+            from server import LOGOS_DIR
+            (LOGOS_DIR / _logo.rsplit("/", 1)[-1]).unlink(missing_ok=True)
+        except Exception:
+            pass
+    try:
+        await db.audit_logs.insert_one({
+            "id": str(uuid.uuid4()), "tenant_id": tid, "action": "project_hard_delete",
+            "project_id": project_id, "project_name": project.get("name"),
+            "deleted_counts": deleted_counts, "user_id": current_user.get("id"),
+            "created_at": datetime.now(timezone.utc).isoformat(),
+        })
+    except Exception:
+        pass
+    logger.info(f"🗑️ project {project_id} hard-deleted: {deleted_counts}")
+    return {"message": "تم حذف المشروع وكل بياناته نهائياً", "deleted_counts": deleted_counts}
+
+
+@router.post("/{project_id}/logo")
+async def upload_project_logo(
+    project_id: str,
+    file: UploadFile = File(...),
+    current_user: dict = Depends(get_current_user)
+):
+    """رفع/تغيير شعار المشروع — يدعم كل صيغ الصور (JPG, PNG, WEBP, GIF, HEIC, BMP, TIFF, AVIF, SVG)"""
+    from server import process_and_save_image, LOGOS_DIR
+    db = get_database()
+    tenant_id = get_user_tenant_id(current_user)
+    query = {"id": project_id, "deleted_at": {"$exists": False}}
+    if tenant_id and current_user.get("role") != UserRole.SUPER_ADMIN:
+        query["tenant_id"] = tenant_id
+    project = await db.projects.find_one(query, {"_id": 0, "id": 1})
+    if not project:
+        raise HTTPException(status_code=404, detail="المشروع غير موجود")
+    is_project_admin = (
+        current_user.get("role") == EnterpriseRole.PROJECT_ADMIN
+        and current_user.get("project_id") == project_id
+    )
+    if not (user_is_enterprise_owner(current_user) or is_project_admin):
+        raise HTTPException(status_code=403, detail="غير مصرح لك بتعديل هذا المشروع")
+
+    name = (file.filename or "").lower()
+    ext = name.rsplit(".", 1)[-1] if "." in name else ""
+    ctype = file.content_type or ""
+    if not (ctype.startswith("image/") or ext in IMAGE_EXTS):
+        raise HTTPException(status_code=400, detail="الملف يجب أن يكون صورة")
+
+    if ext == "svg" or ctype == "image/svg+xml":
+        raw = await file.read()
+        if re.search(rb"<script|javascript:|\son\w+\s*=|<foreignObject", raw, re.IGNORECASE):
+            raise HTTPException(status_code=400, detail="ملف SVG يحتوي على محتوى غير آمن")
+        filename = f"{uuid.uuid4()}.svg"
+        (LOGOS_DIR / filename).write_bytes(raw)
+    else:
+        filename = await process_and_save_image(file, LOGOS_DIR, max_size=(512, 512), quality=90)
+    logo_url = f"/api/uploads/logos/{filename}"
     await db.projects.update_one(
         {"id": project_id},
-        {"$set": {"is_active": False, "deleted_at": datetime.now(timezone.utc).isoformat()}}
+        {"$set": {"logo_url": logo_url, "updated_at": datetime.now(timezone.utc).isoformat()}}
     )
-    return {"message": "تم تعطيل المشروع"}
+    return {"message": "تم رفع شعار المشروع بنجاح", "logo_url": logo_url}
 
 
 @router.post("/{project_id}/assign-admin")

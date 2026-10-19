@@ -1122,9 +1122,26 @@ export default function Dashboard() {
     }
   };
 
+  // 🏷️ اسم وشعار المشروع (وضع المؤسسة) بدل اسم وشعار المؤسسة في الإيصالات
+  const fetchReceiptBranding = async (data) => {
+    const base = {
+      name: tenantInfo?.name || tenantInfo?.restaurant_name || tenantInfo?.name_en,
+      logo_url: tenantInfo?.logo_url,
+      logo_base64: tenantInfo?.logo_base64 || null,
+    };
+    try {
+      const res = await axios.get(`${API}/projects/branding/current`, {
+        params: { branch_id: data?.branch_id || user?.branch_id || undefined },
+      });
+      if (res.data?.id) return { name: res.data.name, logo_url: res.data.logo_url || null, logo_base64: null };
+    } catch (_) { /* fallback */ }
+    return base;
+  };
+
   // طباعة إيصال إغلاق الصندوق (بتنسيق فاتورة الكاشير)
-  const printClosingReceipt = (data) => {
+  const printClosingReceipt = async (data, brandIn) => {
     if (!data) return;
+    const brand = brandIn || await fetchReceiptBranding(data);
     
     const now = new Date();
     const dateStr = now.toLocaleDateString('ar-IQ');
@@ -1154,7 +1171,7 @@ export default function Dashboard() {
     }
     
     // تحويل شعار المطعم إلى base64 ثم الطباعة
-    const logoUrl = tenantInfo?.logo_url;
+    const logoUrl = brand.logo_url;
     const doActualPrint = (logoDataUrl) => {
     
     // إزالة أي iframe سابق
@@ -1298,7 +1315,7 @@ export default function Dashboard() {
               alt="شعار المطعم"
             />
           ` : ''}
-          <h1>${tenantInfo?.name || tenantInfo?.name_en || 'المطعم'}</h1>
+          <h1>${brand.name || 'المطعم'}</h1>
           <h2>إيصال إغلاق الصندوق</h2>
           <p>التاريخ: ${dateStr}</p>
           <p>الوقت: ${timeStr}</p>
@@ -1435,12 +1452,13 @@ export default function Dashboard() {
     const dateStr = now.toLocaleDateString('ar-IQ');
     const timeStr = now.toLocaleTimeString('ar-IQ', { hour: '2-digit', minute: '2-digit' });
     
-    const restaurantName = tenantInfo?.name || tenantInfo?.restaurant_name || 'المطعم';
+    const brand = await fetchReceiptBranding(data);
+    const restaurantName = brand.name || 'المطعم';
     const branchName = tenantInfo?.branch_name || data?.branch_name || '';
     const cashierName = user?.full_name || user?.username || '';
     
     // جلب الشعار من الإعدادات
-    const logoUrl = tenantInfo?.logo_url;
+    const logoUrl = brand.logo_url;
     let resolvedLogoUrl = null;
     if (logoUrl) {
       if (logoUrl.startsWith('http')) resolvedLogoUrl = logoUrl;
@@ -1451,11 +1469,11 @@ export default function Dashboard() {
     const bitmapResult = await renderClosingReceiptBitmap({
       ...data, restaurantName, branchName, cashierName, dateStr, timeStr,
       logo_url: resolvedLogoUrl,
-      logo_base64: tenantInfo?.logo_base64 || null
+      logo_base64: brand.logo_base64
     });
     
     if (!bitmapResult.success || !bitmapResult.raw_data) {
-      printClosingReceipt(data);
+      printClosingReceipt(data, brand);
       return;
     }
     
@@ -1476,7 +1494,7 @@ export default function Dashboard() {
     );
     
     if (!usbPrinter?.usb_printer_name) {
-      printClosingReceipt(data);
+      printClosingReceipt(data, brand);
       return;
     }
     
@@ -1492,7 +1510,7 @@ export default function Dashboard() {
       toast.success(t('تم إرسال إيصال الإغلاق للطباعة'));
     } catch (e) {
       console.warn('Print queue failed:', e.message);
-      printClosingReceipt(data);
+      printClosingReceipt(data, brand);
     }
   };
 

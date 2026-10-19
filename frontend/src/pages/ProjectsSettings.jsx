@@ -9,7 +9,7 @@ import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
 import { Textarea } from '../components/ui/textarea';
 import {
-  Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogTrigger,
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from '../components/ui/dialog';
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
@@ -18,6 +18,7 @@ import {
   Card, CardContent, CardHeader, CardTitle, CardDescription,
 } from '../components/ui/card';
 import { Badge } from '../components/ui/badge';
+import { ProjectLogoUpload, resolveImageUrl } from '../components/ProjectLogoUpload';
 import { Briefcase, Plus, Trash2, Edit, UserPlus, Store, Scissors, Stethoscope, ShoppingCart, Truck, Factory, Package, MoreHorizontal } from 'lucide-react';
 
 const ACTIVITY_TYPES = [
@@ -109,6 +110,12 @@ export default function ProjectsSettings() {
   const [rateForm, setRateForm] = useState({ exchange_rate: '', reason: '' });
   const [rateHistory, setRateHistory] = useState([]);
   const [selectedProject, setSelectedProject] = useState(null);
+  const [editingProject, setEditingProject] = useState(null);
+  const [logoFile, setLogoFile] = useState(null);
+  const [saving, setSaving] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState(null);
+  const [deleteConfirm, setDeleteConfirm] = useState('');
+  const [deleting, setDeleting] = useState(false);
 
   const [form, setForm] = useState({
     name: '', name_en: '', activity_type: 'restaurant',
@@ -131,11 +138,62 @@ export default function ProjectsSettings() {
   // معلومة العملة المختارة (رمز → اسم عربي)
   const currencyLabel = (code) => (CURRENCIES.find(c => c.code === code) || { label: code }).label;
 
-  const resetForm = () => setForm({
-    name: '', name_en: '', activity_type: 'restaurant',
-    logo_url: '', currency: 'IQD', timezone: 'Asia/Baghdad', description: '',
-    exchange_rate: '',
-  });
+  const resetForm = () => {
+    setForm({
+      name: '', name_en: '', activity_type: 'restaurant',
+      logo_url: '', currency: 'IQD', timezone: 'Asia/Baghdad', description: '',
+      exchange_rate: '',
+    });
+    setLogoFile(null);
+    setEditingProject(null);
+  };
+
+  const openCreate = () => { resetForm(); setDialogOpen(true); };
+
+  const openEdit = (p) => {
+    setEditingProject(p);
+    setLogoFile(null);
+    setForm({
+      name: p.name || '', name_en: p.name_en || '', activity_type: p.activity_type || 'restaurant',
+      logo_url: p.logo_url || '', currency: p.currency || 'IQD', timezone: p.timezone || 'Asia/Baghdad',
+      description: p.description || '', exchange_rate: p.exchange_rate ? String(p.exchange_rate) : '',
+    });
+    setDialogOpen(true);
+  };
+
+  const logoPreview = React.useMemo(
+    () => (logoFile ? URL.createObjectURL(logoFile) : form.logo_url),
+    [logoFile, form.logo_url]
+  );
+
+  const uploadLogo = async (projectId) => {
+    if (!logoFile) return;
+    const fd = new FormData();
+    fd.append('file', logoFile);
+    await axios.post(`${API_URL}/projects/${projectId}/logo`, fd, { headers: { 'Content-Type': 'multipart/form-data' } });
+  };
+
+  const handleUpdate = async () => {
+    if (!form.name.trim()) { toast.error('الاسم مطلوب'); return; }
+    setSaving(true);
+    try {
+      const { exchange_rate, ...rest } = form;
+      await axios.put(`${API_URL}/projects/${editingProject.id}`, { ...rest, name: form.name.trim() });
+      try { await uploadLogo(editingProject.id); } catch (e) {
+        toast.error(e.response?.data?.detail || 'تم حفظ البيانات لكن فشل رفع الصورة');
+        refreshProjects();
+        return;
+      }
+      toast.success('تم تحديث بيانات المشروع');
+      resetForm();
+      setDialogOpen(false);
+      refreshProjects();
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'فشل تحديث المشروع');
+    } finally {
+      setSaving(false);
+    }
+  };
 
   const handleCreate = async () => {
     if (!form.name.trim()) { toast.error('الاسم مطلوب'); return; }
@@ -152,41 +210,43 @@ export default function ProjectsSettings() {
         ...form,
         exchange_rate: form.currency === mainCurrency ? 1.0 : parseFloat(form.exchange_rate),
       };
-      await axios.post(`${API_URL}/projects`, payload);
+      setSaving(true);
+      const res = await axios.post(`${API_URL}/projects`, payload);
+      try { await uploadLogo(res.data?.project?.id); } catch (e) {
+        toast.error(e.response?.data?.detail || 'تم إنشاء المشروع لكن فشل رفع الصورة');
+        resetForm();
+        setDialogOpen(false);
+        refreshProjects();
+        return;
+      }
       toast.success('تم إنشاء المشروع بنجاح');
       resetForm();
       setDialogOpen(false);
       refreshProjects();
     } catch (e) {
       toast.error(e.response?.data?.detail || 'فشل إنشاء المشروع');
+    } finally {
+      setSaving(false);
     }
   };
 
-  const handleDelete = async (p) => {
+  const openDelete = (p) => {
     if (p.is_default) { toast.error('لا يمكن حذف المشروع الرئيسي'); return; }
-    if (!window.confirm(`تعطيل مشروع "${p.name}"؟`)) return;
+    setDeleteTarget(p);
+    setDeleteConfirm('');
+  };
+
+  const handleDelete = async () => {
+    setDeleting(true);
     try {
-      await axios.delete(`${API_URL}/projects/${p.id}`);
-      toast.success('تم تعطيل المشروع');
+      await axios.delete(`${API_URL}/projects/${deleteTarget.id}`);
+      toast.success(`تم حذف مشروع "${deleteTarget.name}" وكل بياناته نهائياً`);
+      setDeleteTarget(null);
       refreshProjects();
     } catch (e) {
       toast.error(e.response?.data?.detail || 'فشل الحذف');
-    }
-  };
-
-  // ⭐ تعديل اسم المشروع (مسموح حتى للمشروع الرئيسي — طلب العميل: اسم المطعم الحقيقي)
-  const handleRename = async (p) => {
-    const current = p.name || '';
-    const next = window.prompt(`اسم جديد للمشروع:`, current);
-    if (next === null) return;
-    const trimmed = next.trim();
-    if (!trimmed || trimmed === current) return;
-    try {
-      await axios.put(`${API_URL}/projects/${p.id}`, { name: trimmed });
-      toast.success('تم تحديث اسم المشروع');
-      refreshProjects();
-    } catch (e) {
-      toast.error(e.response?.data?.detail || 'فشل تحديث الاسم');
+    } finally {
+      setDeleting(false);
     }
   };
 
@@ -263,18 +323,26 @@ export default function ProjectsSettings() {
             كل مشروع = كيان مستقل تماماً (خزينة، موارد بشرية، مخزون، تقارير)
           </p>
         </div>
-        <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-          <DialogTrigger asChild>
-            <Button data-testid="add-project-btn" className="gap-2">
-              <Plus className="h-4 w-4" />
-              مشروع جديد
-            </Button>
-          </DialogTrigger>
-          <DialogContent className="max-w-md" dir="rtl">
+        <Button data-testid="add-project-btn" className="gap-2" onClick={openCreate}>
+          <Plus className="h-4 w-4" />
+          مشروع جديد
+        </Button>
+        <Dialog open={dialogOpen} onOpenChange={(o) => { setDialogOpen(o); if (!o) resetForm(); }}>
+          <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto" dir="rtl" data-testid="project-form-dialog">
             <DialogHeader>
-              <DialogTitle>إنشاء مشروع جديد</DialogTitle>
+              <DialogTitle>{editingProject ? `تعديل المشروع: ${editingProject.name}` : 'إنشاء مشروع جديد'}</DialogTitle>
             </DialogHeader>
             <div className="space-y-3">
+              <div>
+                <Label>شعار المشروع (يظهر في الفواتير والرسائل)</Label>
+                <div className="mt-2">
+                  <ProjectLogoUpload
+                    preview={logoPreview}
+                    onSelect={setLogoFile}
+                    onClear={() => { setLogoFile(null); setForm(f => ({ ...f, logo_url: '' })); }}
+                  />
+                </div>
+              </div>
               <div>
                 <Label>اسم المشروع *</Label>
                 <Input
@@ -287,6 +355,7 @@ export default function ProjectsSettings() {
               <div>
                 <Label>الاسم بالإنجليزية</Label>
                 <Input
+                  data-testid="project-name-en-input"
                   value={form.name_en}
                   onChange={e => setForm({ ...form, name_en: e.target.value })}
                   placeholder="GRaffiti Restaurant"
@@ -304,14 +373,6 @@ export default function ProjectsSettings() {
                     ))}
                   </SelectContent>
                 </Select>
-              </div>
-              <div>
-                <Label>رابط الشعار (اختياري)</Label>
-                <Input
-                  value={form.logo_url}
-                  onChange={e => setForm({ ...form, logo_url: e.target.value })}
-                  placeholder="https://..."
-                />
               </div>
               <div className="grid grid-cols-2 gap-2">
                 <div>
@@ -348,7 +409,7 @@ export default function ProjectsSettings() {
                 </div>
               </div>
               {/* 💱 سعر الصرف — يظهر فقط عند اختيار عملة مختلفة عن العملة الرئيسية للمؤسسة */}
-              {form.currency !== mainCurrency && (
+              {!editingProject && form.currency !== mainCurrency && (
                 <div className="p-3 rounded-lg border border-amber-500/40 bg-amber-500/5 space-y-2" data-testid="exchange-rate-box">
                   <Label className="text-amber-500 flex items-center gap-2">
                     💱 سعر الصرف مقارنة بعملة المؤسسة الرئيسية
@@ -376,12 +437,14 @@ export default function ProjectsSettings() {
               )}
               <div>
                 <Label>وصف (اختياري)</Label>
-                <Textarea value={form.description} onChange={e => setForm({ ...form, description: e.target.value })} />
+                <Textarea data-testid="project-description-input" value={form.description} onChange={e => setForm({ ...form, description: e.target.value })} />
               </div>
             </div>
             <DialogFooter>
               <Button variant="outline" onClick={() => setDialogOpen(false)}>إلغاء</Button>
-              <Button data-testid="save-project-btn" onClick={handleCreate}>إنشاء</Button>
+              <Button data-testid="save-project-btn" disabled={saving} onClick={editingProject ? handleUpdate : handleCreate}>
+                {saving ? 'جارٍ الحفظ...' : (editingProject ? 'حفظ التعديلات' : 'إنشاء')}
+              </Button>
             </DialogFooter>
           </DialogContent>
         </Dialog>
@@ -397,7 +460,13 @@ export default function ProjectsSettings() {
                 <div className="flex items-start justify-between">
                   <div className="flex items-center gap-3">
                     {p.logo_url ? (
-                      <img src={p.logo_url} alt="" className="h-10 w-10 rounded object-cover" />
+                      <img
+                        src={resolveImageUrl(p.logo_url)}
+                        alt=""
+                        className="h-10 w-10 rounded-full object-cover border"
+                        data-testid={`project-logo-${p.id}`}
+                        onError={(e) => { e.currentTarget.style.visibility = 'hidden'; }}
+                      />
                     ) : (
                       <div className="h-10 w-10 rounded bg-primary/10 flex items-center justify-center">
                         <Icon className="h-5 w-5 text-primary" />
@@ -441,11 +510,11 @@ export default function ProjectsSettings() {
                     size="sm"
                     variant="outline"
                     className="flex-1 gap-1"
-                    onClick={() => handleRename(p)}
-                    data-testid={`rename-project-btn-${p.id}`}
+                    onClick={() => openEdit(p)}
+                    data-testid={`edit-project-btn-${p.id}`}
                   >
                     <Edit className="h-3.5 w-3.5" />
-                    تعديل الاسم
+                    تعديل المشروع
                   </Button>
                   <Button
                     size="sm"
@@ -462,7 +531,7 @@ export default function ProjectsSettings() {
                       size="sm"
                       variant="ghost"
                       className="text-destructive"
-                      onClick={() => handleDelete(p)}
+                      onClick={() => openDelete(p)}
                       data-testid={`delete-project-btn-${p.id}`}
                     >
                       <Trash2 className="h-3.5 w-3.5" />
@@ -474,6 +543,38 @@ export default function ProjectsSettings() {
           );
         })}
       </div>
+
+      {/* 🗑️ Dialog الحذف النهائي */}
+      <Dialog open={!!deleteTarget} onOpenChange={(o) => { if (!o) setDeleteTarget(null); }}>
+        <DialogContent className="max-w-md" dir="rtl" data-testid="delete-project-dialog">
+          <DialogHeader>
+            <DialogTitle className="text-destructive">حذف المشروع نهائياً: {deleteTarget?.name}</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3 text-sm">
+            <p className="p-3 rounded-lg bg-destructive/10 border border-destructive/30 text-destructive">
+              سيتم حذف المشروع مع كل بياناته نهائياً (الفروع، الطلبات، المصاريف، المخزون، الموظفين، الورديات...). لا يمكن التراجع عن هذه العملية.
+            </p>
+            <Label>للتأكيد اكتب اسم المشروع: <b>{deleteTarget?.name}</b></Label>
+            <Input
+              data-testid="delete-project-confirm-input"
+              value={deleteConfirm}
+              onChange={e => setDeleteConfirm(e.target.value)}
+              placeholder={deleteTarget?.name}
+            />
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDeleteTarget(null)}>إلغاء</Button>
+            <Button
+              variant="destructive"
+              data-testid="confirm-delete-project-btn"
+              disabled={deleting || deleteConfirm.trim() !== (deleteTarget?.name || '').trim()}
+              onClick={handleDelete}
+            >
+              {deleting ? 'جارٍ الحذف...' : 'حذف نهائي'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Dialog تعيين مدير */}
       <Dialog open={adminDialogOpen} onOpenChange={setAdminDialogOpen}>

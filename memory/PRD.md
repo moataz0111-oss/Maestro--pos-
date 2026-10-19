@@ -27,3 +27,13 @@ Only fills NULL/empty logo_url. Existing logos preserved. Zero destructive ops.
 
 ## Credentials
 See `/app/memory/test_credentials.md`
+
+## 2026-06 — Projects: hard delete, full edit, per-project logo & branding
+- DELETE /api/projects/{id}: permanent hard delete + cascade (all docs with project_id or its branch_ids, non-owner users; owners unlinked). Refuses last project. Audit log `project_hard_delete`.
+- GET /api/projects hides legacy soft-deleted (deleted_at) projects. Removed org-logo auto-backfill into projects (list, create, restaurant settings save).
+- POST /api/projects/{id}/logo: any image format (HEIC→JPG via pillow_heif, SVG sanitized).
+- GET /api/projects/branding/current?branch_id|project_id (+X-Project-Id): project name/logo for enterprise tenants only.
+- Receipts (POS invoices + Dashboard closing receipt) use project name/logo instead of org (Maestro system logo unchanged).
+- WhatsApp: Maestro image kept; header line uses project resolved via project_id → branch → header → single project; no "مؤسسة" label.
+- UI: ProjectsSettings full edit dialog + ProjectLogoUpload component + typed-name delete confirmation dialog.
+- Tested: iteration_314 (backend 100%, frontend 100%).

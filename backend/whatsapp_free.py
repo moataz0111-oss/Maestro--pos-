@@ -209,7 +209,10 @@ _ACTIVITY_META = {
     "butchery":    ("🥩", "ملحمة"),
     "sweets":      ("🍰", "حلويات"),
     "juice":       ("🥤", "عصائر"),
-    "default":     ("🏢", "مؤسسة"),
+    "distribution": ("📦", "توزيع"),
+    "delivery_company": ("🚚", "شركة توصيل"),
+    "manufacturing": ("🏭", "تصنيع"),
+    "default":     ("🏢", ""),
 }
 
 

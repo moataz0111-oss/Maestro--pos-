@@ -537,8 +537,19 @@ export default function POS() {
       const loadedPrinters = printersRes.data || [];
       console.log('[POS] Loaded printers:', loadedPrinters.length, loadedPrinters.map(p => ({name: p.name, type: p.printer_type, conn: p.connection_type})));
       setAvailablePrinters(loadedPrinters);
-      const invoiceData = invoiceRes.data || {};
-      const restaurantData = restaurantRes.data || {};
+      let invoiceData = invoiceRes.data || {};
+      let restaurantData = restaurantRes.data || {};
+      // 🏷️ وضع المؤسسة: اسم وشعار المشروع الخاص بالفرع بدل اسم وشعار المؤسسة
+      try {
+        const brandRes = await axios.get(`${API}/projects/branding/current`, {
+          params: { branch_id: getBranchIdForApi() || user?.branch_id || undefined },
+        });
+        const brand = brandRes.data || {};
+        if (brand.id) {
+          restaurantData = { ...restaurantData, name: brand.name, name_ar: brand.name, name_en: brand.name_en || brand.name, logo_url: brand.logo_url || null };
+          invoiceData = { ...invoiceData, invoice_logo: brand.logo_url || null };
+        }
+      } catch (_) { /* fallback to tenant branding */ }
       setInvoiceSettings(invoiceData);
       setRestaurantSettings(restaurantData);
       
