@@ -1,0 +1,49 @@
+{
+  "summary": "Tested Settings project isolation end to end (backend pytest 19/19, plus Playwright UI). Working: the project bar and its select; categories and products filtered per project (مطعم الاختبار 5/8, صالون الأناقة 6/8 including 'قهوة تست'), refetched as soon as the project is switched; project badges on every category (27), product (50) and branch (5) under 'كل المشاريع'; category dialog requires a project (toast 'اختر المشروع أولاً'), is prefilled with the selected project, the new category shows only under its project, and edit moves it to another project; product dialog prefilled; salon shows the 'no manufactured products / no packaging materials' notices while مطعم الاختبار lists 97 manufactured products and 1 packaging material; copy-catalog dialog works and a second copy adds 0; no max-branches banner; branch-project-select is required; backend commission 17/15/15 and invoice phone per project are correct; GET /tenant/limits returns per_project; a new project gets no template categories. Found 2 high and 2 medium frontend bugs: stale values in the delivery commission and invoice fields after switching project, and empty category/manufactured/packaging pickers in the product dialog when its project differs from the bar's project.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "PUT /api/categories/{id}", "issue": "Moving a category to another project leaves its products in the old project (product.project_id is unchanged), so the target project gets an empty category and the source project keeps products with a category from another project."},
+      {"endpoint": "GET /api/categories", "issue": "Reads only the ?project_id query param and ignores the X-Project-Id header, unlike /products, /manufactured-products and the other endpoints. It works today only because the axios interceptor adds both."},
+      {"endpoint": "GET /api/products", "issue": "Default limit is 100 and Settings calls it without a limit. Under 'كل المشاريع' (50 products now) the list will be silently cut once the tenant passes 100 products."},
+      {"endpoint": "POST /api/projects/{id}/copy-catalog", "issue": "Source categories and products are not filtered by deleted_at or is_active, so soft-deleted or inactive items get copied too."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "Settings > شركات التوصيل commission input", "issue": "The input uses defaultValue={app.commission_rate} (uncontrolled). Switching the project while on this tab keeps the old value: with صالون الأناقة → مطعم الاختبار the API returns toters=15 but the input still shows 17. onBlur saves this stale value to the newly selected project, so data can be corrupted.", "selector": "Settings.js ~L5986 Input defaultValue", "priority": "HIGH"},
+      {"component": "Settings > إعدادات الفاتورة", "issue": "After switching صالون الأناقة → مطعم الاختبار or 'all' while on the invoice tab, the phone field still shows '0770-SALON' although the API returns phone=null. Cause: setInvoiceSettings({...prev, ...res.data}) sets phone=null, and value={null} makes the React input uncontrolled, so the DOM keeps the old text. Pressing save would write the salon phone into the other project.", "selector": "Settings.js L1051 fetchInvoiceSettings + L7422 value={invoiceSettings.phone}", "priority": "HIGH"},
+      {"component": "Add/Edit product dialog", "issue": "When the bar is set to project X and the user changes product-project-select or edit-product-project-select to project Y, the category dropdown is empty (salon has 6 categories) and the packaging and manufactured pickers are empty too. Cause: categories, manufacturedProducts and packagingMaterials are loaded only for project X, then forProject(list, Y) filters that list. This only works when the bar is 'كل المشاريع'.", "selector": "[data-testid=product-project-select], [data-testid=edit-product-project-select]", "priority": "MEDIUM"},
+      {"component": "Add product dialog state", "issue": "After closing the dialog without saving, productForm.project_id is kept. Reopening it under another bar project or under 'all' still uses the old project, because productForm.project_id || defaultFormProject takes the stale value. The same likely applies to categoryForm and branchForm.", "selector": "[data-testid=product-project-select]", "priority": "MEDIUM"}
+    ],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Settings > الفئات cards", "issues": ["Some category icons show as raw text ('beef', 'utensils', 'french-fries', 'fire', 'bowl-food', 'drumstick-bite') that spills out of the icon box (categories of مطعم البرغر الملكي and مطعم الشاورما الذهبي).", "The absolute edit/delete buttons at top-left overlap the category image thumbnail."]},
+      {"screen": "Project badge", "issues": ["The 10px primary text on a primary/10 background is hard to read. On mobile (390px) the badge squeezes branch and product names into 2–3 lines."]},
+      {"screen": "Add product dialog (bar = 'all', no project chosen yet)", "issues": ["The category dropdown lists the categories of all projects mixed together, with duplicate names such as 4× 'برغر'."]}
+    ]
+  },
+  "test_report_links": ["/app/backend/tests/test_settings_project_isolation_iter316.py", "/app/test_reports/pytest/pytest_iter316.xml"],
+  "action_items": [
+    "HIGH: Delivery commission input: make it controlled, or give it key={`${selectedProjectId}-${app.id}-${app.commission_rate}`}, so it re-renders when the project changes.",
+    "HIGH: Invoice settings: normalise nulls to '' (value={invoiceSettings.phone || ''} for all fields), or reset state to the defaults before merging when the project changes.",
+    "MEDIUM: Product add/edit dialogs: when the dialog project differs from the bar project, fetch categories, manufactured products and packaging for that project (e.g. GET with params {project_id: pid}), or load these lists unscoped (project_id='all') for the pickers.",
+    "MEDIUM: Reset productForm, categoryForm and branchForm project_id when the dialog closes (onOpenChange false) or when selectedProjectId changes.",
+    "LOW: When a category moves to another project, also update the project_id of its products, or warn the user.",
+    "LOW: Make GET /categories also accept the X-Project-Id header (use requested_project_id).",
+    "LOW: Fix category icons that render as text, and the overlap of the edit/delete icons on category cards."
+  ],
+  "critical_code_review_comments": [
+    "Settings.js has 8182 lines; it should be split into one component per tab.",
+    "forProject() filters lists that are already project-scoped. The pickers need their own fetch keyed on the dialog's project.",
+    "copy_catalog runs one insert_one per document; for large catalogs use insert_many."
+  ],
+  "updated_files": ["/app/backend/tests/test_settings_project_isolation_iter316.py"],
+  "success_rate": {"backend": "100% (19/19)", "frontend": "~80% (core isolation, badges, dialogs and copy work; 4 state/staleness bugs)"},
+  "test_credentials": "admin@maestroegp.com / admin123 (from /app/memory/test_credentials.md)",
+  "seed_data_creation": "Copied the مطعم الاختبار catalog to 'مشروع رابع تجريبي' (3128cfc4) as the review asked: 5 categories and 8 products. Test categories TEST_UI_CAT and TEST_iso_cat were created and then deleted. A TEST_proj_ project was created and deleted by pytest.",
+  "retest_needed": true,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Run: pytest backend/tests/test_settings_project_isolation_iter316.py. UI: hide [data-testid=splash-screen] with add_style_tag. Switch projects through [data-testid=settings-project-select] and get_by_role('option', name=...). Repro for the stale-value bugs: open the شركات التوصيل tab, pick صالون الأناقة (toters shows 17), pick مطعم الاختبار while staying on the tab → the input should show 15. Same on إعدادات الفاتورة with phone 0770-SALON. Repro for the empty product pickers: bar=مطعم الاختبار → add product → change product-project-select to صالون الأناقة → the category dropdown should list 6 items.",
+  "rca of the issue": "Stale delivery and invoice values: Radix TabsContent stays mounted while the project changes on the same tab. The delivery input is uncontrolled (defaultValue), and the invoice phone receives null, which makes the input uncontrolled. Empty product pickers: the lists are fetched for the bar project only (the axios interceptor adds project_id), then filtered client-side by a different project_id."
+}

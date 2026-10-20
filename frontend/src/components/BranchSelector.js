@@ -14,7 +14,7 @@ import {
 } from './ui/select';
 import { Building2, Briefcase } from 'lucide-react';
 
-export default function BranchSelector({ className = '', showLabel = false, showPendingCount = true }) {
+export default function BranchSelector({ className = '', showLabel = false, showPendingCount = true, projectActivity = null }) {
   const { user, hasRole } = useAuth();
   const { t } = useTranslation();
   const {
@@ -97,6 +97,9 @@ export default function BranchSelector({ className = '', showLabel = false, show
                       <Briefcase className="h-3.5 w-3.5 text-muted-foreground" />
                     )}
                     <span>{p.name}</span>
+                    {projectActivity && projectActivity[p.id] === false && (
+                      <span className="h-2 w-2 rounded-full bg-red-500" title={t('لا توجد بيانات')} data-testid={`project-no-data-dot-${p.id}`} />
+                    )}
                   </div>
                 </SelectItem>
               ))}

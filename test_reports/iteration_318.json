@@ -1,0 +1,46 @@
+{
+  "summary": "Tested project isolation for inventory, purchasing and manufacturing (backend + frontend). Backend: 15 of 16 pytest tests pass. Strict per-project lists work for raw/manufactured/packaging/suppliers/mfg-inventory/warehouse-transfers/purchases-new/purchases-report/inventory-stats/inventory-movements. Creating items with X-Project-Id tags project_id for raw, packaging, supplier, purchase and manufacturing request. The full flow inside one project passes with no 500s: add-stock, warehouse-to-manufacturing, manufacturing request create and fulfill, manufactured product create and produce, branch request create and fulfill. The move and transfer tools pass: decrement, add to the same-named item, merge on the second transfer, 400 when qty is too high / same project / bad kind / qty 0, the log entry, and project_transfer_in/out movements in both projects. One backend failure: GET /api/warehouse-purchase-requests is not isolated. Frontend: the project bar and the move/transfer dialog work. The UI transfer of 2 kg salon→مشروع رابع worked with a toast. Badges show under 'all'. Switching project reloads the cards (all 6/99/4 → salon 1/0/0). Add dialogs show the red required field, and choosing a project switches the page and shows the locked 'المشروع: X'. Saving under 'all' is blocked with a toast. Two frontend issues: the request-materials dialog has no project field, and /reports/price-increases has no project bar.",
+  "backend_issues": {
+    "critical": [
+      {"endpoint": "GET /api/warehouse-purchase-requests", "issue": "Not project-isolated. server.py:11233 has an unscoped @api_router.get('/warehouse-purchase-requests'). api_router is included at server.py:18503, before inventory_router at :18523, so the server.py route shadows the scoped route in inventory_system.py:2549. A request created with X-Project-Id=P4 (tagged P4 in the DB) is returned with X-Project-Id=SALON. It also ignores the ?status filter. Fix: delete the server.py duplicate or scope it.", "priority": "HIGH"}
+    ],
+    "minor": [
+      {"endpoint": "GET/POST /api/packaging-requests, GET /api/branch-packaging-inventory, POST /api/packaging-requests/{id}/approve|transfer", "issue": "The same route-shadowing problem: server.py api_router copies (server.py:11277, :11436) take precedence over the scoped inventory_system ones, so packaging requests are NOT project-isolated. Found by code review and route diff; not exercised through the API."},
+      {"endpoint": "sequence numbers (request_number / transfer_number / purchase_number)", "issue": "The 'last number' is found with a scoped find_one(sort=...), which only sees the project's own docs plus untagged ones. Numbers now restart per project, giving duplicate #1, #2 across projects in one tenant. Confirmed in the UI (TEST requests got #1 and #2 in REST). Acceptable if per-project numbering is intended; otherwise use the unscoped db for counters."},
+      {"endpoint": "_ScopedCollection", "issue": "update_one/update_many/delete_*/find_one_and_update pass through unscoped. This is fine for id-based ops but means a project-scoped user could modify another project's item by id. Consider a lenient condition on writes too."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "WarehouseManufacturing request-materials dialog (طلب مواد خام من المخزن, line ~7805)", "issue": "InventoryProjectField is missing. It was inserted into the recipe sync-preview dialog by mistake (line 4870, data-testid sync-preview-dialog). Under 'كل المشاريع' the user cannot pick a project, so POST /manufacturing-requests is blocked by the interceptor and there is no way to fix it from the dialog. The materials list also shows every project's materials.", "selector": "[data-testid=request-materials-btn] -> [role=dialog]", "priority": "HIGH"}
+    ],
+    "integration_issues": [
+      {"flow": "/reports/price-increases (تقرير الأسعار)", "issue": "No PageProjectBar and no useProject dependency. It is scoped only by whatever is in localStorage when the page loads; the user cannot switch project and the page does not reload when the project changes.", "affected_selectors": ["[data-testid=settings-project-select]"]}
+    ],
+    "design_issues": [
+      {"screen": "/warehouse (WarehouseTransfers)", "issues": ["The project bar renders above the page header (with a dark strip at the top) instead of under it like the other pages"]},
+      {"screen": "/reports/price-increases", "issues": ["Page title 'تقرير زيادة أسعار الشراء' and the back button have very low contrast on the dark header background"]},
+      {"screen": "MoveToProjectDialog", "issues": ["The target project select appears to include the currently selected source project (not verified). Picking it in transfer mode leads to a 400 error."]}
+    ]
+  },
+  "test_report_links": ["/app/backend/tests/test_inventory_project_isolation_iter318.py", "/app/test_reports/pytest/pytest_iter318.xml"],
+  "action_items": [
+    "Remove or scope the duplicate GET /warehouse-purchase-requests in server.py (shadows the scoped route) and also the duplicate packaging-requests and branch-packaging-inventory routes in server.py",
+    "Move <InventoryProjectField /> from the sync-preview dialog (WarehouseManufacturing.js ~4870) to the request-materials dialog (~7805)",
+    "Add PageProjectBar plus a useProject/selectedProjectId refetch dependency to PriceIncreaseReport.js",
+    "Optional: decide whether request/transfer numbering per project is intended; exclude the current project from the move/transfer target list"
+  ],
+  "critical_code_review_comments": [
+    "Route duplication between server.py api_router and routes/inventory_system.py: whichever router is included first wins, so the new scoping is silently skipped for 6 routes",
+    "The ContextVar scope is set by a router dependency. Routes in server.py call set_inventory_scope manually, so any future inventory route added to server.py will be unscoped unless it does the same",
+    "server.py purchase-invoices does a supplier find_one for each invoice in a loop (N+1)"
+  ],
+  "updated_files": ["/app/backend/tests/test_inventory_project_isolation_iter318.py"],
+  "success_rate": {"backend": "94% (15/16)", "frontend": "~85% (all pages have the bar and reload except price-increases; 6/7 warehouse dialogs have the field)"},
+  "test_credentials": "admin@maestroegp.com / admin123",
+  "seed_data_creation": "Created TEST_iv*/TEST_ui* raw materials, products, packaging, suppliers, requests, transfers, movements and logs; all were cleaned from the DB after testing. Seeded data is unchanged.",
+  "retest_needed": true,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Run: REACT_APP_BACKEND_URL=... pytest backend/tests/test_inventory_project_isolation_iter318.py. It uses project مشروع رابع تجريبي (3128cfc4-...) as a sandbox. UI login: set localStorage token/user/selectedProjectId, then hide [data-testid=splash-screen]. WarehouseTransfers page is at /warehouse, not /warehouse-transfers. The request-materials button is on tab-manufacturing (data-testid request-materials-btn).",
+  "rca of the issue": "warehouse-purchase-requests leak: FastAPI matches routes in registration order. app.include_router(api_router) at server.py:18503 registers server.py's unscoped GET /api/warehouse-purchase-requests before inventory_router at :18523, so the scoped handler is never reached. Reproduce: POST /api/warehouse-purchase-requests with X-Project-Id=P4, then GET with X-Project-Id=SALON; the request is returned. Mitigation: delete the server.py duplicate route."
+}

@@ -1,5 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { API_URL, BACKEND_URL } from '../utils/api';
+import { SettingsProjectBar, ProjectFormSelect, ProjectBadge } from '../components/ProjectScopeControls';
+import { CopyCatalogDialog } from '../components/CopyCatalogDialog';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { useAuth } from '../context/AuthContext';
@@ -303,8 +305,33 @@ const AgentsMonitorPanel = ({ t }) => {
 
 export default function Settings() {
   const { user, hasRole, logout, hasPermission } = useAuth();
-  const { enterpriseEnabled } = useProject();
+  const { enterpriseEnabled, selectedProjectId } = useProject();
   const { theme, setTheme } = useTheme();
+  const defaultFormProject = selectedProjectId && selectedProjectId !== 'all' ? selectedProjectId : '';
+  // قوائم مشروع آخر غير المختار في الشريط (للنوافذ عند تغيير مشروع المنتج)
+  const [projectLists, setProjectLists] = useState({});
+  const [invoiceLoading, setInvoiceLoading] = useState(false);
+  const ensureProjectLists = async (pid) => {
+    if (!enterpriseEnabled || !pid || selectedProjectId === 'all' || pid === selectedProjectId || projectLists[pid]) return;
+    const cfg = { params: { project_id: pid }, headers: { 'X-Project-Id': pid } };
+    const [c, m, k] = await Promise.all([
+      axios.get(`${API_URL}/categories`, cfg).catch(() => ({ data: [] })),
+      axios.get(`${API_URL}/manufactured-products`, cfg).catch(() => ({ data: [] })),
+      axios.get(`${API_URL}/packaging-materials`, cfg).catch(() => ({ data: [] })),
+    ]);
+    setProjectLists(prev => ({ ...prev, [pid]: { categories: c.data || [], manufactured: m.data || [], packaging: k.data || [] } }));
+  };
+  const forProject = (list, pid, kind) => {
+    if (!enterpriseEnabled) return list || [];
+    if (!pid) return [];
+    if (selectedProjectId !== 'all' && pid !== selectedProjectId) return projectLists[pid]?.[kind] || [];
+    return (list || []).filter(x => x.project_id === pid);
+  };
+  const projectHeaders = (pid) => (pid ? { headers: { 'X-Project-Id': pid } } : undefined);
+  const requireProject = (pid) => {
+    if (enterpriseEnabled && !pid) { toast.error(t('اختر المشروع أولاً')); return false; }
+    return true;
+  };
   const { t, lang, changeLanguage, isRTL } = useTranslation();
   const navigate = useNavigate();
   
@@ -659,6 +686,8 @@ export default function Settings() {
   const [newExtraForm, setNewExtraForm] = useState({ name: '', name_en: '', price: '', quantity: 1, unit: 'قطعة', manufactured_product_id: '' });
   const [manufacturedProducts, setManufacturedProducts] = useState([]);
   const [packagingMaterials, setPackagingMaterials] = useState([]);
+  const allMfg = [...manufacturedProducts, ...Object.values(projectLists).flatMap(l => l.manufactured)];
+  const allPackaging = [...packagingMaterials, ...Object.values(projectLists).flatMap(l => l.packaging)];
   const [kitchenSectionForm, setKitchenSectionForm] = useState({
     name: '', name_en: '', color: '#D4AF37', icon: '🍳', printer_id: '', branch_id: '', sort_order: 0
   });
@@ -713,6 +742,12 @@ export default function Settings() {
     settingsPayment: true,
     settingsKitchenSections: true,
   });
+
+  useEffect(() => {
+    if (!enterpriseEnabled) return;
+    if (hasRole(['admin', 'general_manager', 'super_admin', 'manager', 'branch_manager'])) fetchData();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedProjectId]);
 
   useEffect(() => {
     if (hasRole(['admin', 'general_manager', 'super_admin', 'manager', 'branch_manager'])) {
@@ -919,7 +954,7 @@ export default function Settings() {
         axios.get(`${API}/settings`),
         axios.get(`${API}/delivery-apps`),
         axios.get(`${API}/categories`),
-        axios.get(`${API}/products`),
+        axios.get(`${API}/products`, { params: { limit: 500 } }),
         axios.get(`${API}/kitchen-sections`),
         axios.get(`${API}/customers`),
         axios.get(`${API}/manufactured-products`).catch(() => ({ data: [] })),
@@ -1032,11 +1067,15 @@ export default function Settings() {
 
   // جلب إعدادات الفاتورة للعميل
   const fetchInvoiceSettings = async () => {
+    setInvoiceLoading(true);
     try {
       const res = await axios.get(`${API}/tenant/invoice-settings`);
-      setInvoiceSettings(prev => ({ ...prev, ...res.data }));
+      const clean = Object.fromEntries(Object.entries(res.data || {}).map(([k, v]) => [k, v === null ? '' : v]));
+      setInvoiceSettings(prev => ({ ...prev, ...clean }));
     } catch (error) {
       console.error('Failed to fetch invoice settings:', error);
+    } finally {
+      setInvoiceLoading(false);
     }
   };
 
@@ -1392,7 +1431,9 @@ export default function Settings() {
   const handleCreateBranch = async (e) => {
     e.preventDefault();
     try {
-      await axios.post(`${API}/branches`, branchForm);
+      const pid = branchForm.project_id || defaultFormProject;
+      if (!requireProject(pid)) return;
+      await axios.post(`${API}/branches`, branchForm, projectHeaders(pid));
       toast.success(t('تم الحفظ بنجاح'));
       setBranchDialogOpen(false);
       setBranchForm({ name: '', address: '', phone: '', phone2: '', email: '' });
@@ -1896,7 +1937,9 @@ export default function Settings() {
   const handleCreateCategory = async (e) => {
     e.preventDefault();
     try {
-      await axios.post(`${API}/categories`, categoryForm);
+      const pid = categoryForm.project_id || defaultFormProject;
+      if (!requireProject(pid)) return;
+      await axios.post(`${API}/categories`, { ...categoryForm, project_id: pid || null }, projectHeaders(pid));
       toast.success(t('تم إنشاء الفئة'));
       setCategoryDialogOpen(false);
       setCategoryForm({ name: '', name_en: '', icon: '', image: '', color: '#D4AF37', sort_order: 0 });
@@ -1916,7 +1959,8 @@ export default function Settings() {
         icon: editCategoryForm.icon,
         image: editCategoryForm.image,
         color: editCategoryForm.color,
-        sort_order: editCategoryForm.sort_order
+        sort_order: editCategoryForm.sort_order,
+        project_id: editCategoryForm.project_id || null
       });
       toast.success(t('تم تحديث الفئة'));
       setEditCategoryDialogOpen(false);
@@ -1953,9 +1997,12 @@ export default function Settings() {
   // Product handlers
   const handleCreateProduct = async (e) => {
     e.preventDefault();
+    const pid = productForm.project_id || defaultFormProject;
+    if (!requireProject(pid)) return;
     try {
       await axios.post(`${API}/products`, {
         ...productForm,
+        project_id: pid || null,
         price: parseFloat(productForm.price) || 0,
         cost: parseFloat(productForm.cost) || 0,
         operating_cost: parseFloat(productForm.operating_cost) || 0,
@@ -1965,7 +2012,7 @@ export default function Settings() {
         recipe_quantities: productForm.recipe_quantities || [],
         extras: productForm.extras || [],
         packaging_items: productForm.packaging_items || []
-      });
+      }, projectHeaders(pid));
       toast.success(t('تم إنشاء المنتج'));
       setProductDialogOpen(false);
       setProductForm({ name: '', name_en: '', category_id: '', price: '', cost: '', operating_cost: '', packaging_cost: '', image: '', description: '', barcode: '', manufactured_product_id: '', manufactured_links: [], recipe_quantities: [], printer_ids: [], extras: [], packaging_items: [] });
@@ -1977,10 +2024,11 @@ export default function Settings() {
   };
 
   const handleEditProduct = (p) => {
+    ensureProjectLists(p.project_id);
     // تحميل مكونات الوصفة إذا كان المنتج مرتبط بمنتج مصنع
     let recipeQuantities = p.recipe_quantities || [];
     if (p.manufactured_product_id && recipeQuantities.length === 0) {
-      const mfgProduct = manufacturedProducts.find(mp => mp.id === p.manufactured_product_id);
+      const mfgProduct = allMfg.find(mp => mp.id === p.manufactured_product_id);
       if (mfgProduct && mfgProduct.recipe) {
         recipeQuantities = mfgProduct.recipe.map(ing => ({
           raw_material_id: ing.raw_material_id,
@@ -1994,6 +2042,7 @@ export default function Settings() {
     
     setEditProductForm({
       id: p.id,
+      project_id: p.project_id || '',
       name: p.name,
       name_en: p.name_en || '',
       category_id: p.category_id,
@@ -2264,7 +2313,7 @@ export default function Settings() {
 
     // ⭐ احتساب تكلفة سطر واحد مع مراعاة وحدة الاستهلاك (حبة/شريحة)
     const _linkLineCost = (lk) => {
-      const mp = manufacturedProducts.find(m => m.id === lk.manufactured_product_id);
+      const mp = allMfg.find(m => m.id === lk.manufactured_product_id);
       if (!mp) return 0;
       const qty = Number(lk.consumption_qty || 0);
       if (qty <= 0) return 0;
@@ -2309,7 +2358,7 @@ export default function Settings() {
           {t('ربط بمنتجات مُصنّعة (للخصم التلقائي)')}
         </Label>
 
-        {manufacturedProducts.length === 0 ? (
+        {forProject(manufacturedProducts, form.project_id || (formKind === 'add' ? defaultFormProject : ''), 'manufactured').length === 0 ? (
           <p className="text-xs text-amber-600 bg-amber-500/10 p-2 rounded">
             {t('لا توجد منتجات مصنعة حالياً. أضف منتجات من قسم المخزن والتصنيع أولاً')}
           </p>
@@ -2322,7 +2371,7 @@ export default function Settings() {
               </p>
             )}
             {links.map((lk, idx) => {
-              const mp = manufacturedProducts.find(m => m.id === lk.manufactured_product_id);
+              const mp = allMfg.find(m => m.id === lk.manufactured_product_id);
               const mainUnit = mp?.unit || 'حبة';
               const hasSub = mp ? _hasSubUnit(mp) : false;
               const subUnit = mp?.piece_weight_unit || '';
@@ -2343,7 +2392,7 @@ export default function Settings() {
                         if (v === 'none') {
                           updateLink(idx, { manufactured_product_id: '', consumption_unit: '' });
                         } else {
-                          const sel = manufacturedProducts.find(m => m.id === v);
+                          const sel = allMfg.find(m => m.id === v);
                           updateLink(idx, {
                             manufactured_product_id: v,
                             piece_weight: sel?.piece_weight,
@@ -2359,7 +2408,7 @@ export default function Settings() {
                       <SelectContent>
                         <SelectItem value="none">{t('بدون')}</SelectItem>
                         {/* ⭐ عرض جميع المنتجات المُصنّعة بدون تصفية لمنع اختفاء عناصر */}
-                        {manufacturedProducts.map(m => {
+                        {forProject(manufacturedProducts, form.project_id || (formKind === 'add' ? defaultFormProject : ''), 'manufactured').map(m => {
                           const subInfo = _hasSubUnit(m) ? ` · 1 ${m.unit || 'حبة'} = ${m.piece_weight} ${m.piece_weight_unit}` : '';
                           return (
                             <SelectItem key={m.id} value={m.id}>
@@ -2485,6 +2534,7 @@ export default function Settings() {
       </header>
 
       <main className="max-w-6xl mx-auto px-4 sm:px-6 py-4 sm:py-6">
+        <SettingsProjectBar />
         <Tabs defaultValue="appearance" className="space-y-6">
           {/* شريط التبويبات المحسن */}
           <div className="bg-card border rounded-xl p-2 overflow-x-auto">
@@ -3625,7 +3675,7 @@ export default function Settings() {
                   <div className="flex flex-row items-center justify-between">
                     <CardTitle className="flex items-center gap-2 text-foreground">
                       <Store className="h-5 w-5" />{t('إدارة الفروع')}</CardTitle>
-                    <Dialog open={branchDialogOpen} onOpenChange={setBranchDialogOpen}>
+                    <Dialog open={branchDialogOpen} onOpenChange={(o) => { setBranchDialogOpen(o); if (!o) setBranchForm(f => ({ ...f, project_id: '' })); }}>
                       <DialogTrigger asChild>
                         <Button 
                           className="bg-primary text-primary-foreground"
@@ -3638,6 +3688,7 @@ export default function Settings() {
                         <DialogTitle className="text-foreground">{t('إضافة فرع جديد')}</DialogTitle>
                       </DialogHeader>
                       <form onSubmit={handleCreateBranch} className="space-y-4">
+                        <ProjectFormSelect value={branchForm.project_id || defaultFormProject} onChange={(v) => setBranchForm({ ...branchForm, project_id: v })} testId="branch-project-select" />
                         <div>
                           <Label className="text-foreground">{t('اسم الفرع')}</Label>
                           <Input
@@ -3700,7 +3751,7 @@ export default function Settings() {
                     {branches.map(branch => (
                       <div key={branch.id} className="flex items-center justify-between p-4 bg-muted/30 rounded-lg">
                         <div>
-                          <p className="font-medium text-foreground">{branch.name}</p>
+                          <p className="font-medium text-foreground flex items-center gap-2">{branch.name} <ProjectBadge projectId={branch.project_id} /></p>
                           <p className="text-sm text-muted-foreground">{branch.address}</p>
                           <p className="text-sm text-muted-foreground">{branch.phone}</p>
                           {branch.is_sold_branch && branch.buyer_name && (
@@ -4006,7 +4057,9 @@ export default function Settings() {
                 <CardHeader className="flex flex-row items-center justify-between">
                   <CardTitle className="flex items-center gap-2 text-foreground">
                     <Tag className="h-5 w-5" />{t('إدارة الفئات')}</CardTitle>
-                  <Dialog open={categoryDialogOpen} onOpenChange={setCategoryDialogOpen}>
+                  <div className="flex items-center gap-2">
+                  <CopyCatalogDialog onDone={fetchData} />
+                  <Dialog open={categoryDialogOpen} onOpenChange={(o) => { setCategoryDialogOpen(o); if (!o) setCategoryForm(f => ({ ...f, project_id: '' })); }}>
                     <DialogTrigger asChild>
                       <Button className="bg-primary text-primary-foreground">
                         <Plus className="h-4 w-4 ml-2" />{t('إضافة فئة')}</Button>
@@ -4016,6 +4069,7 @@ export default function Settings() {
                         <DialogTitle className="text-foreground">{t('إضافة فئة جديدة')}</DialogTitle>
                       </DialogHeader>
                       <form onSubmit={handleCreateCategory} className="space-y-4">
+                        <ProjectFormSelect value={categoryForm.project_id || defaultFormProject} onChange={(v) => setCategoryForm({ ...categoryForm, project_id: v })} testId="category-project-select" />
                         <div className="grid grid-cols-2 gap-4">
                           <div>
                             <Label className="text-foreground">{t('اسم الفئة (عربي)')}</Label>
@@ -4118,6 +4172,7 @@ export default function Settings() {
                       </form>
                     </DialogContent>
                   </Dialog>
+                  </div>
                 </CardHeader>
                 <CardContent>
                   {categories.length === 0 ? (
@@ -4151,6 +4206,7 @@ export default function Settings() {
                               {lang === 'en' && cat.name && cat.name !== cat.name_en && (
                                 <p className="text-xs text-muted-foreground">{cat.name}</p>
                               )}
+                              <div className="mt-1"><ProjectBadge projectId={cat.project_id} /></div>
                             </div>
                           </div>
                           <div className="absolute top-2 left-2 flex gap-1">
@@ -4166,7 +4222,8 @@ export default function Settings() {
                                   icon: cat.icon || '',
                                   image: cat.image || '',
                                   color: cat.color || '#D4AF37',
-                                  sort_order: cat.sort_order || 0
+                                  sort_order: cat.sort_order || 0,
+                                  project_id: cat.project_id || ''
                                 });
                                 setEditCategoryDialogOpen(true);
                               }}
@@ -4200,6 +4257,7 @@ export default function Settings() {
                   </DialogHeader>
                   {editCategoryForm && (
                     <form onSubmit={handleUpdateCategory} className="space-y-4">
+                      <ProjectFormSelect value={editCategoryForm.project_id} onChange={(v) => setEditCategoryForm({ ...editCategoryForm, project_id: v })} testId="edit-category-project-select" />
                       <div className="grid grid-cols-2 gap-4">
                         <div>
                           <Label className="text-foreground">{t('اسم الفئة (عربي)')}</Label>
@@ -4317,7 +4375,7 @@ export default function Settings() {
                       <Languages className="h-4 w-4 ml-2" />
                       {autoTranslating ? t('جارٍ الترجمة...') : t('ترجمة تلقائية (EN)')}
                     </Button>
-                    <Dialog open={productDialogOpen} onOpenChange={setProductDialogOpen}>
+                    <Dialog open={productDialogOpen} onOpenChange={(o) => { setProductDialogOpen(o); if (!o) setProductForm(f => ({ ...f, project_id: '' })); }}>
                       <DialogTrigger asChild>
                         <Button className="bg-primary text-primary-foreground">
                           <Plus className="h-4 w-4 ml-2" />{t('إضافة منتج')}</Button>
@@ -4327,6 +4385,7 @@ export default function Settings() {
                         <DialogTitle className="text-foreground">{t('إضافة منتج جديد')}</DialogTitle>
                       </DialogHeader>
                       <form onSubmit={handleCreateProduct} className="space-y-4">
+                        <ProjectFormSelect value={productForm.project_id || defaultFormProject} onChange={(v) => { ensureProjectLists(v); setProductForm({ ...productForm, project_id: v, category_id: '', manufactured_product_id: '', manufactured_links: [], packaging_items: [] }); }} testId="product-project-select" />
                         <div className="grid grid-cols-2 gap-4">
                           <div>
                             <Label className="text-foreground">{t('اسم المنتج (عربي)')}</Label>
@@ -4356,7 +4415,7 @@ export default function Settings() {
                                 <SelectValue placeholder={t('اختر فئة')} />
                               </SelectTrigger>
                               <SelectContent>
-                                {categories.map(cat => (
+                                {forProject(categories, productForm.project_id || defaultFormProject, 'categories').map(cat => (
                                   <SelectItem key={cat.id} value={cat.id}>{lang === 'en' ? (cat.name_en || cat.name) : cat.name}</SelectItem>
                                 ))}
                               </SelectContent>
@@ -4434,7 +4493,7 @@ export default function Settings() {
                           </Label>
                           <p className="text-xs text-muted-foreground mb-3">{t('يُخصم تلقائياً عند الطلب السفري أو التوصيل')}</p>
                           
-                          {packagingMaterials.length === 0 ? (
+                          {forProject(packagingMaterials, productForm.project_id || defaultFormProject, 'packaging').length === 0 ? (
                             <p className="text-xs text-yellow-600 p-2 bg-yellow-500/10 rounded">{t('لا توجد مواد تغليف. أضف مواد التغليف من صفحة المخزن أولاً.')}</p>
                           ) : (
                             <>
@@ -4477,7 +4536,7 @@ export default function Settings() {
                           <Select
                             value=""
                             onValueChange={(materialId) => {
-                              const material = packagingMaterials.find(m => m.id === materialId);
+                              const material = allPackaging.find(m => m.id === materialId);
                               if (material) {
                                 const exists = (productForm.packaging_items || []).find(i => i.packaging_material_id === materialId);
                                 if (!exists) {
@@ -4499,7 +4558,7 @@ export default function Settings() {
                               <SelectValue placeholder={t('+ إضافة مادة تغليف')} />
                             </SelectTrigger>
                             <SelectContent>
-                              {packagingMaterials.map(m => (
+                              {forProject(packagingMaterials, productForm.project_id || defaultFormProject, 'packaging').map(m => (
                                 <SelectItem key={m.id} value={m.id}>
                                   {m.name} ({m.cost_per_unit} د.ع/{m.unit})
                                 </SelectItem>
@@ -4530,7 +4589,7 @@ export default function Settings() {
                                   <span className="text-sm text-green-500">+{extra.price} {t('د.ع')}</span>
                                   {extra.manufactured_product_id && (
                                     <span className="text-xs text-purple-400 bg-purple-500/20 px-2 py-0.5 rounded">
-                                      {manufacturedProducts.find(mp => mp.id === extra.manufactured_product_id)?.name || t('مرتبط')}
+                                      {allMfg.find(mp => mp.id === extra.manufactured_product_id)?.name || t('مرتبط')}
                                     </span>
                                   )}
                                   <Button
@@ -4627,7 +4686,7 @@ export default function Settings() {
                               </SelectTrigger>
                               <SelectContent>
                                 <SelectItem value="none">{t('بدون ربط')}</SelectItem>
-                                {manufacturedProducts.map(mp => (
+                                {forProject(manufacturedProducts, productForm.project_id || defaultFormProject, 'manufactured').map(mp => (
                                   <SelectItem key={mp.id} value={mp.id}>{mp.name}</SelectItem>
                                 ))}
                               </SelectContent>
@@ -4756,7 +4815,7 @@ export default function Settings() {
                               </div>
                             )}
                             <div>
-                              <p className="font-medium text-foreground">{lang === 'en' ? (p.name_en || p.name) : p.name}</p>
+                              <p className="font-medium text-foreground flex items-center gap-2">{lang === 'en' ? (p.name_en || p.name) : p.name} <ProjectBadge projectId={p.project_id} /></p>
                               <p className="text-sm text-muted-foreground">
                                 {(() => {
                                   const cat = categories.find(c => c.id === p.category_id);
@@ -4804,6 +4863,7 @@ export default function Settings() {
                   </DialogHeader>
                   {editProductForm && (
                     <form onSubmit={handleUpdateProduct} className="space-y-4">
+                      <ProjectFormSelect value={editProductForm.project_id} onChange={(v) => { ensureProjectLists(v); setEditProductForm({ ...editProductForm, project_id: v, category_id: '' }); }} testId="edit-product-project-select" />
                       <div className="grid grid-cols-2 gap-4">
                         <div>
                           <Label className="text-foreground">{t('اسم المنتج (عربي)')}</Label>
@@ -4831,7 +4891,7 @@ export default function Settings() {
                               <SelectValue placeholder={t('اختر فئة')} />
                             </SelectTrigger>
                             <SelectContent>
-                              {categories.map(cat => (
+                              {forProject(categories, editProductForm.project_id, 'categories').map(cat => (
                                 <SelectItem key={cat.id} value={cat.id}>{lang === 'en' ? (cat.name_en || cat.name) : cat.name}</SelectItem>
                               ))}
                             </SelectContent>
@@ -4907,7 +4967,7 @@ export default function Settings() {
                         </Label>
                         <p className="text-xs text-muted-foreground mb-3">{t('يُخصم تلقائياً عند الطلب السفري أو التوصيل')}</p>
                         
-                        {packagingMaterials.length === 0 ? (
+                        {forProject(packagingMaterials, editProductForm.project_id, 'packaging').length === 0 ? (
                           <p className="text-xs text-yellow-600 p-2 bg-yellow-500/10 rounded">{t('لا توجد مواد تغليف. أضف مواد التغليف من صفحة المخزن أولاً.')}</p>
                         ) : (
                           <>
@@ -4950,7 +5010,7 @@ export default function Settings() {
                         <Select
                           value=""
                           onValueChange={(materialId) => {
-                            const material = packagingMaterials.find(m => m.id === materialId);
+                            const material = allPackaging.find(m => m.id === materialId);
                             if (material) {
                               const exists = (editProductForm.packaging_items || []).find(i => i.packaging_material_id === materialId);
                               if (!exists) {
@@ -4972,7 +5032,7 @@ export default function Settings() {
                             <SelectValue placeholder={t('+ إضافة مادة تغليف')} />
                           </SelectTrigger>
                           <SelectContent>
-                            {packagingMaterials.map(m => (
+                            {forProject(packagingMaterials, editProductForm.project_id, 'packaging').map(m => (
                               <SelectItem key={m.id} value={m.id}>
                                 {m.name} ({m.cost_per_unit} د.ع/{m.unit})
                               </SelectItem>
@@ -5011,7 +5071,7 @@ export default function Settings() {
                                 <span className="text-sm text-green-500">+{extra.price} {t('د.ع')}</span>
                                 {extra.manufactured_product_id && (
                                   <span className="text-xs text-purple-400 bg-purple-500/20 px-2 py-0.5 rounded">
-                                    {manufacturedProducts.find(mp => mp.id === extra.manufactured_product_id)?.name || t('مرتبط')}
+                                    {allMfg.find(mp => mp.id === extra.manufactured_product_id)?.name || t('مرتبط')}
                                   </span>
                                 )}
                                 <Button
@@ -5108,7 +5168,7 @@ export default function Settings() {
                             </SelectTrigger>
                             <SelectContent>
                               <SelectItem value="none">{t('بدون ربط')}</SelectItem>
-                              {manufacturedProducts.map(mp => (
+                              {forProject(manufacturedProducts, editProductForm.project_id, 'manufactured').map(mp => (
                                 <SelectItem key={mp.id} value={mp.id}>{mp.name}</SelectItem>
                               ))}
                             </SelectContent>
@@ -5947,6 +6007,7 @@ export default function Settings() {
                             <Label className="text-sm text-muted-foreground whitespace-nowrap">{t('نسبة العمولة:')}</Label>
                             <div className="flex items-center gap-2 flex-1">
                               <Input
+                                key={`${app.id}-${selectedProjectId}-${app.commission_rate}`}
                                 type="number"
                                 defaultValue={app.commission_rate || 0}
                                 min="0"
@@ -7500,7 +7561,7 @@ export default function Settings() {
                     <Button 
                       className="w-full bg-green-500 hover:bg-green-600"
                       onClick={saveInvoiceSettings}
-                      disabled={savingInvoiceSettings}
+                      disabled={savingInvoiceSettings || invoiceLoading}
                     >
                       {savingInvoiceSettings ? <RefreshCw className="h-4 w-4 ml-2 animate-spin" /> : <Save className="h-4 w-4 ml-2" />}
                       {t('حفظ إعدادات الفاتورة')}

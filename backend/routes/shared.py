@@ -374,6 +374,52 @@ def user_project_scope(user: dict) -> Optional[str]:
     return user.get("project_id")
 
 
+def requested_project_id(user: dict, request=None) -> Optional[str]:
+    """المشروع المطلوب للقراءة/الحفظ: مشروع المستخدم المقيّد ← project_id/X-Project-Id ← None (كل المشاريع)"""
+    pid = user_project_scope(user)
+    if not pid and request is not None:
+        pid = request.query_params.get("project_id") or request.headers.get("x-project-id")
+    if not pid or pid in ("all", "null", "undefined"):
+        return None
+    return pid
+
+
+async def project_branch_condition(user: dict, request=None) -> Optional[dict]:
+    """شرط عزل لوثائق مرتبطة بالفروع: فروع المشروع أو project_id بدون فرع"""
+    pid = requested_project_id(user, request)
+    if not pid:
+        return None
+    db = get_database()
+    bq = {"project_id": pid}
+    tid = get_user_tenant_id(user)
+    if tid:
+        bq["tenant_id"] = tid
+    ids = [b["id"] async for b in db.branches.find(bq, {"_id": 0, "id": 1}) if b.get("id")]
+    return {"$or": [{"branch_id": {"$in": ids}}, {"branch_id": {"$in": [None, ""]}, "project_id": pid}]}
+
+
+async def delivery_commission_rate(tenant_id: Optional[str], app_id: Optional[str],
+                                   project_id: Optional[str] = None, branch_id: Optional[str] = None) -> float:
+    """نسبة عمولة شركة التوصيل: إعداد المشروع ← إعداد المؤسسة العام"""
+    if not app_id:
+        return 0
+    db = get_database()
+    if not project_id and branch_id:
+        br = await db.branches.find_one({"id": branch_id}, {"_id": 0, "project_id": 1})
+        project_id = (br or {}).get("project_id")
+    base = {"app_id": app_id}
+    if tenant_id:
+        base["tenant_id"] = tenant_id
+    s = None
+    if project_id:
+        s = await db.delivery_app_settings.find_one({**base, "project_id": project_id}, {"_id": 0})
+    if not s:
+        s = await db.delivery_app_settings.find_one({**base, "project_id": None}, {"_id": 0})
+    if not s:
+        s = await db.delivery_app_settings.find_one(base, {"_id": 0})
+    return float((s or {}).get("commission_rate", 0) or 0)
+
+
 def scoped_query_for_user(user: dict, base: Optional[dict] = None,
                           explicit_project_id: Optional[str] = None) -> dict:
     """

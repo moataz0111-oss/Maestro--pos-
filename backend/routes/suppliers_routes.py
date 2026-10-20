@@ -12,13 +12,14 @@ import logging
 from .shared import get_current_user, get_user_tenant_id, build_tenant_query, get_database
 
 logger = logging.getLogger(__name__)
-router = APIRouter(tags=["Suppliers"])
+from .inventory_scope import set_inventory_scope, get_scoped_database
+router = APIRouter(tags=["Suppliers"], dependencies=[Depends(set_inventory_scope)])
 
 # lazy DB proxy: resolves the motor client at request time (correct event loop),
 # avoiding a module-import-time client bind that breaks under production ASGI servers
 class _LazyDB:
     def __getattr__(self, name):
-        return getattr(get_database(), name)
+        return getattr(get_scoped_database(), name)
 
 db = _LazyDB()
 

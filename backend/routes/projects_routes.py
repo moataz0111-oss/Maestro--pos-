@@ -71,6 +71,8 @@ class ProjectUpdate(BaseModel):
     description: Optional[str] = None
     is_active: Optional[bool] = None
     exchange_rate: Optional[float] = None
+    owner_name: Optional[str] = None
+    owner_phone: Optional[str] = None
 
 class ProjectAdminAssign(BaseModel):
     username: str
@@ -290,25 +292,64 @@ async def create_project(
     await db.projects.insert_one(project_doc)
     project_doc.pop("_id", None)
 
-    # تطبيق قوالب النشاط تلقائياً (تصنيفات نموذجية)
-    try:
-        from .enterprise_routes import ACTIVITY_TEMPLATES
-        template = ACTIVITY_TEMPLATES.get(project.activity_type, {"categories": []})
-        for cat in template.get("categories", []):
-            await db.categories.insert_one({
-                "id": str(uuid.uuid4()),
-                "tenant_id": tenant_id,
-                "project_id": project_doc["id"],
-                "name": cat["name"],
-                "icon": cat.get("icon", "📦"),
-                "is_active": True,
-                "created_at": datetime.now(timezone.utc).isoformat(),
-                "created_by": current_user.get("id"),
-            })
-    except Exception as e:
-        logger.warning(f"Auto-template seed failed: {e}")
-
     return {"message": "تم إنشاء المشروع بنجاح", "project": project_doc}
+
+
+class CopyCatalogRequest(BaseModel):
+    source_project_id: str
+    category_ids: Optional[List[str]] = None  # None = كل الفئات
+
+
+@router.post("/{project_id}/copy-catalog")
+async def copy_catalog(project_id: str, payload: CopyCatalogRequest, current_user: dict = Depends(get_current_user)):
+    """نسخ فئات ومنتجات من مشروع إلى آخر (نسخ مستقلة — بدون تكرار الفئات بنفس الاسم)"""
+    if not user_is_enterprise_owner(current_user):
+        raise HTTPException(status_code=403, detail="غير مصرح")
+    if payload.source_project_id == project_id:
+        raise HTTPException(status_code=400, detail="اختر مشروعاً مصدراً مختلفاً")
+    db = get_database()
+    tenant_id = get_user_tenant_id(current_user)
+    base = {"tenant_id": tenant_id, "deleted_at": {"$exists": False}}
+    for pid in (project_id, payload.source_project_id):
+        if not await db.projects.find_one({**base, "id": pid}, {"_id": 1}):
+            raise HTTPException(status_code=404, detail="المشروع غير موجود")
+
+    cq = {"tenant_id": tenant_id, "project_id": payload.source_project_id, "is_active": {"$ne": False}}
+    if payload.category_ids:
+        cq["id"] = {"$in": payload.category_ids}
+    src_cats = await db.categories.find(cq, {"_id": 0}).to_list(length=None)
+    target_cats = await db.categories.find({"tenant_id": tenant_id, "project_id": project_id}, {"_id": 0, "id": 1, "name": 1}).to_list(length=None)
+    by_name = {c["name"]: c["id"] for c in target_cats}
+    now = datetime.now(timezone.utc).isoformat()
+    cat_map, cats_added = {}, 0
+    for c in src_cats:
+        if c["name"] in by_name:
+            cat_map[c["id"]] = by_name[c["name"]]
+            continue
+        new_id = str(uuid.uuid4())
+        await db.categories.insert_one({**c, "id": new_id, "project_id": project_id, "created_at": now})
+        cat_map[c["id"]] = new_id
+        cats_added += 1
+
+    existing_names = {(p.get("category_id"), p.get("name")) async for p in db.products.find(
+        {"tenant_id": tenant_id, "project_id": project_id}, {"_id": 0, "name": 1, "category_id": 1})}
+    prods_added = 0
+    async for p in db.products.find({"tenant_id": tenant_id, "project_id": payload.source_project_id,
+                                     "deleted_at": {"$exists": False}, "is_active": {"$ne": False},
+                                     "category_id": {"$in": list(cat_map.keys())}}, {"_id": 0}):
+        new_cat = cat_map[p["category_id"]]
+        if (new_cat, p.get("name")) in existing_names:
+            continue
+        # روابط المصنّع/المواد تخص المشروع المصدر → تُفرَّغ ليربطها المستخدم بمواد مشروعه
+        await db.products.insert_one({
+            **p, "id": str(uuid.uuid4()), "project_id": project_id, "category_id": new_cat,
+            "manufactured_product_id": None, "manufactured_links": [], "finished_product_id": None,
+            "packaging_items": [], "recipe_quantities": [], "ingredients": [], "printer_ids": [],
+            "created_at": now,
+        })
+        prods_added += 1
+    return {"message": f"تم نسخ {cats_added} فئة و {prods_added} منتج",
+            "categories_added": cats_added, "products_added": prods_added}
 
 
 @router.get("/{project_id}")
@@ -623,7 +664,39 @@ async def assign_project_admin(
 
     user_doc.pop("password", None)
     user_doc.pop("_id", None)
-    return {"message": "تم تعيين مدير المشروع بنجاح", "admin": user_doc}
+    wa_sent, wa_error = await _send_admin_welcome(tenant_id, project, admin)
+    return {"message": "تم تعيين مدير المشروع بنجاح", "admin": user_doc,
+            "whatsapp_sent": wa_sent, "whatsapp_error": wa_error}
+
+
+async def _send_admin_welcome(tenant_id: str, project: dict, admin) -> tuple:
+    """رسالة واتساب تجريبية لمدير المشروع الجديد تحتوي بيانات الدخول"""
+    if not admin.phone:
+        return False, "لا يوجد رقم هاتف"
+    try:
+        import os
+        from server import _phone_to_e164, _wa_free
+        e164 = await _phone_to_e164(admin.phone)
+        url = os.environ.get("FRONTEND_URL", "")
+        msg = (f"مرحباً {admin.full_name} 👋\n"
+               f"تم تعيينك مديراً لمشروع *{project.get('name')}*.\n\n"
+               f"👤 اسم المستخدم: {admin.username}\n"
+               f"📧 البريد: {admin.email}\n"
+               f"🔑 كلمة المرور: {admin.password}\n"
+               + (f"🔗 رابط الدخول: {url}\n" if url else "")
+               + "\nهذه رسالة تجريبية للتأكد من وصول تنبيهات المشروع إليك. يُنصح بتغيير كلمة المرور بعد أول دخول.")
+        ok, err = await _wa_free.send_message(
+            e164, msg, purpose="project_admin_welcome", tenant_id=tenant_id,
+            title="🏢 بيانات دخول مدير المشروع", with_logo=True,
+            project_name=project.get("name"), project_logo=project.get("logo_url"),
+            project_activity=project.get("activity_type"),
+        )
+        errs = {"not_connected": "واتساب النظام غير مربوط — اربطه من إعدادات الواتساب",
+                "invalid_number": "رقم الهاتف غير صالح"}
+        return bool(ok), (None if ok else errs.get(str(err), str(err)))
+    except Exception as e:
+        logger.warning(f"project admin welcome WA failed: {e}")
+        return False, str(e)
 
 
 @router.get("/{project_id}/users")
@@ -1000,3 +1073,171 @@ async def fix_default_project_names_v1(db):
     )
     logger.info(f"✅ fix_default_project_names_v1 complete: {fixed_count} renamed, {unmarked_count} unmarked as default")
     return {"success": True, "fixed_count": fixed_count, "unmarked_default_count": unmarked_count}
+
+
+async def cleanup_empty_template_categories_v1(db):
+    """حذف الفئات النموذجية الفارغة التي أُنشئت تلقائياً للمشاريع (بدون sort_order وبدون منتجات)"""
+    if await db.migrations.find_one({"name": "cleanup_empty_template_categories_v1"}):
+        return
+    from .enterprise_routes import ACTIVITY_TEMPLATES
+    names = {c["name"] for t in ACTIVITY_TEMPLATES.values() for c in t.get("categories", [])}
+    removed = 0
+    async for c in db.categories.find({"name": {"$in": list(names)}, "sort_order": {"$exists": False},
+                                       "project_id": {"$nin": [None, ""]}}, {"_id": 0, "id": 1}):
+        if not await db.products.count_documents({"category_id": c["id"]}, limit=1):
+            await db.categories.delete_one({"id": c["id"]})
+            removed += 1
+    await db.migrations.update_one(
+        {"name": "cleanup_empty_template_categories_v1"},
+        {"$set": {"name": "cleanup_empty_template_categories_v1", "applied": True, "removed": removed,
+                  "applied_at": datetime.now(timezone.utc).isoformat()}},
+        upsert=True,
+    )
+    logger.info(f"🧹 cleanup_empty_template_categories_v1: removed {removed} empty template categories")
+
+
+_INV_KINDS = {"raw": "raw_materials", "manufactured": "manufactured_products", "packaging": "packaging_materials"}
+
+
+class MoveInventoryRequest(BaseModel):
+    target_project_id: str
+    kind: str
+    item_ids: List[str]
+
+
+class TransferStockRequest(BaseModel):
+    target_project_id: str
+    kind: str
+    item_id: str
+    quantity: float
+    notes: Optional[str] = None
+
+
+async def _inv_guard(current_user, target_project_id, kind):
+    if not user_is_enterprise_owner(current_user):
+        raise HTTPException(status_code=403, detail="غير مصرح")
+    if kind not in _INV_KINDS:
+        raise HTTPException(status_code=400, detail="نوع غير صالح")
+    db = get_database()
+    tenant_id = get_user_tenant_id(current_user)
+    target = await db.projects.find_one({"id": target_project_id, "tenant_id": tenant_id,
+                                         "deleted_at": {"$exists": False}}, {"_id": 0, "id": 1, "name": 1})
+    if not target:
+        raise HTTPException(status_code=404, detail="المشروع غير موجود")
+    return db, tenant_id, target
+
+
+@router.post("/inventory/move")
+async def move_inventory_to_project(payload: MoveInventoryRequest, current_user: dict = Depends(get_current_user)):
+    """نقل مواد (خام/مصنّعة/تغليف) نهائياً إلى مشروع آخر بكل كمياتها"""
+    db, tenant_id, target = await _inv_guard(current_user, payload.target_project_id, payload.kind)
+    coll = db[_INV_KINDS[payload.kind]]
+    q = {"id": {"$in": payload.item_ids}}
+    if tenant_id:
+        q["tenant_id"] = tenant_id
+    items = await coll.find(q, {"_id": 0, "id": 1, "name": 1, "project_id": 1}).to_list(length=None)
+    res = await coll.update_many(q, {"$set": {"project_id": target["id"]}})
+    now = datetime.now(timezone.utc).isoformat()
+    await db.project_inventory_log.insert_one({
+        "id": str(uuid.uuid4()), "tenant_id": tenant_id, "type": "move", "kind": payload.kind,
+        "target_project_id": target["id"], "target_project_name": target["name"],
+        "items": [{"id": i["id"], "name": i.get("name"), "from_project_id": i.get("project_id")} for i in items],
+        "user_id": current_user.get("id"), "user_name": current_user.get("full_name") or current_user.get("username"),
+        "created_at": now,
+    })
+    return {"message": f"تم نقل {res.modified_count} عنصر إلى مشروع {target['name']}", "moved": res.modified_count}
+
+
+@router.post("/inventory/transfer")
+async def transfer_stock_between_projects(payload: TransferStockRequest, current_user: dict = Depends(get_current_user)):
+    """تحويل كمية من مادة بين مشروعين بسجل واضح (يخصم من المصدر ويضيف لنفس المادة في الهدف)"""
+    db, tenant_id, target = await _inv_guard(current_user, payload.target_project_id, payload.kind)
+    if payload.quantity <= 0:
+        raise HTTPException(status_code=400, detail="الكمية يجب أن تكون أكبر من صفر")
+    coll = db[_INV_KINDS[payload.kind]]
+    q = {"id": payload.item_id}
+    if tenant_id:
+        q["tenant_id"] = tenant_id
+    src = await coll.find_one(q, {"_id": 0})
+    if not src:
+        raise HTTPException(status_code=404, detail="المادة غير موجودة")
+    if src.get("project_id") == target["id"]:
+        raise HTTPException(status_code=400, detail="المادة موجودة أصلاً في هذا المشروع")
+    if float(src.get("quantity") or 0) < payload.quantity:
+        raise HTTPException(status_code=400, detail=f"الكمية المتوفرة {src.get('quantity') or 0} فقط")
+    now = datetime.now(timezone.utc).isoformat()
+    upd = await coll.update_one({**q, "quantity": {"$gte": payload.quantity}}, {"$inc": {"quantity": -payload.quantity}, "$set": {"updated_at": now}})
+    if not upd.modified_count:
+        raise HTTPException(status_code=409, detail="تغيّرت الكمية، أعد المحاولة")
+    dst = await coll.find_one({"tenant_id": tenant_id, "project_id": target["id"], "name": src.get("name")}, {"_id": 0, "id": 1})
+    if dst:
+        await coll.update_one({"id": dst["id"]}, {"$inc": {"quantity": payload.quantity}, "$set": {"updated_at": now}})
+        dst_id = dst["id"]
+    else:
+        dst_id = str(uuid.uuid4())
+        await coll.insert_one({**src, "id": dst_id, "project_id": target["id"], "quantity": payload.quantity,
+                               "created_at": now, "updated_at": now})
+    src_proj = await db.projects.find_one({"id": src.get("project_id")}, {"_id": 0, "name": 1}) or {}
+    log = {
+        "id": str(uuid.uuid4()), "tenant_id": tenant_id, "type": "transfer", "kind": payload.kind,
+        "item_name": src.get("name"), "unit": src.get("unit"), "quantity": payload.quantity,
+        "cost_per_unit": src.get("cost_per_unit") or src.get("unit_cost"),
+        "from_project_id": src.get("project_id"), "from_project_name": src_proj.get("name"),
+        "from_item_id": src["id"], "target_project_id": target["id"], "target_project_name": target["name"],
+        "to_item_id": dst_id, "notes": payload.notes,
+        "user_id": current_user.get("id"), "user_name": current_user.get("full_name") or current_user.get("username"),
+        "created_at": now,
+    }
+    await db.project_inventory_log.insert_one(dict(log))
+    for pid, direction in ((src.get("project_id"), "out"), (target["id"], "in")):
+        await db.inventory_movements.insert_one({
+            "id": str(uuid.uuid4()), "tenant_id": tenant_id, "project_id": pid,
+            "movement_type": "project_transfer_" + direction, "direction": direction,
+            "item_type": payload.kind, "item_id": src["id"] if direction == "out" else dst_id,
+            "item_name": src.get("name"), "quantity": payload.quantity, "unit": src.get("unit"),
+            "notes": f"تحويل بين المشاريع: {log['from_project_name']} ← {target['name']}",
+            "created_by": current_user.get("id"), "created_by_name": log["user_name"], "created_at": now,
+        })
+    return {"message": f"تم تحويل {payload.quantity} {src.get('unit') or ''} من {src.get('name')} إلى {target['name']}", "log": log}
+
+
+@router.get("/inventory/log")
+async def project_inventory_log(
+    project_id: Optional[str] = None,
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None,
+    current_user: dict = Depends(get_current_user)
+):
+    """سجل نقل وتحويل المواد بين المشاريع"""
+    if not user_is_enterprise_owner(current_user):
+        raise HTTPException(status_code=403, detail="غير مصرح")
+    db = get_database()
+    tenant_id = get_user_tenant_id(current_user)
+    q = {"tenant_id": tenant_id}
+    if project_id and project_id != "all":
+        q["$or"] = [{"from_project_id": project_id}, {"target_project_id": project_id},
+                    {"items.from_project_id": project_id}]
+    if start_date or end_date:
+        q["created_at"] = {}
+        if start_date:
+            q["created_at"]["$gte"] = start_date
+        if end_date:
+            q["created_at"]["$lte"] = end_date + "T99"
+    logs = await db.project_inventory_log.find(q, {"_id": 0}).sort("created_at", -1).to_list(length=1000)
+    names = {p["id"]: p["name"] async for p in db.projects.find({"tenant_id": tenant_id}, {"_id": 0, "id": 1, "name": 1})}
+    for lg in logs:
+        if lg.get("type") == "move":
+            for it in lg.get("items", []):
+                it["from_project_name"] = names.get(it.get("from_project_id"), "—")
+    return logs
+
+
+
+@router.post("/stock-alerts/run")
+async def run_stock_alerts_now(current_user: dict = Depends(get_current_user)):
+    """تشغيل فحص نقص المخزون وإرسال التنبيهات الآن (للمالك)"""
+    if not user_is_enterprise_owner(current_user):
+        raise HTTPException(status_code=403, detail="غير مصرح")
+    from .stock_alerts import run_stock_alerts
+    await run_stock_alerts(tenant_id=get_user_tenant_id(current_user))
+    return {"message": "تم فحص المخزون وإرسال التنبيهات"}

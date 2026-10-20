@@ -117,6 +117,7 @@ ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
 
 from routes.rate_limit import enforce_rate_limit, sanitize_text
+from routes.shared import resolve_project_id_for_create  # noqa: E402
 
 # MongoDB connection
 mongo_url = os.environ['MONGO_URL']
@@ -505,6 +506,31 @@ async def notify_owner_multichannel(
                 )
                 result["whatsapp_skip_reason"] = "wa_not_connected"
             else:
+                _project_id_resolved = None
+                _project_name = None
+                _project_logo = None
+                _project_activity = None
+                if tenant_id:
+                    try:
+                        from routes.projects_routes import resolve_project_for_context
+                        _meta = metadata or {}
+                        _proj = await resolve_project_for_context(
+                            db, tenant_id,
+                            project_id=_meta.get("project_id"),
+                            branch_id=_meta.get("branch_id"),
+                        )
+                        if _proj:
+                            _project_id_resolved = _proj.get("id")
+                            _project_name = _proj.get("name")
+                            _project_logo = _proj.get("logo_url")
+                            _project_activity = _proj.get("activity_type")
+                        else:
+                            _has_projects = await db.projects.count_documents({"tenant_id": tenant_id}, limit=1)
+                            if not _has_projects:
+                                _tn2 = await db.tenants.find_one({"id": tenant_id}, {"_id": 0, "name": 1}) or {}
+                                _project_name = _tn2.get("name")
+                    except Exception as _pe:
+                        logger.warning(f"notify project resolve failed: {_pe}")
                 # اجمع كل الأرقام المستقبِلة: env → tenant.owner_phone → كل admin/manager للتينانت
                 phones = []
                 env_phone = os.environ.get("OWNER_ALERT_PHONE", "")
@@ -524,9 +550,22 @@ async def notify_owner_multichannel(
                           "phone": {"$type": "string", "$ne": ""}}
                 if tenant_id:
                     user_q["tenant_id"] = tenant_id
-                async for u in db.users.find(user_q, {"_id": 0, "phone": 1}):
+                async for u in db.users.find(user_q, {"_id": 0, "phone": 1, "role": 1, "project_id": 1}):
+                    # مدير/مدير فرع تابع لمشروع آخر لا يستلم رسائل هذا المشروع
+                    if (_project_id_resolved and u.get("role") in ("manager", "branch_manager")
+                            and u.get("project_id") and u.get("project_id") != _project_id_resolved):
+                        continue
                     if u.get("phone"):
                         phones.append(u["phone"])
+                # 🏢 مدير المشروع + مالك المشروع (إن كان المشروع مملوكاً لشخص آخر)
+                if _project_id_resolved:
+                    async for u in db.users.find({"tenant_id": tenant_id, "role": "project_admin",
+                                                  "project_id": _project_id_resolved,
+                                                  "phone": {"$type": "string", "$ne": ""}}, {"_id": 0, "phone": 1}):
+                        phones.append(u["phone"])
+                    _pdoc = await db.projects.find_one({"id": _project_id_resolved}, {"_id": 0, "owner_phone": 1}) or {}
+                    if _pdoc.get("owner_phone"):
+                        phones.append(_pdoc["owner_phone"])
                 # dedup على شكل E.164 القياسي (نمنع نفس الرقم بصيغتين مختلفتين)
                 seen_e164 = set()
                 normalized_pairs = []  # (e164, raw) لعرض السجل
@@ -548,29 +587,6 @@ async def notify_owner_multichannel(
                 # إرسال متزامن لكل الأرقام (بهوية Maestro EGP الموحّدة: شعار + قالب + سطر المشروع)
                 # ⭐ v2 Feb 2026: نولّي الأولوية لـ metadata.project_id (مشروع الوردية الفعلي)
                 #    بدل المشروع الافتراضي للتينانت — مهم للتينانتس متعدّدة المشاريع (Enterprise).
-                _project_name = None
-                _project_logo = None
-                _project_activity = None
-                if tenant_id:
-                    try:
-                        from routes.projects_routes import resolve_project_for_context
-                        _meta = metadata or {}
-                        _proj = await resolve_project_for_context(
-                            db, tenant_id,
-                            project_id=_meta.get("project_id"),
-                            branch_id=_meta.get("branch_id"),
-                        )
-                        if _proj:
-                            _project_name = _proj.get("name")
-                            _project_logo = _proj.get("logo_url")
-                            _project_activity = _proj.get("activity_type")
-                        else:
-                            _has_projects = await db.projects.count_documents({"tenant_id": tenant_id}, limit=1)
-                            if not _has_projects:
-                                _tn2 = await db.tenants.find_one({"id": tenant_id}, {"_id": 0, "name": 1}) or {}
-                                _project_name = _tn2.get("name")
-                    except Exception as _pe:
-                        logger.warning(f"notify project resolve failed: {_pe}")
                 sent_count = 0
                 _wa_errors = []
                 for e164, _raw in normalized_pairs:
@@ -1490,6 +1506,13 @@ async def _run_deferred_startup_tasks():
         await migrate_tenants_to_customer_tier_v1(db)
     except Exception as e:
         logger.error(f"⚠️ fix_default_project_names_v1 error: {e}")
+    try:
+        from routes.projects_routes import cleanup_empty_template_categories_v1
+        await cleanup_empty_template_categories_v1(db)
+        from routes.inventory_scope import inventory_project_backfill_v1
+        await inventory_project_backfill_v1(db)
+    except Exception as e:
+        logger.error(f"⚠️ cleanup_empty_template_categories_v1 error: {e}")
 
 async def purge_pentest_probe_data_v1():
     """تنظيف تلقائي (idempotent) لأي سجلات دخيلة أنشأها فاحص اختراق (مثل 'RW Probe').
@@ -2477,6 +2500,7 @@ class CategoryCreate(BaseModel):
     image: Optional[str] = None
     color: Optional[str] = None
     sort_order: int = 0
+    project_id: Optional[str] = None
 
 class CategoryResponse(BaseModel):
     model_config = ConfigDict(extra="ignore")
@@ -2488,6 +2512,7 @@ class CategoryResponse(BaseModel):
     color: Optional[str] = None
     sort_order: int = 0
     is_active: bool = True
+    project_id: Optional[str] = None
 
 # Product Models with Pre-Manufacturing Cost
 class ProductCreate(BaseModel):
@@ -2513,10 +2538,12 @@ class ProductCreate(BaseModel):
     # ⭐ ربط متعدد بالمنتجات المُصنّعة (يدعم أكثر من منتج مصنّع للمنتج الواحد)
     # كل عنصر: {manufactured_product_id, consumption_qty, piece_weight?, piece_weight_unit?}
     manufactured_links: List[Dict[str, Any]] = []
+    project_id: Optional[str] = None
 
 class ProductResponse(BaseModel):
     model_config = ConfigDict(extra="ignore")
     id: str
+    project_id: Optional[str] = None
     name: str
     name_en: Optional[str] = None
     category_id: str
@@ -4906,8 +4933,8 @@ async def delete_user(user_id: str, current_user: dict = Depends(get_current_use
     return {"message": "تم حذف المستخدم بنجاح"}
 
 @api_router.get("/tenant/limits")
-async def get_tenant_limits(current_user: dict = Depends(get_current_user)):
-    """جلب حدود العميل الحالي (الفروع والمستخدمين)"""
+async def get_tenant_limits(request: Request, current_user: dict = Depends(get_current_user)):
+    """جلب حدود العميل الحالي (الفروع والمستخدمين) — في وضع المؤسسة: لكل مشروع"""
     tenant_id = get_user_tenant_id(current_user)
     
     if not tenant_id:
@@ -4931,6 +4958,31 @@ async def get_tenant_limits(current_user: dict = Depends(get_current_user)):
             "users_remaining": 5
         }
     
+    if tenant.get("enterprise_enabled"):
+        from routes.shared import requested_project_id
+        pid = requested_project_id(current_user, request)
+        per_b = tenant.get("max_branches_per_project") or tenant.get("max_branches", 5)
+        per_u = tenant.get("max_users_per_project") or tenant.get("max_users", 10)
+        pq = {"tenant_id": tenant_id, "deleted_at": {"$exists": False}}
+        if pid:
+            pq["id"] = pid
+        pids = [p["id"] async for p in db.projects.find(pq, {"_id": 0, "id": 1})]
+        b_rem = u_rem = cur_b = cur_u = 0
+        for _pid in pids:
+            nb = await db.branches.count_documents({"tenant_id": tenant_id, "project_id": _pid, "is_active": {"$ne": False}})
+            nu = await db.users.count_documents({"tenant_id": tenant_id, "project_id": _pid, "is_active": {"$ne": False}})
+            cur_b += nb
+            cur_u += nu
+            b_rem += max(0, per_b - nb)
+            u_rem += max(0, per_u - nu)
+        n = max(1, len(pids))
+        return {
+            "max_branches": per_b * n, "max_users": per_u * n,
+            "current_branches": cur_b, "current_users": cur_u,
+            "branches_remaining": b_rem, "users_remaining": u_rem,
+            "per_project": True, "max_branches_per_project": per_b,
+        }
+
     max_branches = tenant.get("max_branches", 1)
     max_users = tenant.get("max_users", 5)
     
@@ -4954,7 +5006,7 @@ async def get_tenant_limits(current_user: dict = Depends(get_current_user)):
     }
 
 @api_router.post("/users", response_model=UserResponse)
-async def create_user(user: UserCreate, current_user: dict = Depends(get_current_user)):
+async def create_user(user: UserCreate, request: Request, current_user: dict = Depends(get_current_user)):
     """إنشاء مستخدم جديد مع tenant_id تلقائياً"""
     if current_user["role"] not in [UserRole.ADMIN, UserRole.GENERAL_MANAGER, UserRole.SUPER_ADMIN]:
         raise HTTPException(status_code=403, detail="إنشاء الحسابات متاح للمالك فقط")
@@ -4975,12 +5027,26 @@ async def create_user(user: UserCreate, current_user: dict = Depends(get_current
     # الحصول على tenant_id من المستخدم الحالي
     tenant_id = get_user_tenant_id(current_user)
     
-    # التحقق من الحد الأقصى للمستخدمين
+    # 🏢 مشروع المستخدم الجديد (وضع المؤسسة): مشروع فرعه ← المشروع المختار
+    tenant = await db.tenants.find_one({"id": tenant_id}) if tenant_id else None
+    new_user_project_id = None
+    if tenant and tenant.get("enterprise_enabled"):
+        if user.branch_id:
+            _br = await db.branches.find_one({"id": user.branch_id, "tenant_id": tenant_id}, {"_id": 0, "project_id": 1})
+            new_user_project_id = (_br or {}).get("project_id")
+        if not new_user_project_id:
+            from routes.shared import requested_project_id
+            new_user_project_id = requested_project_id(current_user, request)
+
+    # التحقق من الحد الأقصى للمستخدمين: عميل عادي ← حدود إنشاء العميل، مؤسسة ← حدود تفعيل المؤسسة لكل مشروع
     if tenant_id and current_user["role"] != UserRole.SUPER_ADMIN:
-        tenant = await db.tenants.find_one({"id": tenant_id})
         if tenant:
-            max_users = tenant.get("max_users", 5)
-            current_users_count = await db.users.count_documents({"tenant_id": tenant_id, "is_active": {"$ne": False}})
+            if tenant.get("enterprise_enabled") and new_user_project_id:
+                max_users = tenant.get("max_users_per_project") or tenant.get("max_users", 10)
+                current_users_count = await db.users.count_documents({"tenant_id": tenant_id, "project_id": new_user_project_id, "is_active": {"$ne": False}})
+            else:
+                max_users = tenant.get("max_users", 5)
+                current_users_count = await db.users.count_documents({"tenant_id": tenant_id, "is_active": {"$ne": False}})
             if current_users_count >= max_users:
                 raise HTTPException(
                     status_code=403, 
@@ -4997,6 +5063,7 @@ async def create_user(user: UserCreate, current_user: dict = Depends(get_current
         "role": user.role,
         # 🌐 admin (مالك المشروع) و manager (مدير عام) لا يُخصَّصان لفرع — يعملان على كل فروع مؤسستهما.
         "branch_id": None if user.role in (UserRole.ADMIN, UserRole.GENERAL_MANAGER, UserRole.MANAGER) else user.branch_id,
+        **({"project_id": new_user_project_id} if new_user_project_id and user.role != UserRole.ADMIN else {}),
         "permissions": user.permissions,
         "phone": (user.phone or "").strip(),
         "full_name_en": user.full_name_en,
@@ -5353,16 +5420,28 @@ async def assign_category_to_kitchen_section(category_id: str, data: dict, curre
 
 # ==================== CATEGORY ROUTES ====================
 
+async def _assert_project_in_tenant(current_user: dict, project_id: Optional[str]):
+    if not project_id:
+        return
+    q = {"id": project_id, "deleted_at": {"$exists": False}}
+    tid = get_user_tenant_id(current_user)
+    if tid:
+        q["tenant_id"] = tid
+    if not await db.projects.find_one(q, {"_id": 1}):
+        raise HTTPException(status_code=400, detail="المشروع المحدد غير موجود")
+
+
 @api_router.post("/categories", response_model=CategoryResponse)
 async def create_category(category: CategoryCreate, request: Request, current_user: dict = Depends(get_current_user)):
     if current_user["role"] not in [UserRole.ADMIN, UserRole.GENERAL_MANAGER, UserRole.MANAGER, UserRole.SUPER_ADMIN]:
         raise HTTPException(status_code=403, detail="غير مصرح")
     
     from routes.shared import resolve_project_id_for_create
-    project_id = await resolve_project_id_for_create(current_user, request)
+    project_id = await resolve_project_id_for_create(current_user, request, explicit=category.project_id)
+    await _assert_project_in_tenant(current_user, project_id)
     cat_doc = {
         "id": str(uuid.uuid4()),
-        **category.model_dump(),
+        **category.model_dump(exclude={"project_id"}),
         "tenant_id": get_user_tenant_id(current_user),  # فصل البيانات
         "project_id": project_id,  # Enterprise: عزل حسب المشروع
         "is_active": True
@@ -5373,11 +5452,14 @@ async def create_category(category: CategoryCreate, request: Request, current_us
 
 @api_router.get("/categories", response_model=List[CategoryResponse])
 async def get_categories(
+    request: Request,
     project_id: Optional[str] = None,
     current_user: dict = Depends(get_current_user)
 ):
     """جلب الفئات - مع عزل صارم للبيانات + project isolation"""
     tenant_id = current_user.get("tenant_id")
+    if not project_id:
+        project_id = request.headers.get("x-project-id")
     
     # Super Admin بدون tenant لا يرى فئات
     if current_user.get("role") == UserRole.SUPER_ADMIN and not tenant_id:
@@ -5399,7 +5481,15 @@ async def update_category(category_id: str, category: CategoryCreate, current_us
     if current_user["role"] not in [UserRole.ADMIN, UserRole.GENERAL_MANAGER, UserRole.MANAGER, UserRole.SUPER_ADMIN]:
         raise HTTPException(status_code=403, detail="غير مصرح")
     query = build_tenant_query(current_user, {"id": category_id})
-    await db.categories.update_one(query, {"$set": category.model_dump()})
+    data = category.model_dump(exclude={"project_id"})
+    from routes.shared import user_project_scope
+    if category.project_id and not user_project_scope(current_user):
+        await _assert_project_in_tenant(current_user, category.project_id)
+        data["project_id"] = category.project_id
+        # نقل منتجات الفئة مع الفئة إلى المشروع الجديد
+        await db.products.update_many(build_tenant_query(current_user, {"category_id": category_id}),
+                                      {"$set": {"project_id": category.project_id}})
+    await db.categories.update_one(query, {"$set": data})
     return await db.categories.find_one({"id": category_id}, {"_id": 0})
 
 @api_router.delete("/categories/{category_id}")
@@ -5431,10 +5521,11 @@ async def create_product(product: ProductCreate, request: Request, current_user:
     profit = product.price - product.cost - product.operating_cost
     
     from routes.shared import resolve_project_id_for_create
-    project_id = await resolve_project_id_for_create(current_user, request)
+    project_id = await resolve_project_id_for_create(current_user, request, explicit=product.project_id)
+    await _assert_project_in_tenant(current_user, project_id)
     prod_doc = {
         "id": str(uuid.uuid4()),
-        **product.model_dump(),
+        **product.model_dump(exclude={"project_id"}),
         "tenant_id": get_user_tenant_id(current_user),  # فصل البيانات
         "project_id": project_id,  # Enterprise: عزل حسب المشروع
         "profit": profit
@@ -5508,7 +5599,11 @@ async def update_product(product_id: str, product: ProductCreate, current_user: 
         raise HTTPException(status_code=403, detail="غير مصرح")
     
     profit = product.price - product.cost - product.operating_cost
-    update_data = {**product.model_dump(), "profit": profit}
+    update_data = {**product.model_dump(exclude={"project_id"}), "profit": profit}
+    from routes.shared import user_project_scope
+    if product.project_id and not user_project_scope(current_user):
+        await _assert_project_in_tenant(current_user, product.project_id)
+        update_data["project_id"] = product.project_id
     
     query = build_tenant_query(current_user, {"id": product_id})
     await db.products.update_one(query, {"$set": update_data})
@@ -6332,7 +6427,7 @@ async def get_next_transfer_number() -> int:
     return counter["counter"]
 
 @api_router.post("/inventory-transfers", response_model=InventoryTransferResponse)
-async def create_inventory_transfer(transfer: InventoryTransferCreate, current_user: dict = Depends(get_current_user)):
+async def create_inventory_transfer(transfer: InventoryTransferCreate, request: Request, current_user: dict = Depends(get_current_user)):
     """إنشاء طلب تحويل مخزون"""
     if current_user["role"] not in [UserRole.ADMIN, UserRole.GENERAL_MANAGER, UserRole.MANAGER, UserRole.SUPERVISOR, UserRole.SUPER_ADMIN]:
         raise HTTPException(status_code=403, detail="غير مصرح")
@@ -6340,7 +6435,7 @@ async def create_inventory_transfer(transfer: InventoryTransferCreate, current_u
     transfer_number = await get_next_transfer_number()
     
     # جلب أسماء الفروع
-    from_branch = await db.branches.find_one({"id": transfer.from_branch_id}, {"name": 1})
+    from_branch = await db.branches.find_one({"id": transfer.from_branch_id}, {"name": 1, "project_id": 1})
     to_branch = await db.branches.find_one({"id": transfer.to_branch_id}, {"name": 1})
     
     transfer_doc = {
@@ -6349,6 +6444,7 @@ async def create_inventory_transfer(transfer: InventoryTransferCreate, current_u
         **transfer.model_dump(),
         "from_branch_name": from_branch.get("name") if from_branch else None,
         "to_branch_name": to_branch.get("name") if to_branch else None,
+        "project_id": (from_branch or {}).get("project_id") or await resolve_project_id_for_create(current_user, request),
         "status": "pending",
         "tenant_id": get_user_tenant_id(current_user),
         "created_by": current_user["id"],
@@ -6364,9 +6460,13 @@ async def get_inventory_transfers(
     to_branch_id: Optional[str] = None,
     status: Optional[str] = None,
     transfer_type: Optional[str] = None,
+    request: Request = None,
     current_user: dict = Depends(get_current_user)
 ):
     """جلب تحويلات المخزون"""
+    from routes.inventory_scope import set_inventory_scope, get_scoped_database
+    await set_inventory_scope(request, current_user)
+    sdb = get_scoped_database()
     query = build_tenant_query(current_user)
     if from_branch_id:
         query["from_branch_id"] = from_branch_id
@@ -6377,14 +6477,16 @@ async def get_inventory_transfers(
     if transfer_type:
         query["transfer_type"] = transfer_type
     
-    transfers = await db.inventory_transfers.find(query, {"_id": 0}).sort("created_at", -1).to_list(length=None)
+    transfers = await sdb.inventory_transfers.find(query, {"_id": 0}).sort("created_at", -1).to_list(length=None)
     return transfers
 
 @api_router.get("/inventory-transactions")
-async def get_inventory_transactions(current_user: dict = Depends(get_current_user)):
+async def get_inventory_transactions(request: Request, current_user: dict = Depends(get_current_user)):
     """جلب حركات المخزون (واردات/صادرات)"""
+    from routes.inventory_scope import set_inventory_scope, get_scoped_database
+    await set_inventory_scope(request, current_user)
     query = build_tenant_query(current_user)
-    transactions = await db.inventory_transactions.find(query, {"_id": 0}).sort("created_at", -1).to_list(length=None)
+    transactions = await get_scoped_database().inventory_transactions.find(query, {"_id": 0}).sort("created_at", -1).to_list(length=None)
     return transactions
 
 @api_router.put("/inventory-transfers/{transfer_id}/approve")
@@ -7419,7 +7521,8 @@ async def create_order(order: OrderCreate, current_user: dict = Depends(get_curr
     # Calculate delivery commission if applicable
     delivery_commission = 0
     if order.delivery_app:
-        commission_rate = await get_delivery_app_commission(order.delivery_app)
+        from routes.shared import delivery_commission_rate
+        commission_rate = await delivery_commission_rate(tenant_id, order.delivery_app, branch_id=order.branch_id)
         delivery_commission = total * (commission_rate / 100)
     
     # Calculate profit
@@ -7465,7 +7568,7 @@ async def create_order(order: OrderCreate, current_user: dict = Depends(get_curr
                 is_delivery_company = True
             else:
                 # نبحث في إعدادات شركات التوصيل
-                app_setting = await db.delivery_app_settings.find_one({"app_id": order.delivery_app})
+                app_setting = await db.delivery_app_settings.find_one({"app_id": order.delivery_app, **({"tenant_id": tenant_id} if tenant_id else {})})
                 if app_setting:
                     delivery_app_name = app_setting.get("name", order.delivery_app)
                     is_delivery_company = True
@@ -8807,14 +8910,16 @@ async def force_delete_unpaid_order(
 # ==================== DELIVERY APP SETTINGS ====================
 
 @api_router.post("/delivery-app-settings")
-async def create_delivery_app_setting(setting: DeliveryAppSettingCreate, current_user: dict = Depends(get_current_user)):
+async def create_delivery_app_setting(setting: DeliveryAppSettingCreate, request: Request, current_user: dict = Depends(get_current_user)):
     if current_user["role"] not in [UserRole.ADMIN, UserRole.GENERAL_MANAGER, UserRole.MANAGER]:
         raise HTTPException(status_code=403, detail="غير مصرح")
     
     tenant_id = get_user_tenant_id(current_user)
+    from routes.shared import requested_project_id
+    pid = requested_project_id(current_user, request)
     
-    # Check if exists for this tenant
-    query = {"app_id": setting.app_id}
+    # Check if exists for this tenant + project
+    query = {"app_id": setting.app_id, "project_id": pid}
     if tenant_id:
         query["tenant_id"] = tenant_id
     
@@ -8822,6 +8927,7 @@ async def create_delivery_app_setting(setting: DeliveryAppSettingCreate, current
     
     setting_data = setting.model_dump()
     setting_data["tenant_id"] = tenant_id
+    setting_data["project_id"] = pid
     
     if existing:
         await db.delivery_app_settings.update_one(query, {"$set": setting_data})
@@ -8837,16 +8943,17 @@ async def get_delivery_app_settings(current_user: dict = Depends(get_current_use
     return settings
 
 @api_router.delete("/delivery-app-settings/{app_id}")
-async def delete_delivery_app_setting(app_id: str, current_user: dict = Depends(get_current_user)):
+async def delete_delivery_app_setting(app_id: str, request: Request, current_user: dict = Depends(get_current_user)):
     """حذف شركة توصيل"""
-    query = build_tenant_query(current_user, {"app_id": app_id})
+    from routes.shared import requested_project_id
+    query = build_tenant_query(current_user, {"app_id": app_id, "project_id": requested_project_id(current_user, request)})
     result = await db.delivery_app_settings.delete_one(query)
     if result.deleted_count == 0:
         raise HTTPException(status_code=404, detail="شركة التوصيل غير موجودة")
     return {"success": True, "message": "تم حذف شركة التوصيل بنجاح"}
 
 @api_router.get("/delivery-apps")
-async def get_delivery_apps(current_user: dict = Depends(get_current_user)):
+async def get_delivery_apps(request: Request, current_user: dict = Depends(get_current_user)):
     # Get default apps
     default_apps = [
         {"id": "toters", "name": "توترز", "name_en": "Toters", "icon": "Truck", "is_default": True},
@@ -8857,11 +8964,20 @@ async def get_delivery_apps(current_user: dict = Depends(get_current_user)):
     ]
     
     # Get all settings from database for this tenant
+    from routes.shared import requested_project_id
+    pid = requested_project_id(current_user, request)
     query = build_tenant_query(current_user)
-    all_settings = await db.delivery_app_settings.find(query, {"_id": 0}).to_list(length=None)
-    
-    # Create a map of app_id to settings
-    settings_map = {s["app_id"]: s for s in all_settings}
+    raw_settings = await db.delivery_app_settings.find(query, {"_id": 0}).to_list(length=None)
+    # إعداد المشروع يتقدّم على الإعداد العام للمؤسسة
+    settings_map = {}
+    for s in raw_settings:
+        if not s.get("project_id"):
+            settings_map.setdefault(s["app_id"], s)
+    if pid:
+        for s in raw_settings:
+            if s.get("project_id") == pid:
+                settings_map[s["app_id"]] = s
+    all_settings = list(settings_map.values())
     
     # Update default apps with their settings
     result_apps = []
@@ -9860,9 +9976,14 @@ async def update_system_invoice_settings(settings: SystemInvoiceSettings, curren
     return {"message": "تم تحديث إعدادات الفاتورة", "settings": settings.model_dump()}
 
 @api_router.get("/tenant/invoice-settings")
-async def get_tenant_invoice_settings(current_user: dict = Depends(get_current_user)):
-    """جلب إعدادات الفاتورة للعميل"""
+async def get_tenant_invoice_settings(request: Request, branch_id: Optional[str] = None, current_user: dict = Depends(get_current_user)):
+    """جلب إعدادات الفاتورة للعميل (إعدادات المشروع إن وجدت)"""
     tenant_id = get_user_tenant_id(current_user)
+    from routes.shared import requested_project_id
+    _pid = requested_project_id(current_user, request)
+    if not _pid and branch_id:
+        _br = await db.branches.find_one({"id": branch_id, "tenant_id": tenant_id}, {"_id": 0, "project_id": 1})
+        _pid = (_br or {}).get("project_id")
     
     default_settings = {
         "show_logo": True,
@@ -9879,7 +10000,11 @@ async def get_tenant_invoice_settings(current_user: dict = Depends(get_current_u
     }
     
     if tenant_id:
-        settings = await db.tenant_invoice_settings.find_one({"tenant_id": tenant_id}, {"_id": 0})
+        settings = None
+        if _pid:
+            settings = await db.tenant_invoice_settings.find_one({"tenant_id": tenant_id, "project_id": _pid}, {"_id": 0})
+        if not settings:
+            settings = await db.tenant_invoice_settings.find_one({"tenant_id": tenant_id, "project_id": None}, {"_id": 0})
         if settings:
             # جلب شعار المطعم من tenant إذا لم يكن هناك شعار مخصص للفاتورة
             if not settings.get("invoice_logo"):
@@ -9896,16 +10021,18 @@ async def get_tenant_invoice_settings(current_user: dict = Depends(get_current_u
     return default_settings
 
 @api_router.put("/tenant/invoice-settings")
-async def update_tenant_invoice_settings(settings: TenantInvoiceSettings, current_user: dict = Depends(get_current_user)):
+async def update_tenant_invoice_settings(settings: TenantInvoiceSettings, request: Request, current_user: dict = Depends(get_current_user)):
     """تحديث إعدادات الفاتورة للعميل"""
     if current_user["role"] not in [UserRole.ADMIN, UserRole.GENERAL_MANAGER, UserRole.MANAGER]:
         raise HTTPException(status_code=403, detail="غير مصرح")
     
     tenant_id = get_user_tenant_id(current_user)
     
+    from routes.shared import requested_project_id
+    _pid = requested_project_id(current_user, request)
     await db.tenant_invoice_settings.update_one(
-        {"tenant_id": tenant_id},
-        {"$set": {**settings.model_dump(), "tenant_id": tenant_id, "updated_at": datetime.now(timezone.utc).isoformat()}},
+        {"tenant_id": tenant_id, "project_id": _pid},
+        {"$set": {**settings.model_dump(), "tenant_id": tenant_id, "project_id": _pid, "updated_at": datetime.now(timezone.utc).isoformat()}},
         upsert=True
     )
     
@@ -10910,10 +11037,12 @@ class PurchaseSupplierCreate(BaseModel):
     notes: Optional[str] = None
 
 @api_router.get("/purchase-invoices")
-async def get_purchase_invoices(current_user: dict = Depends(get_current_user)):
+async def get_purchase_invoices(request: Request, current_user: dict = Depends(get_current_user)):
     """جلب فواتير الشراء"""
+    from routes.inventory_scope import set_inventory_scope, get_scoped_database
+    await set_inventory_scope(request, current_user)
     query = build_tenant_query(current_user)
-    invoices = await db.purchase_invoices.find(query, {"_id": 0}).sort("created_at", -1).to_list(length=None)
+    invoices = await get_scoped_database().purchase_invoices.find(query, {"_id": 0}).sort("created_at", -1).to_list(length=None)
     
     # إضافة اسم المورد لكل فاتورة
     for invoice in invoices:
@@ -10924,9 +11053,10 @@ async def get_purchase_invoices(current_user: dict = Depends(get_current_user)):
     return invoices
 
 @api_router.post("/purchase-invoices")
-async def create_purchase_invoice(invoice: PurchaseInvoiceCreate, current_user: dict = Depends(get_current_user)):
+async def create_purchase_invoice(invoice: PurchaseInvoiceCreate, request: Request, current_user: dict = Depends(get_current_user)):
     """إنشاء فاتورة شراء جديدة"""
     tenant_id = get_user_tenant_id(current_user)
+    _pid = await resolve_project_id_for_create(current_user, request)
     
     invoice_doc = {
         "id": str(uuid.uuid4()),
@@ -10938,6 +11068,7 @@ async def create_purchase_invoice(invoice: PurchaseInvoiceCreate, current_user: 
         "image_data": invoice.image_data,
         "status": "new",
         "tenant_id": tenant_id,
+        "project_id": _pid,
         "created_by": current_user["id"],
         "created_at": datetime.now(timezone.utc).isoformat()
     }
@@ -11103,14 +11234,16 @@ async def send_purchase_invoice_to_warehouse(invoice_id: str, current_user: dict
 
 
 @api_router.get("/purchase-suppliers")
-async def get_purchase_suppliers(current_user: dict = Depends(get_current_user)):
+async def get_purchase_suppliers(request: Request, current_user: dict = Depends(get_current_user)):
     """جلب موردي المشتريات"""
+    from routes.inventory_scope import set_inventory_scope, get_scoped_database
+    await set_inventory_scope(request, current_user)
     query = build_tenant_query(current_user)
-    suppliers = await db.purchase_suppliers.find(query, {"_id": 0}).sort("created_at", -1).to_list(length=None)
+    suppliers = await get_scoped_database().purchase_suppliers.find(query, {"_id": 0}).sort("created_at", -1).to_list(length=None)
     return suppliers
 
 @api_router.post("/purchase-suppliers")
-async def create_purchase_supplier(supplier: PurchaseSupplierCreate, current_user: dict = Depends(get_current_user)):
+async def create_purchase_supplier(supplier: PurchaseSupplierCreate, request: Request, current_user: dict = Depends(get_current_user)):
     """إضافة مورد جديد"""
     tenant_id = get_user_tenant_id(current_user)
     
@@ -11118,6 +11251,7 @@ async def create_purchase_supplier(supplier: PurchaseSupplierCreate, current_use
         "id": str(uuid.uuid4()),
         **supplier.model_dump(),
         "tenant_id": tenant_id,
+        "project_id": await resolve_project_id_for_create(current_user, request),
         "created_by": current_user["id"],
         "created_at": datetime.now(timezone.utc).isoformat()
     }
@@ -11127,10 +11261,15 @@ async def create_purchase_supplier(supplier: PurchaseSupplierCreate, current_use
     return supplier_doc
 
 @api_router.get("/warehouse-purchase-requests")
-async def get_warehouse_purchase_requests(current_user: dict = Depends(get_current_user)):
+async def get_warehouse_purchase_requests(http_request: Request, status: Optional[str] = None, current_user: dict = Depends(get_current_user)):
     """جلب طلبات الشراء من المخزن"""
+    from routes.inventory_scope import set_inventory_scope, get_scoped_database
+    await set_inventory_scope(http_request, current_user)
+    sdb = get_scoped_database()
     query = build_tenant_query(current_user)
-    requests = await db.warehouse_purchase_requests.find(query, {"_id": 0}).sort("created_at", -1).to_list(length=None)
+    if status:
+        query["status"] = status
+    requests = await sdb.warehouse_purchase_requests.find(query, {"_id": 0}).sort("created_at", -1).to_list(length=None)
     return requests
 
 @api_router.post("/warehouse-purchase-requests/{request_id}/transfer")
@@ -11169,189 +11308,7 @@ class PackagingRequestCreate(BaseModel):
 
 # --- مواد التغليف (CRUD) محذوفة من هنا - موجودة في routes/inventory_system.py ---
 
-# الحصول على طلبات التغليف
-@api_router.get("/packaging-requests")
-async def get_packaging_requests(current_user: dict = Depends(get_current_user)):
-    """الحصول على جميع طلبات التغليف"""
-    tenant_id = current_user.get("tenant_id")
-    if not tenant_id:
-        raise HTTPException(status_code=400, detail="Tenant ID required")
-    
-    requests = await db.packaging_requests.find({"tenant_id": tenant_id}).sort("created_at", -1).to_list(length=None)
-    for r in requests:
-        r["id"] = r.pop("_id", r.get("id"))
-    return requests
-
-# إنشاء طلب تغليف جديد
-@api_router.post("/packaging-requests")
-async def create_packaging_request(request: PackagingRequestCreate, current_user: dict = Depends(get_current_user)):
-    """إنشاء طلب مواد تغليف جديد"""
-    tenant_id = current_user.get("tenant_id")
-    branch_id = current_user.get("branch_id")
-    
-    if not tenant_id:
-        raise HTTPException(status_code=400, detail="Tenant ID required")
-    
-    # الحصول على اسم الفرع
-    branch_name = "المركز الرئيسي"
-    if branch_id:
-        branch = await db.branches.find_one({"id": branch_id})
-        if branch:
-            branch_name = branch.get("name", branch_name)
-    
-    # إنشاء رقم الطلب
-    count = await db.packaging_requests.count_documents({"tenant_id": tenant_id})
-    request_number = f"PKG-{count + 1:04d}"
-    
-    request_doc = {
-        "id": str(uuid.uuid4()),
-        "tenant_id": tenant_id,
-        "from_branch_id": branch_id,
-        "from_branch_name": branch_name,
-        "request_number": request_number,
-        "items": request.items,
-        "priority": request.priority,
-        "notes": request.notes,
-        "status": "pending",
-        "created_at": datetime.now(timezone.utc).isoformat(),
-        "created_by": current_user.get("user_id")
-    }
-    
-    await db.packaging_requests.insert_one(request_doc)
-    request_doc.pop("_id", None)
-    return request_doc
-
-# الموافقة على طلب تغليف
-@api_router.post("/packaging-requests/{request_id}/approve")
-async def approve_packaging_request(request_id: str, current_user: dict = Depends(get_current_user)):
-    """الموافقة على طلب تغليف"""
-    tenant_id = current_user.get("tenant_id")
-    
-    request = await db.packaging_requests.find_one({"id": request_id, "tenant_id": tenant_id})
-    if not request:
-        raise HTTPException(status_code=404, detail="الطلب غير موجود")
-    
-    await db.packaging_requests.update_one(
-        {"id": request_id},
-        {
-            "$set": {
-                "status": "approved",
-                "approved_at": datetime.now(timezone.utc).isoformat(),
-                "approved_by": current_user.get("user_id")
-            }
-        }
-    )
-    
-    return {"message": "تمت الموافقة على الطلب"}
-
-# تحويل مواد التغليف للفرع
-@api_router.post("/packaging-requests/{request_id}/transfer")
-async def transfer_packaging_to_branch(request_id: str, current_user: dict = Depends(get_current_user)):
-    """تحويل مواد التغليف للفرع - تزيد الكمية تلقائياً في مخزون الفرع"""
-    tenant_id = current_user.get("tenant_id")
-    
-    request = await db.packaging_requests.find_one({"id": request_id, "tenant_id": tenant_id})
-    if not request:
-        raise HTTPException(status_code=404, detail="الطلب غير موجود")
-    
-    branch_id = request.get("from_branch_id")
-    
-    # تحويل كل صنف
-    for item in request.get("items", []):
-        material_id = item.get("packaging_material_id")
-        quantity = _sn(item.get("quantity"))
-        
-        # خصم من المخزن الرئيسي
-        material = await db.packaging_materials.find_one({"id": material_id, "tenant_id": tenant_id})
-        if material:
-            new_quantity = max(0, _sn(material.get("quantity")) - quantity)
-            transferred = material.get("transferred_to_branches", 0) + quantity
-            
-            await db.packaging_materials.update_one(
-                {"id": material_id},
-                {
-                    "$set": {
-                        "quantity": new_quantity,
-                        "remaining_quantity": new_quantity,
-                        "transferred_to_branches": transferred,
-                        "total_value": new_quantity * material.get("cost_per_unit", 0),
-                        "updated_at": datetime.now(timezone.utc).isoformat()
-                    }
-                }
-            )
-        
-        # إضافة لمخزون الفرع (أو إنشاء سجل جديد)
-        if branch_id:
-            branch_inventory = await db.branch_packaging_inventory.find_one({
-                "branch_id": branch_id,
-                "packaging_material_id": material_id,
-                "tenant_id": tenant_id
-            })
-            
-            if branch_inventory:
-                # زيادة الكمية الموجودة
-                await db.branch_packaging_inventory.update_one(
-                    {"id": branch_inventory["id"]},
-                    {
-                        "$inc": {"quantity": quantity, "total_received": quantity},
-                        "$set": {"last_updated": datetime.now(timezone.utc).isoformat()}
-                    }
-                )
-            else:
-                # إنشاء سجل جديد
-                await db.branch_packaging_inventory.insert_one({
-                    "id": str(uuid.uuid4()),
-                    "tenant_id": tenant_id,
-                    "branch_id": branch_id,
-                    "packaging_material_id": material_id,
-                    "name": item.get("name", ""),
-                    "unit": item.get("unit", "قطعة"),
-                    "quantity": quantity,
-                    "total_received": quantity,
-                    "used_quantity": 0,
-                    "cost_per_unit": material.get("cost_per_unit", 0) if material else 0,
-                    "created_at": datetime.now(timezone.utc).isoformat(),
-                    "last_updated": datetime.now(timezone.utc).isoformat()
-                })
-    
-    # تحديث حالة الطلب
-    await db.packaging_requests.update_one(
-        {"id": request_id},
-        {
-            "$set": {
-                "status": "transferred",
-                "transferred_at": datetime.now(timezone.utc).isoformat(),
-                "transferred_by": current_user.get("user_id")
-            }
-        }
-    )
-    
-    return {"message": "تم تحويل المواد للفرع بنجاح"}
-
-# الحصول على مخزون التغليف في الفروع
-@api_router.get("/branch-packaging-inventory")
-async def get_branch_packaging_inventory(branch_id: Optional[str] = None, current_user: dict = Depends(get_current_user)):
-    """الحصول على مخزون التغليف في الفروع"""
-    tenant_id = current_user.get("tenant_id")
-    user_branch_id = current_user.get("branch_id")
-    
-    if not tenant_id:
-        raise HTTPException(status_code=400, detail="Tenant ID required")
-    
-    query = {"tenant_id": tenant_id}
-    
-    # إذا المستخدم مرتبط بفرع، أظهر فقط مخزون فرعه
-    if user_branch_id:
-        query["branch_id"] = user_branch_id
-    elif branch_id:
-        query["branch_id"] = branch_id
-    
-    inventory = await db.branch_packaging_inventory.find(query, {"_id": 0}).to_list(length=None)
-    for item in inventory:
-        # حساب الكمية المتبقية
-        item["remaining_quantity"] = _sn(item.get("quantity")) - item.get("used_quantity", 0)
-    
-    return inventory
+# --- طلبات التغليف ومخزون تغليف الفروع: موجودة في routes/inventory_system.py (معزولة بالمشروع) ---
 
 # ==================== moved to routes/ocr_routes.py ====================
 
@@ -14363,6 +14320,24 @@ async def start_forgotten_shifts_scheduler():
     
     asyncio.create_task(_loop())
     logger.info("🚨 Forgotten shifts alert scheduler started (every 30 min)")
+
+
+@app.on_event("startup")
+async def start_project_stock_alerts_scheduler():
+    """📉 تنبيهات نقص مخزون المشاريع (فوري + ملخص يومي 8 صباحاً) — كل 10 دقائق."""
+    if not is_scheduler_worker():
+        return
+    async def _loop():
+        await asyncio.sleep(90)
+        while True:
+            try:
+                from routes.stock_alerts import run_stock_alerts
+                await run_stock_alerts()
+            except Exception as e:
+                logger.warning(f"stock alerts loop error: {e}")
+            await asyncio.sleep(600)
+    asyncio.create_task(_loop())
+    logger.info("📉 Project stock alerts scheduler started (every 10 min)")
 
 
 @app.on_event("startup")

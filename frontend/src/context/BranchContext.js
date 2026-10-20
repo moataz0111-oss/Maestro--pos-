@@ -53,6 +53,9 @@ export const BranchProvider = ({ children }) => {
   useEffect(() => {
     const handler = () => {
       if (isAuthenticated && user) {
+        if (!(user?.branch_id && !hasRole(['admin', 'general_manager', 'super_admin', 'manager']))) {
+          setSelectedBranchId('all');
+        }
         fetchBranches();
       }
     };

@@ -1,0 +1,40 @@
+{
+  "summary": "Reports project isolation tested end-to-end (backend pytest 23/24 + Playwright UI). All project-scoping works: projects-activity endpoint correct (مطعم الاختبار 33 orders / 932,250; other 8 projects has_data=false); /reports/sales with project_id or X-Project-Id of empty project returns 0; branch of another project returns 0; all tab endpoints (expenses, profit-loss, products, products-by-channel, delivery-credits, cancellations, discounts, credit, card, purchases, inventory, refunds, smart-reports) return zero for empty project. UI: with 'كل المشاريع' + 2026-06-01..07-31 the strip shows 9 chips (REST green 932,250 IQD · 33, 8 red 'لا توجد بيانات'), dropdown shows 8 red dots (none on مطعم الاختبار). Selecting صالون الأناقة by chip or dropdown refetches immediately with X-Project-Id and shows 0 everywhere across all 9 tabs; REST shows its data; switching back to all re-aggregates; rapid switching ends in correct state (no stale data); selection persists across reload. Only gap: Products (الأصناف) tab lists the whole tenant catalog (34 products incl. other projects' products) with 0 sold for an empty project.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "GET /api/reports/products", "issue": "Product catalog is not scoped by project: for صالون الأناقة (empty) it returns total_products=34 including مطعم الاختبار/البرغر/الشاورما products (with 0 sold). products have project_id field, so product_query should be filtered by selected project (_PROJECT_SCOPE project_id). Sales numbers themselves are correctly 0."},
+      {"endpoint": "GET /api/reports/projects-activity", "issue": "Resets scope to None and returns ALL projects' sales even for project-restricted users (user_project_scope). Should limit to the user's project when restricted."},
+      {"endpoint": "GET /api/reports/profit-loss vs /api/reports/sales", "issue": "Pre-existing inconsistency (not project-related): profit-loss counts 53 orders / 1,032,250 (includes 20 pending orders) while sales counts 33 / 932,250. Sales tab 'صافي الربح' card shows 943,250 which is greater than total sales 932,250."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "Reports > الأصناف tab", "issue": "For an empty project, the table shows other projects' products (برغر كلاسيك, برغر دبل...) with 0 qty — caused by backend catalog not being project-scoped", "selector": "[data-testid=reports-page] table", "priority": "MEDIUM"}
+    ],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "ProjectsActivityStrip", "issues": ["'لا توجد بيانات' text hardcoded (not wrapped in t()) — will not translate in EN mode"]}
+    ]
+  },
+  "test_report_links": ["/app/backend/tests/test_reports_project_isolation_iter315.py", "/app/test_reports/pytest/iter315.xml"],
+  "action_items": [
+    "Scope product catalog in /api/reports/products (and products-by-channel catalog if any) to the selected project's products (product.project_id == scope.project_id) when a project is selected",
+    "In /api/reports/projects-activity, restrict to user's project when user_project_scope(current_user) is set",
+    "(Optional, pre-existing) align profit-loss order filter with sales report (exclude pending/unpaid) so Net Profit card <= sales",
+    "(Optional) wrap 'لا توجد بيانات' in t() in ProjectsActivityStrip.jsx; consider AbortController/request-id guard in fetchReports to avoid out-of-order responses on slow networks (rapid switching passed in test)"
+  ],
+  "critical_code_review_comments": [
+    "_PROJECT_SCOPE ContextVar set by async router dependency works since deps run in same task; every request sets it, so no cross-request leakage",
+    "_scope: when branch_id is a non-str (e.g. dict $in) it is ignored and $or project cond is appended — fine; when branch_id str not in project it forces empty $in — verified",
+    "Reports.js is ~6000 lines — should be split into tab components",
+    "fetchReports has no cancellation; stale response could overwrite newer one under latency"
+  ],
+  "updated_files": ["/app/backend/tests/test_reports_project_isolation_iter315.py"],
+  "success_rate": {"backend": "96% (23/24; failing test documents product catalog leak)", "frontend": "95%"},
+  "test_credentials": "admin@maestroegp.com / admin123 (from /app/memory/test_credentials.md)",
+  "seed_data_creation": "None",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Use date range 2026-06-01..2026-07-31 (browser 'today' is 2026-10-19, no data). Only project 52aee398 (مطعم الاختبار, branch 76f56acc) has orders. Splash screen element [data-testid=splash-screen] overlays screenshots — hide via add_style_tag. Project dropdown options: project-option-{id} / project-option-all. Re-run pytest tests/test_reports_project_isolation_iter315.py; test_products_catalog_scoped_to_project should pass after fix."
+}

@@ -105,11 +105,16 @@ async def delete_printer_type(type_id: str, current_user: dict = Depends(get_cur
     return {"message": "تم الحذف"}
 
 @router.get("/printers")
-async def get_printers(branch_id: Optional[str] = None, current_user: dict = Depends(get_current_user)):
-    # فلترة حسب tenant_id لفصل بيانات كل عميل
+async def get_printers(request: Request, branch_id: Optional[str] = None, current_user: dict = Depends(get_current_user)):
+    # فلترة حسب tenant_id + فروع المشروع المختار
     query = build_tenant_query(current_user)
     if branch_id:
         query["branch_id"] = branch_id
+    else:
+        from routes.shared import project_branch_condition
+        cond = await project_branch_condition(current_user, request)
+        if cond:
+            query.setdefault("$and", []).append(cond)
     printers = await db.printers.find(query, {"_id": 0}).to_list(length=None)
     return printers
 

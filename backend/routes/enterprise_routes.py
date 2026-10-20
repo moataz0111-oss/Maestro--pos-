@@ -163,84 +163,47 @@ async def enterprise_dashboard(
     start = datetime.now(timezone.utc) - timedelta(days=period_days)
     start_iso = start.isoformat()
 
-    projects_cursor = db.projects.find({"tenant_id": tenant_id, "is_active": True}, {"_id": 0}).sort("created_at", 1)
-    projects = await projects_cursor.to_list(length=None)
+    projects = await db.projects.find(
+        {"tenant_id": tenant_id, "is_active": {"$ne": False}, "deleted_at": {"$exists": False}}, {"_id": 0}
+    ).sort("created_at", 1).to_list(length=None)
+
+    async def _sum(coll, match, field):
+        agg = await db[coll].aggregate([{"$match": match}, {"$group": {"_id": None, "t": {"$sum": field}, "n": {"$sum": 1}}}]).to_list(1)
+        return (float(agg[0]["t"] or 0), int(agg[0]["n"])) if agg else (0.0, 0)
 
     result = []
-    total_revenue = 0.0
-    total_orders = 0
-    total_expenses = 0.0
-
+    totals = {"revenue": 0.0, "expenses": 0.0, "purchases": 0.0, "inventory_value": 0.0, "orders": 0}
     for p in projects:
         pid = p["id"]
-
-        # مبيعات وطلبات
-        orders_query = {
-            "tenant_id": tenant_id,
-            "created_at": {"$gte": start_iso},
-            "$or": [
-                {"project_id": pid},
-                {"project_id": {"$exists": False}} if p.get("is_default") else {"project_id": pid},
-            ],
-            "status": {"$nin": ["cancelled", "refunded"]},
-        }
-        # في الوثائق القديمة بدون project_id تُنسب للـ default
-        if not p.get("is_default"):
-            orders_query.pop("$or", None)
-            orders_query["project_id"] = pid
-
-        orders_count = await db.orders.count_documents(orders_query)
-
-        # مبيعات
-        pipeline = [
-            {"$match": orders_query},
-            {"$group": {"_id": None, "total": {"$sum": "$total"}}},
-        ]
-        agg = await db.orders.aggregate(pipeline).to_list(1)
-        revenue = float(agg[0]["total"]) if agg else 0.0
-
-        # مصاريف
-        expenses_query = dict(orders_query)
-        expenses_query.pop("status", None)
-        expenses_count = await db.expenses.count_documents(expenses_query)
-        exp_pipeline = [
-            {"$match": expenses_query},
-            {"$group": {"_id": None, "total": {"$sum": "$amount"}}},
-        ]
-        exp_agg = await db.expenses.aggregate(exp_pipeline).to_list(1)
-        expenses = float(exp_agg[0]["total"]) if exp_agg else 0.0
-
-        # عدد الفروع والموظفين
-        branches_query = {"tenant_id": tenant_id}
-        if not p.get("is_default"):
-            branches_query["project_id"] = pid
-        else:
-            branches_query["$or"] = [
-                {"project_id": pid},
-                {"project_id": {"$exists": False}},
-            ]
-        branches_count = await db.branches.count_documents(branches_query)
-        employees_count = await db.employees.count_documents(branches_query)
-
-        net = revenue - expenses
-        total_revenue += revenue
-        total_orders += orders_count
-        total_expenses += expenses
-
+        bids = [b["id"] async for b in db.branches.find({"tenant_id": tenant_id, "project_id": pid}, {"_id": 0, "id": 1})]
+        # الفرع هو المرجع: وثائق بفرع تتبع مشروع الفرع، وبدون فرع تتبع project_id
+        scope = {"$or": [{"branch_id": {"$in": bids}}, {"branch_id": {"$in": [None, ""]}, "project_id": pid}]}
+        base = {"tenant_id": tenant_id, "created_at": {"$gte": start_iso}, **scope}
+        revenue, orders_count = await _sum("orders", {**base, "status": {"$nin": ["cancelled", "refunded", "pending"]},
+                                                      "is_refunded": {"$ne": True}}, "$total")
+        expenses, expenses_count = await _sum("expenses", base, "$amount")
+        purchases, purchases_count = await _sum("purchases_new", {"tenant_id": tenant_id, "project_id": pid,
+                                                                  "created_at": {"$gte": start_iso}}, "$total_amount")
+        inv = 0.0
+        for coll, cost in (("raw_materials", "$cost_per_unit"), ("packaging_materials", "$cost_per_unit"),
+                           ("manufactured_products", {"$ifNull": ["$raw_material_cost_after_waste", "$raw_material_cost"]})):
+            v, _ = await _sum(coll, {"tenant_id": tenant_id, "project_id": pid},
+                              {"$multiply": [{"$ifNull": ["$quantity", 0]}, {"$ifNull": [cost, 0]}]})
+            inv += v
+        branches_count = len(bids)
+        employees_count = await db.employees.count_documents({"tenant_id": tenant_id, "$or": [
+            {"branch_id": {"$in": bids}}, {"project_id": pid}]})
+        for k, v in (("revenue", revenue), ("expenses", expenses), ("purchases", purchases), ("inventory_value", inv)):
+            totals[k] += v
+        totals["orders"] += orders_count
         result.append({
-            "id": pid,
-            "name": p["name"],
-            "activity_type": p["activity_type"],
-            "logo_url": p.get("logo_url"),
-            "currency": p.get("currency", "IQD"),
-            "is_default": p.get("is_default", False),
-            "revenue": round(revenue, 2),
-            "expenses": round(expenses, 2),
-            "net_profit": round(net, 2),
-            "orders_count": orders_count,
-            "expenses_count": expenses_count,
-            "branches_count": branches_count,
-            "employees_count": employees_count,
+            "id": pid, "name": p["name"], "activity_type": p.get("activity_type"), "logo_url": p.get("logo_url"),
+            "currency": p.get("currency", "IQD"), "is_default": p.get("is_default", False),
+            "revenue": round(revenue, 2), "expenses": round(expenses, 2), "purchases": round(purchases, 2),
+            "purchases_count": purchases_count, "inventory_value": round(inv, 2),
+            "net_profit": round(revenue - expenses - purchases, 2),
+            "orders_count": orders_count, "expenses_count": expenses_count,
+            "branches_count": branches_count, "employees_count": employees_count,
             "admin_user_id": p.get("admin_user_id"),
         })
 
@@ -249,10 +212,8 @@ async def enterprise_dashboard(
         "projects": result,
         "totals": {
             "projects_count": len(result),
-            "revenue": round(total_revenue, 2),
-            "expenses": round(total_expenses, 2),
-            "net_profit": round(total_revenue - total_expenses, 2),
-            "orders": total_orders,
+            **{k: round(v, 2) for k, v in totals.items()},
+            "net_profit": round(totals["revenue"] - totals["expenses"] - totals["purchases"], 2),
         },
     }
 

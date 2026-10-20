@@ -1,0 +1,38 @@
+{
+  "summary": "Retest of the iteration_316 fixes. Backend: 24/24 tests pass (5 new in iter317 plus 19 from iter316). Moving a category with PUT now also moves its products; GET /categories honors the X-Project-Id header alone; copy-catalog skips inactive and soft-deleted products. Frontend: all 4 bugs from iter316 are verified fixed. (1) Delivery commission shows salon 17 → مطعم الاختبار 15 → all 15 → salon 17 with no stale value. (2) Invoice phone: salon '0770-SALON' → '' under مطعم الاختبار and under all. It ends correct but only ~1.5-3s after the switch, because the refetch is slow. (3) Add product with bar=مطعم الاختبار: switching product-project-select to صالون الأناقة lists salon's 6 categories and back lists the restaurant's 5. Salon's packaging and manufactured pickers are empty. With bar=all, edit-product-project-select also switches the category lists correctly. (4) With bar=all and no project chosen, the category dropdown is empty; after choosing a project it shows only that project's categories. Reopening the product, category or branch dialog after closing it without saving prefills the current bar project (empty 'اختر المشروع' under all). Project badges at 390px are on one line (h=23px) and readable (dark text #0f1729 on gold/20, 11px).",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "PUT /api/products/{id}", "issue": "ProductCreate has no is_active field, so a product cannot be made inactive through the API. The copy-catalog is_active filter is only reachable for data set directly in the DB. Informational."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "Add/Edit product dialog – manufactured and packaging notices", "issue": "When the dialog project (صالون الأناقة) differs from the bar project (مطعم الاختبار), the 'لا توجد مواد تغليف' and 'لا توجد منتجات مصنعة' notices do not appear. The pickers just open empty (packaging options [] and manufactured options ['بدون']). Cause: the notices check packagingMaterials.length and manufacturedProducts.length, which are the bar-scoped lists, instead of the forProject(...) result. Settings.js ~L4490, ~L4964 and ~L2356 (MfgLinksEditor).", "selector": "[data-testid=mfg-links-editor-add]", "priority": "LOW"},
+      {"component": "Invoice settings tab", "issue": "After switching project, the fields keep showing the previous project's values for ~1.5-3s until the refetch returns. A save during that window would write the old project's data into the new one. Suggest resetting invoiceSettings to defaults, or disabling save while loading, when selectedProjectId changes.", "selector": "input[placeholder='مثال: 07701234567']", "priority": "LOW"}
+    ],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Settings > المنتجات rows on mobile 390px", "issues": ["The badge itself is fine, but the product row is cramped. The name wraps ('برغر كلاسيك' takes 2 lines) and the price/profit column wraps into 4 lines ('ربح المواد: 3,000 IQD'), crowding the category label. Consider stacking the price below the name on small screens."]}
+    ]
+  },
+  "test_report_links": ["/app/backend/tests/test_settings_project_isolation_iter317.py", "/app/backend/tests/test_settings_project_isolation_iter316.py", "/app/test_reports/pytest/pytest_iter317.xml"],
+  "action_items": [
+    "LOW: In the product dialogs, base the empty-state notices on forProject(list, dialogPid, kind).length, not on the bar-scoped packagingMaterials and manufacturedProducts lengths.",
+    "LOW: Reset invoiceSettings (or show a loading state and disable save) when selectedProjectId changes, to avoid briefly showing or saving the previous project's values.",
+    "LOW: Improve the mobile layout of product rows in Settings > المنتجات."
+  ],
+  "critical_code_review_comments": [
+    "The projectLists cache in ensureProjectLists is never invalidated. A category or manufactured product added to project Y after it was first cached will not show in the dialog picker until the page reloads. Clear projectLists[pid] after create, update or delete, or when the dialog opens.",
+    "update_category runs products.update_many on every edit that has a project_id, even when the project did not change. This is harmless, but it could be limited to the case where the project actually changed.",
+    "Settings.js is still more than 8000 lines; it should be split into one component per tab."
+  ],
+  "updated_files": ["/app/backend/tests/test_settings_project_isolation_iter317.py"],
+  "success_rate": {"backend": "100% (24/24)", "frontend": "~95% (all 4 iter316 bugs fixed; 2 low-priority UX items)"},
+  "test_credentials": "admin@maestroegp.com / admin123",
+  "seed_data_creation": "None persisted. The pytest run creates and cleans up TEST_ categories, products and projects. Test products with an is_active or deleted_at flag are set directly in Mongo and then deleted.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Run: pytest backend/tests/test_settings_project_isolation_iter317.py backend/tests/test_settings_project_isolation_iter316.py. UI: hide [data-testid=splash-screen]. Switch projects with [data-testid=settings-project-select] and get_by_role('option', name=..., exact=True), then wait ≥2.5s because the refetch is slow. The category trigger in the add dialog is the combobox with text 'اختر فئة'.",
+  "rca of the issue": "The invoice field showed the old value only because of refetch latency: the request fires ~1s after the switch and the field updates at 1.5-3s. The X-Project-Id header is correct. Missing empty-state notices: the length check uses the bar-scoped arrays instead of the dialog project's list."
+}

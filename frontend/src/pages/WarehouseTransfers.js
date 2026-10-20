@@ -35,8 +35,11 @@ import {
 } from 'lucide-react';
 import { toast, Toaster } from 'sonner';
 import { showApiError } from '../utils/apiError';
+import { PageProjectBar, InventoryProjectField, ProjectBadge } from '../components/ProjectScopeControls';
+import { useProject } from '../context/ProjectContext';
 const API = API_URL;
 export default function WarehouseTransfers() {
+  const { selectedProjectId: _scopeProjectId } = useProject();
   const navigate = useNavigate();
   const { t, isRTL } = useTranslation();
   const [activeTab, setActiveTab] = useState('transfers');
@@ -66,7 +69,8 @@ export default function WarehouseTransfers() {
   const [selectedItems, setSelectedItems] = useState([]);
   useEffect(() => {
     fetchData();
-  }, [selectedBranch]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedBranch, _scopeProjectId]);
   const fetchData = async () => {
     setLoading(true);
     try {
@@ -291,6 +295,7 @@ export default function WarehouseTransfers() {
           </div>
         </div>
       </div>
+      <div className="container mx-auto px-4 mt-3"><PageProjectBar /></div>
       <div className="container mx-auto px-4 py-6">
         {/* Stats */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
@@ -354,6 +359,7 @@ export default function WarehouseTransfers() {
                     <DialogHeader>
                       <DialogTitle>{t('إنشاء تحويل مخزون')}</DialogTitle>
                     </DialogHeader>
+                    <InventoryProjectField />
                     <form onSubmit={handleCreateTransfer} className="space-y-4">
                       <div className="grid grid-cols-3 gap-4">
                         <div>
@@ -538,6 +544,7 @@ export default function WarehouseTransfers() {
                     <DialogHeader>
                       <DialogTitle>{t('إنشاء طلب شراء')}</DialogTitle>
                     </DialogHeader>
+                    <InventoryProjectField />
                     <form onSubmit={handleCreateRequest} className="space-y-4">
                       <div className="grid grid-cols-2 gap-4">
                         <div>

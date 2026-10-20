@@ -56,6 +56,7 @@ import Reports from "./pages/Reports";
 import Settings from "./pages/Settings";
 import ProjectsSettings from "./pages/ProjectsSettings";
 import EnterpriseDashboard from "./pages/EnterpriseDashboard";
+import ProjectTransfersLog from "./pages/ProjectTransfersLog";
 import Marketplace from "./pages/Marketplace";
 import PartnerPortal from "./pages/PartnerPortal";
 import EnterpriseConfigPanel from "./pages/EnterpriseConfigPanel";
@@ -374,6 +375,14 @@ function AppRoutes() {
         element={
           <ProtectedRoute>
             <ProjectsSettings />
+          </ProtectedRoute>
+        } 
+      />
+      <Route 
+        path="/project-transfers-log" 
+        element={
+          <ProtectedRoute>
+            <ProjectTransfersLog />
           </ProtectedRoute>
         } 
       />

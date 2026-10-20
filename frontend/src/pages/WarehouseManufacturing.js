@@ -78,6 +78,9 @@ import { Popover, PopoverContent, PopoverTrigger } from '../components/ui/popove
 import StockoutPredictionDialog, { StockoutPredictionBanner } from '../components/StockoutPrediction';
 import { MonthlyStocktakeButton } from '../components/MonthlyStocktake';
 import { showApiError } from '../utils/apiError';
+import { PageProjectBar, InventoryProjectField, ProjectBadge } from '../components/ProjectScopeControls';
+import { MoveToProjectDialog } from '../components/MoveToProjectDialog';
+import { useProject } from '../context/ProjectContext';
 const API = API_URL;
 
 // ⭐ Safe extraction of FastAPI error messages — يمنع React Error #31 عند تمرير
@@ -99,6 +102,7 @@ export default function WarehouseManufacturing() {
   const navigate = useNavigate();
   const { user, hasRole } = useAuth();
   const { t, isRTL } = useTranslation();
+  const { selectedProjectId } = useProject();
   
   // تحديد الدور
   const userRole = user?.role || '';
@@ -447,7 +451,9 @@ export default function WarehouseManufacturing() {
   const headers = { Authorization: `Bearer ${token}` };
   useEffect(() => {
     fetchData();
-  }, [activeTab]);
+    refreshRequestLists();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTab, selectedProjectId]);
   const fetchData = async () => {
     setLoading(true);
     try {
@@ -2824,6 +2830,11 @@ export default function WarehouseManufacturing() {
           </div>
         </div>
       </header>
+      <div className="max-w-7xl mx-auto px-4 mt-3 flex flex-wrap items-center gap-2">
+        <PageProjectBar className="flex-1" />
+        <MoveToProjectDialog rawMaterials={rawMaterials} manufacturedProducts={manufacturedProducts} packagingMaterials={packagingMaterials} onDone={fetchData} />
+        {hasRole(['admin', 'general_manager', 'super_admin']) && <Button variant="ghost" size="sm" onClick={() => navigate('/project-transfers-log')} data-testid="open-transfers-log-link">{t('سجل التحويلات')}</Button>}
+      </div>
       <main className="max-w-7xl mx-auto p-4 space-y-4">
         {/* Stats */}
         {stats && (
@@ -3156,7 +3167,7 @@ export default function WarehouseManufacturing() {
                   <CardContent className="p-4">
                     <div className="flex items-start justify-between mb-3">
                       <div>
-                        <h3 className="font-bold">{material.name}</h3>
+                        <h3 className="font-bold flex items-center gap-2">{material.name} <ProjectBadge projectId={material.project_id} /></h3>
                         {material.name_en && <p className="text-sm text-muted-foreground">{material.name_en}</p>}
                       </div>
                       <div className="flex flex-col gap-1 items-end">
@@ -3595,6 +3606,7 @@ export default function WarehouseManufacturing() {
                           <div className="flex-1">
                             <div className="flex items-center gap-2">
                               <h4 className="font-bold">{material.name}</h4>
+                              <ProjectBadge projectId={material.project_id} />
                               {material.name_en && <span className="text-sm text-muted-foreground">({material.name_en})</span>}
                               {material.category && (
                                 <Badge variant="outline" className="text-xs">{material.category}</Badge>
@@ -3804,7 +3816,7 @@ export default function WarehouseManufacturing() {
                           <div className="flex items-start justify-between">
                             <div className="flex-1">
                               <div className="flex items-center gap-2 mb-2 flex-wrap">
-                                <h3 className="font-bold text-lg">{product.name}</h3>
+                                <h3 className="font-bold text-lg flex items-center gap-2">{product.name} <ProjectBadge projectId={product.project_id} /></h3>
                                 <Badge className={product.quantity <= product.min_quantity ? 'bg-red-500/20 text-red-500' : 'bg-green-500/20 text-green-500'}>
                                   {t('المتبقي')}: {product.quantity} {product.unit}
                                 </Badge>
@@ -5121,6 +5133,7 @@ export default function WarehouseManufacturing() {
               {t('إضافة مادة خام جديدة')}
             </DialogTitle>
           </DialogHeader>
+          <InventoryProjectField />
           
           <form onSubmit={handleAddRawMaterial} className="space-y-4">
             <div className="grid grid-cols-2 gap-4">
@@ -5296,6 +5309,7 @@ export default function WarehouseManufacturing() {
               {t('تحويل مواد لقسم التصنيع')}
             </DialogTitle>
           </DialogHeader>
+          <InventoryProjectField />
           
           <div className="space-y-4">
             {transferForm.items.length === 0 ? (
@@ -5375,6 +5389,7 @@ export default function WarehouseManufacturing() {
               {t('إضافة منتج مصنع (وصفة)')}
             </DialogTitle>
           </DialogHeader>
+          <InventoryProjectField />
           
           <form onSubmit={handleAddProduct} className="space-y-4">
             <div className="grid grid-cols-2 gap-4">
@@ -7293,6 +7308,7 @@ export default function WarehouseManufacturing() {
               {t('تحويل منتجات للفرع')}
             </DialogTitle>
           </DialogHeader>
+          <InventoryProjectField />
           
           <div className="space-y-4">
             {/* اختيار الفرع */}
@@ -7794,6 +7810,7 @@ export default function WarehouseManufacturing() {
               {t('طلب مواد خام من المخزن')}
             </DialogTitle>
           </DialogHeader>
+          <InventoryProjectField />
           
           <div className="space-y-4">
             {/* اختيار المواد المتاحة */}
@@ -7953,6 +7970,7 @@ export default function WarehouseManufacturing() {
               {t('إضافة مادة تغليف جديدة')}
             </DialogTitle>
           </DialogHeader>
+          <InventoryProjectField />
           <form onSubmit={handleAddPackagingMaterial} className="space-y-4">
             <div className="grid grid-cols-2 gap-4">
               <div>
@@ -8191,6 +8209,7 @@ export default function WarehouseManufacturing() {
               {t('ملاحظة: سيُرسل الطلب للمالك للموافقة قبل أن ينتقل لقسم المشتريات.')}
             </p>
           </DialogHeader>
+          <InventoryProjectField />
 
           <div className="space-y-4 py-2">
             {/* أولوية + ملاحظات */}

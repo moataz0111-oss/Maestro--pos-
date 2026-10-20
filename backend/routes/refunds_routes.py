@@ -184,7 +184,10 @@ async def create_refund(refund: RefundCreate, current_user: dict = Depends(get_c
         del refund_doc["_id"]
     return refund_doc
 
-@router.get("/refunds")
+from routes.reports_routes import _set_project_scope, _scope
+
+
+@router.get("/refunds", dependencies=[Depends(_set_project_scope)])
 async def get_refunds(
     branch_id: Optional[str] = None,
     date_from: Optional[str] = None,
@@ -212,7 +215,7 @@ async def get_refunds(
         else:
             query["created_at"] = {"$lte": date_to + "T23:59:59"}
     
-    refunds = await db.refunds.find(query, {"_id": 0}).sort("created_at", -1).skip(skip).limit(limit).to_list(limit)
+    refunds = await db.refunds.find(_scope(query), {"_id": 0}).sort("created_at", -1).skip(skip).limit(limit).to_list(limit)
     return refunds
 
 @router.get("/refunds/{refund_id}")

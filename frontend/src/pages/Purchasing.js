@@ -56,10 +56,13 @@ import {
   TabsTrigger,
 } from '../components/ui/tabs';
 import { showApiError } from '../utils/apiError';
+import { PageProjectBar, InventoryProjectField, ProjectBadge } from '../components/ProjectScopeControls';
+import { useProject } from '../context/ProjectContext';
 
 const API = BACKEND_URL + '/api';
 
 export default function Purchasing() {
+  const { selectedProjectId: _scopeProjectId } = useProject();
   const navigate = useNavigate();
   const { t, isRTL } = useTranslation();
   
@@ -145,7 +148,7 @@ export default function Purchasing() {
 
   useEffect(() => {
     fetchData();
-  }, [fetchData]);
+  }, [fetchData, _scopeProjectId]);
 
   // 🔄 تحديث صامت دوري لطلبات الشراء الواردة من المخزن — تظهر فوراً دون إعادة تحميل
   useEffect(() => {
@@ -468,6 +471,7 @@ export default function Purchasing() {
   return (
     <div className="p-4 md:p-6 space-y-6" dir={isRTL ? 'rtl' : 'ltr'}>
       {/* Header */}
+      <PageProjectBar />
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
           <Button variant="ghost" onClick={() => navigate(-1)} size="icon">
@@ -882,6 +886,7 @@ export default function Purchasing() {
               {t('إنشاء فاتورة شراء')}
             </DialogTitle>
           </DialogHeader>
+          <InventoryProjectField />
           
           <div className="space-y-4">
             {/* رفع صورة الفاتورة */}
@@ -1058,6 +1063,7 @@ export default function Purchasing() {
               {t('إضافة مورد جديد')}
             </DialogTitle>
           </DialogHeader>
+          <InventoryProjectField />
           
           <div className="space-y-4">
             <div>

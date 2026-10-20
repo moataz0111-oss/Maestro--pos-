@@ -1,0 +1,46 @@
+{
+  "summary": "Tested the transfer log, enterprise dashboard, price-report theme, low-stock alerts, project owner fields and the assign-admin WhatsApp welcome. Backend: 9 of 10 pytest tests pass and 1 is skipped (the wkeeper login failed). Results: GET /projects/inventory/log filters by project and by date correctly. /enterprise/dashboard returns revenue, purchases, expenses, inventory_value, net_profit (= revenue - expenses - purchases), orders_count and branches_count per project, and excludes deleted projects. PUT /projects/{id} saves owner_name and owner_phone. assign-admin returns whatsapp_sent=false with whatsapp_error='not_connected', and the admin is still created with the phone saved. stock-alerts/run sends one instant low_stock notification titled '📉 تنبيه نقص مخزون — صالون الأناقة'. It does not repeat on the next run, clears the item's alert state after restock, and alerts again when the item drops below the minimum again. The daily summary '📋 ملخص المخزون الناقص اليومي' is sent once per day per project. Frontend: /project-transfers-log shows 2 rows with type badge, quantity, unit cost, total, from/to project and user. The project and date filters work. print-log-btn creates a hidden iframe and calls print() once, with no new tab and no JS errors. It is disabled when there are no rows. The Settings > المشاريع buttons and the warehouse-manufacturing link all navigate correctly. The edit dialog keeps the owner name and phone after reopening. Assigning an admin shows the warning toast and the success toast. /reports/price-increases is readable in light and dark (computed colours are theme-aware). The enterprise dashboard chart renders 45 recharts bars, with 9 purchases tiles and 9 inventory tiles. Two bugs found on the enterprise dashboard, listed below.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "POST /api/projects/stock-alerts/run", "issue": "It calls run_stock_alerts(), which loops over every tenant's projects (no tenant filter). Any enterprise owner can trigger low-stock notifications and WhatsApp for every other tenant. Pass the caller's tenant_id and filter on it."},
+      {"endpoint": "POST /api/projects/{id}/assign-admin", "issue": "whatsapp_error is the raw code 'not_connected'. The UI toast then reads 'لم تصل رسالة الواتساب: not_connected'. Map the code to an Arabic message."},
+      {"endpoint": "GET /api/projects/inventory/log?project_id=X", "issue": "A 'move' log with items from several projects matches if any one item is from X. The frontend's flattenLogs then shows every item, including items from other projects."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "EnterpriseDashboard (direct URL/refresh)", "issue": "Opening /enterprise-dashboard directly, or refreshing it, always redirects to '/'. ProjectContext starts with enterpriseEnabled = useState(false), and the page returns <Navigate to='/'> when enterpriseEnabled === false, before fetchProjects finishes. It only works through in-app navigation. Fix: make the initial state null or 'loading' and only redirect when the value is explicitly false after loading.", "selector": "[data-testid='enterprise-dashboard-page']", "priority": "HIGH"}
+    ],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "/enterprise-dashboard (light theme)", "issues": ["The page root <div className='p-6 space-y-6'> has no bg-background or text-foreground. The body is dark navy, rgb(7,14,34), so the dark title 'لوحة المؤسسة', the back button and the period-select text are almost invisible. This is the same bug that was fixed on the price report; add 'min-h-screen bg-background text-foreground'."]},
+      {"screen": "/enterprise-dashboard (dark theme)", "issues": ["The per-project tiles use hard-coded bg-green-50, bg-red-50, bg-amber-50 and bg-sky-50 with muted grey labels. In dark mode the labels have low contrast on the pastel tiles. Add dark: variants."]},
+      {"screen": "/enterprise-dashboard chart", "issues": ["One axis is shared by inventory value (~125M) and sales or purchases. When inventory is large, every other bar is invisible. Consider a separate chart or axis for inventory, or a log scale."]},
+      {"screen": "/project-transfers-log", "issues": ["It uses native <input type='date'> (mm/dd/yyyy, LTR, with a dark calendar icon that is hard to see in dark mode) instead of the shadcn Calendar/Popover."]},
+      {"screen": "Warehouse link visibility", "issues": ["open-transfers-log-link shows for every role, but the API returns 403 for non-owners. The page swallows the error and shows 'لا توجد تحويلات'. Hide the link for non-owners, or show a permission message."]}
+    ]
+  },
+  "test_report_links": ["/app/backend/tests/test_iter320_transfer_log_stock_alerts.py", "/app/test_reports/pytest/pytest_iter320.xml"],
+  "action_items": [
+    "Fix the EnterpriseDashboard redirect on direct load or refresh: use a tri-state enterpriseEnabled in ProjectContext and do not redirect while it is loading.",
+    "Add 'min-h-screen bg-background text-foreground' to the EnterpriseDashboard root, and add dark-mode variants to the per-project stat tiles.",
+    "Scope POST /projects/stock-alerts/run to the caller's tenant.",
+    "Translate whatsapp_error codes (not_connected and others) to Arabic in the assign-admin toast.",
+    "Optional: replace the native date inputs on the transfers log with the shadcn Calendar, and hide the transfers-log link for non-owners."
+  ],
+  "critical_code_review_comments": [
+    "stock_alerts.run_stock_alerts has no tenant filter and also runs from the 10-minute scheduler. That is fine for the scheduler, but the manual endpoint should pass tenant_id.",
+    "The low_stock_alert_state, low_stock_seed and low_stock_daily_state lookups key only on project_id. Add tenant_id to the queries, plus an index on (project_id, item_id) and on (project_id, date).",
+    "inventory/log builds end_date + 'T99' for string comparison. It works for ISO timestamps, but it compares UTC dates while the UI shows local times (Baghdad is UTC+3), so entries near midnight can land on the wrong day.",
+    "ProjectsSettings.jsx is 748 lines, above the 700-line guideline. Consider splitting out the dialogs.",
+    "The admin welcome WhatsApp sends the plaintext password, which was requested. Make sure the message is not saved to any WA log or outbox collection in plaintext."
+  ],
+  "updated_files": ["/app/frontend/src/pages/ProjectsSettings.jsx (added data-testid='admin-phone-input')", "/app/backend/tests/test_iter320_transfer_log_stock_alerts.py"],
+  "success_rate": {"backend": "100% (9/9 executed, 1 skipped)", "frontend": "~85% (all flows work; enterprise dashboard direct-load redirect and light-theme contrast bugs)"},
+  "seed_data_creation": "Temporary TEST_i320 raw material in Salon (removed in teardown). Test admins test_i320_* and test_ui_* were removed, and project 3128cfc4 admin_user_id was reset to null. Salon owner_name and owner_phone were unset after the test. Low-stock notifications for TEST_i320 items remain in db.notifications.",
+  "retest_needed": true,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Full-page loads show a long splash overlay (about 10-15s) that blocks clicks, so wait about 12s or use history.pushState for in-app navigation. The warehouse page with the transfers link is /warehouse-manufacturing, not /warehouse. /enterprise-dashboard only opens through in-app navigation until the redirect bug is fixed. The wkeeper@maestroegp.com login failed in this environment. WhatsApp is not connected in preview (whatsapp_error='not_connected'). Auth playbook checks (bcrypt, cookies, lockout) were not re-run this iteration.",
+  "rca of the issue": "Enterprise dashboard redirect: ProjectContext.js line 31 initialises enterpriseEnabled=false. EnterpriseDashboard.jsx lines 66-68 redirect when enterpriseEnabled===false. On a fresh load the first render happens before /enterprise-config/me resolves, so it navigates to '/'. Reproduce: log in, then open /enterprise-dashboard in the URL bar; you land on the dashboard home. Light-theme contrast: the EnterpriseDashboard root has no bg-background while the body background is dark navy."
+}

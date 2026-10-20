@@ -60,6 +60,8 @@ import {
 import { showApiError } from '../utils/apiError';
 import { Wallet, DollarSign, RotateCcw, TrendingUp, CreditCard, CalendarDays } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, Tooltip as RTooltip, ResponsiveContainer, CartesianGrid, Legend } from 'recharts';
+import { PageProjectBar, InventoryProjectField, ProjectBadge } from '../components/ProjectScopeControls';
+import { useProject } from '../context/ProjectContext';
 const API = API_URL;
 
 // توحيد رابط صورة الفاتورة: الصور القديمة محفوظة بمسار /uploads/ بلا بادئة /api فلا تمر عبر الـ ingress وتظهر مكسورة
@@ -100,6 +102,7 @@ const InvoiceImage = ({ url, label }) => {
   );
 };
 export default function PurchasesPage() {
+  const { selectedProjectId: _scopeProjectId } = useProject();
   const navigate = useNavigate();
   const { user, hasRole } = useAuth();
   const { t, isRTL } = useTranslation();
@@ -189,7 +192,8 @@ export default function PurchasesPage() {
   const headers = { Authorization: `Bearer ${token}` };
   useEffect(() => {
     fetchData();
-  }, [activeTab]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTab, _scopeProjectId]);
   const fetchData = async () => {
     setLoading(true);
     try {
@@ -959,6 +963,7 @@ export default function PurchasesPage() {
           </div>
         </div>
       </header>
+      <div className="max-w-7xl mx-auto px-4 mt-3"><PageProjectBar /></div>
       <main className="max-w-7xl mx-auto p-4 space-y-4">
         {/* Tabs */}
         <Tabs value={activeTab} onValueChange={setActiveTab}>
@@ -1136,7 +1141,7 @@ export default function PurchasesPage() {
                   <CardContent className="p-4">
                     <div className="flex items-start justify-between">
                       <div>
-                        <h3 className="font-bold text-lg">{supplier.name}</h3>
+                        <h3 className="font-bold text-lg flex items-center gap-2">{supplier.name} <ProjectBadge projectId={supplier.project_id} /></h3>
                         {supplier.company_name && (
                           <p className="text-sm text-muted-foreground">{supplier.company_name}</p>
                         )}
@@ -1554,6 +1559,7 @@ export default function PurchasesPage() {
               إضافة مورد جديد
             </DialogTitle>
           </DialogHeader>
+          <InventoryProjectField />
           
           <form onSubmit={handleAddSupplier} className="space-y-4">
             <div className="grid grid-cols-2 gap-4">
@@ -1630,6 +1636,7 @@ export default function PurchasesPage() {
               {purchaseForm.request_id ? t('تسعير طلب مخزن — إنشاء فاتورة') : t('إنشاء فاتورة شراء جديدة')}
             </DialogTitle>
           </DialogHeader>
+          <InventoryProjectField />
           
           {purchaseForm.request_id && (() => {
             const totalItemsCount = purchaseRequests.find(r => r.id === purchaseForm.request_id)?.items?.length || 0;

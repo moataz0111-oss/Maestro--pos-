@@ -69,9 +69,22 @@ export const clearCache = (urlPattern) => {
 // ==================== ENTERPRISE PROJECT SCOPE INTERCEPTOR ====================
 // عند تفعيل وضع المؤسسة واختيار مشروع محدد، يُضاف تلقائياً X-Project-Id لكل طلب
 // + project_id لطلبات GET/DELETE. الخلفية تستخدمه لعزل القراءة/الكتابة بالمشروع.
+// مسارات إنشاء تتطلب تحديد مشروع في وضع المؤسسة عند اختيار "كل المشاريع"
+const PROJECT_REQUIRED_CREATE = /\/api\/(raw-materials-new|packaging-materials|manufactured-products|suppliers|purchases-new|purchase-requests|warehouse-purchase-requests|manufacturing-requests|purchase-invoices|purchase-suppliers|warehouse-transfers|inventory-transfers|branches|categories|products)\/?(\?.*)?$/;
+
 if (typeof window !== 'undefined' && !window.__PROJECT_INTERCEPTOR_INSTALLED__) {
   window.__PROJECT_INTERCEPTOR_INSTALLED__ = true;
   axios.interceptors.request.use((config) => {
+    const method0 = (config.method || 'get').toLowerCase();
+    if (method0 === 'post' && window.__ENTERPRISE_ENABLED__ && PROJECT_REQUIRED_CREATE.test(config.url || '')) {
+      const sel = localStorage.getItem('selectedProjectId');
+      const hdr = config.headers?.['X-Project-Id'] || config.headers?.['x-project-id'];
+      if (!hdr && (!sel || sel === 'all')) {
+        const err = new Error('اختر المشروع أولاً');
+        err.response = { status: 400, data: { detail: 'اختر المشروع أولاً من حقل "المشروع"' } };
+        return Promise.reject(err);
+      }
+    }
     try {
       const pid = localStorage.getItem('selectedProjectId');
       if (pid && pid !== 'all' && pid !== 'null' && pid !== 'undefined') {

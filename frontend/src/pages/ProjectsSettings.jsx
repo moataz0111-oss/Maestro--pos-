@@ -4,6 +4,8 @@ import { useProject } from '../context/ProjectContext';
 import { useAuth } from '../context/AuthContext';
 import { API_URL } from '../utils/api';
 import { toast } from 'sonner';
+import { useNavigate } from 'react-router-dom';
+import { LayoutDashboard, ArrowLeftRight } from 'lucide-react';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
@@ -101,6 +103,7 @@ const TIMEZONES = [
 ];
 
 export default function ProjectsSettings() {
+  const navigate = useNavigate();
   const { user } = useAuth();
   const { projects, refreshProjects } = useProject();
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -142,7 +145,7 @@ export default function ProjectsSettings() {
     setForm({
       name: '', name_en: '', activity_type: 'restaurant',
       logo_url: '', currency: 'IQD', timezone: 'Asia/Baghdad', description: '',
-      exchange_rate: '',
+      exchange_rate: '', owner_name: '', owner_phone: '',
     });
     setLogoFile(null);
     setEditingProject(null);
@@ -157,6 +160,7 @@ export default function ProjectsSettings() {
       name: p.name || '', name_en: p.name_en || '', activity_type: p.activity_type || 'restaurant',
       logo_url: p.logo_url || '', currency: p.currency || 'IQD', timezone: p.timezone || 'Asia/Baghdad',
       description: p.description || '', exchange_rate: p.exchange_rate ? String(p.exchange_rate) : '',
+      owner_name: p.owner_name || '', owner_phone: p.owner_phone || '',
     });
     setDialogOpen(true);
   };
@@ -253,8 +257,10 @@ export default function ProjectsSettings() {
   const handleAssignAdmin = async () => {
     if (!adminForm.email || !adminForm.password) { toast.error('البريد وكلمة المرور مطلوبان'); return; }
     try {
-      await axios.post(`${API_URL}/projects/${selectedProject.id}/assign-admin`, adminForm);
+      const res = await axios.post(`${API_URL}/projects/${selectedProject.id}/assign-admin`, adminForm);
       toast.success('تم تعيين مدير المشروع بنجاح');
+      if (res.data?.whatsapp_sent) toast.success('📲 أُرسلت رسالة تجريبية ببيانات الدخول إلى واتساب المدير');
+      else if (adminForm.phone) toast.warning(`لم تصل رسالة الواتساب: ${res.data?.whatsapp_error || 'تحقق من ربط الواتساب'}`);
       setAdminDialogOpen(false);
       setAdminForm({ username: '', email: '', password: '', full_name: '', phone: '' });
       refreshProjects();
@@ -323,10 +329,18 @@ export default function ProjectsSettings() {
             كل مشروع = كيان مستقل تماماً (خزينة، موارد بشرية، مخزون، تقارير)
           </p>
         </div>
+        <div className="flex flex-wrap gap-2">
+        <Button variant="outline" className="gap-2" onClick={() => navigate('/enterprise-dashboard')} data-testid="open-enterprise-dashboard-btn">
+          <LayoutDashboard className="h-4 w-4" /> لوحة المؤسسة
+        </Button>
+        <Button variant="outline" className="gap-2" onClick={() => navigate('/project-transfers-log')} data-testid="open-transfers-log-btn">
+          <ArrowLeftRight className="h-4 w-4" /> سجل التحويلات
+        </Button>
         <Button data-testid="add-project-btn" className="gap-2" onClick={openCreate}>
           <Plus className="h-4 w-4" />
           مشروع جديد
         </Button>
+        </div>
         <Dialog open={dialogOpen} onOpenChange={(o) => { setDialogOpen(o); if (!o) resetForm(); }}>
           <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto" dir="rtl" data-testid="project-form-dialog">
             <DialogHeader>
@@ -438,6 +452,11 @@ export default function ProjectsSettings() {
               <div>
                 <Label>وصف (اختياري)</Label>
                 <Textarea data-testid="project-description-input" value={form.description} onChange={e => setForm({ ...form, description: e.target.value })} />
+              </div>
+              <div className="grid grid-cols-2 gap-2 p-2 rounded-lg border border-dashed">
+                <p className="col-span-2 text-xs text-muted-foreground">مالك المشروع (إن كان المشروع مملوكاً أو مباعاً لشخص آخر) — يستلم تقارير الورديات وتنبيهات المخزون على واتساب</p>
+                <div><Label>اسم المالك</Label><Input data-testid="project-owner-name-input" value={form.owner_name || ''} onChange={e => setForm({ ...form, owner_name: e.target.value })} /></div>
+                <div><Label>هاتف المالك (واتساب)</Label><Input data-testid="project-owner-phone-input" dir="ltr" placeholder="07xxxxxxxxx" value={form.owner_phone || ''} onChange={e => setForm({ ...form, owner_phone: e.target.value })} /></div>
               </div>
             </div>
             <DialogFooter>
@@ -620,6 +639,7 @@ export default function ProjectsSettings() {
             <div>
               <Label>الهاتف</Label>
               <Input
+                data-testid="admin-phone-input"
                 value={adminForm.phone}
                 onChange={e => setAdminForm({ ...adminForm, phone: e.target.value })}
               />

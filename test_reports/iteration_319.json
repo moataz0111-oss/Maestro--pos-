@@ -1,0 +1,35 @@
+{
+  "summary": "Retested the iter318 inventory project isolation fixes. Backend: 8 of 9 pytest tests pass, after I fixed one 500. GET /warehouse-purchase-requests is now isolated by X-Project-Id, and the ?status filter works. Sequence numbers are tenant-global for warehouse-purchase-requests, manufacturing-requests, warehouse-to-manufacturing transfer_number and PKG numbers. Cross-project PUT, add-stock and DELETE on a raw material, and DELETE on a packaging material, return 404 and leave the item unchanged. The same-project flow passes with no 404/500: add-stock, edit, warehouse→manufacturing, manufacturing request create and fulfill, product create and produce, branch request create and fulfill. Packaging-requests list and branch-packaging-inventory are isolated by project. Bug found and fixed: GET /api/packaging-requests in server.py returned 500 on every call. Its loop did r['id'] = r.pop('_id'), which put an ObjectId into the response. I changed it to project {'_id': 0}. The backend did not hot-reload this file, so I restarted it. Still open: the server.py packaging POST/transfer routes shadow the routes/inventory_system.py versions, and they drop from_branch_id (details below). Frontend: all 4 checks pass. The request-materials dialog shows the locked 'المشروع: مطعم الاختبار' field, and the sync-preview dialog code no longer has it. /reports/price-increases has the project bar and re-fetches with the new project_id when the project changes. The /warehouse project bar sits under the sticky header (header ends at y=85, bar starts at y=97). The MoveToProjectDialog target list excludes the current project.",
+  "backend_issues": {
+    "critical": [
+      {"endpoint": "POST /api/packaging-requests (server.py ~11297) + POST /packaging-requests/{id}/transfer", "issue": "The server.py route shadows routes/inventory_system.py. Its PackagingRequestCreate has no from_branch_id field, so an admin or any user without branch_id saves from_branch_id=None. The transfer then lowers main packaging stock (20→17 in the test) but adds nothing to any branch_packaging_inventory, so the stock disappears. The server.py version also returns a string request_number 'PKG-000N', while inventory_system returns an int, and GET ignores ?status.", "priority": "HIGH"}
+    ],
+    "minor": [
+      {"endpoint": "GET /api/packaging-requests", "issue": "FIXED by testing agent: 500 ObjectId serialization (r['id']=r.pop('_id')). Now uses {'_id':0}."},
+      {"endpoint": "server.py packaging approve/transfer", "issue": "These use raw db, not the scoped db. Branch inventory inserted by transfer has no project_id tag; it is only visible through branch_id→project mapping."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "/reports/price-increases", "issues": ["The page background is dark navy, but the PageProjectBar select trigger shows no visible text: white border, empty-looking value.", "The header title is dark red and the back/refresh button text is dark, both on a dark background. Contrast is low.", "The initial load fires GET /reports/price-increases twice (duplicate fetch)."]}
+    ]
+  },
+  "test_report_links": ["/app/backend/tests/test_inventory_isolation_iter319.py", "/app/test_reports/pytest/pytest_iter319.xml"],
+  "action_items": [
+    "Remove the duplicate server.py packaging-requests POST/approve/transfer routes (or add from_branch_id to their model) so the inventory_system.py versions, or a fixed copy, handle the request. Transfer must not lower main stock when no branch is set.",
+    "Fix contrast of the project select and header text on /reports/price-increases (dark theme)."
+  ],
+  "critical_code_review_comments": [
+    "The _ScopedCollection.find_one bypass for sorts on *_number keys is broad. If find_one is called with an id filter plus sort on a *_number field, it skips project scoping. Narrow the bypass to filter-less counter lookups.",
+    "_lenient lets any untagged (project_id null/empty) doc be updated or deleted from any project. This is fine after the backfill, but worth noting.",
+    "server.py still holds many duplicate inventory routes that shadow routes/inventory_system.py, so fixes in one file silently do nothing. Consolidate them."
+  ],
+  "updated_files": ["/app/backend/server.py (get_packaging_requests _id fix)", "/app/backend/tests/test_inventory_isolation_iter319.py"],
+  "success_rate": {"backend": "89% (8/9)", "frontend": "100% (4/4 checks)"},
+  "seed_data_creation": "TEST_i319* docs were created and then removed directly in MongoDB. The raw-material delete API returns 409 once a material has been used.",
+  "retest_needed": true,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Run: REACT_APP_BACKEND_URL=... pytest backend/tests/test_inventory_isolation_iter319.py. TestPackaging::test_packaging_flow fails until the server.py packaging POST keeps from_branch_id. After editing server.py, the backend needed `supervisorctl restart backend`; hot reload did not pick it up. UI login: page.request.post login, set localStorage token/user/selectedProjectId, hide [data-testid=splash-screen]."
+}

@@ -64,6 +64,8 @@ import StockCountHistoryDialog from '../components/StockCountHistoryDialog';
 import { useAuth } from '../context/AuthContext';
 import { showApiError } from '../utils/apiError';
 import { printBranchOrder } from '../utils/printReport';
+import { PageProjectBar, InventoryProjectField, ProjectBadge } from '../components/ProjectScopeControls';
+import { useProject } from '../context/ProjectContext';
 const API = API_URL;
 
 // ⭐ معامل تحويل الوحدات (نفس منطق صفحة التصنيع — مصدر واحد للحقيقة)
@@ -122,6 +124,7 @@ const convertToMainUnit = (mp, inputQty, inputUnit) => {
   return qty;
 };
 export default function BranchOrders() {
+  const { selectedProjectId: _scopeProjectId } = useProject();
   const navigate = useNavigate();
   const { t, isRTL } = useTranslation();
   const { hasRole } = useAuth();
@@ -159,7 +162,8 @@ export default function BranchOrders() {
   const headers = { Authorization: `Bearer ${token}` };
   useEffect(() => {
     fetchData();
-  }, [selectedTab, selectedBranch]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedTab, selectedBranch, _scopeProjectId]);
 
   // 🔄 تحديث صامت دوري — تظهر تحديثات الطلبات (من المصنع/المخزن) فوراً دون إعادة تحميل
   useEffect(() => {
@@ -463,6 +467,7 @@ export default function BranchOrders() {
           </Button>
         </div>
       </header>
+      <div className="max-w-7xl mx-auto px-4 mt-3"><PageProjectBar /></div>
       <main className="max-w-7xl mx-auto p-4 space-y-4">
         {/* Tabs */}
         <Tabs value={selectedTab} onValueChange={setSelectedTab}>

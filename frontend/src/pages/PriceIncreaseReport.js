@@ -16,10 +16,13 @@ import {
   ArrowRight, TrendingUp, AlertTriangle, RefreshCw, Filter, Building2, Package, Calendar,
 } from 'lucide-react';
 import { showApiError } from '../utils/apiError';
+import { PageProjectBar } from '../components/ProjectScopeControls';
+import { useProject } from '../context/ProjectContext';
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 
 const PriceIncreaseReport = () => {
+  const { selectedProjectId: _scopeProjectId } = useProject();
   const { t } = useTranslation();
   const navigate = useNavigate();
   const token = localStorage.getItem('token');
@@ -65,28 +68,30 @@ const PriceIncreaseReport = () => {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  useEffect(() => { fetchData(); }, [fetchData]);
+  useEffect(() => { fetchData(); }, [fetchData, _scopeProjectId]);
 
   const totalImpact = data.total_cost_impact || 0;
   const rowsCount = data.total_rows || 0;
 
   return (
+    <div className="min-h-screen bg-background text-foreground" dir="rtl">
     <div className="container mx-auto p-4 md:p-6 space-y-6" dir="rtl" data-testid="price-increase-report-page">
+      <PageProjectBar />
       {/* Header */}
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div className="flex items-center gap-3">
-          <Button variant="ghost" size="icon" onClick={() => navigate(-1)} data-testid="back-btn">
+          <Button variant="outline" size="icon" className="text-foreground" onClick={() => navigate(-1)} data-testid="back-btn">
             <ArrowRight className="h-5 w-5" />
           </Button>
           <div>
-            <h1 className="text-2xl font-bold flex items-center gap-2">
+            <h1 className="text-2xl font-bold flex items-center gap-2 text-foreground">
               <TrendingUp className="h-6 w-6 text-red-500" />
               {t('تقرير زيادة أسعار الشراء')}
             </h1>
             <p className="text-sm text-muted-foreground">{t('مراجعة قرارات قسم المشتريات ومحاسبة الموردين على الأسعار المرتفعة')}</p>
           </div>
         </div>
-        <Button variant="outline" onClick={fetchData} disabled={loading} data-testid="refresh-btn">
+        <Button variant="outline" className="text-foreground" onClick={fetchData} disabled={loading} data-testid="refresh-btn">
           <RefreshCw className={`h-4 w-4 ml-2 ${loading ? 'animate-spin' : ''}`} />
           {t('تحديث')}
         </Button>
@@ -273,6 +278,7 @@ const PriceIncreaseReport = () => {
           )}
         </CardContent>
       </Card>
+    </div>
     </div>
   );
 };

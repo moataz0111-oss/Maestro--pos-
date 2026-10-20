@@ -5,6 +5,8 @@ import { useAuth } from '../context/AuthContext';
 import { useProject } from '../context/ProjectContext';
 import { API_URL } from '../utils/api';
 import { toast } from 'sonner';
+import { ProjectsComparisonChart } from '../components/ProjectsComparisonChart';
+import { resolveImageUrl } from '../components/ProjectLogoUpload';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../components/ui/card';
 import { Badge } from '../components/ui/badge';
 import { Button } from '../components/ui/button';
@@ -18,7 +20,7 @@ const fmt = (n, cur = 'IQD') => `${Number(n || 0).toLocaleString('en-US')} ${cur
 
 export default function EnterpriseDashboard() {
   const { user } = useAuth();
-  const { enterpriseEnabled } = useProject();
+  const { enterpriseEnabled, configLoaded } = useProject();
   const navigate = useNavigate();
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -61,7 +63,7 @@ export default function EnterpriseDashboard() {
 
   // 🔒 حماية (Feb 2026): لا تدخل لوحة المؤسسة ما لم يُفعّلها Super Admin (enterprise_enabled=true)
   //    super_admin فقط يُستثنى (يرى كل شيء دائماً). — بعد كل الـ hooks لتجنّب خطأ قواعد الـ hooks
-  if (user && user.role !== 'super_admin' && enterpriseEnabled === false) {
+  if (user && user.role !== 'super_admin' && configLoaded && enterpriseEnabled === false) {
     return <Navigate to="/" replace />;
   }
 
@@ -78,7 +80,7 @@ export default function EnterpriseDashboard() {
   }
 
   return (
-    <div className="p-6 space-y-6" dir="rtl" data-testid="enterprise-dashboard-page">
+    <div className="min-h-screen bg-background text-foreground p-6 space-y-6" dir="rtl" data-testid="enterprise-dashboard-page">
       <div className="flex items-center justify-between">
         <div>
           <div className="flex items-center gap-2">
@@ -139,7 +141,7 @@ export default function EnterpriseDashboard() {
                   <TrendingUp className="h-5 w-5 text-green-600" />
                   <div>
                     <p className="text-xs text-muted-foreground">الإيرادات الإجمالية</p>
-                    <p className="text-xl font-bold text-green-700">{fmt(data.totals.revenue)}</p>
+                    <p className="text-xl font-bold text-green-700 dark:text-green-400">{fmt(data.totals.revenue)}</p>
                   </div>
                 </div>
               </CardContent>
@@ -150,7 +152,7 @@ export default function EnterpriseDashboard() {
                   <TrendingDown className="h-5 w-5 text-red-600" />
                   <div>
                     <p className="text-xs text-muted-foreground">إجمالي المصاريف</p>
-                    <p className="text-xl font-bold text-red-700">{fmt(data.totals.expenses)}</p>
+                    <p className="text-xl font-bold text-red-700 dark:text-red-400">{fmt(data.totals.expenses)}</p>
                   </div>
                 </div>
               </CardContent>
@@ -161,7 +163,7 @@ export default function EnterpriseDashboard() {
                   <DollarSign className={`h-5 w-5 ${data.totals.net_profit >= 0 ? 'text-green-600' : 'text-red-600'}`} />
                   <div>
                     <p className="text-xs text-muted-foreground">صافي الربح</p>
-                    <p className={`text-xl font-bold ${data.totals.net_profit >= 0 ? 'text-green-700' : 'text-red-700'}`}>
+                    <p className={`text-xl font-bold ${data.totals.net_profit >= 0 ? 'text-green-700 dark:text-green-400' : 'text-red-700 dark:text-red-400'}`}>
                       {fmt(data.totals.net_profit)}
                     </p>
                   </div>
@@ -170,6 +172,8 @@ export default function EnterpriseDashboard() {
             </Card>
           </div>
 
+          <ProjectsComparisonChart projects={data.projects} />
+
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {data.projects.map(p => (
               <Card key={p.id} className="hover:shadow-md transition" data-testid={`project-stats-${p.id}`}>
@@ -177,7 +181,7 @@ export default function EnterpriseDashboard() {
                   <div className="flex items-start justify-between">
                     <div className="flex items-center gap-2">
                       {p.logo_url ? (
-                        <img src={p.logo_url} alt="" className="h-8 w-8 rounded object-cover" />
+                        <img src={resolveImageUrl(p.logo_url)} alt="" className="h-8 w-8 rounded-full object-cover" />
                       ) : (
                         <div className="h-8 w-8 rounded bg-primary/10 flex items-center justify-center">
                           <Briefcase className="h-4 w-4 text-primary" />
@@ -193,23 +197,31 @@ export default function EnterpriseDashboard() {
                 </CardHeader>
                 <CardContent className="space-y-2">
                   <div className="grid grid-cols-2 gap-2 text-xs">
-                    <div className="p-2 bg-green-50 rounded">
+                    <div className="p-2 bg-green-50 dark:bg-green-500/15 rounded">
                       <p className="text-muted-foreground">إيرادات</p>
-                      <p className="font-bold text-green-700">{fmt(p.revenue, p.currency)}</p>
+                      <p className="font-bold text-green-700 dark:text-green-400">{fmt(p.revenue, p.currency)}</p>
                     </div>
-                    <div className="p-2 bg-red-50 rounded">
+                    <div className="p-2 bg-red-50 dark:bg-red-500/15 rounded">
                       <p className="text-muted-foreground">مصاريف</p>
-                      <p className="font-bold text-red-700">{fmt(p.expenses, p.currency)}</p>
+                      <p className="font-bold text-red-700 dark:text-red-400">{fmt(p.expenses, p.currency)}</p>
                     </div>
-                    <div className="p-2 bg-blue-50 rounded">
-                      <p className="text-muted-foreground">صافي</p>
-                      <p className={`font-bold ${p.net_profit >= 0 ? 'text-blue-700' : 'text-red-700'}`}>
+                    <div className="p-2 bg-blue-50 dark:bg-blue-500/15 rounded">
+                      <p className="text-muted-foreground">صافي (مبيعات − مصاريف − مشتريات)</p>
+                      <p className={`font-bold ${p.net_profit >= 0 ? 'text-blue-700 dark:text-blue-400' : 'text-red-700 dark:text-red-400'}`}>
                         {fmt(p.net_profit, p.currency)}
                       </p>
                     </div>
-                    <div className="p-2 bg-purple-50 rounded">
+                    <div className="p-2 bg-purple-50 dark:bg-purple-500/15 rounded">
                       <p className="text-muted-foreground">طلبات</p>
-                      <p className="font-bold text-purple-700">{p.orders_count.toLocaleString()}</p>
+                      <p className="font-bold text-purple-700 dark:text-purple-400">{p.orders_count.toLocaleString()}</p>
+                    </div>
+                    <div className="p-2 bg-amber-50 dark:bg-amber-500/15 rounded" data-testid={`project-purchases-${p.id}`}>
+                      <p className="text-muted-foreground">مشتريات</p>
+                      <p className="font-bold text-amber-700 dark:text-amber-400">{fmt(p.purchases || 0, p.currency)}</p>
+                    </div>
+                    <div className="p-2 bg-sky-50 dark:bg-sky-500/15 rounded" data-testid={`project-inventory-${p.id}`}>
+                      <p className="text-muted-foreground">قيمة المخزون</p>
+                      <p className="font-bold text-sky-700 dark:text-sky-400">{fmt(p.inventory_value || 0, p.currency)}</p>
                     </div>
                   </div>
                   <div className="flex items-center justify-between text-xs text-muted-foreground pt-2 border-t">

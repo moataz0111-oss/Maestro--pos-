@@ -28,6 +28,7 @@ export const ProjectProvider = ({ children }) => {
   });
 
   const [loading, setLoading] = useState(false);
+  const [configLoaded, setConfigLoaded] = useState(false);
   const [enterpriseEnabled, setEnterpriseEnabled] = useState(false);
 
   const canSelectAllProjects = useCallback(() => {
@@ -50,7 +51,7 @@ export const ProjectProvider = ({ children }) => {
 
       if (!enterpriseOn) {
         // العميل لم يفعّل وضع المؤسسة — استخدم الوضع التقليدي
-        setEnterpriseEnabled(false);
+        setEnterpriseEnabled(false); window.__ENTERPRISE_ENABLED__ = false; setConfigLoaded(true);
         setProjects([]);
         setSelectedProjectId('all');
         localStorage.removeItem('projects');
@@ -63,7 +64,7 @@ export const ProjectProvider = ({ children }) => {
       const data = res.data || [];
       setProjects(data);
       localStorage.setItem('projects', JSON.stringify(data));
-      setEnterpriseEnabled(true);
+      setEnterpriseEnabled(true); window.__ENTERPRISE_ENABLED__ = true; setConfigLoaded(true);
 
       // مستخدم مقيد بمشروع → اختياره تلقائياً
       if (user?.project_id && !ENTERPRISE_WIDE_ROLES.includes(user?.role)) {
@@ -75,8 +76,9 @@ export const ProjectProvider = ({ children }) => {
       }
     } catch (e) {
       console.log('Enterprise config unavailable:', e?.message);
-      setEnterpriseEnabled(false);
+      setEnterpriseEnabled(false); window.__ENTERPRISE_ENABLED__ = false;
     } finally {
+      setConfigLoaded(true);
       setLoading(false);
     }
   }, [isAuthenticated, user]);
@@ -126,6 +128,7 @@ export const ProjectProvider = ({ children }) => {
       getProjectIdForApi,
       canSelectAllProjects,
       loading,
+      configLoaded,
       enterpriseEnabled,
       refreshProjects: fetchProjects,
     }}>

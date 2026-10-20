@@ -115,17 +115,12 @@ def get_user_tenant_id(user: dict) -> str:
     return user.get("tenant_id")
 
 
-async def _get_company_commission_rate(tenant_id: Optional[str], app_id: Optional[str]) -> float:
+async def _get_company_commission_rate(tenant_id: Optional[str], app_id: Optional[str], branch_id: Optional[str] = None) -> float:
     """جلب نسبة عمولة شركة التوصيل الحالية من delivery_app_settings (مفتاحها app_id)."""
     if not app_id:
         return 0
-    q = {"app_id": app_id}
-    if tenant_id:
-        q["tenant_id"] = tenant_id
-    s = await db.delivery_app_settings.find_one(q, {"_id": 0})
-    if not s:
-        s = await db.delivery_app_settings.find_one({"app_id": app_id}, {"_id": 0})
-    return (s or {}).get("commission_rate", 0) or 0
+    from .shared import delivery_commission_rate
+    return await delivery_commission_rate(tenant_id, app_id, branch_id=branch_id)
 
 async def get_next_order_number(tenant_id: str, branch_id: Optional[str] = None, business_date: Optional[str] = None) -> int:
     """الحصول على رقم الطلب التالي — يستخدم نفس عدّاد online orders (يومي حسب الفرع)
@@ -237,7 +232,7 @@ async def sync_order(order: OfflineOrder, current_user: dict = Depends(get_curre
         )
         delivery_commission = 0
         if is_dc and da_id:
-            _rate = await _get_company_commission_rate(tenant_id, da_id)
+            _rate = await _get_company_commission_rate(tenant_id, da_id, getattr(order, 'branch_id', None))
             delivery_commission = round((order.total or 0) * _rate / 100, 2)
 
         # إنشاء الطلب الجديد
@@ -631,7 +626,7 @@ async def fix_order_routing(
         update_set["delivery_app"] = _app_id
         update_set["delivery_app_name"] = _name
         update_set["is_delivery_company"] = True
-        _rate = await _get_company_commission_rate(tenant_id, _app_id)
+        _rate = await _get_company_commission_rate(tenant_id, _app_id, existing.get('branch_id'))
         update_set["delivery_commission"] = round((existing.get("total", 0) or 0) * _rate / 100, 2)
 
     update_set["routing_fixed_at"] = datetime.now(timezone.utc).isoformat()
@@ -715,7 +710,7 @@ async def assign_delivery_company(
     }
 
     # نسبة العمولة الحالية للشركة (لتظهر في تقرير شركات التوصيل بشكل صحيح)
-    _rate = await _get_company_commission_rate(tenant_id, payload.delivery_company_id)
+    _rate = await _get_company_commission_rate(tenant_id, payload.delivery_company_id, existing.get('branch_id'))
     _commission = round((existing.get("total", 0) or 0) * _rate / 100, 2)
 
     update_set = {

@@ -1,7 +1,8 @@
 """
 Reports Routes - تقارير المبيعات والمشتريات والمصروفات
 """
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
+from contextvars import ContextVar
 from fastapi.responses import StreamingResponse
 from typing import Optional, List, Dict, Any
 from datetime import datetime, timezone, timedelta
@@ -16,7 +17,84 @@ from .shared import (
 )
 
 logger = logging.getLogger(__name__)
-router = APIRouter(prefix="/reports", tags=["Reports"])
+
+# 🏢 عزل التقارير بالمشروع: {"project_id", "branch_ids"} أو None (كل المشاريع)
+_PROJECT_SCOPE: ContextVar[Optional[dict]] = ContextVar("reports_project_scope", default=None)
+
+
+async def _set_project_scope(request: Request, current_user: dict = Depends(get_current_user)):
+    """يحدد المشروع المختار (query project_id أو X-Project-Id) أو مشروع المستخدم المقيّد"""
+    from .shared import user_project_scope
+    pid = user_project_scope(current_user)
+    if not pid:
+        pid = request.query_params.get("project_id") or request.headers.get("x-project-id")
+    if not pid or pid in ("all", "null", "undefined"):
+        _PROJECT_SCOPE.set(None)
+        return
+    db = get_database()
+    tenant_id = get_user_tenant_id(current_user)
+    bq = {"project_id": pid}
+    if tenant_id:
+        bq["tenant_id"] = tenant_id
+    branch_ids = [b["id"] async for b in db.branches.find(bq, {"_id": 0, "id": 1}) if b.get("id")]
+    _PROJECT_SCOPE.set({"project_id": pid, "branch_ids": branch_ids})
+
+
+def _scope(query: dict) -> dict:
+    """يقصر الاستعلام على بيانات المشروع المختار فقط (بالـ project_id أو فروع المشروع)"""
+    sc = _PROJECT_SCOPE.get()
+    if not sc:
+        return query
+    bid = query.get("branch_id")
+    if isinstance(bid, str):
+        if bid not in sc["branch_ids"]:
+            query["branch_id"] = {"$in": []}
+        return query
+    cond = {"$or": [
+        {"branch_id": {"$in": sc["branch_ids"]}},
+        {"branch_id": {"$in": [None, ""]}, "project_id": sc["project_id"]},
+        {"branch_id": {"$exists": False}, "project_id": sc["project_id"]},
+    ]}
+    if cond not in query.get("$and", []):
+        query.setdefault("$and", []).append(cond)
+    return query
+
+
+router = APIRouter(prefix="/reports", tags=["Reports"], dependencies=[Depends(_set_project_scope)])
+
+
+@router.get("/projects-activity")
+async def get_projects_activity(
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None,
+    current_user: dict = Depends(get_current_user)
+):
+    """مبيعات وعدد طلبات كل مشروع في الفترة — لتمييز المشاريع بدون بيانات"""
+    db = get_database()
+    tenant_id = get_user_tenant_id(current_user)
+    _PROJECT_SCOPE.set(None)
+    from .shared import user_project_scope
+    pq = {"deleted_at": {"$exists": False}}
+    if tenant_id:
+        pq["tenant_id"] = tenant_id
+    if user_project_scope(current_user):
+        pq["id"] = user_project_scope(current_user)
+    projects = await db.projects.find(pq, {"_id": 0, "id": 1, "name": 1, "logo_url": 1}).to_list(length=None)
+    bq = {"tenant_id": tenant_id} if tenant_id else {}
+    branch_project = {b["id"]: b.get("project_id") async for b in db.branches.find(bq, {"_id": 0, "id": 1, "project_id": 1}) if b.get("id")}
+    oq = {"status": {"$nin": ["cancelled", "refunded"]}, "is_refunded": {"$ne": True}}
+    if tenant_id:
+        oq["tenant_id"] = tenant_id
+    oq = _apply_business_date_filter(oq, start_date, end_date)
+    stats = {p["id"]: {"orders": 0, "sales": 0.0} for p in projects}
+    async for o in db.orders.find(oq, {"_id": 0, "project_id": 1, "branch_id": 1, "total": 1, "payment_status": 1}):
+        if o.get("payment_status") not in ("paid", "credit", None):
+            continue
+        pid = branch_project.get(o.get("branch_id")) or o.get("project_id")
+        if pid in stats:
+            stats[pid]["orders"] += 1
+            stats[pid]["sales"] += float(o.get("total") or 0)
+    return [{**p, **stats[p["id"]], "has_data": stats[p["id"]]["orders"] > 0} for p in projects]
 
 
 # ==================== UNIFIED PER-PRODUCT COST RESOLVER ====================
@@ -191,6 +269,7 @@ async def _build_current_costs_map(db, tenant_id: Optional[str]) -> Dict[str, Di
 def _apply_business_date_filter(query: dict, start_date: Optional[str], end_date: Optional[str], legacy_field: str = "created_at") -> dict:
     """يُضيف فلتر business_date (مع fallback للحقل القديم للسجلات التي لا تملك business_date).
     يُعدّل الـ query بإضافة $or أو $and حسب السياق."""
+    _scope(query)
     if not start_date and not end_date:
         return query
     biz_range = {}
@@ -506,7 +585,7 @@ async def get_weekly_low_profit_products(
     if branch_id:
         query = build_branch_query(branch_id, query)
 
-    paid_orders = await db.orders.find(query, {"_id": 0}).to_list(length=None)
+    paid_orders = await db.orders.find(_scope(query), {"_id": 0}).to_list(length=None)
 
     # ⭐ خريطة موحّدة بالتكاليف الحالية (تستخدم نفس منطق POS عبر manufactured_links)
     tenant_id = get_user_tenant_id(current_user)
@@ -661,7 +740,7 @@ async def get_inventory_report(branch_id: Optional[str] = None, current_user: di
     elif branch_id:
         query["branch_id"] = branch_id
     
-    items = await db.inventory.find(query, {"_id": 0}).to_list(length=None)
+    items = await db.inventory.find(_scope(query), {"_id": 0}).to_list(length=None)
     
     low_stock = [i for i in items if i["quantity"] <= i["min_quantity"]]
     raw_materials = [i for i in items if i.get("item_type") == "raw"]
@@ -823,7 +902,7 @@ async def get_profit_loss_report(
     if end_date:
         expense_query.setdefault("date", {})["$lte"] = end_date
     
-    expenses = await db.expenses.find(expense_query, {"_id": 0}).to_list(length=None)
+    expenses = await db.expenses.find(_scope(expense_query), {"_id": 0}).to_list(length=None)
     total_expenses = sum(e["amount"] for e in expenses)
     
     # ==================== حساب التكاليف التشغيلية ====================
@@ -842,7 +921,7 @@ async def get_profit_loss_report(
             {"branch_type": {"$nin": NON_BRANCH_TYPES}},
         ]
     
-    branches = await db.branches.find(branches_query, {"_id": 0}).to_list(length=None)
+    branches = await db.branches.find(_scope(branches_query), {"_id": 0}).to_list(length=None)
     # الفلتر الدفاعي: استبعاد أي قسم إداري قد يتسلل
     if not branch_id:
         branches = [b for b in branches if (b.get("branch_type") or "branch") == "branch"]
@@ -861,7 +940,7 @@ async def get_profit_loss_report(
     elif user_branch_id and user_role not in [UserRole.SUPER_ADMIN, UserRole.ADMIN, UserRole.GENERAL_MANAGER, UserRole.MANAGER]:
         employees_query["branch_id"] = user_branch_id
     
-    employees = await db.employees.find(employees_query, {"_id": 0, "salary": 1}).to_list(length=None)
+    employees = await db.employees.find(_scope(employees_query), {"_id": 0, "salary": 1}).to_list(length=None)
     total_salaries = sum(e.get("salary", 0) for e in employees)
     
     # حساب عدد الأيام في الفترة
@@ -979,6 +1058,9 @@ async def get_delivery_credits_report(
     
     # نِسَب العمولة محفوظة فعلياً في delivery_app_settings (مفتاحها app_id) — وليست في delivery_apps
     app_settings = await db.delivery_app_settings.find(build_tenant_query(current_user), {"_id": 0}).to_list(length=None)
+    _sc = _PROJECT_SCOPE.get()
+    app_settings = sorted(app_settings, key=lambda s: 1 if (_sc and s.get("project_id") == _sc["project_id"]) else 0)
+    app_settings = [s for s in app_settings if not s.get("project_id") or (_sc and s.get("project_id") == _sc["project_id"])]
     app_rates = {s["app_id"]: s.get("commission_rate", 0) for s in app_settings}
     app_names = {s["app_id"]: s.get("name") for s in app_settings if s.get("name")}
     # دمج مع الشركات الافتراضية لجلب الاسم عند عدم وجود إعداد
@@ -996,7 +1078,7 @@ async def get_delivery_credits_report(
     if end_date:
         collections_query.setdefault("date", {})["$lte"] = end_date
     
-    delivery_collections = await db.delivery_collections.find(collections_query, {"_id": 0}).to_list(length=None)
+    delivery_collections = await db.delivery_collections.find(_scope(collections_query), {"_id": 0}).to_list(length=None)
     
     # حساب المبالغ المحصلة لكل شركة توصيل
     collected_by_app = {}
@@ -1178,7 +1260,7 @@ async def get_products_report(
     else:
         product_query["$or"] = [{"tenant_id": {"$exists": False}}, {"tenant_id": None}]
     
-    products = await db.products.find(product_query, {"_id": 0}).to_list(length=None)
+    products = await db.products.find(_scope(product_query), {"_id": 0}).to_list(length=None)
     
     order_query = {"status": {"$ne": OrderStatus.CANCELLED}}
     
@@ -1399,7 +1481,7 @@ async def get_cancellations_report(
     elif branch_id:
         query["branch_id"] = branch_id
     
-    cancelled_orders = await db.orders.find(query, {"_id": 0}).to_list(length=None)
+    cancelled_orders = await db.orders.find(_scope(query), {"_id": 0}).to_list(length=None)
     
     total_query = {"created_at": {"$gte": start_date, "$lte": end_date + "T23:59:59"}}
     if tenant_id:
@@ -1410,7 +1492,7 @@ async def get_cancellations_report(
         total_query["branch_id"] = user_branch_id
     elif branch_id:
         total_query["branch_id"] = branch_id
-    total_orders = await db.orders.count_documents(total_query)
+    total_orders = await db.orders.count_documents(_scope(total_query))
     
     today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
     today_query = {"status": "cancelled", "created_at": {"$regex": f"^{today}"}}
@@ -1420,7 +1502,7 @@ async def get_cancellations_report(
         today_query["branch_id"] = user_branch_id
     elif branch_id:
         today_query["branch_id"] = branch_id
-    today_cancelled = await db.orders.count_documents(today_query)
+    today_cancelled = await db.orders.count_documents(_scope(today_query))
     
     total_value = sum(o.get("total", 0) for o in cancelled_orders)
     cancellation_rate = (len(cancelled_orders) / total_orders * 100) if total_orders > 0 else 0
@@ -1462,7 +1544,7 @@ async def get_discounts_report(
     elif branch_id:
         query["branch_id"] = branch_id
     
-    orders = await db.orders.find(query, {"_id": 0}).to_list(length=None)
+    orders = await db.orders.find(_scope(query), {"_id": 0}).to_list(length=None)
     
     sales_query = {"created_at": {"$gte": start_date, "$lte": end_date + "T23:59:59"}, "status": {"$ne": "cancelled"}}
     if tenant_id:
@@ -1473,7 +1555,7 @@ async def get_discounts_report(
         sales_query["branch_id"] = user_branch_id
     elif branch_id:
         sales_query["branch_id"] = branch_id
-    all_orders = await db.orders.find(sales_query, {"total": 1}).to_list(length=None)
+    all_orders = await db.orders.find(_scope(sales_query), {"total": 1}).to_list(length=None)
     total_sales = sum(o.get("total", 0) for o in all_orders)
     
     total_discounts = sum(o.get("discount", 0) for o in orders)
@@ -1526,7 +1608,7 @@ async def get_credit_report(
     elif branch_id:
         query["branch_id"] = branch_id
     
-    orders = await db.orders.find(query, {"_id": 0}).to_list(length=None)
+    orders = await db.orders.find(_scope(query), {"_id": 0}).to_list(length=None)
     
     # جلب سجلات التحصيل لهذه الطلبات
     order_ids = [o.get("id") for o in orders]
@@ -1664,7 +1746,7 @@ async def get_credit_collections(
     if end_date:
         query.setdefault("date", {})["$lte"] = end_date
     
-    collections = await db.credit_collections.find(query, {"_id": 0}).to_list(length=None)
+    collections = await db.credit_collections.find(_scope(query), {"_id": 0}).to_list(length=None)
     
     return {
         "collections": collections,
@@ -1863,7 +1945,7 @@ async def reset_delivery_collections(
     if payload.end_date:
         query.setdefault("date", {})["$lte"] = payload.end_date
 
-    collections = await db.delivery_collections.find(query, {"_id": 0}).to_list(length=None)
+    collections = await db.delivery_collections.find(_scope(query), {"_id": 0}).to_list(length=None)
     if not collections:
         return {"deleted_collections": 0, "deleted_deposits": 0, "restored_orders": 0, "amount_reversed": 0,
                 "message": "لا توجد تحصيلات لهذه الشركة"}
@@ -2120,7 +2202,7 @@ async def get_delivery_collections(
     if end_date:
         query.setdefault("date", {})["$lte"] = end_date
     
-    collections = await db.delivery_collections.find(query, {"_id": 0}).to_list(length=None)
+    collections = await db.delivery_collections.find(_scope(query), {"_id": 0}).to_list(length=None)
 
     # ⭐ احتساب "كلفة المواد" لكل سجل تحصيل ديناميكياً من طلباته (لدعم السجلات القديمة
     # التي أُنشئت قبل تخزين total_materials_cost). يستخدم نفس مصدر تقرير المبيعات.
@@ -2216,7 +2298,7 @@ async def get_card_report(
     elif branch_id:
         query["branch_id"] = branch_id
     
-    orders = await db.orders.find(query, {"_id": 0}).to_list(length=None)
+    orders = await db.orders.find(_scope(query), {"_id": 0}).to_list(length=None)
     
     # جلب سجلات التحصيل لهذه الطلبات
     order_ids = [o.get("id") for o in orders]
@@ -2352,7 +2434,7 @@ async def get_card_collections(
     if end_date:
         query.setdefault("date", {})["$lte"] = end_date
     
-    collections = await db.card_collections.find(query, {"_id": 0}).to_list(length=None)
+    collections = await db.card_collections.find(_scope(query), {"_id": 0}).to_list(length=None)
     
     return {
         "collections": collections,

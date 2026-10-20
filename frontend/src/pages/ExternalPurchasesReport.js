@@ -19,6 +19,8 @@ import {
 } from 'lucide-react';
 import { API_URL, BACKEND_URL } from '../utils/api';
 import { useTranslation } from '../hooks/useTranslation';
+import { PageProjectBar, InventoryProjectField, ProjectBadge } from '../components/ProjectScopeControls';
+import { useProject } from '../context/ProjectContext';
 
 const API = API_URL;
 
@@ -45,6 +47,7 @@ const imgUrl = (u) => {
 };
 
 export default function ExternalPurchasesReport() {
+  const { selectedProjectId: _scopeProjectId } = useProject();
   const navigate = useNavigate();
   const { t, lang } = useTranslation();
   const cur = lang === 'en' ? 'IQD' : 'د.ع';
@@ -79,7 +82,7 @@ export default function ExternalPurchasesReport() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [start, end, supplierFilter]);
 
-  useEffect(() => { fetchReport(); }, [fetchReport]);
+  useEffect(() => { fetchReport(); }, [fetchReport, _scopeProjectId]);
 
   const summary = data.summary || {};
 
@@ -261,6 +264,7 @@ export default function ExternalPurchasesReport() {
           </button>
         </div>
       </header>
+      <div className="max-w-7xl mx-auto px-4 mt-3"><PageProjectBar /></div>
 
       <div className="max-w-7xl mx-auto px-4 py-5 space-y-5">
         {/* الفلاتر */}

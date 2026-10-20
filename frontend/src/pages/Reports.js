@@ -15,6 +15,7 @@ import { Label } from '../components/ui/label';
 import { Switch } from '../components/ui/switch';
 import { Badge } from '../components/ui/badge';
 import BranchSelector from '../components/BranchSelector';
+import { ProjectsActivityStrip } from '../components/ProjectsActivityStrip';
 import ProductsByChannelTab from '../components/reports/ProductsByChannelTab';
 import {
   ArrowRight,
@@ -4349,12 +4350,25 @@ const DeliveryReportTab = ({ deliveryCreditsReport, t, formatPrice, fetchReports
 export default function Reports() {
   const { user, hasRole } = useAuth();
   const { selectedBranchId, branches, getBranchIdForApi, canSelectAllBranches, selectBranch } = useBranch();
-  const { enterpriseEnabled, projects, selectedProjectId } = useProject();
+  const { enterpriseEnabled, projects, selectedProjectId, selectProject } = useProject();
   const { t, isRTL } = useTranslation();
   const navigate = useNavigate();
   
   const [startDate, setStartDate] = useState(localDate());
   const [endDate, setEndDate] = useState(localDate());
+  const [projectsActivity, setProjectsActivity] = useState([]);
+
+  useEffect(() => {
+    if (!enterpriseEnabled || (projects || []).length < 2) { setProjectsActivity([]); return; }
+    axios.get(`${API}/reports/projects-activity`, { params: { start_date: startDate, end_date: endDate } })
+      .then(res => setProjectsActivity(Array.isArray(res.data) ? res.data : []))
+      .catch(() => setProjectsActivity([]));
+  }, [enterpriseEnabled, projects, startDate, endDate]);
+
+  const projectActivityMap = React.useMemo(
+    () => (projectsActivity.length ? Object.fromEntries(projectsActivity.map(p => [p.id, p.has_data])) : null),
+    [projectsActivity]
+  );
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('sales');
   const [loadingComprehensive, setLoadingComprehensive] = useState(false);
@@ -4425,7 +4439,7 @@ export default function Reports() {
     if (activeTab === 'comprehensive') {
       fetchAllReportsForComprehensive();
     }
-  }, [startDate, endDate, selectedBranchId]);
+  }, [startDate, endDate, selectedBranchId, selectedProjectId]);
 
   // الحصول على اسم الفرع المحدد
   const getSelectedBranchName = () => {
@@ -4436,7 +4450,7 @@ export default function Reports() {
 
   useEffect(() => {
     fetchReports();
-  }, [selectedBranchId, startDate, endDate, activeTab]);
+  }, [selectedBranchId, startDate, endDate, activeTab, selectedProjectId]);
 
   // إعادة جلب البيانات عند العودة للصفحة (visibility change)
   useEffect(() => {
@@ -4450,7 +4464,7 @@ export default function Reports() {
     return () => {
       document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
-  }, [selectedBranchId, startDate, endDate, activeTab]);
+  }, [selectedBranchId, startDate, endDate, activeTab, selectedProjectId]);
 
   const fetchReports = async () => {
     setLoading(true);
@@ -4741,7 +4755,7 @@ export default function Reports() {
             <div>
               <Label className="text-xs text-muted-foreground">{t('الفرع')}</Label>
               <div className="mt-1">
-                <BranchSelector />
+                <BranchSelector projectActivity={projectActivityMap} />
               </div>
             </div>
             <div>
@@ -4763,6 +4777,11 @@ export default function Reports() {
               />
             </div>
           </div>
+          {enterpriseEnabled && selectedProjectId === 'all' && projectsActivity.length > 1 && (
+            <div className="mt-3">
+              <ProjectsActivityStrip activity={projectsActivity} formatPrice={formatPrice} onSelect={selectProject} />
+            </div>
+          )}
         </div>
       )}
 

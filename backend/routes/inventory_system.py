@@ -24,7 +24,8 @@ from services.cost_layer_service import (
     PRICE_DIFF_THRESHOLD_PERCENT,
 )
 
-router = APIRouter(prefix="/api", tags=["Inventory System"], dependencies=[Depends(get_current_user)])
+from .inventory_scope import set_inventory_scope, get_scoped_database
+router = APIRouter(prefix="/api", tags=["Inventory System"], dependencies=[Depends(get_current_user), Depends(set_inventory_scope)])
 
 # ==================== HELPERS ====================
 
@@ -697,8 +698,8 @@ class BranchPackagingInventoryResponse(BaseModel):
 # ==================== HELPER FUNCTIONS ====================
 
 def get_db():
-    """Get database instance from shared module"""
-    return get_database()
+    """DB مقيّدة بالمشروع المختار (عزل المخزن/المشتريات/التصنيع)"""
+    return get_scoped_database()
 
 async def get_current_user_from_token(token: str):
     """Get current user from token"""
@@ -2720,14 +2721,18 @@ async def dismiss_price_alert(alert_id: str, current_user: dict = Depends(get_cu
 
 
 @router.get("/raw-materials-new")
-async def get_raw_materials(current_user: dict = Depends(get_current_user)):
-    """جلب جميع المواد الخام"""
+async def get_raw_materials(request: Request, current_user: dict = Depends(get_current_user)):
+    """جلب جميع المواد الخام (معزولة بالمشروع المختار)"""
     db = get_db()
     tenant_id = get_user_tenant_id(current_user)
     
     query = {}
     if tenant_id:
         query["tenant_id"] = tenant_id
+    from .shared import requested_project_id
+    _pid = requested_project_id(current_user, request)
+    if _pid:
+        query["project_id"] = _pid
     
     materials = await db.raw_materials.find(query, {"_id": 0}).to_list(length=None)
     
@@ -5240,10 +5245,18 @@ async def _enrich_unit_cost_fields(db, product: dict) -> dict:
 
 
 @router.get("/manufactured-products")
-async def get_manufactured_products(current_user: dict = Depends(get_current_user)):
-    """جلب جميع المنتجات المصنعة"""
+async def get_manufactured_products(request: Request, current_user: dict = Depends(get_current_user)):
+    """جلب المنتجات المصنعة (معزولة بالمؤسسة والمشروع المختار)"""
     db = get_db()
-    products = await db.manufactured_products.find({}, {"_id": 0}).to_list(length=None)
+    from .shared import requested_project_id
+    query = {}
+    tenant_id = get_user_tenant_id(current_user)
+    if tenant_id:
+        query["tenant_id"] = tenant_id
+    _pid = requested_project_id(current_user, request)
+    if _pid:
+        query["project_id"] = _pid
+    products = await db.manufactured_products.find(query, {"_id": 0}).to_list(length=None)
 
     # ⭐ المستهلَك كمكوّن في تصنيع منتجات أخرى (Nested Recipes) — يُخصم من المتبقي.
     # يُجمَع من حركات الاستهلاك (manufactured_consumption) فيُصحّح ذاتياً للبيانات القائمة.
@@ -7064,16 +7077,21 @@ async def receive_from_notification(notification_id: str):
 
 @router.get("/packaging-materials")
 async def get_packaging_materials(
+    request: Request,
     category: Optional[str] = None,
     current_user: dict = Depends(get_current_user)
 ):
-    """جلب جميع مواد التغليف"""
+    """جلب مواد التغليف (معزولة بالمشروع المختار)"""
     db = get_db()
     tenant_id = get_user_tenant_id(current_user)
     
     query = {}
     if tenant_id:
         query["tenant_id"] = tenant_id
+    from .shared import requested_project_id
+    _pid = requested_project_id(current_user, request)
+    if _pid:
+        query["project_id"] = _pid
     if category:
         query["category"] = category
     
