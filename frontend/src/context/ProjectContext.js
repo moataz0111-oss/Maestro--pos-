@@ -11,7 +11,7 @@ const API = API_URL;
 const ENTERPRISE_WIDE_ROLES = ['super_admin', 'admin', 'general_manager', 'enterprise_owner'];
 // 🔒 أدوار تتخطّى علامة tenant.enterprise_enabled (ترى إدارة المشاريع دائماً — فقط مالك النظام الأعلى)
 //    admin/general_manager لتينانت customer يجب أن يحترموا الإعداد ولا يروا إدارة المشاريع.
-const SYSTEM_OWNER_ROLES = ['super_admin', 'enterprise_owner'];
+const SYSTEM_OWNER_ROLES = ['super_admin'];
 
 export const ProjectProvider = ({ children }) => {
   const { user, isAuthenticated } = useAuth();
@@ -30,6 +30,7 @@ export const ProjectProvider = ({ children }) => {
   const [loading, setLoading] = useState(false);
   const [configLoaded, setConfigLoaded] = useState(false);
   const [enterpriseEnabled, setEnterpriseEnabled] = useState(false);
+  const [tenantEnterpriseActive, setTenantEnterpriseActive] = useState(false);
 
   const canSelectAllProjects = useCallback(() => {
     return ENTERPRISE_WIDE_ROLES.includes(user?.role);
@@ -47,6 +48,7 @@ export const ProjectProvider = ({ children }) => {
         entConfig = cfg.data;
       } catch (_) { /* fallback */ }
 
+      setTenantEnterpriseActive(entConfig?.enterprise_enabled === true);
       const enterpriseOn = entConfig?.enterprise_enabled === true || SYSTEM_OWNER_ROLES.includes(user?.role);
 
       if (!enterpriseOn) {
@@ -130,6 +132,7 @@ export const ProjectProvider = ({ children }) => {
       loading,
       configLoaded,
       enterpriseEnabled,
+      tenantEnterpriseActive,
       refreshProjects: fetchProjects,
     }}>
       {children}

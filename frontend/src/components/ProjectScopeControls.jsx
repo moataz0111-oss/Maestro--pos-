@@ -3,13 +3,16 @@ import { Briefcase } from 'lucide-react';
 import { Label } from './ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
 import { useProject } from '../context/ProjectContext';
+import { ProjectColorDot, projectColorOf } from './ProjectColor';
 
 export const SettingsProjectBar = ({ className = '' }) => {
   const { enterpriseEnabled, projects, selectedProjectId, selectProject } = useProject();
   if (!enterpriseEnabled || !(projects || []).length) return null;
   return (
     <div className={`flex flex-wrap items-center gap-3 p-3 rounded-xl border border-primary/30 bg-primary/5 ${className}`} data-testid="settings-project-bar">
-      <Briefcase className="h-4 w-4 text-primary" />
+      {selectedProjectId && selectedProjectId !== 'all'
+        ? <ProjectColorDot color={projectColorOf(projects, selectedProjectId)} size={10} />
+        : <Briefcase className="h-4 w-4 text-primary" />}
       <span className="text-sm font-medium text-foreground">المشروع:</span>
       <Select value={selectedProjectId || 'all'} onValueChange={selectProject}>
         <SelectTrigger className="w-[220px] h-9 bg-background text-foreground" data-testid="settings-project-select">
@@ -17,7 +20,7 @@ export const SettingsProjectBar = ({ className = '' }) => {
         </SelectTrigger>
         <SelectContent>
           <SelectItem value="all">كل المشاريع</SelectItem>
-          {projects.map(p => <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>)}
+          {projects.map(p => <SelectItem key={p.id} value={p.id}><span className="flex items-center gap-2"><ProjectColorDot color={projectColorOf(projects, p.id)} size={8} />{p.name}</span></SelectItem>)}
         </SelectContent>
       </Select>
       <span className="text-xs text-muted-foreground">
@@ -40,7 +43,7 @@ export const ProjectFormSelect = ({ value, onChange, testId = 'form-project-sele
           <SelectValue placeholder="اختر المشروع" />
         </SelectTrigger>
         <SelectContent>
-          {projects.map(p => <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>)}
+          {projects.map(p => <SelectItem key={p.id} value={p.id}><span className="flex items-center gap-2"><ProjectColorDot color={projectColorOf(projects, p.id)} size={8} />{p.name}</span></SelectItem>)}
         </SelectContent>
       </Select>
     </div>
@@ -51,12 +54,14 @@ export const ProjectBadge = ({ projectId }) => {
   const { enterpriseEnabled, projects, selectedProjectId } = useProject();
   if (!enterpriseEnabled || (selectedProjectId && selectedProjectId !== 'all')) return null;
   const p = (projects || []).find(x => x.id === projectId);
+  const color = projectColorOf(projects, projectId);
   return (
     <span
-      className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium whitespace-nowrap border shrink-0 ${p ? 'border-primary/60 bg-primary/20 text-foreground' : 'border-muted text-muted-foreground'}`}
+      className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[11px] font-medium whitespace-nowrap border shrink-0 ${p ? 'text-foreground' : 'border-muted text-muted-foreground'}`}
+      style={p ? { background: `${color}1F`, borderColor: `${color}73` } : undefined}
       data-testid={`project-badge-${projectId || 'none'}`}
     >
-      <Briefcase className="h-2.5 w-2.5" />
+      {p ? <ProjectColorDot color={color} size={7} /> : <Briefcase className="h-2.5 w-2.5" />}
       {p ? p.name : 'بدون مشروع'}
     </span>
   );
@@ -73,7 +78,7 @@ export const InventoryProjectField = () => {
     const p = projects.find(x => x.id === selectedProjectId);
     return (
       <div className="flex items-center gap-2 text-xs p-2 rounded-lg border border-primary/30 bg-primary/5" data-testid="inventory-project-locked">
-        <Briefcase className="h-3.5 w-3.5 text-primary" /> المشروع: <b>{p?.name}</b>
+        <ProjectColorDot color={projectColorOf(projects, selectedProjectId)} size={8} /> المشروع: <b>{p?.name}</b>
       </div>
     );
   }
@@ -83,7 +88,7 @@ export const InventoryProjectField = () => {
       <Select value="" onValueChange={selectProject}>
         <SelectTrigger data-testid="inventory-project-select"><SelectValue placeholder="اختر المشروع أولاً" /></SelectTrigger>
         <SelectContent>
-          {projects.map(p => <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>)}
+          {projects.map(p => <SelectItem key={p.id} value={p.id}><span className="flex items-center gap-2"><ProjectColorDot color={projectColorOf(projects, p.id)} size={8} />{p.name}</span></SelectItem>)}
         </SelectContent>
       </Select>
       <p className="text-[11px] text-muted-foreground">بعد اختيار المشروع تظهر مواده فقط ويُحفظ العنصر عليه</p>

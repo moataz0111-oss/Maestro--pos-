@@ -100,7 +100,7 @@ async def get_my_enterprise_config(current_user: dict = Depends(get_current_user
     """أي مستخدم: جلب إعدادات المؤسسة الخاصة بمستأجره"""
     db = get_database()
     tenant_id = current_user.get("tenant_id")
-    if not tenant_id or current_user.get("role") == UserRole.SUPER_ADMIN:
+    if current_user.get("role") == UserRole.SUPER_ADMIN:
         return {
             "tenant_id": tenant_id,
             "enterprise_enabled": True,  # super admin دائماً enterprise

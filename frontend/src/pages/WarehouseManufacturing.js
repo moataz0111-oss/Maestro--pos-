@@ -102,7 +102,7 @@ export default function WarehouseManufacturing() {
   const navigate = useNavigate();
   const { user, hasRole } = useAuth();
   const { t, isRTL } = useTranslation();
-  const { selectedProjectId } = useProject();
+  const { selectedProjectId, tenantEnterpriseActive } = useProject();
   
   // تحديد الدور
   const userRole = user?.role || '';
@@ -2833,7 +2833,7 @@ export default function WarehouseManufacturing() {
       <div className="max-w-7xl mx-auto px-4 mt-3 flex flex-wrap items-center gap-2">
         <PageProjectBar className="flex-1" />
         <MoveToProjectDialog rawMaterials={rawMaterials} manufacturedProducts={manufacturedProducts} packagingMaterials={packagingMaterials} onDone={fetchData} />
-        {hasRole(['admin', 'general_manager', 'super_admin']) && <Button variant="ghost" size="sm" onClick={() => navigate('/project-transfers-log')} data-testid="open-transfers-log-link">{t('سجل التحويلات')}</Button>}
+        {tenantEnterpriseActive && hasRole(['admin', 'general_manager', 'super_admin']) && <Button variant="ghost" size="sm" onClick={() => navigate('/project-transfers-log')} data-testid="open-transfers-log-link">{t('سجل التحويلات')}</Button>}
       </div>
       <main className="max-w-7xl mx-auto p-4 space-y-4">
         {/* Stats */}

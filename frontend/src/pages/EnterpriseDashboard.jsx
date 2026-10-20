@@ -7,6 +7,7 @@ import { API_URL } from '../utils/api';
 import { toast } from 'sonner';
 import { ProjectsComparisonChart } from '../components/ProjectsComparisonChart';
 import { resolveImageUrl } from '../components/ProjectLogoUpload';
+import { ProjectColorBadge, projectColorOf, ACTIVITY_LABELS } from '../components/ProjectColor';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../components/ui/card';
 import { Badge } from '../components/ui/badge';
 import { Button } from '../components/ui/button';
@@ -20,7 +21,7 @@ const fmt = (n, cur = 'IQD') => `${Number(n || 0).toLocaleString('en-US')} ${cur
 
 export default function EnterpriseDashboard({ embedded = false }) {
   const { user } = useAuth();
-  const { enterpriseEnabled, configLoaded } = useProject();
+  const { enterpriseEnabled, configLoaded, projects: ctxProjects } = useProject();
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const focusProject = searchParams.get('project');
@@ -178,15 +179,16 @@ export default function EnterpriseDashboard({ embedded = false }) {
 
           {focusProject && (
             <div className="flex items-center gap-2 p-3 rounded-lg border border-primary/40 bg-primary/10 text-sm" data-testid="dashboard-project-focus">
-              عرض مشروع: <b>{data.projects.find(x => x.id === focusProject)?.name}</b>
+              عرض مشروع: <ProjectColorBadge projectId={focusProject} name={data.projects.find(x => x.id === focusProject)?.name} />
               <Button size="sm" variant="outline" onClick={() => setSearchParams({})} data-testid="dashboard-show-all-btn">عرض كل المشاريع</Button>
             </div>
           )}
-          <ProjectsComparisonChart projects={focusProject ? data.projects.filter(x => x.id === focusProject) : data.projects} />
+          <ProjectsComparisonChart projects={(focusProject ? data.projects.filter(x => x.id === focusProject) : data.projects).map(x => ({ ...x, color: projectColorOf(ctxProjects, x.id) }))} />
 
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {data.projects.filter(x => !focusProject || x.id === focusProject).map(p => (
-              <Card key={p.id} className="hover:shadow-md transition" data-testid={`project-stats-${p.id}`}>
+              <Card key={p.id} className="relative overflow-hidden hover:-translate-y-0.5 hover:shadow-lg transition-[transform,box-shadow] duration-300" style={{ borderColor: `${projectColorOf(ctxProjects, p.id)}59` }} data-testid={`project-stats-${p.id}`}>
+                <div className="absolute inset-x-0 top-0 h-1" style={{ background: `linear-gradient(90deg, ${projectColorOf(ctxProjects, p.id)}, ${projectColorOf(ctxProjects, p.id)}33)` }} />
                 <CardHeader className="pb-2">
                   <div className="flex items-start justify-between">
                     <div className="flex items-center gap-2">
@@ -199,7 +201,7 @@ export default function EnterpriseDashboard({ embedded = false }) {
                       )}
                       <div>
                         <CardTitle className="text-base">{p.name}</CardTitle>
-                        <CardDescription className="text-xs">{p.activity_type}</CardDescription>
+                        <div className="mt-1"><ProjectColorBadge projectId={p.id} name={ACTIVITY_LABELS[p.activity_type] || p.activity_type} testId={`dashboard-project-badge-${p.id}`} /></div>
                       </div>
                     </div>
                     {p.is_default && <Badge variant="secondary" className="text-xs">افتراضي</Badge>}

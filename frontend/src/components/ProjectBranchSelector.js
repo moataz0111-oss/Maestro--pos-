@@ -1,6 +1,7 @@
 import React from 'react';
 import { useBranch } from '../context/BranchContext';
 import { useProject } from '../context/ProjectContext';
+import { ProjectColorDot, projectColorOf } from './ProjectColor';
 import { useAuth } from '../context/AuthContext';
 import { useTranslation } from '../hooks/useTranslation';
 import {
@@ -122,7 +123,8 @@ export default function ProjectBranchSelector({ className = '' }) {
             {projects.filter(p => p.is_active !== false).map(p => (
               <SelectItem key={p.id} value={p.id} data-testid={`project-option-${p.id}`}>
                 <div className="flex items-center gap-2">
-                  {p.logo_url ? (
+                  <ProjectColorDot color={projectColorOf(projects, p.id)} size={8} />
+                    {p.logo_url ? (
                     <img src={p.logo_url} alt="" className="h-4 w-4 rounded object-cover" />
                   ) : (
                     <Briefcase className="h-3.5 w-3.5 text-muted-foreground" />

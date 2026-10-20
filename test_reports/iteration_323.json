@@ -1,0 +1,41 @@
+{
+  "summary": "Tested that the Enterprise tabs only appear for enterprise tenants, plus regression of the iteration_322 color fixes. IMPORTANT: when testing started, the backend was still running old code (process started 14:56; projects_routes.py and enterprise_routes.py changed 15:06; backend has no --reload). Non-enterprise users got 200 from /api/enterprise/dashboard and /api/projects/inventory/log. After 'sudo supervisorctl restart backend', all 12 backend tests pass. Results: the enterprise admin sees both Reports tabs and both load. Non-enterprise admin and enterprise_owner see neither tab in /reports, and the APIs return 403 for admin, general_manager and enterprise_owner. Colors: the 9 projects have 9 distinct project-color-bar colors, and the create dialog pre-selects #14B8A6, which no project uses. Dashboard badges show Arabic labels (مطعم/صالون/شركة توصيل/عيادة/تجزئة). The inventory chart has no legend. Some UI routes still leak to non-enterprise tenants (see issues).",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "deployment", "issue": "The backend was running stale code because there is no hot reload. The tester restarted it. Main agent must restart the backend after every backend edit."},
+      {"endpoint": "/api/enterprise-config/me", "issue": "Returns enterprise_enabled=true for any user with no tenant_id, not only super_admin. require_tenant_enterprise would deny such a user. Inconsistent edge case."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "ProjectContext / EnterpriseDashboard route", "issue": "SYSTEM_OWNER_ROLES includes 'enterprise_owner', so enterpriseEnabled=true for an enterprise_owner in a NON-enterprise tenant. Opening the /enterprise-dashboard URL directly shows the Enterprise Dashboard shell (empty because the API returns 403) instead of redirecting. The same flag drives about 54 other enterpriseEnabled usages (project bars, selectors, etc.), which can therefore appear for this user.", "selector": "[data-testid='enterprise-dashboard-page']", "priority": "MEDIUM"},
+      {"component": "WarehouseManufacturing", "issue": "The 'سجل التحويلات' button (open-transfers-log-link) is shown to admin/general_manager of a NON-enterprise tenant. It is gated only by hasRole, not tenantEnterpriseActive.", "selector": "[data-testid='open-transfers-log-link']", "priority": "MEDIUM"},
+      {"component": "/project-transfers-log route", "issue": "There is no enterprise guard. Non-enterprise admin and enterprise_owner can open the page; the API returns 403, the error is silently caught, and an empty table is shown.", "selector": "[data-testid='transfers-log-page']", "priority": "MEDIUM"}
+    ],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "/settings/projects (dark theme)", "issues": ["The page title 'إدارة المشاريع' still has very low contrast against the dark background"]},
+      {"screen": "Enterprise dashboard charts", "issues": ["X-axis labels on the inventory chart and the comparison chart are auto-skipped (only 3-5 of 9 project names shown), so it is unclear which project a bar belongs to. Use interval={0} with angled ticks, or rely on the tooltip."]}
+    ]
+  },
+  "test_report_links": ["/app/backend/tests/test_enterprise_tabs_gate_iter323.py", "/app/backend/tests/iter323_temp_tenant.py", "/app/test_reports/pytest/iter323.xml"],
+  "action_items": [
+    "Always run 'sudo supervisorctl restart backend' after backend changes (there is no reload)",
+    "In ProjectContext, do not treat enterprise_owner as always-enterprise. Only super_admin should bypass: enterpriseOn = entConfig.enterprise_enabled || role==='super_admin'",
+    "Gate open-transfers-log-link in WarehouseManufacturing with tenantEnterpriseActive",
+    "Add an enterprise guard (redirect when !tenantEnterpriseActive && role!=='super_admin') to /project-transfers-log and use tenantEnterpriseActive in the EnterpriseDashboard guard",
+    "Optional: fix the ProjectsSettings title contrast and the chart x-axis label skipping"
+  ],
+  "critical_code_review_comments": [
+    "enterprise_enabled visibility is computed two ways (tenantEnterpriseActive vs enterpriseEnabled with the SYSTEM_OWNER_ROLES bypass). Consolidate into one flag.",
+    "ProjectTransfersLog swallows 403 errors (catch -> setRows([])). Show a 'not available' state instead."
+  ],
+  "updated_files": ["/app/backend/tests/test_enterprise_tabs_gate_iter323.py", "/app/backend/tests/iter323_temp_tenant.py"],
+  "success_rate": {"backend": "100% (after backend restart; 50% before)", "frontend": "~80% (all requested checks pass; 3 leak paths outside the Reports tabs)"},
+  "seed_data_creation": "Temp tenants TEST_iter323_nonent / TEST_iter323_ui and their users were created and deleted. Default tenant was not modified (enterprise_enabled still true).",
+  "retest_needed": true,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Use python tests/iter323_temp_tenant.py up|down to create/remove a non-enterprise tenant with users test_ui323_admin@x.com and test_ui323_enterprise_owner@x.com (password test1234). Log in with localStorage maestro_device_id='e2e-tester-persistent' to avoid 2FA. Wait about 13-15s after each goto because of the splash screen. Retest: /enterprise-dashboard and /project-transfers-log direct URLs, and open-transfers-log-link on /warehouse-manufacturing for non-enterprise users.",
+  "rca of the issue": "Backend 200s for non-enterprise users: uvicorn runs without --reload and was started before the guard code was saved. A restart fixed it. Frontend leak: ProjectContext computes enterpriseOn = enterprise_enabled || SYSTEM_OWNER_ROLES.includes(role), and SYSTEM_OWNER_ROLES contains enterprise_owner."
+}

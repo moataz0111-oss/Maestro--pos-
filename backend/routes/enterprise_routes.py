@@ -16,7 +16,7 @@ from .shared import (
     build_tenant_query,
 )
 from .projects_routes import (
-    user_is_enterprise_owner, user_allowed_projects, EnterpriseRole,
+    user_is_enterprise_owner, user_allowed_projects, EnterpriseRole, require_tenant_enterprise,
 )
 
 router = APIRouter(prefix="/enterprise", tags=["Enterprise Dashboard & Marketplace"])
@@ -158,6 +158,7 @@ async def enterprise_dashboard(
         raise HTTPException(status_code=403, detail="لوحة المؤسسة للمالك فقط")
 
     db = get_database()
+    await require_tenant_enterprise(db, current_user)
     tenant_id = get_user_tenant_id(current_user) or "default"
 
     start = datetime.now(timezone.utc) - timedelta(days=period_days)

@@ -4352,7 +4352,7 @@ const DeliveryReportTab = ({ deliveryCreditsReport, t, formatPrice, fetchReports
 export default function Reports() {
   const { user, hasRole } = useAuth();
   const { selectedBranchId, branches, getBranchIdForApi, canSelectAllBranches, selectBranch } = useBranch();
-  const { enterpriseEnabled, projects, selectedProjectId, selectProject } = useProject();
+  const { enterpriseEnabled, tenantEnterpriseActive, projects, selectedProjectId, selectProject } = useProject();
   const { t, isRTL } = useTranslation();
   const navigate = useNavigate();
   
@@ -4373,7 +4373,7 @@ export default function Reports() {
   );
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('sales');
-  const showEnterpriseTabs = (enterpriseEnabled || user?.role === 'super_admin')
+  const showEnterpriseTabs = tenantEnterpriseActive
     && ['super_admin', 'admin', 'general_manager', 'enterprise_owner'].includes(user?.role);
   const [loadingComprehensive, setLoadingComprehensive] = useState(false);
   const [dashboardSettings, setDashboardSettings] = useState({ 

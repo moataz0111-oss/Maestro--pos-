@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import axios from 'axios';
+import { ProjectColorBadge, ProjectColorPicker, nextFreeColor, projectColorOf } from '../components/ProjectColor';
 import { useProject } from '../context/ProjectContext';
 import { useAuth } from '../context/AuthContext';
 import { API_URL } from '../utils/api';
@@ -122,7 +123,7 @@ export default function ProjectsSettings() {
   const [form, setForm] = useState({
     name: '', name_en: '', activity_type: 'restaurant',
     logo_url: '', currency: 'IQD', timezone: 'Asia/Baghdad', description: '',
-    exchange_rate: '',
+    exchange_rate: '', color: '',
   });
 
   const [adminForm, setAdminForm] = useState({
@@ -145,6 +146,7 @@ export default function ProjectsSettings() {
       name: '', name_en: '', activity_type: 'restaurant',
       logo_url: '', currency: 'IQD', timezone: 'Asia/Baghdad', description: '',
       exchange_rate: '', owner_name: '', owner_phone: '',
+      color: nextFreeColor(projects),
     });
     setLogoFile(null);
     setEditingProject(null);
@@ -160,6 +162,7 @@ export default function ProjectsSettings() {
       logo_url: p.logo_url || '', currency: p.currency || 'IQD', timezone: p.timezone || 'Asia/Baghdad',
       description: p.description || '', exchange_rate: p.exchange_rate ? String(p.exchange_rate) : '',
       owner_name: p.owner_name || '', owner_phone: p.owner_phone || '',
+      color: projectColorOf(projects, p.id),
     });
     setDialogOpen(true);
   };
@@ -211,6 +214,7 @@ export default function ProjectsSettings() {
     try {
       const payload = {
         ...form,
+        color: form.color || undefined,
         exchange_rate: form.currency === mainCurrency ? 1.0 : parseFloat(form.exchange_rate),
       };
       setSaving(true);
@@ -442,6 +446,7 @@ export default function ProjectsSettings() {
                   </div>
                 </div>
               )}
+              <ProjectColorPicker value={form.color} onChange={(c) => setForm(f => ({ ...f, color: c }))} />
               <div>
                 <Label>وصف (اختياري)</Label>
                 <Textarea data-testid="project-description-input" value={form.description} onChange={e => setForm({ ...form, description: e.target.value })} />
@@ -467,7 +472,8 @@ export default function ProjectsSettings() {
           const meta = getActivityMeta(p.activity_type);
           const Icon = meta.icon;
           return (
-            <Card key={p.id} className="hover:shadow-md transition" data-testid={`project-card-${p.id}`}>
+            <Card key={p.id} className="relative overflow-hidden hover:-translate-y-0.5 hover:shadow-lg transition-[transform,box-shadow] duration-300" style={{ borderColor: `${projectColorOf(projects, p.id)}59`, backgroundImage: `radial-gradient(120% 60% at 100% 0%, ${projectColorOf(projects, p.id)}14, transparent 60%)` }} data-testid={`project-card-${p.id}`}>
+              <div className="absolute inset-x-0 top-0 h-1" style={{ background: `linear-gradient(90deg, ${projectColorOf(projects, p.id)}, ${projectColorOf(projects, p.id)}33)` }} data-testid={`project-color-bar-${p.id}`} />
               <CardHeader className="pb-3">
                 <div className="flex items-start justify-between">
                   <div className="flex items-center gap-3">
@@ -475,18 +481,18 @@ export default function ProjectsSettings() {
                       <img
                         src={resolveImageUrl(p.logo_url)}
                         alt=""
-                        className="h-10 w-10 rounded-full object-cover border"
+                        className="h-10 w-10 rounded-full object-cover border-2" style={{ borderColor: projectColorOf(projects, p.id) }}
                         data-testid={`project-logo-${p.id}`}
                         onError={(e) => { e.currentTarget.style.visibility = 'hidden'; }}
                       />
                     ) : (
-                      <div className="h-10 w-10 rounded bg-primary/10 flex items-center justify-center">
-                        <Icon className="h-5 w-5 text-primary" />
+                      <div className="h-10 w-10 rounded-full flex items-center justify-center" style={{ background: `${projectColorOf(projects, p.id)}26` }}>
+                        <Icon className="h-5 w-5" style={{ color: projectColorOf(projects, p.id) }} />
                       </div>
                     )}
                     <div>
                       <CardTitle className="text-base">{p.name}</CardTitle>
-                      <CardDescription className="text-xs">{meta.label}</CardDescription>
+                      <div className="mt-1"><ProjectColorBadge projectId={p.id} name={meta.label} testId={`project-card-badge-${p.id}`} /></div>
                     </div>
                   </div>
                   {p.is_default && <Badge variant="outline" className="text-[10px] opacity-60">تجريبي</Badge>}

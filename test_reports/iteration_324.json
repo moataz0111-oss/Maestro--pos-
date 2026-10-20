@@ -1,0 +1,24 @@
+{
+  "summary": "Retest of the iteration_323 enterprise-gating issues. All four fixes are verified. Backend: 14/14 pytest pass, including two new tests: (1) /api/enterprise-config/me returns enterprise_enabled=false for a non-super_admin user with no tenant_id; (2) super_admin gets true. UI test on a temporary non-enterprise tenant with admin, general_manager and enterprise_owner. For all three roles, opening /enterprise-dashboard or /project-transfers-log directly redirects to '/'. On /warehouse-manufacturing they get no open-transfers-log-link and no settings-project-bar/project selectors. On /reports there are no enterprise tabs. Enterprise tenant admin (admin@maestroegp.com) regression: WM shows the project bar and the transfers-log link, and the link navigates correctly. The standalone /project-transfers-log and /enterprise-dashboard pages load. Reports tabs reports-tab-enterprise-dashboard and reports-tab-transfers-log both appear and both load embedded. The comparison and inventory charts show all 9 project names, angled, on the X axis (checked visually in a screenshot). Super admin owner@maestroegp.com logs in through the UI with secret 271018 and lands on /super-admin.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "/super-admin dashboard (dark theme)", "issues": ["Several texts are nearly invisible (dark text on a dark navy background): the 'إجمالي العملاء' and 'إجمالي المستخدمين' values, section headings above the plan cards and the sales section, the currency selector text, and customer names in the customers list. Probably pre-existing, not part of this change."]},
+      {"screen": "/enterprise-dashboard", "issues": ["Shows the 'غير متصل' (socket disconnected) badge in the preview environment. Cosmetic."]}
+    ]
+  },
+  "test_report_links": ["/app/backend/tests/test_enterprise_gate_iter324.py", "/app/backend/tests/iter324_temp_tenant.py", "/app/test_reports/pytest/iter324.xml"],
+  "action_items": ["Optional: fix the low-contrast texts on the /super-admin dark theme"],
+  "critical_code_review_comments": [
+    "ProjectTransfersLog still swallows API errors (catch -> setRows([])). An error state would be better.",
+    "tenantEnterpriseActive and enterpriseEnabled now differ only by the super_admin bypass. Consider consolidating them into one flag."
+  ],
+  "updated_files": ["/app/backend/tests/test_enterprise_gate_iter324.py", "/app/backend/tests/iter324_temp_tenant.py"],
+  "success_rate": {"backend": "100%", "frontend": "100%"},
+  "seed_data_creation": "Temp tenant TEST_iter324_ui (admin/GM/enterprise_owner, password test1234) and TEST_iter323_nonent were created and then deleted. The temp no-tenant user was deleted too. The default tenant still has enterprise_enabled=true.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Run 'python tests/iter324_temp_tenant.py up|down' to create/remove the non-enterprise tenant users test_ui324_{admin,general_manager,enterprise_owner}@x.com / test1234. For UI login, get a token from /api/auth/login with device_id 'e2e-tester-persistent', then set localStorage token + cached_user + maestro_device_id. Wait about 14s after each goto (splash screen)."
+}

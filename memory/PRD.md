@@ -75,3 +75,7 @@ See `/app/memory/test_credentials.md`
 ## 2026-06 — Enterprise buttons moved to Reports
 - Removed 'لوحة المؤسسة' and 'سجل التحويلات' buttons from ProjectsSettings (header + project cards).
 - Added them as tabs in Reports page (enterprise-enabled owner/admin/GM only); embedded mode hides back button and global report filters. Tested iteration_321 (100%).
+
+## 2026-06 — Project colors + strict enterprise gating
+- Project color: owner picks from 12-swatch palette or a custom color (projects.color, validated hex). Projects without a saved color get distinct automatic defaults (components/ProjectColor.jsx). Colors show on project cards, in selectors, in the enterprise dashboard and charts, and in the transfers log.
+- Enterprise Dashboard / Transfers Log are shown only when tenant enterprise_enabled=true (ProjectContext.tenantEnterpriseActive). Backend require_tenant_enterprise guards /enterprise/dashboard and /projects/inventory/log. enterprise_owner no longer bypasses the flag. Tested iteration_322-324 (all pass).

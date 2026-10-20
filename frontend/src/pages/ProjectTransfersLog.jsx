@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import axios from 'axios';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { Navigate, useNavigate, useSearchParams } from 'react-router-dom';
 import { ArrowRight, Printer, RefreshCw, ArrowLeftRight } from 'lucide-react';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
@@ -11,17 +11,18 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '.
 import { useProject } from '../context/ProjectContext';
 import { API_URL } from '../utils/api';
 import { printTransferLog } from '../utils/printTransferLog';
+import { ProjectColorBadge, ProjectColorDot, projectColorOf } from '../components/ProjectColor';
 
 const KIND = { raw: 'مادة خام', manufactured: 'منتج مصنّع', packaging: 'مادة تغليف' };
 const fmt = (n) => Number(n || 0).toLocaleString('en-US', { maximumFractionDigits: 2 });
 
 export const flattenLogs = (logs, pid) => logs.flatMap(l => (l.type === 'move'
-  ? (l.items || []).filter(it => !pid || pid === 'all' || l.target_project_id === pid || it.from_project_id === pid).map(it => ({ ...l, item_name: it.name, from_project_name: it.from_project_name, quantity: null, cost_per_unit: null }))
+  ? (l.items || []).filter(it => !pid || pid === 'all' || l.target_project_id === pid || it.from_project_id === pid).map(it => ({ ...l, item_name: it.name, from_project_name: it.from_project_name, from_project_id: it.from_project_id, quantity: null, cost_per_unit: null }))
   : [l]));
 
 export default function ProjectTransfersLog({ embedded = false }) {
   const navigate = useNavigate();
-  const { projects } = useProject();
+  const { projects, configLoaded, tenantEnterpriseActive } = useProject();
   const [searchParams] = useSearchParams();
   const [projectId, setProjectId] = useState(searchParams.get('project') || 'all');
   const [start, setStart] = useState('');
@@ -40,6 +41,8 @@ export default function ProjectTransfersLog({ embedded = false }) {
   }, [projectId, start, end]);
 
   useEffect(() => { load(); }, [load]);
+
+  if (configLoaded && !tenantEnterpriseActive) return <Navigate to="/" replace />;
 
   const projectName = projectId === 'all' ? 'كل المشاريع' : (projects.find(p => p.id === projectId)?.name || '');
 
@@ -66,7 +69,7 @@ export default function ProjectTransfersLog({ embedded = false }) {
               <SelectTrigger className="mt-1" data-testid="log-project-select"><SelectValue /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">كل المشاريع</SelectItem>
-                {projects.map(p => <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>)}
+                {projects.map(p => <SelectItem key={p.id} value={p.id}><span className="flex items-center gap-2"><ProjectColorDot color={projectColorOf(projects, p.id)} size={8} />{p.name}</span></SelectItem>)}
               </SelectContent>
             </Select>
           </div>
@@ -82,15 +85,15 @@ export default function ProjectTransfersLog({ embedded = false }) {
             <tbody>
               {rows.length === 0 && <tr><td colSpan={9} className="p-8 text-center text-muted-foreground">{loading ? 'جارٍ التحميل...' : 'لا توجد تحويلات'}</td></tr>}
               {rows.map((r, i) => (
-                <tr key={`${r.id}-${i}`} className="border-t hover:bg-muted/30" data-testid={`log-row-${i}`}>
+                <tr key={`${r.id}-${i}`} className="border-t hover:bg-muted/30 transition-colors" style={{ boxShadow: `inset -3px 0 0 ${projectColorOf(projects, r.target_project_id)}` }} data-testid={`log-row-${i}`}>
                   <td className="p-3 whitespace-nowrap">{new Date(r.created_at).toLocaleString('ar-IQ')}</td>
                   <td className="p-3"><Badge variant={r.type === 'move' ? 'secondary' : 'default'}>{r.type === 'move' ? 'نقل نهائي' : 'تحويل كمية'}</Badge> <span className="text-xs text-muted-foreground">{KIND[r.kind]}</span></td>
                   <td className="p-3 font-medium">{r.item_name}</td>
                   <td className="p-3">{r.quantity != null ? `${fmt(r.quantity)} ${r.unit || ''}` : 'كامل الكمية'}</td>
                   <td className="p-3">{r.cost_per_unit != null ? fmt(r.cost_per_unit) : '—'}</td>
                   <td className="p-3 font-medium">{r.quantity != null && r.cost_per_unit != null ? fmt(r.quantity * r.cost_per_unit) : '—'}</td>
-                  <td className="p-3">{r.from_project_name || '—'}</td>
-                  <td className="p-3">{r.target_project_name}</td>
+                  <td className="p-3">{r.from_project_id ? <ProjectColorBadge projectId={r.from_project_id} name={r.from_project_name} testId={`log-from-badge-${i}`} /> : (r.from_project_name || '—')}</td>
+                  <td className="p-3"><ProjectColorBadge projectId={r.target_project_id} name={r.target_project_name} testId={`log-to-badge-${i}`} /></td>
                   <td className="p-3">{r.user_name || '—'}</td>
                 </tr>
               ))}

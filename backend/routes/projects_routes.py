@@ -49,12 +49,16 @@ ACTIVITY_TYPES = [
 
 IMAGE_EXTS = {"jpg", "jpeg", "png", "gif", "webp", "heic", "heif", "bmp", "tiff", "tif", "avif", "svg", "ico", "jfif"}
 
+PROJECT_PALETTE = ["#F97316", "#10B981", "#3B82F6", "#EC4899", "#A855F7", "#EAB308",
+                   "#06B6D4", "#EF4444", "#84CC16", "#14B8A6", "#F43F5E", "#6366F1"]
+
 # ==================== MODELS ====================
 class ProjectCreate(BaseModel):
     name: str
     name_en: Optional[str] = None
     activity_type: str = "restaurant"
     logo_url: Optional[str] = None
+    color: Optional[str] = Field(None, pattern=r"^#[0-9a-fA-F]{6}$")
     currency: str = "IQD"
     timezone: str = "Asia/Baghdad"
     description: Optional[str] = None
@@ -66,6 +70,7 @@ class ProjectUpdate(BaseModel):
     name_en: Optional[str] = None
     activity_type: Optional[str] = None
     logo_url: Optional[str] = None
+    color: Optional[str] = Field(None, pattern=r"^#[0-9a-fA-F]{6}$")
     currency: Optional[str] = None
     timezone: Optional[str] = None
     description: Optional[str] = None
@@ -90,6 +95,14 @@ class ExchangeRateUpdate(BaseModel):
 def user_is_enterprise_owner(user: dict) -> bool:
     """المستخدم مالك مؤسسة أو أعلى - يشوف كل المشاريع"""
     return user.get("role") in ENTERPRISE_WIDE_ROLES
+
+async def require_tenant_enterprise(db, user: dict):
+    """يمنع ميزات المؤسسة عن العميل العادي (غير مفعّل له التوسعة)"""
+    if user.get("role") == UserRole.SUPER_ADMIN:
+        return
+    t = await db.tenants.find_one({"id": get_user_tenant_id(user)}, {"_id": 0, "enterprise_enabled": 1})
+    if not (t or {}).get("enterprise_enabled"):
+        raise HTTPException(status_code=403, detail="هذه الميزة متاحة فقط لحسابات المؤسسة")
 
 def user_allowed_projects(user: dict) -> Optional[List[str]]:
     """
@@ -269,6 +282,8 @@ async def create_project(
 
     # 🖼️ Feb 2026: إذا لم يُحدَّد لوجو للمشروع الجديد، اقتبسه من إعدادات المؤسسة (settings.system_info.logoUrl)
     _project_logo = project.logo_url
+    _used_colors = {(p.get("color") or "").upper() async for p in db.projects.find(
+        {"tenant_id": tenant_id, "deleted_at": {"$exists": False}}, {"_id": 0, "color": 1})}
 
     project_doc = {
         "id": str(uuid.uuid4()),
@@ -277,6 +292,10 @@ async def create_project(
         "name_en": project.name_en,
         "activity_type": project.activity_type,
         "logo_url": _project_logo,
+        "color": (project.color or next(
+            (c for c in PROJECT_PALETTE if c not in _used_colors),
+            PROJECT_PALETTE[len(_used_colors) % len(PROJECT_PALETTE)]
+        )).upper(),
         "currency": project.currency,
         "timezone": project.timezone,
         "description": project.description,
@@ -1212,6 +1231,7 @@ async def project_inventory_log(
     if not user_is_enterprise_owner(current_user):
         raise HTTPException(status_code=403, detail="غير مصرح")
     db = get_database()
+    await require_tenant_enterprise(db, current_user)
     tenant_id = get_user_tenant_id(current_user)
     q = {"tenant_id": tenant_id}
     if project_id and project_id != "all":

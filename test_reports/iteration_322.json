@@ -1,0 +1,33 @@
+{
+  "summary": "Project Colors feature tested end-to-end. Backend 11/11 pytest pass (PUT valid color persists, 5 invalid formats -> 422, POST w/o color auto-assigns hex, POST with color persists, POST invalid -> 422). Frontend: /settings/projects cards show colored top bar + border tint + badge for all 9 projects (incl. those without saved color); create dialog has picker w/ 12 swatches + custom input and pre-selects next palette color; created TEST_UI_Color with #6366F1 -> card colored; edit -> 10B981 -> bar/badge/border update after save; custom input #123abc -> applied. BranchSelector dropdown (project-option-*) shows color dots; Reports > لوحة المؤسسة: 10 project-stats cards with colored bar + dashboard-project-badge, inventory chart bars filled per-project; Reports > سجل التحويلات: log-from/to badges colored, log-project-select options have dots. Mobile 390px: no horizontal overflow on page or dialog. Test project hard-deleted after test.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "projectColorOf default fallback", "issue": "Color collision: 'صالون الأناقة' (index 1, saved #EC4899) and 'مشروع رابع تجريبي' (index 3, no saved color -> palette[3] = #EC4899) both render pink everywhere (cards, filters, transfers log). Defaults are index-based and ignore colors already explicitly chosen, so projects are NOT guaranteed distinct.", "selector": "project-color-bar-3128cfc4-b3ed-488a-b318-eebbd21d696b", "priority": "MEDIUM"},
+      {"component": "EnterpriseDashboard project stat card badge", "issue": "dashboard-project-badge-{id} shows raw English activity_type ('restaurant', 'salon', 'delivery_company') instead of Arabic label (مطعم/صالون/شركة توصيل) like the project cards do", "selector": "[data-testid^=dashboard-project-badge-]", "priority": "LOW"}
+    ],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Inventory value chart (Reports > لوحة المؤسسة)", "issues": ["Legend shows a single blue 'قيمة المخزون' swatch while bars are per-project colored - legend misleading"]},
+      {"screen": "/settings/projects (dark theme)", "issues": ["Page title 'إدارة المشاريع' and subtitle nearly invisible (low contrast) on dark background; cards render white on dark page"]}
+    ]
+  },
+  "test_report_links": ["/app/backend/tests/test_project_colors_iter322.py", "/app/test_reports/pytest/iter322.xml"],
+  "action_items": [
+    "Fix default color collisions: persist colors for existing projects via one-time idempotent migration choosing the first palette color not already used in tenant (also make POST auto-assign pick an unused color instead of count % 12, which collides after deletes). Frontend fallback should also skip colors already used.",
+    "Index-based fallback depends on the projects list visible to the current user (restricted project_admin sees a filtered list -> different colors than owner); persisting colors in DB solves this too.",
+    "EnterpriseDashboard: pass the Arabic activity label to ProjectColorBadge instead of p.activity_type",
+    "Optional: remove/adjust single-color legend on per-project inventory chart; improve title contrast on ProjectsSettings dark theme"
+  ],
+  "critical_code_review_comments": [
+    "ProjectColor.jsx projectColorOf: fallback PROJECT_PALETTE[idx % 12] is order/visibility dependent and collides with explicit colors",
+    "projects_routes.py create: count_documents % len(PALETTE) can duplicate existing colors after deletions or manual picks",
+    "ProjectsSettings openCreate preselects palette[projects.length] - same collision risk"
+  ],
+  "updated_files": ["/app/backend/tests/test_project_colors_iter322.py"],
+  "success_rate": {"backend": "100%", "frontend": "92%"},
+  "seed_data_creation": "None persisted. TEST_color_* (API) and TEST_UI_Color (UI) projects were created and hard-deleted.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Login admin@maestroegp.com/admin123 with device_id e2e-tester-persistent; StartupSplash ~10-12s after every page.goto - wait 13s. Dashboard shows cashier-shift dialog after login: press Escape before clicking project-selector. صالون الأناقة has saved #EC4899; other 8 projects have no saved color (index fallback)."
+}
