@@ -14,14 +14,16 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '../components/ui/select';
 import { Briefcase, TrendingUp, TrendingDown, Users, Building2, DollarSign, ShoppingCart, ArrowLeft, Radio } from 'lucide-react';
-import { useNavigate, Navigate } from 'react-router-dom';
+import { useNavigate, Navigate, useSearchParams } from 'react-router-dom';
 
 const fmt = (n, cur = 'IQD') => `${Number(n || 0).toLocaleString('en-US')} ${cur}`;
 
-export default function EnterpriseDashboard() {
+export default function EnterpriseDashboard({ embedded = false }) {
   const { user } = useAuth();
   const { enterpriseEnabled, configLoaded } = useProject();
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const focusProject = searchParams.get('project');
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [period, setPeriod] = useState('30');
@@ -80,13 +82,15 @@ export default function EnterpriseDashboard() {
   }
 
   return (
-    <div className="min-h-screen bg-background text-foreground p-6 space-y-6" dir="rtl" data-testid="enterprise-dashboard-page">
+    <div className={`${embedded ? '' : 'min-h-screen p-6'} bg-background text-foreground space-y-6`} dir="rtl" data-testid="enterprise-dashboard-page">
       <div className="flex items-center justify-between">
         <div>
           <div className="flex items-center gap-2">
-            <Button variant="ghost" size="sm" onClick={() => navigate('/')} data-testid="back-btn">
-              <ArrowLeft className="h-4 w-4" />
-            </Button>
+            {!embedded && (
+              <Button variant="ghost" size="sm" onClick={() => navigate('/')} data-testid="back-btn">
+                <ArrowLeft className="h-4 w-4" />
+              </Button>
+            )}
             <h1 className="text-2xl font-bold flex items-center gap-2">
               <Briefcase className="h-6 w-6 text-primary" />
               لوحة المؤسسة
@@ -172,10 +176,16 @@ export default function EnterpriseDashboard() {
             </Card>
           </div>
 
-          <ProjectsComparisonChart projects={data.projects} />
+          {focusProject && (
+            <div className="flex items-center gap-2 p-3 rounded-lg border border-primary/40 bg-primary/10 text-sm" data-testid="dashboard-project-focus">
+              عرض مشروع: <b>{data.projects.find(x => x.id === focusProject)?.name}</b>
+              <Button size="sm" variant="outline" onClick={() => setSearchParams({})} data-testid="dashboard-show-all-btn">عرض كل المشاريع</Button>
+            </div>
+          )}
+          <ProjectsComparisonChart projects={focusProject ? data.projects.filter(x => x.id === focusProject) : data.projects} />
 
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {data.projects.map(p => (
+            {data.projects.filter(x => !focusProject || x.id === focusProject).map(p => (
               <Card key={p.id} className="hover:shadow-md transition" data-testid={`project-stats-${p.id}`}>
                 <CardHeader className="pb-2">
                   <div className="flex items-start justify-between">

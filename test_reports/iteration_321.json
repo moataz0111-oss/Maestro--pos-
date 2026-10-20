@@ -1,0 +1,36 @@
+{
+  "summary": "Frontend-only test of moving 'لوحة المؤسسة' and 'سجل التحويلات' from Projects Settings into Reports as tabs. All 6 requested checks passed for admin@maestroegp.com (default tenant, enterprise_enabled=true, 9 projects). (1) /reports shows reports-tab-enterprise-dashboard and reports-tab-transfers-log. (2) The enterprise tab renders enterprise-dashboard-page with no back-btn, and GET /api/enterprise/dashboard?period_days=30 returns 200; stats show 9 projects, period-select and live-status are present, and charts render. (3) The transfers tab renders transfers-log-page with no back-btn; log-project-select, log-start-date/end-date, refresh-btn, print-log-btn and transfers-log-table with 2 rows are present, and refresh works. (4) /settings/projects: open-enterprise-dashboard-btn, open-transfers-log-btn, project-dashboard-btn-* and project-transfers-btn-* all have a count of 0, and the texts لوحة المؤسسة / سجل التحويلات do not appear. add-project-btn and 9 project cards are still there. (5) A temporary admin in a non-enterprise tenant sees neither tab; the other tabs (expenses etc.) work. Switching tabs unmounts the embedded components. (6) /enterprise-dashboard and /project-transfers-log work standalone, both with in-app navigation and a direct page load, and both show back-btn.",
+  "backend_issues": {"critical": [], "minor": [
+    {"endpoint": "/api/auth/login", "issue": "The login response user object includes the 'password_vault' field (an encrypted vault blob). It should not be sent to the client. Pre-existing and outside this task."}
+  ]},
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "Reports + embedded ProjectTransfersLog", "issue": "Duplicate data-testid='refresh-btn': the Reports header refresh button and the embedded log refresh button share it, so a test selector matches both (strict mode violation).", "selector": "[data-testid='refresh-btn']", "priority": "LOW"}
+    ],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Reports > enterprise/transfers tabs", "issues": [
+        "The Reports page's global project/branch/date filters stay visible above the embedded tabs but do nothing there. The dashboard uses its own period-select and the log has its own project/date filters, so there are two sets of filters (confusing). Consider hiding the global filter bar when these tabs are active.",
+        "The transfers log uses the browser's native date inputs (mm/dd/yyyy) instead of the shadcn calendar."
+      ]},
+      {"screen": "/settings/projects", "issues": ["The page title 'إدارة المشاريع' is barely visible against the dark navy background (low contrast). Pre-existing."]}
+    ]
+  },
+  "test_report_links": [],
+  "action_items": [
+    "Optional: rename the embedded log refresh testid (e.g. 'log-refresh-btn') to avoid duplicating the Reports header 'refresh-btn'",
+    "Optional: hide the Reports global filters when the enterprise-dashboard/transfers-log tabs are active",
+    "Optional: strip password_vault from the login/user responses"
+  ],
+  "critical_code_review_comments": [
+    "Reports.js showEnterpriseTabs logic is correct: (enterpriseEnabled || super_admin) && role in [super_admin, admin, general_manager, enterprise_owner]. Note that the 'owner' role from the request text is not in the list. Add it if 'owner' is a real role.",
+    "Embedded components are lazily mounted (activeTab === ...), which is good and avoids extra API calls.",
+    "Reports.js is over 5,000 lines and should be split into modules."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "N/A", "frontend": "100%"},
+  "seed_data_creation": "Temporarily created the user TEST_nonent_admin@maestroegp.com in tenant 445b2f6e... and extended that tenant's expires_at, for the non-enterprise check. Both were reverted/deleted afterwards.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "The environment date is 2026-10-20, so every non-default tenant's subscription has expired (login returns 'انتهى اشتراك المطعم'). Extend tenants.expires_at to test non-enterprise users. Log in by POSTing /api/auth/login, setting localStorage token/cached_user, then waiting about 14s for the splash. The Projects Settings route is /settings/projects."
+}

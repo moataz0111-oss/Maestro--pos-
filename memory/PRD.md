@@ -70,3 +70,8 @@ See `/app/memory/test_credentials.md`
 ## 2026-06 — Two limit systems
 - Non-enterprise tenant: limits from client creation (tenant.max_branches / max_users), tenant-wide.
 - Enterprise tenant: limits from enterprise activation (max_branches_per_project / max_users_per_project), per project. Applied in GET /tenant/limits, POST /branches, POST /users (new users get project_id from branch's project or selected project).
+
+
+## 2026-06 — Enterprise buttons moved to Reports
+- Removed 'لوحة المؤسسة' and 'سجل التحويلات' buttons from ProjectsSettings (header + project cards).
+- Added them as tabs in Reports page (enterprise-enabled owner/admin/GM only); embedded mode hides back button and global report filters. Tested iteration_321 (100%).

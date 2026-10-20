@@ -5,7 +5,6 @@ import { useAuth } from '../context/AuthContext';
 import { API_URL } from '../utils/api';
 import { toast } from 'sonner';
 import { useNavigate } from 'react-router-dom';
-import { LayoutDashboard, ArrowLeftRight } from 'lucide-react';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
@@ -330,12 +329,6 @@ export default function ProjectsSettings() {
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
-        <Button variant="outline" className="gap-2" onClick={() => navigate('/enterprise-dashboard')} data-testid="open-enterprise-dashboard-btn">
-          <LayoutDashboard className="h-4 w-4" /> لوحة المؤسسة
-        </Button>
-        <Button variant="outline" className="gap-2" onClick={() => navigate('/project-transfers-log')} data-testid="open-transfers-log-btn">
-          <ArrowLeftRight className="h-4 w-4" /> سجل التحويلات
-        </Button>
         <Button data-testid="add-project-btn" className="gap-2" onClick={openCreate}>
           <Plus className="h-4 w-4" />
           مشروع جديد
@@ -524,7 +517,7 @@ export default function ProjectsSettings() {
                   <div>المنطقة الزمنية: {p.timezone}</div>
                   {p.admin_user_id && <Badge variant="outline" className="text-xs">مدير مُعيّن</Badge>}
                 </div>
-                <div className="flex gap-2 pt-2 border-t">
+                <div className="flex gap-2">
                   <Button
                     size="sm"
                     variant="outline"

@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import axios from 'axios';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { ArrowRight, Printer, RefreshCw, ArrowLeftRight } from 'lucide-react';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
@@ -19,10 +19,11 @@ export const flattenLogs = (logs, pid) => logs.flatMap(l => (l.type === 'move'
   ? (l.items || []).filter(it => !pid || pid === 'all' || l.target_project_id === pid || it.from_project_id === pid).map(it => ({ ...l, item_name: it.name, from_project_name: it.from_project_name, quantity: null, cost_per_unit: null }))
   : [l]));
 
-export default function ProjectTransfersLog() {
+export default function ProjectTransfersLog({ embedded = false }) {
   const navigate = useNavigate();
   const { projects } = useProject();
-  const [projectId, setProjectId] = useState('all');
+  const [searchParams] = useSearchParams();
+  const [projectId, setProjectId] = useState(searchParams.get('project') || 'all');
   const [start, setStart] = useState('');
   const [end, setEnd] = useState('');
   const [rows, setRows] = useState([]);
@@ -43,18 +44,18 @@ export default function ProjectTransfersLog() {
   const projectName = projectId === 'all' ? 'كل المشاريع' : (projects.find(p => p.id === projectId)?.name || '');
 
   return (
-    <div className="min-h-screen bg-background text-foreground" dir="rtl" data-testid="transfers-log-page">
-      <div className="container mx-auto p-4 md:p-6 space-y-5">
+    <div className={`${embedded ? '' : 'min-h-screen'} bg-background text-foreground`} dir="rtl" data-testid="transfers-log-page">
+      <div className={`${embedded ? '' : 'container mx-auto p-4 md:p-6'} space-y-5`}>
         <div className="flex items-center justify-between flex-wrap gap-3">
           <div className="flex items-center gap-3">
-            <Button variant="outline" size="icon" onClick={() => navigate(-1)} data-testid="back-btn"><ArrowRight className="h-5 w-5" /></Button>
+            {!embedded && <Button variant="outline" size="icon" onClick={() => navigate(-1)} data-testid="back-btn"><ArrowRight className="h-5 w-5" /></Button>}
             <div>
               <h1 className="text-2xl font-bold flex items-center gap-2"><ArrowLeftRight className="h-6 w-6 text-primary" /> سجل التحويلات بين المشاريع</h1>
               <p className="text-sm text-muted-foreground">كل عمليات النقل النهائي وتحويل الكميات بين مخازن المشاريع</p>
             </div>
           </div>
           <div className="flex gap-2">
-            <Button variant="outline" onClick={load} disabled={loading} data-testid="refresh-btn"><RefreshCw className={`h-4 w-4 ml-2 ${loading ? 'animate-spin' : ''}`} />تحديث</Button>
+            <Button variant="outline" onClick={load} disabled={loading} data-testid="transfers-log-refresh-btn"><RefreshCw className={`h-4 w-4 ml-2 ${loading ? 'animate-spin' : ''}`} />تحديث</Button>
             <Button onClick={() => printTransferLog(rows, { projectName, start, end })} disabled={!rows.length} data-testid="print-log-btn"><Printer className="h-4 w-4 ml-2" />طباعة</Button>
           </div>
         </div>

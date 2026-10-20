@@ -17,6 +17,8 @@ import { Badge } from '../components/ui/badge';
 import BranchSelector from '../components/BranchSelector';
 import { ProjectsActivityStrip } from '../components/ProjectsActivityStrip';
 import ProductsByChannelTab from '../components/reports/ProductsByChannelTab';
+import EnterpriseDashboard from './EnterpriseDashboard';
+import ProjectTransfersLog from './ProjectTransfersLog';
 import {
   ArrowRight,
   BarChart3,
@@ -4371,6 +4373,8 @@ export default function Reports() {
   );
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('sales');
+  const showEnterpriseTabs = (enterpriseEnabled || user?.role === 'super_admin')
+    && ['super_admin', 'admin', 'general_manager', 'enterprise_owner'].includes(user?.role);
   const [loadingComprehensive, setLoadingComprehensive] = useState(false);
   const [dashboardSettings, setDashboardSettings] = useState({ 
     showSmartReports: true, 
@@ -4749,7 +4753,7 @@ export default function Reports() {
       </header>
 
       {/* Filters - تظهر فقط للتبويبات التي تحتاجها (تختفي عند إغلاق الصندوق لأنه له فلاتره الخاصة) */}
-      {activeTab !== 'comprehensive' && activeTab !== 'cash-register' && (
+      {!['comprehensive', 'cash-register', 'enterprise-dashboard', 'transfers-log'].includes(activeTab) && (
         <div className="max-w-7xl mx-auto px-6 py-4 border-b border-border">
           <div className="flex flex-wrap items-center gap-4">
             <div>
@@ -4806,7 +4810,24 @@ export default function Reports() {
             {dashboardSettings.showSmartReports !== false && (
               <TabsTrigger value="smart" className="text-emerald-500">{t('التقرير الذكي')}</TabsTrigger>
             )}
+            {showEnterpriseTabs && (
+              <TabsTrigger value="enterprise-dashboard" className="text-amber-500 font-bold" data-testid="reports-tab-enterprise-dashboard">{t('لوحة المؤسسة')}</TabsTrigger>
+            )}
+            {showEnterpriseTabs && (
+              <TabsTrigger value="transfers-log" className="text-sky-500 font-bold" data-testid="reports-tab-transfers-log">{t('سجل التحويلات')}</TabsTrigger>
+            )}
           </TabsList>
+
+          {showEnterpriseTabs && (
+            <TabsContent value="enterprise-dashboard">
+              {activeTab === 'enterprise-dashboard' && <EnterpriseDashboard embedded />}
+            </TabsContent>
+          )}
+          {showEnterpriseTabs && (
+            <TabsContent value="transfers-log">
+              {activeTab === 'transfers-log' && <ProjectTransfersLog embedded />}
+            </TabsContent>
+          )}
 
           {/* Comprehensive Report - التقرير الشامل */}
           {dashboardSettings.showComprehensiveReport !== false && (
