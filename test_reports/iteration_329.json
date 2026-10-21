@@ -1,0 +1,26 @@
+{
+  "summary": "Frontend retest of the iter328 stale form bug (enterprise admin@maestroegp.com). All 3 requested items PASS. (1) Repro: in the all-projects view, Add printer > choose الشاورما > close > switch the bar to مطعم البرغر الملكي > reopen. There is no printer-project-select, the branch list shows only المنصور/الكرادة, and the POST has project_id=edc0531b (burger) with a burger branch, persisted in the DB. Add user, same repro: no user-project-select, the branch list shows burger branches, and POST /api/users sends project_id=burger, which saves. (2) In the burger view, edit-printer-project-select and edit-user-project-select are hidden. Saving PUTs the existing project_id=burger, so the project is kept. In the all-projects view both are shown, prefilled with the current project. (3) In the all-projects view, editing a printer from burger to الشاورما resets the branch to 'اختر الفرع', lists only the shawarma branches and saves project_id=shawarma. Adding a printer with مطعم الاختبار saves project_id=52aee398 and the main branch, and the project badges render. NEW MINOR ISSUE: a stale branch_id remains in the form.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "Add printer dialog (same pattern in Add user)", "issue": "A stale branch_id remains in the form after a project switch. Steps: in the all-projects view choose الشاورما, pick the branch الجادرية, close, switch the bar to burger, reopen. The branch trigger shows EMPTY, but printerForm.branch_id is still ef8ab196 (shawarma). If the user saves without re-picking a branch, the POST sends the burger project with the shawarma branch, and the backend correctly returns 400 'الفرع المختار لا يتبع المشروع المحدد'. That is confusing, because the UI shows no branch selected. Fix: reset printerForm/userForm (project_id and branch_id) when selectedProjectId changes or when the dialog closes, or drop a branch_id that is not in branchesForProject(...) before submitting. The user form has the same pattern (verified by code reading; not reproduced in the UI).", "selector": "[data-testid='printer-branch-select']", "priority": "LOW"}
+    ],
+    "integration_issues": [],
+    "design_issues": [{"screen": "Settings > Printers / Users", "issues": ["The Add printer and Add user buttons, and the branch SelectTriggers in the user and edit-printer dialogs, still have no data-testid."]}]
+  },
+  "test_report_links": [],
+  "action_items": [
+    "LOW: Clear printerForm/userForm branch_id (and project_id) when the project bar changes or the dialog closes, so a hidden stale branch is not submitted."
+  ],
+  "critical_code_review_comments": [
+    "Settings.js has 8257 lines and should be split into tab components.",
+    "Categories, products and branches still use `form.project_id || defaultFormProject` (lines 1457, 1968, 2028, 3728, 4109, 4425 and 4455). Their project select is always shown, so they are lower risk, but the same stale-form pattern could appear if they are hidden in the future."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "skipped", "frontend": "100% of requested checks (1 new LOW issue)"},
+  "seed_data_creation": "Temp printers TEST_it329_stale(_ed) and TEST_it329_main and user TEST_it329_user were created and deleted. The tenant has 0 printers again.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Login: API login, then set localStorage token, cached_user and selectedProjectId. Go to '/', press Escape twice to close the cashier-shift dialog, then click 'الإعدادات' and use the tab locator [role=tab] has_text. The IP field in the add-printer dialog is required (placeholder 192.168.1.100). Select the user-dialog branch trigger with '[role=dialog] div:has(> label:text-is(\"الفرع\")) button[role=combobox]'. Project ids: burger edc0531b, shawarma 75dfb28d, main 52aee398.",
+  "test_credentials": "admin@maestroegp.com/admin123"
+}

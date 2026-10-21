@@ -71,6 +71,11 @@ class ProjectUpdate(BaseModel):
     activity_type: Optional[str] = None
     logo_url: Optional[str] = None
     color: Optional[str] = Field(None, pattern=r"^#[0-9a-fA-F]{6}$")
+    admin_reports_enabled: Optional[bool] = None  # المالك فقط: تقارير مدير المشروع
+    admin_daily_summary: Optional[bool] = None    # المالك فقط: ملخص الإغلاق اليومي لمدير المشروع
+    admin_inventory_enabled: Optional[bool] = None  # المالك فقط: المخزون والتصنيع
+    admin_purchases_enabled: Optional[bool] = None  # المالك فقط: المشتريات والموردين
+    cash_diff_alert_threshold: Optional[float] = Field(None, ge=0)  # تنبيه فرق الصندوق (0 = معطّل)
     currency: Optional[str] = None
     timezone: Optional[str] = None
     description: Optional[str] = None
@@ -371,6 +376,41 @@ async def copy_catalog(project_id: str, payload: CopyCatalogRequest, current_use
             "categories_added": cats_added, "products_added": prods_added}
 
 
+@router.post("/owner-weekly-summary/test")
+async def send_owner_weekly_summary_now(current_user: dict = Depends(get_current_user)):
+    """إرسال الملخص الأسبوعي للمالك الآن (للتجربة)"""
+    if not user_is_enterprise_owner(current_user) or current_user.get("is_project_admin"):
+        raise HTTPException(status_code=403, detail="غير مصرح")
+    db = get_database()
+    await require_tenant_enterprise(db, current_user)
+    from routes.project_daily_summary import run_owner_weekly_summaries, _owner_phones
+    tid = get_user_tenant_id(current_user)
+    if not await _owner_phones(db, tid):
+        raise HTTPException(status_code=400, detail="لا يوجد رقم هاتف للمالك — أضفه في بيانات الحساب")
+    sent = await run_owner_weekly_summaries(force_tenant_id=tid)
+    return {"sent": sent, "message": "تم إرسال الملخص الأسبوعي" if sent else "تعذّر الإرسال — تحقق من ربط واتساب النظام"}
+
+
+@router.put("/owner-weekly-summary")
+async def toggle_owner_weekly_summary(body: dict = Body(...), current_user: dict = Depends(get_current_user)):
+    if not user_is_enterprise_owner(current_user) or current_user.get("is_project_admin"):
+        raise HTTPException(status_code=403, detail="غير مصرح")
+    db = get_database()
+    await require_tenant_enterprise(db, current_user)
+    enabled = bool(body.get("enabled", True))
+    await db.tenants.update_one({"id": get_user_tenant_id(current_user)}, {"$set": {"owner_weekly_summary": enabled}})
+    return {"enabled": enabled}
+
+
+@router.get("/owner-weekly-summary")
+async def get_owner_weekly_summary(current_user: dict = Depends(get_current_user)):
+    if not user_is_enterprise_owner(current_user) or current_user.get("is_project_admin"):
+        raise HTTPException(status_code=403, detail="غير مصرح")
+    db = get_database()
+    t = await db.tenants.find_one({"id": get_user_tenant_id(current_user)}, {"_id": 0, "owner_weekly_summary": 1}) or {}
+    return {"enabled": t.get("owner_weekly_summary") is not False}
+
+
 @router.get("/{project_id}")
 async def get_project(project_id: str, current_user: dict = Depends(get_current_user)):
     """جلب مشروع محدد"""
@@ -412,7 +452,7 @@ async def update_project(
 
     is_owner = user_is_enterprise_owner(current_user)
     is_project_admin = (
-        current_user.get("role") == EnterpriseRole.PROJECT_ADMIN
+        (current_user.get("role") == EnterpriseRole.PROJECT_ADMIN or current_user.get("is_project_admin"))
         and current_user.get("project_id") == project_id
     )
     if not (is_owner or is_project_admin):
@@ -421,12 +461,32 @@ async def update_project(
     payload = {k: v for k, v in updates.dict().items() if v is not None}
     # لا يسمح بتغيير سعر الصرف مباشرة عبر PUT - لأنه يحتاج تسجيل سجل تاريخي
     payload.pop("exchange_rate", None)
+    if not is_owner:
+        payload.pop("admin_reports_enabled", None)
+        for _k in ("admin_daily_summary", "admin_inventory_enabled", "admin_purchases_enabled", "cash_diff_alert_threshold"):
+            payload.pop(_k, None)
     if payload:
         payload["updated_at"] = datetime.now(timezone.utc).isoformat()
         await db.projects.update_one({"id": project_id}, {"$set": payload})
 
     updated = await db.projects.find_one({"id": project_id}, {"_id": 0})
     return {"message": "تم تحديث المشروع بنجاح", "project": updated}
+
+
+@router.post("/{project_id}/daily-summary/test")
+async def send_project_daily_summary_now(project_id: str, current_user: dict = Depends(get_current_user)):
+    """إرسال ملخص إغلاق الأمس لمدير المشروع الآن (للتجربة) — مالك المؤسسة فقط"""
+    if not user_is_enterprise_owner(current_user):
+        raise HTTPException(status_code=403, detail="غير مصرح")
+    db = get_database()
+    await require_tenant_enterprise(db, current_user)
+    if not await db.projects.find_one({"id": project_id, "tenant_id": get_user_tenant_id(current_user)}, {"_id": 1}):
+        raise HTTPException(status_code=404, detail="المشروع غير موجود")
+    if not await db.users.find_one({"project_id": project_id, "role": "project_admin", "phone": {"$type": "string", "$ne": ""}}, {"_id": 1}):
+        raise HTTPException(status_code=400, detail="لا يوجد مدير مشروع برقم هاتف لهذا المشروع")
+    from routes.project_daily_summary import run_project_daily_summaries
+    sent = await run_project_daily_summaries(force_project_id=project_id)
+    return {"sent": sent, "message": "تم إرسال الملخص" if sent else "تعذّر الإرسال — تحقق من ربط واتساب النظام"}
 
 
 # ==================== EXCHANGE RATE MANAGEMENT ====================
@@ -603,7 +663,7 @@ async def upload_project_logo(
     if not project:
         raise HTTPException(status_code=404, detail="المشروع غير موجود")
     is_project_admin = (
-        current_user.get("role") == EnterpriseRole.PROJECT_ADMIN
+        (current_user.get("role") == EnterpriseRole.PROJECT_ADMIN or current_user.get("is_project_admin"))
         and current_user.get("project_id") == project_id
     )
     if not (user_is_enterprise_owner(current_user) or is_project_admin):

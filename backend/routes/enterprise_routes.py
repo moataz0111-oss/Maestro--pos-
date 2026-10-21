@@ -111,7 +111,7 @@ async def apply_activity_template(project_id: str, current_user: dict = Depends(
 
     is_owner = user_is_enterprise_owner(current_user)
     is_project_admin = (
-        current_user.get("role") == EnterpriseRole.PROJECT_ADMIN
+        (current_user.get("role") == EnterpriseRole.PROJECT_ADMIN or current_user.get("is_project_admin"))
         and current_user.get("project_id") == project_id
     )
     if not (is_owner or is_project_admin):

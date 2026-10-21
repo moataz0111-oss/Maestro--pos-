@@ -1,0 +1,37 @@
+{
+  "summary": "Retest of the iter327 failures for enterprise printers. Backend: 21/21 pass (4 new iter328 tests plus 17 iter327 regression tests). The new header-project check only took effect after `sudo supervisorctl restart backend`. Before the restart, POST with X-Project-Id=burger and a main branch returned 200, because the backend runs without --reload and printer_routes.py was edited at 15:48 while the server had started at 15:40. UI (admin@maestroegp.com), all verified: (1) in the all-projects view both printer rows contain project-badge-<pid> with the correct project name, and the badge is hidden in a specific-project view; (2) the iter327 repro (burger, click a branch chip, switch to مطعم الاختبار) now shows the main printer, so the filter reset works; (3) in the all-projects view the add-printer dialog shows printer-project-select, choosing الشاورما lists its 2 branches, and saving POSTs project_id, which is persisted in the DB; (4) with the bar on burger, the add-printer dialog has no project select and the branch list shows the 2 burger branches; the add-user dialog has no user-project-select and shows the burger branches; in the all-projects view user-project-select is shown. NEW BUG: stale form project_id when switching the bar. The edit-printer dialog also still shows the project select in a specific-project view.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "POST /api/printers", "issue": "When a specific project is selected, the body's project_id still takes priority over X-Project-Id (`printer.project_id or project_id`). Together with the frontend stale-form bug, a printer can be saved to project A while the user is viewing project B. Consider rejecting body.project_id != header project when the header is set and is not 'all'."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "Add printer dialog (and Add user dialog, same pattern)", "issue": "Stale printerForm.project_id. Steps: in the all-projects view open Add printer, choose الشاورما in printer-project-select, cancel, switch the bar to مطعم البرغر الملكي, reopen Add printer. The branch dropdown is EMPTY. It uses `printerForm.project_id || defaultFormProject`, so the hidden stale shawarma id wins over the bar project and is filtered against burger-scoped branches; saving would POST project_id=shawarma. Fix: use `needProject ? printerForm.project_id : defaultFormProject` (same for userForm at L1443/3327/3336), or clear form.project_id when selectedProjectId changes.", "selector": "[data-testid='printer-branch-select']", "priority": "MEDIUM"},
+      {"component": "Edit printer dialog (also edit user L3604)", "issue": "edit-printer-project-select is still shown when the bar is on a specific project. Choosing a different project gives an empty branch list, because branchesForProject filters the project-scoped `branches` state (the iter327 MEDIUM issue remains in the edit dialogs). Hide it with needProject, or lock it to the bar project, as in the add dialogs.", "selector": "[data-testid='edit-printer-project-select']", "priority": "LOW"}
+    ],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Settings > Printers / Users", "issues": ["The add-printer button, the add-user button, the edit-printer branch SelectTrigger and the user-dialog branch SelectTrigger still have no data-testid."]}
+    ]
+  },
+  "test_report_links": ["/app/backend/tests/test_enterprise_printers_iter328.py", "/app/backend/tests/test_enterprise_printers_iter327.py", "/app/test_reports/pytest/iter328.xml"],
+  "action_items": [
+    "In the add printer and add user dialogs, prefer defaultFormProject when !needProject (or reset form.project_id when selectedProjectId changes), so a stale hidden project_id cannot override the bar project.",
+    "Hide or lock edit-printer-project-select and edit-user-project-select when a specific project is selected.",
+    "Optional: in POST /printers, return 400 if body.project_id conflicts with a specific X-Project-Id.",
+    "Remember to restart the backend after backend edits (it has no --reload)."
+  ],
+  "critical_code_review_comments": [
+    "Settings.js is over 6000 lines and should be split (Printers and Users tabs into their own components).",
+    "The `form.project_id || defaultFormProject` pattern is repeated for categories, products, branches, users and printers. Check the same stale-state bug in all of them and extract a helper such as effectiveFormProject(formPid)."
+  ],
+  "updated_files": ["/app/backend/tests/test_enterprise_printers_iter328.py"],
+  "success_rate": {"backend": "100% (21/21, after restarting the backend)", "frontend": "~85% (all 3 iter327 fixes verified; new stale-form bug; edit dialog project select still shown)"},
+  "seed_data_creation": "Temp printers TEST_it328_* were created and deleted. The default tenant has 0 printers again.",
+  "retest_needed": true,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Login via the API, put the token and user in localStorage, go to '/', then click 'الإعدادات' (a direct goto /settings redirected to /). Tabs: page.locator('[role=tab]', has_text='الطابعات'). Project bar: [data-testid=settings-project-select], then role=option filter by name. Project and branch ids are listed in iteration_327.json.",
+  "test_credentials": "admin@maestroegp.com/admin123 (enterprise). The super admin was not needed."
+}

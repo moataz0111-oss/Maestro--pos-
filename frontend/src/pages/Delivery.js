@@ -76,6 +76,8 @@ import {
 import DriverTrackingMap from '../components/DriverTrackingMap';
 import PhoneCountryInput from '../components/PhoneCountryInput';
 import { showApiError } from '../utils/apiError';
+import { useProject } from '../context/ProjectContext';
+import { PageProjectBar, ProjectBadge } from '../components/ProjectScopeControls';
 
 const API = API_URL;
 
@@ -98,6 +100,13 @@ export default function Delivery() {
   const [ordersFilter, setOrdersFilter] = useState('all');
   const [branches, setBranches] = useState([]);
   const [selectedBranch, setSelectedBranch] = useState(null);
+  const { selectedProjectId, enterpriseEnabled } = useProject();
+  const firstProjectRender = useRef(true);
+  useEffect(() => {
+    if (firstProjectRender.current) { firstProjectRender.current = false; return; }
+    setSelectedBranch(null);
+    fetchData();
+  }, [selectedProjectId]); // eslint-disable-line react-hooks/exhaustive-deps
   const [loading, setLoading] = useState(true);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [formData, setFormData] = useState({ name: '', phone: '', email: '', pin: '1234' });
@@ -281,7 +290,7 @@ export default function Delivery() {
     try {
       await axios.post(`${API}/drivers`, {
         ...formData,
-        branch_id: selectedBranch
+        branch_id: formData.branch_id || selectedBranch
       });
       toast.success(t('تم إضافة السائق'));
       setDialogOpen(false);
@@ -780,12 +789,12 @@ export default function Delivery() {
                           value={formData.branch_id || selectedBranch || ''} 
                           onValueChange={(val) => setFormData({ ...formData, branch_id: val })}
                         >
-                          <SelectTrigger className="mt-1 bg-background border-input">
+                          <SelectTrigger className="mt-1 bg-background border-input" data-testid="new-driver-branch-select">
                             <SelectValue placeholder={t('اختر الفرع')} />
                           </SelectTrigger>
                           <SelectContent>
                             {branches.map(branch => (
-                              <SelectItem key={branch.id} value={branch.id}>{branch.name}</SelectItem>
+                              <SelectItem key={branch.id} value={branch.id} data-testid={`new-driver-branch-${branch.id}`}>{branch.name}</SelectItem>
                             ))}
                           </SelectContent>
                         </Select>
@@ -820,6 +829,7 @@ export default function Delivery() {
           </div>
         </div>
       </header>
+      {enterpriseEnabled && <div className="max-w-7xl mx-auto px-4 sm:px-6 pt-4" data-testid="page-project-bar-wrap"><PageProjectBar /></div>}
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 py-4 sm:py-6">
         {/* إحصائيات سريعة */}
@@ -979,7 +989,7 @@ export default function Delivery() {
                               <Truck className={`h-6 w-6 ${driver.is_available ? 'text-green-500' : 'text-orange-500'}`} />
                             </div>
                             <div>
-                              <h3 className="font-bold text-foreground">{driver.name}</h3>
+                              <h3 className="font-bold text-foreground flex items-center gap-2">{driver.name} <ProjectBadge projectId={driver.project_id || (branches.find(b => b.id === driver.branch_id) || {}).project_id} /></h3>
                               <p className="text-xs text-muted-foreground flex items-center gap-1">
                                 <Phone className="h-3 w-3" />
                                 {driver.phone}

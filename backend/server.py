@@ -1000,6 +1000,22 @@ _INV_ROLES = _MGMT_ROLES | {"warehouse_keeper", "manufacturer"}
 _PURCH_ROLES = _MGMT_ROLES | {"purchasing", "warehouse_keeper"}
 
 # (نمط المسار, الأدوار المسموح لها). أول تطابق يُحسم.
+# 🏢 صلاحيات مدير المشروع التي يتحكم بها مالك المؤسسة (مفتاح المشروع ← بادئات المسارات)
+_PA_GATES = [
+    ("admin_reports_enabled", ("/api/reports/", "/api/smart-reports/", "/api/break-even")),
+    ("admin_purchases_enabled", ("/api/suppliers", "/api/supplier-payment-dues", "/api/purchases", "/api/purchase-requests",
+                                 "/api/purchase-invoices", "/api/external-purchases")),
+    ("admin_inventory_enabled", ("/api/inventory", "/api/raw-materials", "/api/manufactured-products", "/api/manufacturing",
+                                 "/api/warehouse", "/api/recipes", "/api/stock")),
+]
+_PA_FLAGS = {"reports": "admin_reports_enabled", "purchases": "admin_purchases_enabled", "inventory": "admin_inventory_enabled"}
+
+
+async def _project_admin_permissions(project_id):
+    p = await db.projects.find_one({"id": project_id}, {"_id": 0, **{f: 1 for f in _PA_FLAGS.values()}}) or {}
+    return {k: bool(p.get(f)) for k, f in _PA_FLAGS.items()}
+
+
 _RBAC_RULES = [
     (_re_rbac.compile(r"^/api/employees(/|$)"), _MGMT_ROLES),
     (_re_rbac.compile(r"^/api/payroll"), _MGMT_ROLES),
@@ -1029,6 +1045,18 @@ async def rbac_middleware(request: Request, call_next):
     try:
         path = request.url.path
         if request.method != "OPTIONS" and path.startswith("/api/"):
+            _flag = next((f for f, pre in _PA_GATES if path.startswith(pre)), None)
+            _auth = request.headers.get("Authorization", "")
+            if _flag and _auth.startswith("Bearer "):
+                try:
+                    _pl = jwt.decode(_auth[7:], JWT_SECRET, algorithms=[JWT_ALGORITHM])
+                except Exception:
+                    _pl = {}
+                if _pl.get("role") == "project_admin":
+                    _pa = await db.users.find_one({"id": _pl.get("user_id")}, {"_id": 0, "project_id": 1})
+                    _pp = await db.projects.find_one({"id": (_pa or {}).get("project_id")}, {"_id": 0, _flag: 1})
+                    if not (_pp or {}).get(_flag):
+                        return _JR(status_code=403, content={"detail": "هذه الصلاحية غير مفعّلة لمدير المشروع — يفعّلها مالك المؤسسة"})
             allowed = None
             for rx, roles in _RBAC_RULES:
                 if rx.match(path):
@@ -1041,6 +1069,8 @@ async def rbac_middleware(request: Request, call_next):
                     try:
                         payload = jwt.decode(auth[7:], JWT_SECRET, algorithms=[JWT_ALGORITHM])
                         role = payload.get("role")
+                        if role == "project_admin":
+                            role = "manager"  # مدير المشروع = مدير داخل مشروعه
                     except Exception:
                         role = None
                 if role is None:
@@ -2405,6 +2435,7 @@ class UserCreate(BaseModel):
     permissions: List[str] = []
     phone: Optional[str] = None  # لاستلام رمز التحقق عبر واتساب/SMS
     tenant_id: Optional[str] = None  # للنظام متعدد المستأجرين
+    project_id: Optional[str] = None  # وضع المؤسسة: تقييد المستخدم بمشروع
 
 class UserLogin(BaseModel):
     email: str
@@ -2426,6 +2457,7 @@ class UserResponse(BaseModel):
     is_active: bool = True
     created_at: str
     tenant_id: Optional[str] = None
+    project_id: Optional[str] = None
 
 class UserUpdate(BaseModel):
     username: Optional[str] = None
@@ -2437,6 +2469,7 @@ class UserUpdate(BaseModel):
     permissions: Optional[List[str]] = None
     phone: Optional[str] = None
     is_active: Optional[bool] = None
+    project_id: Optional[str] = None  # "" = بدون تقييد (كل المشاريع)
     # 🔑 كلمة مرور جديدة اختيارية — عند تمريرها تُحدَّث password + password_vault
     password: Optional[str] = None
 
@@ -2658,6 +2691,7 @@ class TableCreate(BaseModel):
     capacity: int
     branch_id: str
     section: Optional[str] = None
+    project_id: Optional[str] = None
 
 class TableResponse(BaseModel):
     model_config = ConfigDict(extra="ignore")
@@ -2668,6 +2702,7 @@ class TableResponse(BaseModel):
     section: Optional[str] = None
     status: str = "available"
     current_order_id: Optional[str] = None
+    project_id: Optional[str] = None
 
 # Customer Models - إدارة العملاء
 class CustomerCreate(BaseModel):
@@ -2903,6 +2938,8 @@ class DeliveryAppSettingCreate(BaseModel):
     is_active: bool = True
     payment_terms: str = "weekly"  # daily, weekly, monthly
     contact_info: Optional[str] = None
+    scope_project_id: Optional[str] = None  # وضع المؤسسة: "all" = كل المشاريع
+    original_project_id: Optional[str] = None  # عند تغيير مشروع الشركة
 
 # Currency Models
 class Currency(BaseModel):
@@ -3330,6 +3367,11 @@ async def get_current_user(request: Request, credentials: HTTPAuthorizationCrede
                 raise
             except Exception:
                 pass
+        # 🏢 مدير المشروع: صلاحيات مدير داخل مشروعه فقط (العزل عبر project_id)
+        if user.get("role") == "project_admin" and user.get("project_id"):
+            user["role"] = UserRole.MANAGER
+            user["is_project_admin"] = True
+            user["_project_branch_ids"] = [b["id"] async for b in db.branches.find({"project_id": user["project_id"], "tenant_id": user.get("tenant_id")}, {"_id": 0, "id": 1})]
         return user
     except jwt.ExpiredSignatureError:
         raise HTTPException(status_code=401, detail="انتهت صلاحية الجلسة")
@@ -4102,6 +4144,10 @@ async def login(credentials: UserLogin, request: Request, response: Response):
         del user["password"]
     if "password_hash" in user:
         del user["password_hash"]
+    user.pop("password_vault", None)
+    if user.get("role") == "project_admin":
+        user["project_permissions"] = await _project_admin_permissions(user.get("project_id"))
+        user["project_reports_enabled"] = user["project_permissions"]["reports"]
 
     # ======== المصادقة الثنائية (جهاز موثوق) ========
     _is_owner = (user.get("role") == UserRole.SUPER_ADMIN) or ((user.get("email") or "").lower() in OWNER_RECOVERY_EMAILS)
@@ -4310,6 +4356,10 @@ async def verify_staff_2fa(payload: Verify2FARequest, request: Request, response
         del user["password"]
     if "password_hash" in user:
         del user["password_hash"]
+    user.pop("password_vault", None)
+    if user.get("role") == "project_admin":
+        user["project_permissions"] = await _project_admin_permissions(user.get("project_id"))
+        user["project_reports_enabled"] = user["project_permissions"]["reports"]
     # ✅ جلسة نشطة واحدة (بعد التحقق الثنائي)
     _sid = await issue_user_session(user["id"], user.get("role"))
     token = create_token(user["id"], user["role"], user.get("branch_id"), user.get("tenant_id"), session_id=_sid)
@@ -4460,8 +4510,15 @@ async def unban_ip(payload: dict, current_user: dict = Depends(get_current_user)
 @api_router.get("/auth/me")
 async def get_me(current_user: dict = Depends(get_current_user)):
     user = dict(current_user)
+    if user.pop("is_project_admin", False):
+        user["role"] = "project_admin"
+        user["project_permissions"] = await _project_admin_permissions(user.get("project_id"))
+        user["project_reports_enabled"] = user["project_permissions"]["reports"]
+    user.pop("_project_branch_ids", None)
     if "password" in user:
         del user["password"]
+    user.pop("password_vault", None)
+    user.pop("password_hash", None)
     # ⭐ أكتوبر 2026: إرفاق معلومات مستوى الحساب للـ frontend
     # (لإخفاء UI المؤسسة عن العملاء العاديين حتى يُفعّلهم super_admin)
     try:
@@ -4664,12 +4721,17 @@ async def clear_audit_logs(current_user: dict = Depends(get_current_user)):
 # ==================== USER ROUTES ====================
 
 @api_router.get("/users", response_model=List[UserResponse])
-async def get_users(current_user: dict = Depends(get_current_user)):
+async def get_users(request: Request, current_user: dict = Depends(get_current_user)):
     if current_user["role"] not in [UserRole.ADMIN, UserRole.GENERAL_MANAGER, UserRole.MANAGER, UserRole.SUPER_ADMIN]:
         raise HTTPException(status_code=403, detail="غير مصرح")
     
     # فلترة المستخدمين حسب tenant_id
     query = build_tenant_query(current_user)
+    # 🏢 وضع المؤسسة: مستخدمو المشروع المختار (المقيّدون به أو بأحد فروعه)
+    _pid, _is_ent = await _enterprise_pid(current_user, request)
+    if _is_ent and _pid:
+        _bids = [b["id"] async for b in db.branches.find({"tenant_id": get_user_tenant_id(current_user), "project_id": _pid}, {"_id": 0, "id": 1})]
+        query["$or"] = [{"project_id": _pid}, {"branch_id": {"$in": _bids}}]
     users = await db.users.find(query, {"_id": 0, "password": 0}).to_list(length=None)
     return users
 
@@ -4749,10 +4811,39 @@ async def update_user(user_id: str, update: UserUpdate, current_user: dict = Dep
     # التحقق من أن المستخدم ينتمي لنفس الـ tenant
     query = build_tenant_query(current_user, {"id": user_id})
     user = await db.users.find_one(query)
+    await _project_admin_guard(current_user, user)
     if not user:
         raise HTTPException(status_code=404, detail="المستخدم غير موجود")
     
+    await _project_admin_guard(current_user, user)
     update_data = {k: v for k, v in update.model_dump().items() if v is not None}
+    if current_user.get("is_project_admin"):
+        update_data.pop("project_id", None)
+        if update_data.get("branch_id") and await _branch_project_id(update_data["branch_id"], user.get("tenant_id")) != current_user.get("project_id"):
+            raise HTTPException(status_code=400, detail="الفرع المختار لا يتبع مشروعك")
+        if update_data.get("role") in ("admin", "general_manager", "project_admin", "super_admin"):
+            raise HTTPException(status_code=403, detail="مدير المشروع لا يمكنه تعيين هذا الدور")
+    if "project_id" not in update_data and update_data.get("branch_id") and update_data["branch_id"] != user.get("branch_id"):
+        _t0 = await db.tenants.find_one({"id": user.get("tenant_id")}, {"_id": 0, "enterprise_enabled": 1}) if user.get("tenant_id") else None
+        _bp0 = await _branch_project_id(update_data["branch_id"], user.get("tenant_id"))
+        if (_t0 or {}).get("enterprise_enabled") and _bp0:
+            update_data["project_id"] = _bp0
+    if "project_id" in update_data:
+        _t = await db.tenants.find_one({"id": user.get("tenant_id")}, {"_id": 0, "enterprise_enabled": 1}) if user.get("tenant_id") else None
+        _new_pid = update_data["project_id"]
+        if not (_t or {}).get("enterprise_enabled"):
+            update_data.pop("project_id")
+        elif _new_pid in ("", "all"):
+            update_data["project_id"] = None
+        elif not await db.projects.find_one({"id": _new_pid, "tenant_id": user.get("tenant_id")}, {"_id": 0, "id": 1}):
+            raise HTTPException(status_code=400, detail="المشروع غير موجود")
+        else:
+            _bid = update_data.get("branch_id") or user.get("branch_id")
+            _bp = await _branch_project_id(_bid, user.get("tenant_id")) if _bid else None
+            if _bp and _bp != _new_pid:
+                if update_data.get("branch_id"):
+                    raise HTTPException(status_code=400, detail="الفرع المختار لا يتبع المشروع المحدد")
+                update_data["branch_id"] = None
     
     # 🛡️ سياسة صلاحيات المستخدمين (طلب المالك — تحكّم كامل لمالك المشروع):
     #   - super_admin: كل شيء (نظاماً كاملاً).
@@ -5008,7 +5099,7 @@ async def get_tenant_limits(request: Request, current_user: dict = Depends(get_c
 @api_router.post("/users", response_model=UserResponse)
 async def create_user(user: UserCreate, request: Request, current_user: dict = Depends(get_current_user)):
     """إنشاء مستخدم جديد مع tenant_id تلقائياً"""
-    if current_user["role"] not in [UserRole.ADMIN, UserRole.GENERAL_MANAGER, UserRole.SUPER_ADMIN]:
+    if current_user["role"] not in [UserRole.ADMIN, UserRole.GENERAL_MANAGER, UserRole.SUPER_ADMIN] and not current_user.get("is_project_admin"):
         raise HTTPException(status_code=403, detail="إنشاء الحسابات متاح للمالك فقط")
 
     # منع تصعيد الصلاحيات: لا يُسمح بإنشاء super_admin إطلاقاً عبر هذا المسار
@@ -5031,9 +5122,20 @@ async def create_user(user: UserCreate, request: Request, current_user: dict = D
     tenant = await db.tenants.find_one({"id": tenant_id}) if tenant_id else None
     new_user_project_id = None
     if tenant and tenant.get("enterprise_enabled"):
+        if current_user.get("is_project_admin"):
+            user.project_id = current_user.get("project_id")
+            if user.role in ("admin", "general_manager", "project_admin", "super_admin"):
+                raise HTTPException(status_code=403, detail="مدير المشروع لا يمكنه إنشاء هذا الدور")
+        if user.project_id and user.project_id not in ("all", ""):
+            if not await db.projects.find_one({"id": user.project_id, "tenant_id": tenant_id}, {"_id": 0, "id": 1}):
+                raise HTTPException(status_code=400, detail="المشروع غير موجود")
+            new_user_project_id = user.project_id
         if user.branch_id:
             _br = await db.branches.find_one({"id": user.branch_id, "tenant_id": tenant_id}, {"_id": 0, "project_id": 1})
-            new_user_project_id = (_br or {}).get("project_id")
+            _bpid = (_br or {}).get("project_id")
+            if new_user_project_id and _bpid and _bpid != new_user_project_id:
+                raise HTTPException(status_code=400, detail="الفرع المختار لا يتبع المشروع المحدد")
+            new_user_project_id = new_user_project_id or _bpid
         if not new_user_project_id:
             from routes.shared import requested_project_id
             new_user_project_id = requested_project_id(current_user, request)
@@ -5826,7 +5928,7 @@ async def create_expense(expense: ExpenseCreate, request: Request, current_user:
     tenant_id_for_biz = get_user_tenant_id(current_user)
     branch_for_biz = expense.branch_id if hasattr(expense, 'branch_id') else None
     from routes.shared import resolve_project_id_for_create
-    project_id = await resolve_project_id_for_create(current_user, request)
+    project_id = await _enterprise_item_project(current_user, request, None, branch_for_biz) or await resolve_project_id_for_create(current_user, request)
     
     # حماية ضد التكرار: نفس المستخدم + الفرع + المبلغ + الوصف خلال آخر 10 ثواني = تكرار
     from datetime import timedelta
@@ -6041,16 +6143,8 @@ async def get_expenses(
 ):
     query = build_tenant_query(current_user)  # فلترة حسب tenant_id
     # ═══ Enterprise Mode: عزل حسب المشروع ═══
-    user_project_id = current_user.get("project_id")
-    ENTERPRISE_ROLES = [UserRole.SUPER_ADMIN, UserRole.ADMIN, UserRole.GENERAL_MANAGER, "enterprise_owner"]
-    if user_project_id and current_user.get("role") not in ENTERPRISE_ROLES:
-        query["$or"] = [
-            {"project_id": user_project_id},
-            {"project_id": {"$exists": False}},
-            {"project_id": None},
-        ]
-    elif project_id and project_id != "all":
-        query["project_id"] = project_id
+    from routes.shared import apply_project_scope
+    query = await apply_project_scope(current_user, query, project_id)  # عزل صارم: المشروع + السجلات القديمة على فروعه
     # استبعاد المرتجعات من المصاريف نهائياً
     if category:
         query["category"] = category
@@ -6609,16 +6703,18 @@ async def get_next_request_number() -> int:
 # ==================== TABLE ROUTES ====================
 
 @api_router.post("/tables", response_model=TableResponse)
-async def create_table(table: TableCreate, current_user: dict = Depends(get_current_user)):
+async def create_table(table: TableCreate, request: Request, current_user: dict = Depends(get_current_user)):
     # السماح للمدير والأدمن أو من لديه صلاحية tables
     user_permissions = current_user.get("permissions", [])
     if current_user["role"] not in [UserRole.SUPER_ADMIN, UserRole.ADMIN, UserRole.GENERAL_MANAGER, UserRole.MANAGER] and "tables" not in user_permissions:
         raise HTTPException(status_code=403, detail="غير مصرح")
     
     tenant_id = get_user_tenant_id(current_user)
+    _tpid = await _enterprise_item_project(current_user, request, table.project_id, table.branch_id)
     table_doc = {
         "id": str(uuid.uuid4()),
-        **table.model_dump(),
+        **table.model_dump(exclude={"project_id"}),
+        "project_id": _tpid,
         "tenant_id": tenant_id,  # فصل البيانات لكل عميل
         "status": "available",
         "current_order_id": None
@@ -6628,12 +6724,16 @@ async def create_table(table: TableCreate, current_user: dict = Depends(get_curr
     return table_doc
 
 @api_router.get("/tables", response_model=List[TableResponse])
-async def get_tables(branch_id: Optional[str] = None, current_user: dict = Depends(get_current_user)):
+async def get_tables(request: Request, branch_id: Optional[str] = None, current_user: dict = Depends(get_current_user)):
     # Super Admin لا يرى طاولات (ليس لديه مطعم)
     if current_user.get("role") == UserRole.SUPER_ADMIN:
         return []
     
     query = build_tenant_query(current_user)  # فلترة حسب tenant_id
+    from routes.shared import project_branch_condition
+    _cond = await project_branch_condition(current_user, request)
+    if _cond:
+        query.setdefault("$and", []).append(_cond)  # 🏢 طاولات فروع المشروع فقط
     if branch_id:
         query["branch_id"] = branch_id
     tables = await db.tables.find(query, {"_id": 0}).sort("number", 1).to_list(length=None)
@@ -6642,11 +6742,12 @@ async def get_tables(branch_id: Optional[str] = None, current_user: dict = Depen
 @api_router.put("/tables/{table_id}/status")
 async def update_table_status(table_id: str, status: str, current_user: dict = Depends(get_current_user)):
     query = build_tenant_query(current_user, {"id": table_id})
+    await _project_admin_guard(current_user, await db.tables.find_one(query, {"_id": 0}))
     await db.tables.update_one(query, {"$set": {"status": status}})
     return {"message": "تم التحديث"}
 
 @api_router.put("/tables/{table_id}")
-async def update_table(table_id: str, table_data: TableCreate, current_user: dict = Depends(get_current_user)):
+async def update_table(table_id: str, table_data: TableCreate, request: Request, current_user: dict = Depends(get_current_user)):
     """تعديل بيانات الطاولة"""
     # التحقق من صلاحيات المستخدم
     if current_user.get("role") not in [UserRole.ADMIN, UserRole.GENERAL_MANAGER, UserRole.MANAGER, UserRole.SUPER_ADMIN]:
@@ -6658,6 +6759,7 @@ async def update_table(table_id: str, table_data: TableCreate, current_user: dic
     existing_table = await db.tables.find_one(query)
     if not existing_table:
         raise HTTPException(status_code=404, detail="الطاولة غير موجودة")
+    await _project_admin_guard(current_user, existing_table)
     
     # التحقق من تكرار رقم الطاولة في نفس الفرع
     branch_id = table_data.branch_id or existing_table.get("branch_id")
@@ -6676,6 +6778,7 @@ async def update_table(table_id: str, table_data: TableCreate, current_user: dic
         "capacity": table_data.capacity,
         "section": table_data.section or existing_table.get("section", "داخلي"),
         "branch_id": branch_id,
+        "project_id": await _enterprise_item_project(current_user, request, table_data.project_id, branch_id) or existing_table.get("project_id"),
         "updated_at": datetime.now(timezone.utc).isoformat()
     }
     
@@ -6763,6 +6866,7 @@ async def delete_table(table_id: str, current_user: dict = Depends(get_current_u
         query = build_tenant_query(current_user, {"id": table_id})
     
     table = await db.tables.find_one(query)
+    await _project_admin_guard(current_user, table)
     if not table:
         raise HTTPException(status_code=404, detail="الطاولة غير موجودة")
     
@@ -6815,8 +6919,14 @@ async def get_customers(search: Optional[str] = None, phone: Optional[str] = Non
     ER = [UserRole.SUPER_ADMIN, UserRole.ADMIN, UserRole.GENERAL_MANAGER, "enterprise_owner"]
     if upid and current_user.get("role") not in ER:
         query["$and"] = [{"$or": [{"project_id": upid}, {"project_id": {"$exists": False}}, {"project_id": None}]}]
-    elif project_id and project_id != "all":
-        query["project_id"] = project_id
+    elif project_id and project_id != "all" and not phone:
+        # 🏢 العملاء مشتركون بين المشاريع — الفلتر يعرض من طلب من المشروع المختار
+        _tid = get_user_tenant_id(current_user)
+        _bids = [b["id"] async for b in db.branches.find({"tenant_id": _tid, "project_id": project_id}, {"_id": 0, "id": 1})]
+        _oq = {"tenant_id": _tid, "$or": [{"project_id": project_id}, {"branch_id": {"$in": _bids}}]}
+        _cids = [c for c in await db.orders.distinct("customer_id", _oq) if c]
+        _phones = [c for c in await db.orders.distinct("customer_phone", _oq) if c]
+        query["$and"] = [{"$or": [{"id": {"$in": _cids}}, {"phone": {"$in": _phones}}, {"project_id": project_id}]}]
     if phone:
         if "$and" in query:
             query["$and"].append({"$or": [{"phone": phone}, {"phone2": phone}]})
@@ -8917,6 +9027,17 @@ async def create_delivery_app_setting(setting: DeliveryAppSettingCreate, request
     tenant_id = get_user_tenant_id(current_user)
     from routes.shared import requested_project_id
     pid = requested_project_id(current_user, request)
+    _ent_pid, _is_ent = await _enterprise_pid(current_user, request)
+    if _is_ent and setting.scope_project_id is not None and not current_user.get("is_project_admin"):
+        pid = None if setting.scope_project_id in ("all", "") else setting.scope_project_id
+        if pid and not await db.projects.find_one({"id": pid, "tenant_id": tenant_id}, {"_id": 0, "id": 1}):
+            raise HTTPException(status_code=400, detail="المشروع غير موجود")
+        if setting.original_project_id is not None:
+            _orig = None if setting.original_project_id in ("all", "") else setting.original_project_id
+            if _orig != pid:
+                if await db.delivery_app_settings.find_one({"app_id": setting.app_id, "tenant_id": tenant_id, "project_id": pid}, {"_id": 1}):
+                    raise HTTPException(status_code=409, detail="هذه الشركة مخصصة مسبقاً لهذا المشروع — عدّلها من صفها")
+                await db.delivery_app_settings.delete_one({"app_id": setting.app_id, "tenant_id": tenant_id, "project_id": _orig})
     
     # Check if exists for this tenant + project
     query = {"app_id": setting.app_id, "project_id": pid}
@@ -8925,7 +9046,7 @@ async def create_delivery_app_setting(setting: DeliveryAppSettingCreate, request
     
     existing = await db.delivery_app_settings.find_one(query)
     
-    setting_data = setting.model_dump()
+    setting_data = setting.model_dump(exclude={"scope_project_id", "original_project_id"})
     setting_data["tenant_id"] = tenant_id
     setting_data["project_id"] = pid
     
@@ -8946,7 +9067,11 @@ async def get_delivery_app_settings(current_user: dict = Depends(get_current_use
 async def delete_delivery_app_setting(app_id: str, request: Request, current_user: dict = Depends(get_current_user)):
     """حذف شركة توصيل"""
     from routes.shared import requested_project_id
-    query = build_tenant_query(current_user, {"app_id": app_id, "project_id": requested_project_id(current_user, request)})
+    _pid = requested_project_id(current_user, request)
+    _scope = request.query_params.get("scope_project_id")
+    if _scope is not None:
+        _pid = None if _scope in ("all", "") else _scope
+    query = build_tenant_query(current_user, {"app_id": app_id, "project_id": _pid})
     result = await db.delivery_app_settings.delete_one(query)
     if result.deleted_count == 0:
         raise HTTPException(status_code=404, detail="شركة التوصيل غير موجودة")
@@ -8977,18 +9102,42 @@ async def get_delivery_apps(request: Request, current_user: dict = Depends(get_c
         for s in raw_settings:
             if s.get("project_id") == pid:
                 settings_map[s["app_id"]] = s
+    _ent_pid, _is_ent = await _enterprise_pid(current_user, request)
+    if _is_ent and not pid:
+        # كل المشاريع: صف لكل تخصيص (شركة × مشروع)
+        _pn = {p["id"]: p.get("name") async for p in db.projects.find({"tenant_id": get_user_tenant_id(current_user)}, {"_id": 0, "id": 1, "name": 1})}
+        rows, seen = [], set()
+        meta = {a["id"]: a for a in default_apps}
+        for s in raw_settings:
+            seen.add(s["app_id"])
+            base = meta.get(s["app_id"], {"id": s["app_id"], "icon": "Truck", "is_default": False})
+            rows.append({**base, "name": s.get("name") or base.get("name") or s["app_id"],
+                         "name_en": s.get("name_en") or base.get("name_en") or s["app_id"],
+                         "commission_rate": s.get("commission_rate", 0), "is_active": s.get("is_active", True),
+                         "project_id": s.get("project_id"), "project_name": _pn.get(s.get("project_id"))})
+        for a in default_apps:
+            if a["id"] not in seen:
+                rows.append({**a, "commission_rate": 0, "is_active": True, "project_id": None, "project_name": None})
+        return rows
+    if _is_ent:
+        _project_names = {p["id"]: p.get("name") async for p in db.projects.find({"tenant_id": get_user_tenant_id(current_user)}, {"_id": 0, "id": 1, "name": 1})}
     all_settings = list(settings_map.values())
     
     # Update default apps with their settings
     result_apps = []
     for app in default_apps:
         setting = settings_map.get(app["id"])
+        if _is_ent and not setting and any(s["app_id"] == app["id"] for s in raw_settings):
+            continue  # الشركة مخصصة لمشروع آخر
         if setting:
             app["commission_rate"] = setting.get("commission_rate", 0)
             app["is_active"] = setting.get("is_active", True)
         else:
             app["commission_rate"] = 0
             app["is_active"] = True
+        if _is_ent:
+            app["project_id"] = (setting or {}).get("project_id")
+            app["project_name"] = _project_names.get(app["project_id"]) if app["project_id"] else None
         result_apps.append(app)
     
     # Add custom apps (apps that are not in default list)
@@ -9002,7 +9151,8 @@ async def get_delivery_apps(request: Request, current_user: dict = Depends(get_c
                 "icon": "Truck",
                 "is_default": False,
                 "commission_rate": setting.get("commission_rate", 0),
-                "is_active": setting.get("is_active", True)
+                "is_active": setting.get("is_active", True),
+                **({"project_id": setting.get("project_id"), "project_name": _project_names.get(setting.get("project_id"))} if _is_ent else {}),
             })
     
     return result_apps
@@ -9975,8 +10125,70 @@ async def update_system_invoice_settings(settings: SystemInvoiceSettings, curren
     
     return {"message": "تم تحديث إعدادات الفاتورة", "settings": settings.model_dump()}
 
+async def _enterprise_pid(current_user: dict, request: Request):
+    """(project_id, is_enterprise) — إعدادات خاصة بالمشروع لحسابات المؤسسة فقط"""
+    tid = get_user_tenant_id(current_user)
+    if not tid:
+        return None, False
+    t = await db.tenants.find_one({"id": tid}, {"_id": 0, "enterprise_enabled": 1})
+    if not (t or {}).get("enterprise_enabled"):
+        return None, False
+    from routes.shared import requested_project_id
+    return requested_project_id(current_user, request), True
+
+
+async def _enterprise_item_project(current_user: dict, request: Request, body_pid: Optional[str], branch_id: Optional[str]) -> Optional[str]:
+    """project_id لعنصر جديد/معدّل (وضع المؤسسة فقط) مع التحقق من تبعية الفرع"""
+    req_pid, is_ent = await _enterprise_pid(current_user, request)
+    if not is_ent:
+        return None
+    tid = get_user_tenant_id(current_user)
+    pid = req_pid if current_user.get("is_project_admin") else (body_pid if body_pid not in (None, "", "all") else req_pid)
+    bpid = await _branch_project_id(branch_id, tid) if branch_id else None
+    if pid and not await db.projects.find_one({"id": pid, "tenant_id": tid}, {"_id": 0, "id": 1}):
+        raise HTTPException(status_code=400, detail="المشروع غير موجود")
+    if pid and bpid and bpid != pid:
+        raise HTTPException(status_code=400, detail="الفرع المختار لا يتبع المشروع المحدد")
+    return pid or bpid
+
+
+async def _project_admin_guard(current_user: dict, doc: Optional[dict]):
+    """مدير المشروع لا يصل لعناصر مشروع آخر"""
+    if not doc or not current_user.get("is_project_admin"):
+        return
+    pid = doc.get("project_id") or await _branch_project_id(doc.get("branch_id"), current_user.get("tenant_id"))
+    if pid != current_user.get("project_id"):
+        raise HTTPException(status_code=404, detail="العنصر غير موجود في مشروعك")
+
+
+async def _branch_project_id(branch_id: Optional[str], tenant_id: Optional[str] = None) -> Optional[str]:
+    if not branch_id:
+        return None
+    br = await db.branches.find_one({"id": branch_id, **({"tenant_id": tenant_id} if tenant_id else {})}, {"_id": 0, "project_id": 1})
+    return (br or {}).get("project_id")
+
+
+async def _project_settings_doc(coll, tenant_id: str, pid: Optional[str], strict: bool = False):
+    """إعدادات المشروع ← (ترحيل الإعدادات القديمة للمشروع الأساسي) ← الإعدادات العامة"""
+    if pid:
+        doc = await coll.find_one({"tenant_id": tenant_id, "project_id": pid}, {"_id": 0})
+        if doc:
+            return doc
+        main = await db.projects.find_one({"tenant_id": tenant_id, "is_default": True, "deleted_at": {"$exists": False}}, {"_id": 0, "id": 1}) \
+            or await db.projects.find_one({"tenant_id": tenant_id, "deleted_at": {"$exists": False}}, {"_id": 0, "id": 1}, sort=[("created_at", 1)])
+        if main and main.get("id") == pid:
+            general = await coll.find_one({"tenant_id": tenant_id, "project_id": None}, {"_id": 0})
+            if general:
+                copy = {**general, "project_id": pid, "migrated_from_general": True}
+                await coll.update_one({"tenant_id": tenant_id, "project_id": pid}, {"$setOnInsert": copy}, upsert=True)
+                return await coll.find_one({"tenant_id": tenant_id, "project_id": pid}, {"_id": 0})
+        if strict:
+            return None
+    return await coll.find_one({"tenant_id": tenant_id, "project_id": None}, {"_id": 0})
+
+
 @api_router.get("/tenant/invoice-settings")
-async def get_tenant_invoice_settings(request: Request, branch_id: Optional[str] = None, current_user: dict = Depends(get_current_user)):
+async def get_tenant_invoice_settings(request: Request, branch_id: Optional[str] = None, strict: bool = False, current_user: dict = Depends(get_current_user)):
     """جلب إعدادات الفاتورة للعميل (إعدادات المشروع إن وجدت)"""
     tenant_id = get_user_tenant_id(current_user)
     from routes.shared import requested_project_id
@@ -10000,11 +10212,11 @@ async def get_tenant_invoice_settings(request: Request, branch_id: Optional[str]
     }
     
     if tenant_id:
-        settings = None
-        if _pid:
-            settings = await db.tenant_invoice_settings.find_one({"tenant_id": tenant_id, "project_id": _pid}, {"_id": 0})
-        if not settings:
-            settings = await db.tenant_invoice_settings.find_one({"tenant_id": tenant_id, "project_id": None}, {"_id": 0})
+        _ent_pid, _is_ent = await _enterprise_pid(current_user, request)
+        _strict = bool(strict and _is_ent and _ent_pid)
+        settings = await _project_settings_doc(db.tenant_invoice_settings, tenant_id, _pid, strict=_strict)
+        if _strict:
+            return {**default_settings, "thank_you_message": None, **(settings or {}), "project_id": _ent_pid}
         if settings:
             # جلب شعار المطعم من tenant إذا لم يكن هناك شعار مخصص للفاتورة
             if not settings.get("invoice_logo"):
@@ -10444,7 +10656,7 @@ async def get_invoice_data(order_id: str, current_user: dict = Depends(get_curre
     tenant = await db.tenants.find_one({"id": tenant_id}, {"_id": 0}) if tenant_id else None
     
     # جلب إعدادات فاتورة العميل
-    tenant_invoice = await db.tenant_invoice_settings.find_one({"tenant_id": tenant_id}, {"_id": 0}) if tenant_id else {}
+    tenant_invoice = (await _project_settings_doc(db.tenant_invoice_settings, tenant_id, order.get("project_id") or await _branch_project_id(order.get("branch_id"))) or {}) if tenant_id else {}
     
     # جلب إعدادات النظام
     system_settings = await db.settings.find_one({"type": "system_invoice_settings"}, {"_id": 0})
@@ -11957,19 +12169,23 @@ class IncomingCall(BaseModel):
 active_calls = {}
 
 @api_router.post("/callcenter/config")
-async def save_callcenter_config(config: CallCenterConfig, current_user: dict = Depends(get_current_user)):
-    """حفظ إعدادات الكول سنتر"""
+async def save_callcenter_config(config: CallCenterConfig, request: Request, current_user: dict = Depends(get_current_user)):
+    """حفظ إعدادات الكول سنتر (لكل مشروع في وضع المؤسسة)"""
     tenant_id = get_user_tenant_id(current_user)
+    pid, is_ent = await _enterprise_pid(current_user, request)
+    if is_ent and not pid:
+        raise HTTPException(status_code=400, detail="اختر مشروعاً لتعديل إعدادات الكول سنتر الخاصة به")
     
     config_doc = {
         "tenant_id": tenant_id,
+        "project_id": pid,
         **config.dict(),
         "updated_at": datetime.now(timezone.utc).isoformat(),
         "updated_by": current_user["id"]
     }
     
     await db.callcenter_config.update_one(
-        {"tenant_id": tenant_id},
+        {"tenant_id": tenant_id, "project_id": pid},
         {"$set": config_doc},
         upsert=True
     )
@@ -11977,11 +12193,11 @@ async def save_callcenter_config(config: CallCenterConfig, current_user: dict = 
     return {"message": "تم حفظ إعدادات الكول سنتر"}
 
 @api_router.get("/callcenter/config")
-async def get_callcenter_config(current_user: dict = Depends(get_current_user)):
+async def get_callcenter_config(request: Request, current_user: dict = Depends(get_current_user)):
     """جلب إعدادات الكول سنتر"""
     tenant_id = get_user_tenant_id(current_user)
-    
-    config = await db.callcenter_config.find_one({"tenant_id": tenant_id}, {"_id": 0})
+    pid, is_ent = await _enterprise_pid(current_user, request)
+    config = await _project_settings_doc(db.callcenter_config, tenant_id, pid, strict=bool(is_ent and pid))
     
     if not config:
         return CallCenterConfig().dict()
@@ -14323,6 +14539,24 @@ async def start_forgotten_shifts_scheduler():
 
 
 @app.on_event("startup")
+async def start_project_daily_summary_scheduler():
+    """📊 ملخص الإغلاق اليومي لمدراء المشاريع (المؤسسة فقط) — يُفحص كل 10 دقائق ويُرسل مرة يومياً 9 صباحاً."""
+    if not is_scheduler_worker():
+        return
+    async def _loop():
+        await asyncio.sleep(120)
+        while True:
+            try:
+                from routes.project_daily_summary import run_project_daily_summaries, run_owner_weekly_summaries
+                await run_project_daily_summaries()
+                await run_owner_weekly_summaries()
+            except Exception as e:
+                logger.warning(f"project daily summary loop error: {e}")
+            await asyncio.sleep(600)
+    asyncio.create_task(_loop())
+
+
+@app.on_event("startup")
 async def start_project_stock_alerts_scheduler():
     """📉 تنبيهات نقص مخزون المشاريع (فوري + ملخص يومي 8 صباحاً) — كل 10 دقائق."""
     if not is_scheduler_worker():
@@ -15917,7 +16151,7 @@ class DriverLocation(BaseModel):
     longitude: float
 
 @api_router.get("/drivers")
-async def get_drivers(project_id: Optional[str] = None,
+async def get_drivers(request: Request, project_id: Optional[str] = None,
                       current_user: dict = Depends(get_current_user)):
     """جلب قائمة السائقين - مع عزل حسب المشروع"""
     tenant_id = get_user_tenant_id(current_user)
@@ -15928,7 +16162,8 @@ async def get_drivers(project_id: Optional[str] = None,
     if upid and current_user.get("role") not in ER:
         query["$or"] = [{"project_id": upid}, {"project_id": {"$exists": False}}, {"project_id": None}]
     elif project_id and project_id != "all":
-        query["project_id"] = project_id
+        _bids = [b["id"] async for b in db.branches.find({"tenant_id": tenant_id, "project_id": project_id}, {"_id": 0, "id": 1})]
+        query["$or"] = [{"project_id": project_id}, {"branch_id": {"$in": _bids}, "project_id": {"$in": [None, ""]}}]
     
     drivers = await db.drivers.find(
         query,
@@ -15944,10 +16179,12 @@ class DriverCreateRequest(BaseModel):
     branch_id: Optional[str] = None
     pin: str = "1234"
     country_code: Optional[str] = "IQ"  # رمز الدولة لضبط رقم الهاتف E.164 (IQ / SA / AE / EG / ...)
+    project_id: Optional[str] = None  # وضع المؤسسة
 
 @api_router.post("/drivers")
 async def create_driver(
     driver_data: DriverCreateRequest,
+    request: Request,
     current_user: dict = Depends(get_current_user)
 ):
     """إنشاء سائق جديد"""
@@ -15962,7 +16199,7 @@ async def create_driver(
     driver = {
         "id": str(uuid.uuid4()),
         "tenant_id": tenant_id,
-        "project_id": current_user.get("project_id"),
+        "project_id": await _enterprise_item_project(current_user, request, driver_data.project_id, driver_data.branch_id) or current_user.get("project_id"),
         "branch_id": driver_data.branch_id,
         "name": driver_data.name,
         "phone": driver_data.phone,
@@ -15995,11 +16232,13 @@ class DriverUpdateRequest(BaseModel):
     is_active: Optional[bool] = None
     is_available: Optional[bool] = None
     branch_id: Optional[str] = None
+    project_id: Optional[str] = None
 
 @api_router.put("/drivers/{driver_id}")
 async def update_driver(
     driver_id: str,
     driver_data: DriverUpdateRequest,
+    request: Request,
     current_user: dict = Depends(get_current_user)
 ):
     """تحديث بيانات سائق"""
@@ -16019,9 +16258,16 @@ async def update_driver(
     if driver_data.is_active is not None: update_data["is_active"] = driver_data.is_active
     if driver_data.is_available is not None: update_data["is_available"] = driver_data.is_available
     if driver_data.branch_id: update_data["branch_id"] = driver_data.branch_id
+    if driver_data.project_id is not None or driver_data.branch_id:
+        _dp = await _enterprise_item_project(current_user, request, driver_data.project_id, driver_data.branch_id)
+        if _dp:
+            update_data["project_id"] = _dp
+    _dq = {"id": driver_id, "tenant_id": tenant_id}
+    if current_user.get("is_project_admin"):
+        _dq["project_id"] = current_user.get("project_id")
     
     result = await db.drivers.update_one(
-        {"id": driver_id, "tenant_id": tenant_id},
+        _dq,
         {"$set": update_data}
     )
     
@@ -16132,6 +16378,7 @@ async def delete_driver(driver_id: str, current_user: dict = Depends(get_current
     
     tenant_id = get_user_tenant_id(current_user)
     
+    await _project_admin_guard(current_user, await db.drivers.find_one({"id": driver_id, "tenant_id": tenant_id}, {"_id": 0}))
     result = await db.drivers.delete_one({"id": driver_id, "tenant_id": tenant_id})
     
     if result.deleted_count == 0:
@@ -17208,14 +17455,13 @@ class PaymentSettingsUpdate(BaseModel):
     fee_zones: Optional[List[dict]] = None   # نطاقات الكم: [{up_to_km, fee}] (تطغى على المعادلة)
 
 @api_router.get("/payment-settings")
-async def get_payment_settings(current_user: dict = Depends(get_current_user)):
-    """جلب إعدادات الدفع"""
+async def get_payment_settings(request: Request, current_user: dict = Depends(get_current_user)):
+    """جلب إعدادات الدفع (لكل مشروع في وضع المؤسسة)"""
     tenant_id = get_user_tenant_id(current_user) or "default"
-    
-    settings = await db.payment_settings.find_one(
-        {"tenant_id": tenant_id},
-        {"_id": 0, "stripe_secret_key": 0}  # إخفاء المفتاح السري
-    )
+    pid, is_ent = await _enterprise_pid(current_user, request)
+    settings = await _project_settings_doc(db.payment_settings, tenant_id, pid, strict=bool(is_ent and pid))
+    if settings:
+        settings["_has_sk"] = bool(settings.pop("stripe_secret_key", None))
     
     if not settings:
         settings = {
@@ -17234,17 +17480,19 @@ async def get_payment_settings(current_user: dict = Depends(get_current_user)):
         }
     
     # إخفاء المفتاح السري (عرض فقط أنه موجود أو لا)
-    settings["stripe_secret_key_set"] = bool(settings.get("stripe_secret_key"))
-    
+    settings["stripe_secret_key_set"] = bool(settings.pop("_has_sk", False))
+    settings.pop("stripe_secret_key", None)
+    settings["project_id"] = pid if is_ent else None
     return settings
 
 @api_router.post("/payment-settings")
 async def update_payment_settings(
     settings: PaymentSettingsUpdate,
+    request: Request,
     current_user: dict = Depends(get_current_user)
 ):
     """تحديث إعدادات الدفع"""
-    if not has_role(current_user, ['admin', 'owner']):
+    if not (has_role(current_user, ['admin', 'owner', 'general_manager']) or current_user.get("is_project_admin")):
         raise HTTPException(status_code=403, detail="غير مصرح لك بتعديل الإعدادات")
     
     tenant_id = get_user_tenant_id(current_user) or "default"
@@ -17265,8 +17513,12 @@ async def update_payment_settings(
         # هنا نحتفظ به كما هو للتبسيط
         pass
     
+    pid, is_ent = await _enterprise_pid(current_user, request)
+    if is_ent and not pid:
+        raise HTTPException(status_code=400, detail="اختر مشروعاً لتعديل إعدادات الدفع الخاصة به")
+    update_data["project_id"] = pid
     await db.payment_settings.update_one(
-        {"tenant_id": tenant_id},
+        {"tenant_id": tenant_id, "project_id": pid},
         {"$set": update_data},
         upsert=True
     )
@@ -17315,7 +17567,7 @@ def _compute_distance_fee(s: dict, km: float) -> int:
 
 async def _distance_fee_for(tenant_id: str, branch_id: Optional[str], loc: Optional[dict]):
     """ترجع dict {km, fee, out_of_range, max_km} إن أمكن الحساب، وإلا None"""
-    s = await db.payment_settings.find_one({"tenant_id": tenant_id or "default"}, {"_id": 0}) or {}
+    s = await _project_settings_doc(db.payment_settings, tenant_id or "default", await _branch_project_id(branch_id)) or {}
     if not s.get("distance_fee_enabled"):
         return None
     if not loc:
@@ -17364,12 +17616,12 @@ async def update_branch_location(branch_id: str, loc: BranchLocationUpdate, curr
 async def suggest_delivery_fee(order_id: str, current_user: dict = Depends(get_current_user)):
     """اقتراح أجور التوصيل لطلب حسب المسافة (للكاشير/إدارة التوصيل)"""
     tenant_id = get_user_tenant_id(current_user) or "default"
-    s = await db.payment_settings.find_one({"tenant_id": tenant_id}, {"_id": 0}) or {}
-    if not s.get("distance_fee_enabled"):
-        return {"enabled": False, "suggested_fee": None, "reason": "أجور المسافة غير مفعلة في الإعدادات"}
     order = await db.orders.find_one({"id": order_id}, {"_id": 0, "delivery_location": 1, "branch_id": 1})
     if not order:
         raise HTTPException(status_code=404, detail="الطلب غير موجود")
+    s = await _project_settings_doc(db.payment_settings, tenant_id, await _branch_project_id(order.get("branch_id"))) or {}
+    if not s.get("distance_fee_enabled"):
+        return {"enabled": False, "suggested_fee": None, "reason": "أجور المسافة غير مفعلة في الإعدادات"}
     loc = order.get("delivery_location") or {}
     lat = loc.get("latitude", loc.get("lat"))
     lng = loc.get("longitude", loc.get("lng"))
@@ -17396,7 +17648,7 @@ async def suggest_delivery_fee(order_id: str, current_user: dict = Depends(get_c
 @api_router.get("/customer/delivery-fee/{tenant_id}")
 async def customer_delivery_fee_quote(tenant_id: str, lat: float, lng: float, branch_id: Optional[str] = None):
     """تسعير أجور التوصيل للزبون حسب موقعه - بدون مصادقة"""
-    s = await db.payment_settings.find_one({"tenant_id": tenant_id}, {"_id": 0}) or {}
+    s = await _project_settings_doc(db.payment_settings, tenant_id, await _branch_project_id(branch_id)) or {}
     if not s.get("distance_fee_enabled"):
         return {"distance_based": False, "fee": None}
     branch = None
@@ -17424,6 +17676,7 @@ async def customer_delivery_fee_quote(tenant_id: str, lat: float, lng: float, br
 
 @api_router.post("/payment-settings/zaincash-qr")
 async def upload_zaincash_qr(
+    request: Request,
     file: UploadFile = File(...),
     current_user: dict = Depends(get_current_user)
 ):
@@ -17435,7 +17688,10 @@ async def upload_zaincash_qr(
     
     # حفظ الصورة
     file_ext = file.filename.split('.')[-1] if '.' in file.filename else 'png'
-    filename = f"zaincash_qr_{tenant_id}.{file_ext}"
+    pid, is_ent = await _enterprise_pid(current_user, request)
+    if is_ent and not pid:
+        raise HTTPException(status_code=400, detail="اختر مشروعاً أولاً")
+    filename = f"zaincash_qr_{tenant_id}{('_' + pid) if pid else ''}.{file_ext}"
     file_path = UPLOAD_DIR / "payment" / filename
     
     (UPLOAD_DIR / "payment").mkdir(exist_ok=True)
@@ -17449,8 +17705,8 @@ async def upload_zaincash_qr(
     
     # تحديث الإعدادات
     await db.payment_settings.update_one(
-        {"tenant_id": tenant_id},
-        {"$set": {"zaincash_qr_image": image_url}},
+        {"tenant_id": tenant_id, "project_id": pid},
+        {"$set": {"zaincash_qr_image": image_url, "project_id": pid}},
         upsert=True
     )
     

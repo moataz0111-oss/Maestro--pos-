@@ -129,6 +129,11 @@ async def get_current_user(request: Request, credentials: HTTPAuthorizationCrede
                 status_code=401,
                 detail="تم تسجيل الدخول من جهاز آخر — تم إنهاء هذه الجلسة",
             )
+        # 🏢 مدير المشروع = مدير داخل مشروعه (نفس منطق server.get_current_user)
+        if user.get("role") == "project_admin" and user.get("project_id"):
+            user["role"] = UserRole.MANAGER
+            user["is_project_admin"] = True
+            user["_project_branch_ids"] = [b["id"] async for b in db.branches.find({"project_id": user["project_id"], "tenant_id": user.get("tenant_id")}, {"_id": 0, "id": 1})]
         return user
     except jwt.ExpiredSignatureError:
         raise HTTPException(status_code=401, detail="انتهت صلاحية الجلسة")
@@ -434,7 +439,13 @@ def scoped_query_for_user(user: dict, base: Optional[dict] = None,
         query["tenant_id"] = tenant_id
 
     scope = user_project_scope(user)
-    if scope:
+    if scope and user.get("is_project_admin"):
+        # مدير المشروع: عزل صارم — مشروعه أو سجلات قديمة بلا مشروع على فروعه فقط
+        query.setdefault("$and", []).append({"$or": [
+            {"project_id": scope},
+            {"project_id": {"$in": [None, ""]}, "branch_id": {"$in": user.get("_project_branch_ids") or []}},
+        ]})
+    elif scope:
         # مقيد بمشروع → عزل صارم (يشمل الوثائق القديمة بلا project_id ضمن نفس tenant)
         query["$or"] = [
             {"project_id": scope},
@@ -443,6 +454,18 @@ def scoped_query_for_user(user: dict, base: Optional[dict] = None,
         ]
     elif explicit_project_id and explicit_project_id != "all":
         query["project_id"] = explicit_project_id
+    return query
+
+
+async def apply_project_scope(user: dict, query: dict, explicit_project_id: Optional[str] = None) -> dict:
+    """عزل صارم بالمشروع (مشروع المستخدم المقيّد أو المختار): project_id أو فرع من فروع المشروع للسجلات القديمة"""
+    pid = user_project_scope(user) or (explicit_project_id if explicit_project_id not in (None, "", "all", "null", "undefined") else None)
+    if not pid:
+        return query
+    db = get_database()
+    tid = get_user_tenant_id(user)
+    bids = [b["id"] async for b in db.branches.find({"project_id": pid, **({"tenant_id": tid} if tid else {})}, {"_id": 0, "id": 1})]
+    query.setdefault("$and", []).append({"$or": [{"project_id": pid}, {"project_id": {"$in": [None, ""]}, "branch_id": {"$in": bids}}]})
     return query
 
 

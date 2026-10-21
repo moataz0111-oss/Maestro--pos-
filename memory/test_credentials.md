@@ -250,3 +250,6 @@
 - **Settings tab rename**: تبويب "المطعم" أصبح "المؤسسة" ديناميكياً (بناءً على `enterpriseEnabled`). Test-id: `settings-tab-enterprise`. جميع النصوص داخل التبويب (اسم/شعار/زر الحفظ) تتبدّل تبعاً للحالة.
 - **Projects tab inline**: تبويب "🏢 المشاريع" في Settings يعرض `ProjectsSettings` مباشرة (لم يعد ينتقل لصفحة منفصلة). Test-id: `settings-tab-projects`, `projects-tab-content`, `add-project-btn`, `project-card-{id}`, `assign-admin-btn-{id}`.
 - **Project → Branch filter cascade**: BranchContext.fetchBranches يرسل `project_id` تلقائياً عند تغير المشروع (event `project-changed`)، فلا تظهر إلا فروع المشروع المختار.
+
+## Project Admin (enterprise tenant "default", project مطعم البرغر الملكي)
+- email: pmburger@test.com / password: Pm123456 (role project_admin, project_id edc0531b-3fa3-4bb7-b942-d34d0ff6b745)

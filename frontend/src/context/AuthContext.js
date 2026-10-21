@@ -513,6 +513,14 @@ export const AuthProvider = ({ children }) => {
     if (user.role === 'general_manager') return true;
     // SuperAdmin لديه جميع الصلاحيات
     if (user.role === 'super_admin') return true;
+    // مدير المشروع: كل الصلاحيات داخل مشروعه (العزل في الخادم)
+    if (user.role === 'project_admin') {
+      const pp = user.project_permissions || { reports: !!user.project_reports_enabled };
+      if (['reports', 'smart_reports'].includes(permission)) return !!pp.reports;
+      if (['inventory', 'inventory_reports', 'branch_orders'].includes(permission)) return !!pp.inventory;
+      if (['purchases', 'purchasing'].includes(permission)) return !!pp.purchases;
+      return true;
+    }
     // إذا كانت صلاحية "all" موجودة
     if (user.permissions?.includes('all')) return true;
     // التحقق من الصلاحية المحددة
@@ -521,8 +529,9 @@ export const AuthProvider = ({ children }) => {
 
   const hasRole = (roles) => {
     if (!user) return false;
-    if (typeof roles === 'string') return user.role === roles;
-    return roles.includes(user.role);
+    const list = typeof roles === 'string' ? [roles] : roles;
+    if (user.role === 'project_admin' && list.includes('manager')) return true;
+    return list.includes(user.role);
   };
 
   // تحديث الوردية الحالية

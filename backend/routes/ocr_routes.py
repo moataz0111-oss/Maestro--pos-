@@ -1,5 +1,5 @@
 """OCR Invoice Extraction (extracted from server.py)"""
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from typing import Optional
 from datetime import datetime, timezone
 from pydantic import BaseModel
@@ -287,10 +287,12 @@ async def delete_purchase_order(order_id: str, current_user: dict = Depends(get_
 async def get_raw_materials(
     branch_id: Optional[str] = None,
     category: Optional[str] = None,
+    project_id: Optional[str] = None,
     current_user: dict = Depends(get_current_user)
 ):
     """جلب المواد الخام من جدول raw_materials"""
-    query = build_tenant_query(current_user)
+    from routes.shared import apply_project_scope
+    query = await apply_project_scope(current_user, build_tenant_query(current_user), project_id)
     
     if branch_id:
         query["branch_id"] = branch_id
@@ -302,7 +304,7 @@ async def get_raw_materials(
     
     # إذا لم نجد شيء، نبحث أيضاً في inventory بنوع raw (للتوافقية القديمة)
     if not materials:
-        old_query = build_tenant_query(current_user, {"item_type": "raw"})
+        old_query = await apply_project_scope(current_user, build_tenant_query(current_user, {"item_type": "raw"}), project_id)
         if branch_id:
             old_query["branch_id"] = branch_id
         if category:
@@ -312,14 +314,17 @@ async def get_raw_materials(
     return materials
 
 @router.post("/raw-materials")
-async def create_raw_material(material: RawMaterialCreate, current_user: dict = Depends(get_current_user)):
+async def create_raw_material(material: RawMaterialCreate, request: Request, current_user: dict = Depends(get_current_user)):
     """إضافة مادة خام جديدة"""
     tenant_id = get_user_tenant_id(current_user)
+    from routes.shared import resolve_project_id_for_create
+    _rm_pid = await resolve_project_id_for_create(current_user, request)
     
     material_doc = {
         "id": str(uuid.uuid4()),
         **material.model_dump(),
         "tenant_id": tenant_id,
+        "project_id": _rm_pid,
         "is_active": True,
         "created_at": datetime.now(timezone.utc).isoformat(),
         "created_by": current_user["id"]

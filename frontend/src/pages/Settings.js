@@ -1,6 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { API_URL, BACKEND_URL } from '../utils/api';
-import { SettingsProjectBar, ProjectFormSelect, ProjectBadge } from '../components/ProjectScopeControls';
+import { SettingsProjectBar, ProjectFormSelect, ProjectBadge, ChooseProjectNotice } from '../components/ProjectScopeControls';
+import { ProjectColorBadge } from '../components/ProjectColor';
 import { CopyCatalogDialog } from '../components/CopyCatalogDialog';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
@@ -158,7 +159,7 @@ const API = API_URL;
 // PERMISSION_GROUPS is now defined above with the new permissions structure
 
 // =================== لوحة مراقبة الوسطاء (Agents Monitor) ===================
-const AgentsMonitorPanel = ({ t }) => {
+const AgentsMonitorPanel = ({ t, projectKey }) => {
   const [data, setData] = useState({ agents: [], summary: null });
   const [loading, setLoading] = useState(false);
   const [collapsed, setCollapsed] = useState(false);
@@ -173,7 +174,7 @@ const AgentsMonitorPanel = ({ t }) => {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [projectKey]); // eslint-disable-line react-hooks/exhaustive-deps
   
   useEffect(() => {
     setLoading(true);
@@ -305,7 +306,9 @@ const AgentsMonitorPanel = ({ t }) => {
 
 export default function Settings() {
   const { user, hasRole, logout, hasPermission } = useAuth();
-  const { enterpriseEnabled, selectedProjectId } = useProject();
+  const { enterpriseEnabled, selectedProjectId, projects } = useProject();
+  const needProject = enterpriseEnabled && (!selectedProjectId || selectedProjectId === 'all');
+  const isPA = user?.role === 'project_admin';
   const { theme, setTheme } = useTheme();
   const defaultFormProject = selectedProjectId && selectedProjectId !== 'all' ? selectedProjectId : '';
   // قوائم مشروع آخر غير المختار في الشريط (للنوافذ عند تغيير مشروع المنتج)
@@ -430,6 +433,7 @@ export default function Settings() {
   const [savingInventorySettings, setSavingInventorySettings] = useState(false);
   
   // إعدادات الفاتورة للعميل (صاحب المطعم)
+  const paymentDefaults = useRef(paymentSettings).current;
   const [invoiceSettings, setInvoiceSettings] = useState({
     show_logo: true,
     phone: '',
@@ -467,6 +471,7 @@ export default function Settings() {
     auto_save_new_callers: true,
     play_sound: true
   });
+  const callCenterDefaults = useRef(callCenterConfig).current;
   
   // Sound Settings States
   const [soundSettings, setSoundSettings] = useState({
@@ -634,9 +639,10 @@ export default function Settings() {
   
   // Form data
   const [userForm, setUserForm] = useState({
-    username: '', email: '', password: '', full_name: '', full_name_en: '', role: 'cashier', branch_id: '', permissions: [], phone: ''
+    username: '', email: '', password: '', full_name: '', full_name_en: '', role: 'cashier', branch_id: '', permissions: [], phone: '', project_id: ''
   });
   const [editUserForm, setEditUserForm] = useState(null);
+  const branchesForProject = (pid) => (enterpriseEnabled && pid && pid !== 'all') ? branches.filter(b => b.project_id === pid) : branches;
   const [branchForm, setBranchForm] = useState({
     name: '', address: '', phone: '', phone2: '', email: ''
   });
@@ -650,6 +656,11 @@ export default function Settings() {
   const [printerTestStatus, setPrinterTestStatus] = useState({}); // حالة اختبار الطابعات
   const [printerTypes, setPrinterTypes] = useState([]);
   const [printerBranchFilter, setPrinterBranchFilter] = useState('all'); // فلتر الفرع للطابعات
+  useEffect(() => {
+    setPrinterBranchFilter('all');
+    setPrinterForm(f => ({ ...f, project_id: '', branch_id: '' }));
+    setUserForm(f => ({ ...f, project_id: '', branch_id: '' }));
+  }, [selectedProjectId]);
   const [printAgentOnline, setPrintAgentOnline] = useState(() => getSavedAgentStatus().online);
   // حوار اختيار الفرع قبل تحميل الوسيط (لعزل أوامر الطباعة عند تعدد الفروع)
   const [showAgentBranchDialog, setShowAgentBranchDialog] = useState(false);
@@ -1010,6 +1021,7 @@ export default function Settings() {
       
       // جلب إعدادات الفاتورة للعميل
       fetchInvoiceSettings();
+      fetchCallCenterConfig();
       
       // جلب إعدادات المنطقة والعملة
       fetchRegionalSettings();
@@ -1066,10 +1078,23 @@ export default function Settings() {
   };
 
   // جلب إعدادات الفاتورة للعميل
+  const fetchCallCenterConfig = async () => {
+    try {
+      const reqPid = localStorage.getItem('selectedProjectId');
+      const res = await axios.get(`${API}/callcenter/config`);
+      if (reqPid !== localStorage.getItem('selectedProjectId')) return;
+      setCallCenterConfig({ ...callCenterDefaults, ...(res.data || {}) });
+    } catch (error) {
+      console.error('Failed to fetch call center config:', error);
+    }
+  };
+
   const fetchInvoiceSettings = async () => {
     setInvoiceLoading(true);
     try {
-      const res = await axios.get(`${API}/tenant/invoice-settings`);
+      const reqPid = localStorage.getItem('selectedProjectId');
+      const res = await axios.get(`${API}/tenant/invoice-settings`, enterpriseEnabled ? { params: { strict: true } } : undefined);
+      if (reqPid !== localStorage.getItem('selectedProjectId')) return;
       const clean = Object.fromEntries(Object.entries(res.data || {}).map(([k, v]) => [k, v === null ? '' : v]));
       setInvoiceSettings(prev => ({ ...prev, ...clean }));
     } catch (error) {
@@ -1166,8 +1191,10 @@ export default function Settings() {
   // جلب إعدادات الدفع
   const fetchPaymentSettings = async () => {
     try {
+      const reqPid = localStorage.getItem('selectedProjectId');
       const res = await axios.get(`${API}/payment-settings`);
-      setPaymentSettings(prev => ({ ...prev, ...res.data }));
+      if (reqPid !== localStorage.getItem('selectedProjectId')) return;
+      setPaymentSettings(enterpriseEnabled ? { ...paymentDefaults, ...res.data } : prev => ({ ...prev, ...res.data }));
     } catch (error) {
       console.error('Failed to fetch payment settings:', error);
     }
@@ -1418,7 +1445,8 @@ export default function Settings() {
     e.preventDefault();
     try {
       // استخدام endpoint جديد يضيف tenant_id تلقائياً
-      await axios.post(`${API}/users`, userForm);
+      if (enterpriseEnabled && !(needProject ? userForm.project_id : defaultFormProject)) { toast.error(t('اختر المشروع أولاً')); return; }
+      await axios.post(`${API}/users`, { ...userForm, project_id: enterpriseEnabled ? (needProject ? userForm.project_id : defaultFormProject) : undefined });
       toast.success(t('تم الحفظ بنجاح'));
       setUserDialogOpen(false);
       setUserForm({ username: '', email: '', password: '', full_name: '', full_name_en: '', role: 'cashier', branch_id: '', permissions: [] });
@@ -1523,7 +1551,8 @@ export default function Settings() {
   const handleCreatePrinter = async (e) => {
     e.preventDefault();
     try {
-      await axios.post(`${API}/printers`, printerForm);
+      if (enterpriseEnabled && !(needProject ? printerForm.project_id : defaultFormProject)) { toast.error(t('اختر المشروع أولاً')); return; }
+      await axios.post(`${API}/printers`, { ...printerForm, project_id: enterpriseEnabled ? (needProject ? printerForm.project_id : defaultFormProject) : undefined });
       toast.success(t('تم إضافة الطابعة'));
       setPrinterDialogOpen(false);
       setPrinterForm({ 
@@ -1538,6 +1567,7 @@ export default function Settings() {
 
   const handleEditPrinter = (printer) => {
     setEditPrinterForm({
+      project_id: printer.project_id || (branches.find(b => b.id === printer.branch_id) || {}).project_id || '',
       id: printer.id,
       name: printer.name,
       ip_address: printer.ip_address,
@@ -1574,7 +1604,8 @@ export default function Settings() {
         print_mode: editPrinterForm.print_mode,
         show_prices: editPrinterForm.show_prices,
         print_individual_items: editPrinterForm.print_individual_items,
-        auto_print_on_order: editPrinterForm.auto_print_on_order
+        auto_print_on_order: editPrinterForm.auto_print_on_order,
+        ...(enterpriseEnabled && editPrinterForm.project_id ? { project_id: editPrinterForm.project_id } : {}),
       });
       toast.success(t('تم تحديث الطابعة'));
       setEditPrinterDialogOpen(false);
@@ -1822,7 +1853,8 @@ export default function Settings() {
       branch_id: u.branch_id || '',
       permissions: u.permissions || [],
       phone: u.phone || '',
-      is_active: u.is_active !== false
+      is_active: u.is_active !== false,
+      project_id: u.project_id || (branches.find(b => b.id === u.branch_id) || {}).project_id || '',
     });
     setEditUserDialogOpen(true);
   };
@@ -1901,7 +1933,8 @@ export default function Settings() {
         branch_id: editUserForm.branch_id || null,
         permissions: editUserForm.permissions,
         phone: editUserForm.phone || '',
-        is_active: editUserForm.is_active
+        is_active: editUserForm.is_active,
+        ...(enterpriseEnabled ? { project_id: editUserForm.project_id || '' } : {}),
       });
       
       // تغيير كلمة المرور إذا تم إدخالها
@@ -2169,9 +2202,10 @@ export default function Settings() {
     }
   };
 
-  const handleUpdateDeliveryApp = async (appId, commissionRate) => {
+  const deliveryScope = (app) => (enterpriseEnabled ? { scope_project_id: app?.project_id || 'all' } : {});
+  const handleUpdateDeliveryApp = async (app, commissionRate) => {
+    const appId = app.id;
     try {
-      const app = deliveryApps.find(a => a.id === appId);
       await axios.post(`${API}/delivery-app-settings`, {
         app_id: appId,
         name: app.name,
@@ -2179,7 +2213,8 @@ export default function Settings() {
         commission_type: 'percentage',
         commission_rate: parseFloat(commissionRate),
         is_active: app.is_active !== false,
-        payment_terms: 'weekly'
+        payment_terms: 'weekly',
+        ...deliveryScope(app),
       });
       toast.success(t('تم تحديث نسبة العمولة'));
       fetchData();
@@ -2204,7 +2239,8 @@ export default function Settings() {
         commission_type: 'percentage',
         commission_rate: parseFloat(newDeliveryApp.commission_rate) || 0,
         is_active: newDeliveryApp.is_active,
-        payment_terms: 'weekly'
+        payment_terms: 'weekly',
+        ...(enterpriseEnabled ? { scope_project_id: newDeliveryApp.project_id || defaultFormProject || 'all' } : {}),
       });
       toast.success(t('تم إضافة شركة التوصيل بنجاح'));
       setShowAddDeliveryApp(false);
@@ -2218,11 +2254,12 @@ export default function Settings() {
   };
 
   // حذف شركة توصيل
-  const handleDeleteDeliveryApp = async (appId) => {
+  const handleDeleteDeliveryApp = async (app) => {
+    const appId = app.id;
     if (!window.confirm(t('هل أنت متأكد من حذف شركة التوصيل؟'))) return;
     
     try {
-      await axios.delete(`${API}/delivery-app-settings/${appId}`);
+      await axios.delete(`${API}/delivery-app-settings/${appId}`, enterpriseEnabled ? { params: deliveryScope(app) } : undefined);
       toast.success(t('تم حذف شركة التوصيل'));
       fetchData();
     } catch (error) {
@@ -2240,7 +2277,8 @@ export default function Settings() {
         commission_type: 'percentage',
         commission_rate: app.commission_rate || 0,
         is_active: !app.is_active,
-        payment_terms: 'weekly'
+        payment_terms: 'weekly',
+        ...deliveryScope(app),
       });
       toast.success(app.is_active ? t('تم تعطيل الشركة') : t('تم تفعيل الشركة'));
       fetchData();
@@ -2264,20 +2302,22 @@ export default function Settings() {
         commission_type: 'percentage',
         commission_rate: editDeliveryApp.commission_rate || 0,
         is_active: editDeliveryApp.is_active !== false,
-        payment_terms: 'weekly'
+        payment_terms: 'weekly',
+        ...(enterpriseEnabled ? { scope_project_id: editDeliveryApp.project_id || 'all', original_project_id: editDeliveryApp.original_project_id || 'all' } : {}),
       });
       toast.success(t('تم تحديث بيانات الشركة'));
       setEditDeliveryAppDialogOpen(false);
       setEditDeliveryApp(null);
       fetchData();
     } catch (error) {
-      toast.error(t('فشل في تحديث بيانات الشركة'));
+      showApiError(error, t('فشل في تحديث بيانات الشركة'));
     }
   };
 
   const getRoleText = (role) => {
     const roles = {
       admin: t('المالك'),
+      project_admin: t('مدير مشروع'),
       general_manager: t('مدير عام'),
       manager: t('مدير'),
       supervisor: t('مشرف'),
@@ -2564,7 +2604,7 @@ export default function Settings() {
                 </TabsTrigger>
               )}
               {/* super_admin يدير المستخدمين من لوحة تحكم المالك فقط */}
-              {hasRole(['admin', 'general_manager', 'super_admin']) && (
+              {(isPA || (hasRole(['admin', 'general_manager', 'super_admin']))) && (
                 <TabsTrigger 
                   value="staff"
                   className="flex-shrink-0 px-4 py-2.5 text-sm font-medium rounded-lg data-[state=active]:bg-primary data-[state=active]:text-primary-foreground"
@@ -2573,7 +2613,7 @@ export default function Settings() {
                   {t('المستخدمين')}
                 </TabsTrigger>
               )}
-              {(hasRole(['admin', 'general_manager', 'super_admin', 'manager', 'branch_manager']) || hasSettingsPermission('settings_customers')) && settingsPermissions.settingsCustomers && (
+              {(isPA || ((hasRole(['admin', 'general_manager', 'super_admin', 'manager', 'branch_manager']) || hasSettingsPermission('settings_customers')) && settingsPermissions.settingsCustomers)) && (
                 <TabsTrigger 
                   value="customers"
                   className="flex-shrink-0 px-4 py-2.5 text-sm font-medium rounded-lg data-[state=active]:bg-primary data-[state=active]:text-primary-foreground"
@@ -2581,7 +2621,7 @@ export default function Settings() {
                   {t('العملاء')}
                 </TabsTrigger>
               )}
-              {hasRole(['admin', 'general_manager', 'super_admin']) && settingsPermissions.settingsBranches && (
+              {(isPA || (hasRole(['admin', 'general_manager', 'super_admin']) && settingsPermissions.settingsBranches)) && (
                 <TabsTrigger 
                   value="branches"
                   className="flex-shrink-0 px-4 py-2.5 text-sm font-medium rounded-lg data-[state=active]:bg-primary data-[state=active]:text-primary-foreground"
@@ -2589,7 +2629,7 @@ export default function Settings() {
                   {t('الفروع')}
                 </TabsTrigger>
               )}
-              {(hasRole(['admin', 'general_manager', 'super_admin', 'manager', 'branch_manager']) || hasSettingsPermission('settings_categories')) && settingsPermissions.settingsCategories && (
+              {(isPA || ((hasRole(['admin', 'general_manager', 'super_admin', 'manager', 'branch_manager']) || hasSettingsPermission('settings_categories')) && settingsPermissions.settingsCategories)) && (
                 <TabsTrigger 
                   value="categories"
                   className="flex-shrink-0 px-4 py-2.5 text-sm font-medium rounded-lg data-[state=active]:bg-primary data-[state=active]:text-primary-foreground"
@@ -2597,7 +2637,7 @@ export default function Settings() {
                   {t('الفئات')}
                 </TabsTrigger>
               )}
-              {(hasRole(['admin', 'general_manager', 'super_admin', 'manager', 'branch_manager']) || hasSettingsPermission('settings_products')) && settingsPermissions.settingsProducts && (
+              {(isPA || ((hasRole(['admin', 'general_manager', 'super_admin', 'manager', 'branch_manager']) || hasSettingsPermission('settings_products')) && settingsPermissions.settingsProducts)) && (
                 <TabsTrigger 
                   value="products"
                   className="flex-shrink-0 px-4 py-2.5 text-sm font-medium rounded-lg data-[state=active]:bg-primary data-[state=active]:text-primary-foreground"
@@ -2605,7 +2645,7 @@ export default function Settings() {
                   {t('المنتجات')}
                 </TabsTrigger>
               )}
-              {(hasRole(['admin', 'general_manager', 'super_admin', 'manager', 'branch_manager']) || hasSettingsPermission('settings_printers')) && settingsPermissions.settingsPrinters && (
+              {(isPA || ((hasRole(['admin', 'general_manager', 'super_admin', 'manager', 'branch_manager']) || hasSettingsPermission('settings_printers')) && settingsPermissions.settingsPrinters)) && (
                 <TabsTrigger 
                   value="printers"
                   className="flex-shrink-0 px-4 py-2.5 text-sm font-medium rounded-lg data-[state=active]:bg-primary data-[state=active]:text-primary-foreground"
@@ -2613,7 +2653,7 @@ export default function Settings() {
                   {t('الطابعات')}
                 </TabsTrigger>
               )}
-              {(hasRole(['admin', 'general_manager', 'super_admin']) || hasSettingsPermission('settings_delivery')) && settingsPermissions.settingsDeliveryCompanies && (
+              {(isPA || ((hasRole(['admin', 'general_manager', 'super_admin']) || hasSettingsPermission('settings_delivery')) && settingsPermissions.settingsDeliveryCompanies)) && (
                 <TabsTrigger 
                   value="delivery"
                   className="flex-shrink-0 px-4 py-2.5 text-sm font-medium rounded-lg data-[state=active]:bg-primary data-[state=active]:text-primary-foreground"
@@ -2621,7 +2661,7 @@ export default function Settings() {
                   {t('شركات التوصيل')}
                 </TabsTrigger>
               )}
-              {hasRole(['admin', 'general_manager', 'super_admin']) && settingsPermissions.settingsCallCenter && (
+              {(isPA || (hasRole(['admin', 'general_manager', 'super_admin']) && settingsPermissions.settingsCallCenter)) && (
                 <TabsTrigger 
                   value="callcenter"
                   className="flex-shrink-0 px-4 py-2.5 text-sm font-medium rounded-lg data-[state=active]:bg-primary data-[state=active]:text-primary-foreground"
@@ -2637,7 +2677,7 @@ export default function Settings() {
                   {t('الإشعارات')}
                 </TabsTrigger>
               )}
-              {hasRole(['admin', 'general_manager', 'super_admin']) && (
+              {(isPA || (hasRole(['admin', 'general_manager', 'super_admin']))) && (
                 <TabsTrigger 
                   value="payments"
                   data-testid="tab-payments"
@@ -2662,7 +2702,7 @@ export default function Settings() {
                   {t('إعدادات النظام')}
                 </TabsTrigger>
               )}
-              {hasRole(['admin', 'general_manager', 'super_admin', 'manager']) && (
+              {(isPA || (hasRole(['admin', 'general_manager', 'super_admin', 'manager']))) && (
                 <TabsTrigger 
                   value="invoice-settings"
                   className="flex-shrink-0 px-4 py-2.5 text-sm font-medium rounded-lg data-[state=active]:bg-primary data-[state=active]:text-primary-foreground"
@@ -3289,6 +3329,7 @@ export default function Settings() {
                                   </Select>
                                 </div>
                                 {/* ⭐ يختفي حقل الفرع للأدوار المركزية + للمالك والمدير العام (كل الفروع) */}
+                                {needProject && <ProjectFormSelect value={(needProject ? userForm.project_id : defaultFormProject)} onChange={(v) => setUserForm({ ...userForm, project_id: v, branch_id: '' })} testId="user-project-select" />}
                                 {!['warehouse_keeper', 'manufacturer', 'purchasing', 'admin', 'general_manager'].includes(userForm.role) && (
                                 <div>
                                   <Label className="text-foreground">{t('الفرع')}</Label>
@@ -3297,7 +3338,7 @@ export default function Settings() {
                                       <SelectValue placeholder={t('اختر الفرع')} />
                                     </SelectTrigger>
                                     <SelectContent>
-                                      {branches.map(branch => (
+                                      {branchesForProject(needProject ? userForm.project_id : defaultFormProject).map(branch => (
                                         <SelectItem key={branch.id} value={branch.id}>{branch.name}</SelectItem>
                                       ))}
                                     </SelectContent>
@@ -3431,7 +3472,7 @@ export default function Settings() {
                                     </div>
                                     <div>
                                       <p className="font-medium">{u.full_name || u.username}</p>
-                                      <p className="text-xs text-muted-foreground">@{u.username}</p>
+                                      <p className="text-xs text-muted-foreground flex items-center gap-1.5">@{u.username} <ProjectBadge projectId={u.project_id || (branches.find(b => b.id === u.branch_id) || {}).project_id} emptyLabel="كل المشاريع" /></p>
                                     </div>
                                   </div>
                                 </TableCell>
@@ -3565,6 +3606,7 @@ export default function Settings() {
                                 </Select>
                               </div>
                               {/* ⭐ يختفي حقل الفرع للأدوار المركزية + للمالك والمدير العام (كل الفروع) */}
+                              {needProject && <ProjectFormSelect value={editUserForm.project_id} allLabel="كل المشاريع (بدون تقييد)" onChange={(v) => setEditUserForm(prev => ({ ...prev, project_id: v === 'all' ? '' : v, branch_id: v === 'all' || (branches.find(b => b.id === prev.branch_id) || {}).project_id === v ? prev.branch_id : '' }))} testId="edit-user-project-select" />}
                               {!['warehouse_keeper', 'manufacturer', 'purchasing', 'admin', 'general_manager'].includes(editUserForm.role) && (
                               <div>
                                 <Label className="text-foreground">{t('الفرع')}</Label>
@@ -3574,7 +3616,7 @@ export default function Settings() {
                                   </SelectTrigger>
                                   <SelectContent>
                                     <SelectItem value="all">{t('جميع الفروع')}</SelectItem>
-                                    {branches.map(branch => (
+                                    {branchesForProject(editUserForm.project_id).map(branch => (
                                       <SelectItem key={branch.id} value={branch.id}>{branch.name}</SelectItem>
                                     ))}
                                   </SelectContent>
@@ -5368,15 +5410,16 @@ export default function Settings() {
                           </div>
                         </div>
                         )}
+                        {needProject && <ProjectFormSelect value={(needProject ? printerForm.project_id : defaultFormProject)} onChange={(v) => setPrinterForm({ ...printerForm, project_id: v, branch_id: '' })} testId="printer-project-select" />}
                         <div className="grid grid-cols-2 gap-4">
                           <div>
                             <Label className="text-foreground">{t('الفرع')}</Label>
                             <Select value={printerForm.branch_id} onValueChange={(v) => setPrinterForm({ ...printerForm, branch_id: v })}>
-                              <SelectTrigger className="mt-1">
+                              <SelectTrigger className="mt-1" data-testid="printer-branch-select">
                                 <SelectValue placeholder={t('اختر فرع')} />
                               </SelectTrigger>
                               <SelectContent>
-                                {branches.map(branch => (
+                                {branchesForProject(needProject ? printerForm.project_id : defaultFormProject).map(branch => (
                                   <SelectItem key={branch.id} value={branch.id}>{branch.name}</SelectItem>
                                 ))}
                               </SelectContent>
@@ -5552,7 +5595,7 @@ export default function Settings() {
                   </div>
                   
                   {/* ============ لوحة مراقبة الوسطاء (كل فرع) ============ */}
-                  <AgentsMonitorPanel t={t} />
+                  <AgentsMonitorPanel t={t} projectKey={selectedProjectId} />
                   
                   {printers.length === 0 ? (
                     <p className="text-center text-muted-foreground py-8">{t('لا توجد طابعات مضافة')}</p>
@@ -5587,7 +5630,7 @@ export default function Settings() {
                         </div>
                       )}
                       {printers.filter(p => printerBranchFilter === 'all' || p.branch_id === printerBranchFilter).map(printer => (
-                        <div key={printer.id} className="flex items-center justify-between p-4 bg-muted/30 rounded-lg">
+                        <div key={printer.id} className="flex items-center justify-between p-4 bg-muted/30 rounded-lg" data-testid={`printer-row-${printer.id}`}>
                           <div className="flex items-center gap-4">
                             <div className="relative">
                               <Printer className="h-8 w-8 text-muted-foreground" />
@@ -5603,6 +5646,7 @@ export default function Settings() {
                             <div>
                               <p className="font-medium text-foreground">
                                 {t(printer.name)}
+                                {enterpriseEnabled && <span className="mr-2 inline-block align-middle"><ProjectBadge projectId={printer.project_id || (branches.find(b => b.id === printer.branch_id) || {}).project_id} /></span>}
                                 {branches && branches.length > 1 && (
                                   <span className="text-xs text-primary/60 mr-2">
                                     ({branches.find(b => b.id === printer.branch_id)?.name || ''})
@@ -5785,6 +5829,7 @@ export default function Settings() {
                         </div>
                       </div>
                       )}
+                      {needProject && <ProjectFormSelect value={editPrinterForm.project_id} onChange={(v) => setEditPrinterForm({ ...editPrinterForm, project_id: v, branch_id: (branches.find(b => b.id === editPrinterForm.branch_id) || {}).project_id === v ? editPrinterForm.branch_id : '' })} testId="edit-printer-project-select" />}
                       <div>
                         <Label className="text-foreground">{t('الفرع')}</Label>
                         <Select value={editPrinterForm.branch_id} onValueChange={(v) => setEditPrinterForm({ ...editPrinterForm, branch_id: v })}>
@@ -5792,7 +5837,7 @@ export default function Settings() {
                             <SelectValue placeholder={t('اختر الفرع')} />
                           </SelectTrigger>
                           <SelectContent>
-                            {branches.map(b => (
+                            {branchesForProject(editPrinterForm.project_id).map(b => (
                               <SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>
                             ))}
                           </SelectContent>
@@ -5920,6 +5965,7 @@ export default function Settings() {
                             className="mt-1"
                           />
                         </div>
+                        <ProjectFormSelect value={newDeliveryApp.project_id || defaultFormProject} allLabel="كل المشاريع" hint="حدد المشروع الذي تعمل معه الشركة أو اجعلها لكل المشاريع" onChange={(v) => setNewDeliveryApp({ ...newDeliveryApp, project_id: v })} testId="delivery-app-project-select" />
                         <div className="flex items-end gap-2">
                           <div className="flex items-center gap-2">
                             <input
@@ -5937,6 +5983,7 @@ export default function Settings() {
                         <Button 
                           onClick={handleAddDeliveryApp} 
                           disabled={savingDeliveryApp}
+                          data-testid="delivery-app-save-btn"
                           className="gap-2"
                         >
                           {savingDeliveryApp ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
@@ -5962,14 +6009,14 @@ export default function Settings() {
                       </div>
                     ) : (
                       deliveryApps.map(app => (
-                        <div key={app.id} className="p-4 bg-muted/30 rounded-lg">
+                        <div key={`${app.id}-${app.project_id || 'all'}`} className="p-4 bg-muted/30 rounded-lg" data-testid={`delivery-app-row-${app.id}-${app.project_id || 'all'}`}>
                           <div className="flex items-center justify-between mb-3">
                             <div className="flex items-center gap-3">
                               <div className="w-10 h-10 bg-primary/10 rounded-lg flex items-center justify-center">
                                 <Truck className="h-5 w-5 text-primary" />
                               </div>
                               <div>
-                                <p className="font-medium text-foreground">{app.name}</p>
+                                <p className="font-medium text-foreground flex items-center gap-2">{app.name} {enterpriseEnabled && (app.project_id ? <ProjectColorBadge projectId={app.project_id} name={app.project_name} testId={`delivery-app-project-${app.id}`} /> : <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-semibold border border-primary/40 bg-primary/10" data-testid={`delivery-app-project-${app.id}`}>{t('كل المشاريع')}</span>)}</p>
                                 <p className="text-xs text-muted-foreground">{app.name_en}</p>
                               </div>
                             </div>
@@ -5986,9 +6033,10 @@ export default function Settings() {
                                 variant="ghost"
                                 size="sm"
                                 onClick={() => {
-                                  setEditDeliveryApp({...app});
+                                  setEditDeliveryApp({...app, original_project_id: app.project_id || 'all'});
                                   setEditDeliveryAppDialogOpen(true);
                                 }}
+                                data-testid={`delivery-app-edit-${app.id}-${app.project_id || 'all'}`}
                                 className="text-blue-500 hover:text-blue-600 hover:bg-blue-500/10"
                               >
                                 <Edit className="h-4 w-4" />
@@ -5996,7 +6044,8 @@ export default function Settings() {
                               <Button
                                 variant="ghost"
                                 size="sm"
-                                onClick={() => handleDeleteDeliveryApp(app.id)}
+                                onClick={() => handleDeleteDeliveryApp(app)}
+                                data-testid={`delivery-app-delete-${app.id}-${app.project_id || 'all'}`}
                                 className="text-red-500 hover:text-red-600 hover:bg-red-500/10"
                               >
                                 <Trash2 className="h-4 w-4" />
@@ -6014,7 +6063,8 @@ export default function Settings() {
                                 max="100"
                                 step="0.5"
                                 className="w-24"
-                                onBlur={(e) => handleUpdateDeliveryApp(app.id, e.target.value)}
+                                onBlur={(e) => { if (parseFloat(e.target.value) !== parseFloat(app.commission_rate || 0)) handleUpdateDeliveryApp(app, e.target.value); }}
+                                data-testid={`delivery-app-commission-${app.id}-${app.project_id || 'all'}`}
                               />
                               <Percent className="h-4 w-4 text-muted-foreground" />
                             </div>
@@ -6065,6 +6115,7 @@ export default function Settings() {
                           className="mt-1"
                         />
                       </div>
+                      <ProjectFormSelect value={editDeliveryApp.project_id || 'all'} allLabel="كل المشاريع" onChange={(v) => setEditDeliveryApp({ ...editDeliveryApp, project_id: v === 'all' ? null : v })} testId="edit-delivery-app-project-select" />
                       <div className="flex items-center gap-2">
                         <input
                           type="checkbox"
@@ -6094,7 +6145,8 @@ export default function Settings() {
           {/* Call Center - إعدادات الكول سنتر */}
           {hasRole(['admin', 'general_manager', 'super_admin']) && (
             <TabsContent value="callcenter">
-              <div className="space-y-6">
+              {needProject && <ChooseProjectNotice what="إعدادات الكول سنتر" />}
+              <div className={`space-y-6 ${needProject ? 'hidden' : ''}`}>
                 {/* بطاقة التفعيل والمزود */}
                 <Card className="border-border/50 bg-card">
                   <CardHeader>
@@ -6678,7 +6730,8 @@ export default function Settings() {
           {/* Payment Settings - إعدادات الدفع الإلكتروني */}
           {hasRole(['admin', 'general_manager', 'super_admin']) && (
             <TabsContent value="payments">
-              <div className="space-y-6">
+              {needProject && <ChooseProjectNotice what="إعدادات الدفع الإلكتروني" />}
+              <div className={`space-y-6 ${needProject ? 'hidden' : ''}`}>
                 <Card className="border-border/50 bg-card">
                   <CardHeader>
                     <CardTitle className="flex items-center gap-2 text-foreground">
@@ -7356,7 +7409,8 @@ export default function Settings() {
           {/* Invoice Settings - إعدادات الفاتورة للعميل */}
           {hasRole(['admin', 'general_manager', 'super_admin', 'manager']) && (
             <TabsContent value="invoice-settings">
-              <div className="space-y-6">
+              {needProject && <ChooseProjectNotice what="معلومات الفاتورة" />}
+              <div className={`space-y-6 ${needProject ? 'hidden' : ''}`}>
                 {/* إعدادات الفاتورة */}
                 <Card className="border-border/50 bg-card">
                   <CardHeader>

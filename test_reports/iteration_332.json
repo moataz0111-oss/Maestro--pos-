@@ -1,0 +1,46 @@
+{
+  "summary": "Tested the enterprise per-project shifts and cash closings, the project-admin reports permission and the daily WhatsApp summary. BACKEND: all 11 pytest tests pass, plus seeded probes. The probes used TEST332 shifts and closings in five cases: a burger project doc, a legacy no-project doc on a burger branch, a shawarma doc, a legacy doc on a shawarma branch, and a mismatch doc (project shawarma, branch burger). (1) GET /api/shifts is tenant-scoped. With ?project_id=burger it returns only burger docs plus legacy docs on burger branches. The mismatch doc correctly goes to shawarma. This also holds with date and date_from/date_to filters, because the project scope sits in $and and the date $or does not clobber it. GET /reports/cash-register-closings uses the same strict scope; burger stats total_sales = 1200. (2) pmburger gets burger-only data from /shifts and /cash-register-closings, even with ?project_id=shawarma and with date ranges. (3) With reports OFF, login and /me return project_reports_enabled=false, and /reports/sales, /smart-reports/products and /reports/cash-register-closings return 403. With reports ON they return true and 200, and the sales totals match the owner's burger view. A project-admin PUT of admin_reports_enabled or admin_daily_summary is ignored. (4) POST daily-summary/test: no phone gives 400. After the phone is set: 200 {sent:0, 'تعذّر الإرسال…'} because WhatsApp is not connected. Project admin gets 403, an unknown project 404, and a non-enterprise tenant 403. build_project_summary produces a correct message: totals, net, and per-branch lines, plus a 'no closings' line when there are none. (5) A temp non-enterprise tenant still gets its own shifts and closings. FRONTEND: Settings > المشاريع shows the burger box project-admin-perms-{pid} with both switches. Toggling persists to the backend (toast 'تم التفعيل' / 'تم الإيقاف'), and send-summary-now shows a warning toast. As pmburger with reports ON, /reports opens with no enterprise tabs. The cash tab shows only burger closings, and the branch filter lists only the 2 burger branches. With reports OFF, /reports redirects to /. BUG: in the admin Reports > إغلاق الصندوق tab, changing the project filter does NOT refetch. The list stays stale until you click تحديث.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "POST /api/projects/{pid}/daily-summary/test", "issue": "If the owner disabled admin_daily_summary for the project, run_project_daily_summaries filters the project out (admin_daily_summary $ne False even when force_project_id is set). The endpoint then returns 200 {sent:0, 'تعذّر الإرسال — تحقق من ربط واتساب النظام'}, which misleadingly blames WhatsApp. It should return a 400 such as 'الملخص اليومي معطّل لهذا المشروع', or ignore the flag for a manual send."},
+      {"endpoint": "scheduler run_project_daily_summaries", "issue": "project_daily_summary_state is upserted even when every send failed (sent=0, for example WhatsApp disconnected at 9am). The day is then marked done and never retried. Only mark the day when at least one send succeeds, or store attempts."},
+      {"endpoint": "GET /api/dashboard/stats, /api/reports/weekly-low-profit (project_admin, reports OFF)", "issue": "Both now return 403 for the project admin, because rbac_middleware gates /api/dashboard/stats. The Dashboard swallows the errors and shows 0 IQD stat cards, which is misleading. Either let the project admin see dashboard/stats for his project, or hide the stats section when project_reports_enabled=false."},
+      {"endpoint": "GET /api/shifts with only the X-Project-Id header", "issue": "get_shifts and the cash-closing routes read only the project_id query param, not the X-Project-Id header. This is fine through the frontend interceptor, which adds project_id to GETs, but it is inconsistent with the header contract."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "Reports.js CashRegisterClosingTab", "issue": "The fetchReport useEffect deps are [dateRange, localBranchId] and do NOT include localProjectId. Selecting another project in cash-report-project-filter fires no request, so the closings and shifts list stays stale. Selecting shawarma kept showing the burger closings while the branch dropdown already showed shawarma branches. Fix: add localProjectId to the deps (Reports.js ~L1695).", "selector": "[data-testid=cash-report-project-filter]", "priority": "HIGH"},
+      {"component": "Dashboard quick actions (project_admin, reports OFF)", "issue": "The 'التقارير' tile (and other report tiles, e.g. تقرير زيادة الأسعار) is still shown. Clicking it silently redirects back to /. Filter the tiles with hasPermission('reports').", "selector": "Dashboard tile id=reports", "priority": "MEDIUM"},
+      {"component": "Reports cash tab (project_admin)", "issue": "The project filter is not locked for the project admin. The select is enabled and offers 'كل المشاريع' plus the burger project. Data is still forced to burger by the backend, but the requirement says 'project locked to burger'. Disable the select or hide the 'all' option for project_admin.", "selector": "[data-testid=cash-report-project-filter]", "priority": "LOW"}
+    ],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Reports > إغلاق الصندوق (light theme)", "issues": ["The filter labels (من تاريخ, إلى تاريخ, المشروع, الفرع) use text-emerald-300 on a light emerald panel and are almost invisible.", "The shift-row labels (المبيعات/الطلبات/الفرق) and the summary-card captions are faded grey on grey with very low contrast."]},
+      {"screen": "Settings > المشاريع perms box", "issues": ["The Switch thumb renders oddly: the checked state shows a yellow pill with no visible thumb, and the unchecked state is pale and hard to read."]}
+    ]
+  },
+  "test_report_links": ["/app/backend/tests/test_project_shifts_reports_iter332.py", "/app/test_reports/pytest/iter332.xml"],
+  "action_items": [
+    "Reports.js CashRegisterClosingTab: add localProjectId to the fetchReport useEffect deps so that switching the project refetches the closings and shifts.",
+    "Dashboard: hide the Reports-related tiles (and the stats section, or allow dashboard/stats) for project_admin when project_reports_enabled=false.",
+    "Lock the project filter in the Reports page for project_admin (disable it, no 'كل المشاريع').",
+    "daily-summary/test: return a clear 400 when admin_daily_summary is OFF, or bypass the flag for a manual send.",
+    "Scheduler: do not mark project_daily_summary_state as sent when sent==0.",
+    "Improve label contrast in the cash-register tab in the light theme."
+  ],
+  "critical_code_review_comments": [
+    "apply_project_scope correctly uses $and so that the date $or does not override it. Note: the legacy match {project_id: {$in: [None, '']}} also matches docs where the field is missing (good).",
+    "Reports cash tab: when localProjectId='all' but the global selectedProjectId is set, the axios interceptor still appends project_id=<global>, so 'كل المشاريع' in the cash tab is effectively the global project. Pass project_id explicitly ('all') to avoid this.",
+    "rbac_middleware does 2 DB lookups per project_admin report request (users plus projects). This is acceptable but could be cached in the JWT or memory.",
+    "Daily summary scheduler and test endpoint: the users lookup in send_project_daily_summary_now has no tenant_id filter (project ids are UUIDs, so this is low risk)."
+  ],
+  "updated_files": ["/app/backend/tests/test_project_shifts_reports_iter332.py"],
+  "success_rate": {"backend": "100% (11/11 pytest + probes)", "frontend": "~80% (the cash-tab project switch does not refetch; the PA Dashboard shows report tiles while reports are OFF)"},
+  "test_credentials": "admin@maestroegp.com/admin123, pmburger@test.com/Pm123456 (project_admin burger)",
+  "seed_data_creation": "Created and then deleted TEST332_* shifts and cash_register_closings (tenant default, burger and shawarma branches) and a temp non-enterprise tenant t332ne (user t332ne@test.com). Restored: the burger admin_reports_enabled=false and admin_daily_summary=true. pmburger is kept, and his phone was reset to '' so the 9am scheduler will not message 07701234567.",
+  "retest_needed": true,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Run pytest tests/test_project_shifts_reports_iter332.py. Burger is edc0531b-3fa3-4bb7-b942-d34d0ff6b745 (branches 2e19e95f, e92ba1be); shawarma is 75dfb28d-94d9-4d09-976f-be3a0f471aa1 (ef8ab196, a05b3c1e). The existing 22 real shifts all belong to project مطعم الاختبار (52aee398), so seed burger and shawarma data to test scoping. Seeded shifts need cashier_id (the response model requires it): copy a real shift doc. To retest the cash-tab fix as admin: set both date inputs to the seed date, select a project in [data-testid=cash-report-project-filter], and confirm a /reports/cash-register-closings request fires without clicking تحديث."
+}

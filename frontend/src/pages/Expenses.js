@@ -1,10 +1,12 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { API_URL, BACKEND_URL } from '../utils/api';
 import { localDate } from '../utils/date';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { useAuth } from '../context/AuthContext';
 import { useOffline } from '../context/OfflineContext';
+import { useProject } from '../context/ProjectContext';
+import { PageProjectBar, ProjectBadge } from '../components/ProjectScopeControls';
 import { useTranslation } from '../hooks/useTranslation';
 import { formatPrice } from '../utils/currency';
 import db, { STORES } from '../lib/offlineDB';
@@ -70,6 +72,16 @@ export default function Expenses() {
   const [expenses, setExpenses] = useState([]);
   const [branches, setBranches] = useState([]);
   const [selectedBranch, setSelectedBranch] = useState(null);
+  const { selectedProjectId, enterpriseEnabled } = useProject();
+  const firstProjectRender = useRef(true);
+  const entDefaultApplied = useRef(false);
+  useEffect(() => {
+    if (enterpriseEnabled && !entDefaultApplied.current) { entDefaultApplied.current = true; setSelectedBranch('all'); }
+  }, [enterpriseEnabled]);
+  useEffect(() => {
+    if (firstProjectRender.current) { firstProjectRender.current = false; return; }
+    if (selectedBranch === null) fetchData(); else setSelectedBranch(null);
+  }, [selectedProjectId]); // eslint-disable-line react-hooks/exhaustive-deps
   const [selectedCategory, setSelectedCategory] = useState('all');
   const [startDate, setStartDate] = useState(localDate());
   const [endDate, setEndDate] = useState(localDate());
@@ -104,7 +116,7 @@ export default function Expenses() {
     if (!selectedBranch || isOffline) return;
     (async () => {
       try {
-        const res = await axios.get(`${API}/business-date/current`, { params: { branch_id: selectedBranch } });
+        const res = await axios.get(`${API}/business-date/current`, { params: { branch_id: selectedBranch === 'all' ? (branches[0] || {}).id : selectedBranch } });
         const biz = res.data?.business_date;
         if (biz && biz !== businessDate) {
           setBusinessDate(biz);
@@ -184,7 +196,7 @@ export default function Expenses() {
       const [expensesRes, branchesRes] = await Promise.all([
         axios.get(`${API}/expenses`, {
           params: {
-            branch_id: selectedBranch,
+            branch_id: selectedBranch === 'all' ? undefined : selectedBranch,
             category: selectedCategory !== 'all' ? selectedCategory : undefined,
             start_date: startDate,
             end_date: endDate
@@ -205,7 +217,7 @@ export default function Expenses() {
       }
 
       if (!selectedBranch && branchesRes.data.length > 0) {
-        setSelectedBranch(branchesRes.data[0].id);
+        setSelectedBranch(enterpriseEnabled ? 'all' : branchesRes.data[0].id);
       }
     } catch (error) {
       console.error('Failed to fetch expenses:', error);
@@ -234,6 +246,7 @@ export default function Expenses() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (submitting) return; // منع التكرار عند الضغط المتعدد
+    if (selectedBranch === 'all') { toast.error(t('اختر الفرع أولاً من القائمة لتسجيل المصروف')); return; }
     setSubmitting(true);
     try {
       let categoryToUse = formData.category;
@@ -411,7 +424,9 @@ export default function Expenses() {
               value={selectedBranch || ''}
               onChange={(e) => setSelectedBranch(e.target.value)}
               className="bg-card border border-border rounded-lg px-3 py-2 text-sm text-foreground"
+              data-testid="expenses-branch-select"
             >
+              {enterpriseEnabled && <option value="all">{t('كل الفروع')}</option>}
               {branches.map(branch => (
                 <option key={branch.id} value={branch.id}>{branch.name}</option>
               ))}
@@ -543,6 +558,7 @@ export default function Expenses() {
           </div>
         </div>
       </header>
+      {enterpriseEnabled && <div className="max-w-7xl mx-auto px-4 sm:px-6 pt-4" data-testid="page-project-bar-wrap"><PageProjectBar /></div>}
 
       {/* Filters - فقط للمدير/المالك */}
       {isManager && (
@@ -694,7 +710,7 @@ export default function Expenses() {
                     <div className="flex items-center gap-4">
                       <span className="text-2xl">{getCategoryIcon(expense.category)}</span>
                       <div>
-                        <p className="font-medium text-foreground">{expense.description}</p>
+                        <p className="font-medium text-foreground flex items-center gap-2">{expense.description} <ProjectBadge projectId={expense.project_id || (branches.find(b => b.id === expense.branch_id) || {}).project_id} /></p>
                         <div className="flex items-center gap-2 text-sm text-muted-foreground">
                           <span>{getCategoryName(expense.category)}</span>
                           <span>•</span>

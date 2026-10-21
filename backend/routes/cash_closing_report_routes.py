@@ -110,7 +110,8 @@ async def get_cash_register_closing_report(
     current_user: dict = Depends(get_current_user)
 ):
     """تقرير إغلاق الصندوق الشامل - يعرض المبيعات والمصروفات ومطابقة الصندوق"""
-    query = scoped_query_for_user(current_user, base=build_tenant_query(current_user), explicit_project_id=project_id)
+    from routes.shared import apply_project_scope
+    query = await apply_project_scope(current_user, build_tenant_query(current_user), project_id)
     
     if branch_id:
         query["branch_id"] = branch_id
@@ -166,7 +167,8 @@ async def get_cash_register_closing_report(
     cancellation_count = len(cancelled_orders)
     
     # جلب المصروفات (بدون المرتجعات)
-    expenses_query = scoped_query_for_user(current_user, base=build_tenant_query(current_user), explicit_project_id=project_id)
+    from routes.shared import apply_project_scope
+    expenses_query = await apply_project_scope(current_user, build_tenant_query(current_user), project_id)
     expenses_query["category"] = {"$ne": "refund"}
     if branch_id:
         expenses_query["branch_id"] = branch_id
@@ -184,7 +186,8 @@ async def get_cash_register_closing_report(
     expenses = await db.expenses.find(expenses_query, {"_id": 0}).to_list(length=None)
     
     # جلب إغلاقات الصندوق
-    closings_query = scoped_query_for_user(current_user, base=build_tenant_query(current_user), explicit_project_id=project_id)
+    from routes.shared import apply_project_scope
+    closings_query = await apply_project_scope(current_user, build_tenant_query(current_user), project_id)
     if branch_id:
         closings_query["branch_id"] = branch_id
     if cashier_id:
@@ -548,7 +551,8 @@ async def get_cash_register_closings_history(
     current_user: dict = Depends(get_current_user)
 ):
     """سجل إغلاقات الصندوق السابقة — بدون حد أقصى افتراضياً (limit=0 = الكل)"""
-    query = scoped_query_for_user(current_user, base=build_tenant_query(current_user), explicit_project_id=project_id)
+    from routes.shared import apply_project_scope
+    query = await apply_project_scope(current_user, build_tenant_query(current_user), project_id)
     
     if branch_id:
         query["branch_id"] = branch_id
@@ -795,7 +799,8 @@ async def get_delivery_credits_report(
     current_user: dict = Depends(get_current_user)
 ):
     """تقرير آجل شركات التوصيل - فقط شركات التوصيل (بدون توصيل السائقين العاديين)"""
-    query = scoped_query_for_user(current_user, base=build_tenant_query(current_user), explicit_project_id=project_id)
+    from routes.shared import apply_project_scope
+    query = await apply_project_scope(current_user, build_tenant_query(current_user), project_id)
     
     # فقط طلبات التوصيل التي تنتمي لشركة توصيل
     query["order_type"] = "delivery"
@@ -889,7 +894,8 @@ async def get_products_report(
     current_user: dict = Depends(get_current_user)
 ):
     """تقرير المنتجات الأكثر مبيعاً"""
-    query = scoped_query_for_user(current_user, base=build_tenant_query(current_user), explicit_project_id=project_id)
+    from routes.shared import apply_project_scope
+    query = await apply_project_scope(current_user, build_tenant_query(current_user), project_id)
     
     if branch_id:
         query["branch_id"] = branch_id
@@ -967,7 +973,8 @@ async def get_hourly_report(
     current_user: dict = Depends(get_current_user)
 ):
     """تقرير المبيعات حسب الساعة"""
-    query = scoped_query_for_user(current_user, base=build_tenant_query(current_user), explicit_project_id=project_id)
+    from routes.shared import apply_project_scope
+    query = await apply_project_scope(current_user, build_tenant_query(current_user), project_id)
     
     if branch_id:
         query["branch_id"] = branch_id

@@ -1606,8 +1606,8 @@ const CashRegisterClosingTab = ({ t, formatPrice, selectedBranchId, branches, ge
       const [reportRes, historyRes, shiftsRes, activeShiftsRes] = await Promise.all([
         axios.get(`${API_URL}/reports/cash-register-closing?${params}`, { headers }),
         axios.get(`${API_URL}/reports/cash-register-closings?${params}&limit=0`, { headers }),
-        axios.get(`${API_URL}/shifts?status=closed&cashiers_only=true${branchId && branchId !== 'all' ? '&branch_id=' + branchId : ''}`, { headers }).catch(() => ({ data: [] })),
-        axios.get(`${API_URL}/shifts?status=open&cashiers_only=true${branchId && branchId !== 'all' ? '&branch_id=' + branchId : ''}`, { headers }).catch(() => ({ data: [] }))
+        axios.get(`${API_URL}/shifts?status=closed&cashiers_only=true${branchId && branchId !== 'all' ? '&branch_id=' + branchId : ''}${localProjectId && localProjectId !== 'all' ? '&project_id=' + localProjectId : ''}`, { headers }).catch(() => ({ data: [] })),
+        axios.get(`${API_URL}/shifts?status=open&cashiers_only=true${branchId && branchId !== 'all' ? '&branch_id=' + branchId : ''}${localProjectId && localProjectId !== 'all' ? '&project_id=' + localProjectId : ''}`, { headers }).catch(() => ({ data: [] }))
       ]);
       
       setReport(reportRes.data);
@@ -1694,7 +1694,7 @@ const CashRegisterClosingTab = ({ t, formatPrice, selectedBranchId, branches, ge
 
   useEffect(() => {
     fetchReport();
-  }, [dateRange, localBranchId]);
+  }, [dateRange, localBranchId, localProjectId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const getDifferenceColor = (diff) => {
     if (diff > 0) return 'text-emerald-400';

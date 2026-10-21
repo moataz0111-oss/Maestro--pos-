@@ -1,0 +1,33 @@
+{
+  "summary": "Retested the 5 iteration-333 gaps. Backend: 10/10 new pytest tests pass. (1) POST /api/cash-register/close, the real UI close flow, now writes a db.cash_diff_alerts record. A burger shift with diff 50000 recorded project_id=burger and threshold 10000. A diff of 1000 recorded nothing. When the shift has no project_id, the project is derived from its branch, and a custom threshold of 500 is honoured. (2) GET /api/raw-materials is project scoped. pmburger with inventory ON sees only burger items plus legacy items on burger branches, and cannot override this with ?project_id=shawarma. The owner with ?project_id=shawarma sees only shawarma items plus legacy items on shawarma branches. The owner with no param sees everything. (3) The weekly summary adds closed shifts (total_sales/total_orders) and db.expenses, excluding refunds, using business_date with a date fallback. Open shifts are ignored and legacy shifts on project branches are included. _owner_phones now includes the admin whose project_id is set. GET /projects/owner-weekly-summary returns 403 for pmburger and 200 for the owner. Frontend: the Expenses select (data-testid expenses-branch-select) has the 'كل الفروع' option. With it selected, both burger and shawarma expenses show with project badges, and submitting shows the toast 'اختر الفرع أولاً من القائمة لتسجيل المصروف'. Selecting a burger branch filters the list, and adding an expense succeeds and the new expense is listed. pmburger dashboard: with purchases OFF the purchasing, external-purchases-report and price-increase-report tiles are hidden; with purchases ON all 3 show. One minor frontend race and one minor backend gap were found (see below).",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "POST /api/raw-materials (routes/ocr_routes.py create_raw_material)", "issue": "Does not set project_id (resolve_project_id_for_create is not used). Now that GET is strictly scoped, a raw material created by pmburger without a branch_id is saved with project_id=None and branch_id=None. The creator cannot see it afterwards. Verified: POST returned 200, then GET returned []. The frontend currently only GETs this endpoint, so the impact is low."},
+      {"endpoint": "Legacy GET /api/raw-materials callers (PurchasesPage.js, PriceIncreaseReport.js, Inventory.js)", "issue": "The endpoint reads only the project_id query param. Check that the axios project interceptor sends ?project_id when the owner picks a project; if it only sends the X-Project-Id header, the owner still sees all projects' materials."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "Expenses.js default branch selection", "issue": "Race condition. On a direct URL load or hard refresh of /expenses, fetchData runs before ProjectContext has resolved enterpriseEnabled, so selectedBranch defaults to branches[0] ('الفرع الرئيسي') instead of 'all'. SPA navigation correctly defaults to 'all'. Fix: once enterpriseEnabled becomes true and selectedBranch is not 'all' and was not chosen by the user, set it to 'all' (or wait for project context to load).", "selector": "[data-testid=expenses-branch-select]", "priority": "LOW"}
+    ],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": ["/app/backend/tests/test_iter334_enterprise_gaps_retest.py", "/app/test_reports/pytest/pytest_iter334.xml"],
+  "action_items": [
+    "Expenses.js: default to 'all' after enterpriseEnabled resolves (direct load or refresh race)",
+    "POST /api/raw-materials: set project_id via resolve_project_id_for_create so new items stay visible under the strict scope",
+    "Update obsolete iter333 tests: test_send_now_no_phone_400 (now 200, because the admin phone counts) and test_message_lists_all_projects_sorted (it seeds cash_register_closings but the summary now reads shifts)"
+  ],
+  "critical_code_review_comments": [
+    "send_cash_diff_alert records cash_diff_alerts even when no project_admin has a phone (sent=0). That is fine for audit, but the record does not say why nothing was sent.",
+    "Two iter333 regression tests now fail as a result of the intended behaviour changes (not bugs): the weekly summary moved from closings to shifts+expenses, and _owner_phones now includes admins with a project_id."
+  ],
+  "updated_files": ["/app/backend/tests/test_iter334_enterprise_gaps_retest.py"],
+  "success_rate": {"backend": "100% (10/10 new; iter333 suite 25/27, 2 obsolete)", "frontend": "95% (all flows work; minor race on direct load)"},
+  "seed_data_creation": "Temporary TEST334 shifts, expenses, raw_materials and cash_diff_alerts were created and then deleted. Burger project toggles were reset to OFF and the custom threshold was unset.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Burger edc0531b (branches 2e19e95f, e92ba1be). Shawarma 75dfb28d (branches ef8ab196, a05b3c1e). To test the cash-diff alert end to end: insert an open shift into db.shifts, then as admin POST /api/cash-register/close with shift_id, denominations and force_close_without_count=true. Python urllib calls to the public URL get 403 (Cloudflare); use requests or a mongo toggle instead. Logging in as pmburger invalidates earlier pmburger tokens. The system date is 2026-10-21."
+}

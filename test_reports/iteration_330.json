@@ -1,0 +1,47 @@
+{
+  "summary": "Tested enterprise tables and drivers per project, project_admin (pmburger) isolation, a non-enterprise tenant and the enterprise admin Settings tabs, on the backend (pytest, 17 tests: 11 pass, 6 fail) and the UI (Playwright). TABLES fully PASS. Project bar shown; switching project resets the branch select to that project's first branch and shows only its branches/tables; POST saves project_id=burger; X-Project-Id filtering works; mismatched project_id gives 400; project admin PUT on another project's table gives 404. DRIVERS backend FAILS. routes/drivers_routes.py (drivers_router is included in server.py ~L18480, BEFORE app.include_router(api_router)) SHADOWS the new GET/POST/PUT/DELETE /api/drivers in server.py (L16102-16335). None of the new driver logic runs. PROJECT ADMIN: login, /auth/me role=project_admin, /users and /projects scoped, payment-settings forced to his project, printer/table/owner-admin guards all PASS. Settings tabs are correct, and the project bar shows only his project and cannot be switched. FAILS: the project admin cannot create any user (403), and he can move a user of his project into another project's branch. NON-ENTERPRISE tenant: no project bar or badges on Tables/Delivery, create works. Admin Settings regression: all 17 tabs visible.",
+  "backend_issues": {
+    "critical": [
+      {"endpoint": "GET/POST/PUT/DELETE /api/drivers[/{id}]", "issue": "ROOT CAUSE: routes/drivers_routes.py defines the same paths and its router is included before api_router, so it wins and the server.py implementations are dead code. As a result: (a) POST ignores the branch's project and uses X-Project-Id or the tenant default; in the all-projects view a driver created on burger branch الكرادة is saved with project_id=None (verified in DB). (b) GET ?project_id=X filters strictly on project_id, so legacy drivers with no project but a branch in X are missing. (c) PUT with a branch of another project + mismatching project_id returns 200 'تم تعديل السائق' instead of 400. (d) The project admin can PUT a driver of another project (200). (e) DriverResponse has no project_id field, so the API never returns project_id; frontend badges only work through the branch fallback. (f) DELETE /drivers/{id} in drivers_routes has no tenant/project check at all (find_one by id only), so it can delete across tenants.", "priority": "CRITICAL"},
+      {"endpoint": "POST /api/users (project_admin)", "issue": "create_user allows only ADMIN/GENERAL_MANAGER/SUPER_ADMIN. The project admin is mapped to MANAGER, so every create returns 403 'إنشاء الحسابات متاح للمالك فقط'. The is_project_admin forcing branch (L5084) is unreachable, and the project admin cannot add users to his project. The role=admin→403 check passes, but only because of this blanket 403.", "priority": "HIGH"},
+      {"endpoint": "PUT /api/users/{id} (project_admin)", "issue": "Project escape. update_user pops project_id for the project admin but then derives project_id from branch_id (L4787). Sending {branch_id: <shawarma branch>} moved a burger user to project_id=shawarma (200). Validate that branch_id belongs to current_user.project_id for the project admin.", "priority": "HIGH"}
+    ],
+    "minor": [
+      {"endpoint": "DELETE /api/users/{owner admin id} (project_admin)", "issue": "Returns 403 instead of 404, because the admin-role check runs before any _project_admin_guard. Still denied; the spec expected 404."},
+      {"endpoint": "PUT /api/tables/{id}/status", "issue": "No _project_admin_guard: the project admin can change the status of another project's table."},
+      {"endpoint": "GET /api/drivers (server.py version)", "issue": "For the project admin the query includes all drivers with project_id None/missing, including drivers whose branch belongs to another project."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "Delivery add-driver dialog", "issue": "handleCreateDriver sends {...formData, branch_id: selectedBranch}. The branch the user picks inside the dialog's Select is always overridden by the header branch.", "selector": "[data-testid=add-driver-btn]", "priority": "MEDIUM"}
+    ],
+    "integration_issues": [
+      {"flow": "Create driver in the all-projects view", "issue": "The driver is saved with project_id=None (backend shadowing). The card badge still shows the project only because of the branch fallback.", "affected_selectors": ["[data-testid^=project-badge-]"]}
+    ],
+    "design_issues": [
+      {"screen": "Project bar for project_admin", "issues": ["The dropdown is enabled and lists 'كل المشاريع' plus his project; picking does nothing (selectProject is a no-op). Better to disable or hide the select for restricted users."]},
+      {"screen": "Tables/Delivery non-enterprise", "issues": ["The empty wrapper div page-project-bar-wrap (pt-4) still renders, adding extra top spacing."]},
+      {"screen": "Delivery header", "issues": ["The branch <select> truncates long branch names (e.g. 'البرغر الملكي - المنصور'). Neither header branch select has a data-testid."]}
+    ]
+  },
+  "test_report_links": ["/app/backend/tests/test_enterprise_tables_drivers_pa_iter330.py", "/app/test_reports/pytest/iter330.xml"],
+  "action_items": [
+    "Remove or merge the duplicate driver CRUD in routes/drivers_routes.py, or move the new logic there: branch-derived project_id with validation (400 on mismatch), the legacy branch fallback in GET ?project_id, project admin guards, project_id in DriverResponse, and a tenant check on DELETE",
+    "Allow is_project_admin in POST /api/users (it is blocked by the role whitelist at L5063)",
+    "In PUT /api/users for the project admin, reject a branch_id outside his project",
+    "Add _project_admin_guard to PUT /tables/{id}/status; consider returning 404 before the owner-admin 403 in DELETE /users",
+    "Delivery dialog: use formData.branch_id || selectedBranch"
+  ],
+  "critical_code_review_comments": [
+    "Duplicate route definitions across server.py and routes/*.py silently shadow each other depending on include order; check for other duplicated paths",
+    "server.py is >18k lines; the new enterprise helpers belong in routes/shared.py"
+  ],
+  "updated_files": ["/app/backend/tests/test_enterprise_tables_drivers_pa_iter330.py"],
+  "success_rate": {"backend": "65% (11/17)", "frontend": "90%"},
+  "seed_data_creation": "Created a temp tenant t330ne613d6 (tier changed to customer) plus TEST330_ drivers/tables/users/printers; all cleaned up. pmburger kept.",
+  "retest_needed": true,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Login via the API, then set localStorage token, cached_user and selectedProjectId ('all' or a project id). Branch selects on /tables and /delivery: use the 'header select' locator. The project bar select is [data-testid=settings-project-select]. New super-admin tenants default to trial with enterprise_enabled=True; PUT /api/super-admin/tenants/{id} {account_tier:'customer'} disables it. Ids: burger edc0531b (branches 2e19e95f المنصور, e92ba1be الكرادة), shawarma 75dfb28d (ef8ab196, a05b3c1e), main 52aee398 (76f56acc). pmburger id 4cb9b7fb, owner admin d3896bff.",
+  "rca of the issue": "Drivers: app.include_router(drivers_router, prefix='/api') runs before app.include_router(api_router). FastAPI matches the first registered route, so the old drivers_routes handlers serve /api/drivers. PA user create: the role whitelist runs before the enterprise PA logic, and get_current_user maps project_admin→manager, which is not in the whitelist."
+}

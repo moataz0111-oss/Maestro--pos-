@@ -1151,8 +1151,8 @@ async def get_shift_receipts(
     if current_user.get("role", "") not in ["admin", "general_manager", "super_admin", "manager", "branch_manager", "owner"]:
         raise HTTPException(status_code=403, detail="غير مصرح")
     
-    from routes.shared import scoped_query_for_user
-    tq = scoped_query_for_user(current_user, base={"tenant_id": tenant_id} if tenant_id else {}, explicit_project_id=project_id)
+    from routes.shared import apply_project_scope
+    tq = await apply_project_scope(current_user, {"tenant_id": tenant_id} if tenant_id else {}, project_id)
     
     # جمع البيانات من مصدرين: shifts + cash_register_closings (كلاهما قد يحوي received_at)
     query = {**tq, "received_at": {"$exists": True, "$ne": None}}
@@ -1423,6 +1423,13 @@ async def close_shift(shift_id: str, close_data: ShiftClose, current_user: dict 
     }
     await db.cash_register_closings.insert_one(closing_record)
     del closing_record["_id"]
+    # 🚨 تنبيه فرق الصندوق لمدير المشروع (المؤسسة فقط)
+    try:
+        import asyncio as _aio_cd
+        from routes.project_daily_summary import send_cash_diff_alert
+        _aio_cd.create_task(send_cash_diff_alert(dict(closing_record)))
+    except Exception as _cde:
+        logger.warning(f"cash diff alert schedule failed: {_cde}")
     
     # 🛡 فحص سلامة تلقائي فوري لهذا الشفت بعد الإغلاق مباشرة (بلا أي تدخل يدوي)
     try:
@@ -1553,12 +1560,14 @@ async def get_shifts(
     date_from: Optional[str] = None,
     date_to: Optional[str] = None,
     cashiers_only: bool = False,
+    project_id: Optional[str] = None,
     current_user: dict = Depends(get_current_user)
 ):
     """جلب قائمة الورديات - يدعم الفلترة بالـ business_date (اليوم التشغيلي).
     cashiers_only=True يستبعد ورديات رؤساء الأقسام (مخزن/تصنيع/مطبخ/مشتريات) — تظهر ورديات الكاشير حصراً."""
     db = get_database()
-    query = {}
+    from routes.shared import apply_project_scope
+    query = await apply_project_scope(current_user, build_tenant_query(current_user), project_id)
     if branch_id:
         query["branch_id"] = branch_id
     if status:
@@ -2224,6 +2233,13 @@ async def close_cash_register(close_data: CashRegisterClose, current_user: dict 
             "branch_name": branch["name"] if branch else "",
         }
         _aio.create_task(_send_shift_close_report(db, updated_shift, _closing_payload, tenant_id))
+        # 🚨 تنبيه فرق الصندوق لمدير المشروع (المؤسسة فقط)
+        from routes.project_daily_summary import send_cash_diff_alert
+        _aio.create_task(send_cash_diff_alert({
+            **_closing_payload, "tenant_id": tenant_id, "branch_id": shift.get("branch_id"),
+            "project_id": shift.get("project_id"), "shift_id": shift.get("id"),
+            "cashier_name": shift.get("cashier_name"),
+        }))
     except Exception as _e:
         logger.warning(f"post cash-register close notify failed: {_e}")
     

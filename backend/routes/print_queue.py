@@ -299,7 +299,7 @@ async def cleanup_old_jobs(current_user: dict = Depends(get_current_user)):
 
 
 @router.get("/print-queue/agents-monitor")
-async def get_all_agents_status(current_user: dict = Depends(get_current_user)):
+async def get_all_agents_status(request: Request, current_user: dict = Depends(get_current_user)):
     """لوحة مراقبة الوسطاء: حالة كل agent في كل فرع مع آخر heartbeat + version.
     
     تُستخدم في Settings لعرض إعلام فوري عند انقطاع أي فرع.
@@ -312,6 +312,11 @@ async def get_all_agents_status(current_user: dict = Depends(get_current_user)):
     branch_query = {}
     if tenant_id:
         branch_query["tenant_id"] = tenant_id
+    # 🏢 وضع المؤسسة: فروع المشروع المختار فقط
+    from routes.shared import requested_project_id
+    _pid = requested_project_id(current_user, request)
+    if _pid:
+        branch_query["project_id"] = _pid
     branches = await db.branches.find(branch_query, {"_id": 0, "id": 1, "name": 1}).to_list(length=None)
     
     # جلب جميع heartbeats من آخر 24 ساعة

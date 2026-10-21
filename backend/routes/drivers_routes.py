@@ -25,6 +25,7 @@ class DriverCreate(BaseModel):
     branch_id: str
     pin: str = "1234"  # الرمز السري للسائق
     user_id: Optional[str] = None
+    project_id: Optional[str] = None  # وضع المؤسسة
 
 class DriverResponse(BaseModel):
     model_config = ConfigDict(extra="ignore")
@@ -42,6 +43,7 @@ class DriverResponse(BaseModel):
     location_updated_at: Optional[str] = None
     current_order: Optional[Dict[str, Any]] = None
     is_active: bool = True
+    project_id: Optional[str] = None
 
 class DriverLocationUpdate(BaseModel):
     latitude: float
@@ -56,7 +58,9 @@ async def create_driver(driver: DriverCreate, request: Request, current_user: di
         raise HTTPException(status_code=403, detail="غير مصرح")
 
     from routes.shared import resolve_project_id_for_create
-    project_id = await resolve_project_id_for_create(current_user, request)
+    from server import _enterprise_item_project
+    project_id = await _enterprise_item_project(current_user, request, driver.project_id, driver.branch_id) \
+        or await resolve_project_id_for_create(current_user, request)
 
     driver_doc = {
         "id": str(uuid.uuid4()),
@@ -93,10 +97,10 @@ async def get_drivers(branch_id: Optional[str] = None, include_orders: bool = Fa
     # === Enterprise: عزل حسب المشروع ===
     upid = current_user.get("project_id")
     ER = [UserRole.SUPER_ADMIN, UserRole.ADMIN, UserRole.GENERAL_MANAGER, "enterprise_owner"]
-    if upid and current_user.get("role") not in ER:
-        query["$or"] = [{"project_id": upid}, {"project_id": {"$exists": False}}, {"project_id": None}]
-    elif project_id and project_id != "all":
-        query["project_id"] = project_id
+    _scope = upid if (upid and current_user.get("role") not in ER) else (project_id if project_id and project_id != "all" else None)
+    if _scope:
+        _bids = [b["id"] async for b in db.branches.find({"tenant_id": get_user_tenant_id(current_user), "project_id": _scope}, {"_id": 0, "id": 1})]
+        query["$or"] = [{"project_id": _scope}, {"project_id": {"$in": [None, ""]}, "branch_id": {"$in": _bids}}]
     drivers = await db.drivers.find(query, {"_id": 0}).to_list(length=None)
     
     if include_orders:
@@ -240,15 +244,19 @@ class DriverUpdate(BaseModel):
     is_available: Optional[bool] = None
     current_order_id: Optional[str] = None
     user_id: Optional[str] = None
+    branch_id: Optional[str] = None
+    project_id: Optional[str] = None
 
 @router.put("/{driver_id}")
-async def update_driver(driver_id: str, driver: DriverUpdate, current_user: dict = Depends(get_current_user)):
+async def update_driver(driver_id: str, driver: DriverUpdate, request: Request, current_user: dict = Depends(get_current_user)):
     """تعديل بيانات السائق"""
     db = get_database()
     query = build_tenant_query(current_user, {"id": driver_id})
     existing = await db.drivers.find_one(query)
     if not existing:
         raise HTTPException(status_code=404, detail="السائق غير موجود")
+    from server import _project_admin_guard, _enterprise_item_project
+    await _project_admin_guard(current_user, existing)
     
     update_data = {"updated_at": datetime.now(timezone.utc).isoformat()}
     if driver.name:
@@ -268,6 +276,12 @@ async def update_driver(driver_id: str, driver: DriverUpdate, current_user: dict
         update_data["current_order_id"] = driver.current_order_id or None
     if driver.user_id:
         update_data["user_id"] = driver.user_id
+    if driver.branch_id:
+        update_data["branch_id"] = driver.branch_id
+    if driver.branch_id or driver.project_id is not None:
+        _dp = await _enterprise_item_project(current_user, request, driver.project_id, driver.branch_id or existing.get("branch_id"))
+        if _dp:
+            update_data["project_id"] = _dp
     
     await db.drivers.update_one({"id": driver_id}, {"$set": update_data})
     return {"message": "تم تعديل السائق"}
@@ -295,9 +309,13 @@ async def link_driver_to_user(driver_id: str, user_id: str, current_user: dict =
 async def delete_driver(driver_id: str, current_user: dict = Depends(get_current_user)):
     """حذف السائق"""
     db = get_database()
-    existing = await db.drivers.find_one({"id": driver_id})
+    if current_user["role"] not in [UserRole.ADMIN, UserRole.GENERAL_MANAGER, UserRole.MANAGER, UserRole.SUPER_ADMIN]:
+        raise HTTPException(status_code=403, detail="غير مصرح")
+    existing = await db.drivers.find_one(build_tenant_query(current_user, {"id": driver_id}))
     if not existing:
         raise HTTPException(status_code=404, detail="السائق غير موجود")
+    from server import _project_admin_guard
+    await _project_admin_guard(current_user, existing)
     
     if existing.get("current_order_id"):
         raise HTTPException(status_code=400, detail="لا يمكن حذف سائق لديه طلب نشط")

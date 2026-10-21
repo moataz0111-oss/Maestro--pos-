@@ -1692,6 +1692,14 @@ export default function Dashboard() {
       return ['cashier', 'supervisor', 'admin', 'general_manager', 'super_admin', 'branch_manager', 'manager', 'owner'].includes(user?.role);
     }
     
+    // 🏢 مدير المشروع: حسب الصلاحيات التي فعّلها مالك المؤسسة
+    if (user?.role === 'project_admin') {
+      const pp = user.project_permissions || {};
+      if (['showReports', 'showSmartReports', 'showRatings'].includes(action.key)) return !!pp.reports;
+      if (['showPurchasing', 'showExternalPurchasesReport', 'showPriceIncreaseReport'].includes(action.key)) return !!pp.purchases;
+      if (['showWarehouse', 'showBranchOrders', 'showInventoryReports'].includes(action.key)) return !!pp.inventory;
+      return true;
+    }
     // المدير (admin) والمدير العام (general_manager) يريان كل شيء
     if (user?.role === 'admin' || user?.role === 'general_manager' || user?.role === 'super_admin') return true;
     

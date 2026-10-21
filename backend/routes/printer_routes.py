@@ -38,6 +38,22 @@ class PrinterCreate(BaseModel):
     show_prices: bool = True  # عرض الأسعار في الطباعة
     print_individual_items: bool = False  # طباعة كل صنف على حدة
     auto_print_on_order: bool = True  # طباعة تلقائية عند الطلب
+    project_id: Optional[str] = None  # وضع المؤسسة: تقييد الطابعة بمشروع
+
+async def _validated_printer_project(tenant_id, project_id, branch_id):
+    """وضع المؤسسة فقط: يتحقق أن المشروع للمؤسسة وأن الفرع يتبعه"""
+    if not project_id or project_id == "all" or not tenant_id:
+        return None
+    t = await db.tenants.find_one({"id": tenant_id}, {"_id": 0, "enterprise_enabled": 1})
+    if not (t or {}).get("enterprise_enabled"):
+        return None
+    if not await db.projects.find_one({"id": project_id, "tenant_id": tenant_id}, {"_id": 0, "id": 1}):
+        raise HTTPException(status_code=400, detail="المشروع غير موجود")
+    if branch_id:
+        br = await db.branches.find_one({"id": branch_id, "tenant_id": tenant_id}, {"_id": 0, "project_id": 1})
+        if br and br.get("project_id") and br["project_id"] != project_id:
+            raise HTTPException(status_code=400, detail="الفرع المختار لا يتبع المشروع المحدد")
+    return project_id
 
 @router.post("/printers")
 async def create_printer(printer: PrinterCreate, request: Request, current_user: dict = Depends(get_current_user)):
@@ -47,9 +63,10 @@ async def create_printer(printer: PrinterCreate, request: Request, current_user:
     tenant_id = get_user_tenant_id(current_user)
     from routes.shared import resolve_project_id_for_create
     project_id = await resolve_project_id_for_create(current_user, request)
+    project_id = await _validated_printer_project(tenant_id, printer.project_id or project_id, printer.branch_id) or project_id
     printer_doc = {
         "id": str(uuid.uuid4()),
-        **printer.model_dump(),
+        **printer.model_dump(exclude={"project_id"}),
         "tenant_id": tenant_id,  # ربط الطابعة بالعميل
         "project_id": project_id,  # Enterprise: عزل حسب المشروع
         "is_active": True,
@@ -129,9 +146,17 @@ async def update_printer(printer_id: str, printer: dict, current_user: dict = De
     existing = await db.printers.find_one(query)
     if not existing:
         raise HTTPException(status_code=404, detail="الطابعة غير موجودة")
+    from server import _project_admin_guard
+    await _project_admin_guard(current_user, existing)
     
     # إزالة حقول محظورة من الـ update (id, tenant_id, _id)
     update_data = {k: v for k, v in (printer or {}).items() if k not in ("id", "_id", "tenant_id")}
+    if "project_id" in update_data:
+        _vp = await _validated_printer_project(existing.get("tenant_id"), update_data["project_id"], update_data.get("branch_id", existing.get("branch_id")))
+        if _vp:
+            update_data["project_id"] = _vp
+        else:
+            update_data.pop("project_id")
     if not update_data:
         return {**existing, "_id": None}
     update_data.pop("_id", None)
@@ -147,6 +172,8 @@ async def delete_printer(printer_id: str, current_user: dict = Depends(get_curre
     
     # التحقق من أن الطابعة تنتمي لنفس العميل
     query = build_tenant_query(current_user, {"id": printer_id})
+    from server import _project_admin_guard
+    await _project_admin_guard(current_user, await db.printers.find_one(query, {"_id": 0}))
     result = await db.printers.delete_one(query)
     if result.deleted_count == 0:
         raise HTTPException(status_code=404, detail="الطابعة غير موجودة")

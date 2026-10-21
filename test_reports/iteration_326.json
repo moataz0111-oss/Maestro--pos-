@@ -1,0 +1,36 @@
+{
+  "summary": "Retested the 5 fixes from iteration_325 and ran a quick regression. Backend: 17 of 18 pytest pass (7 new iter326 tests plus the 11 iter325 regression tests). (1) The lazy migration now upserts: 12 concurrent GET /payment-settings calls for the main project left exactly 1 migrated doc. (2) GET /delivery-apps in the all-projects view returns one row per (app, project) assignment: toters general 15% and toters for صالون الأناقة 17%, each with its project_name, and no duplicate keys. Editing commission or deleting a project row changes only that assignment (API and UI). (3) PUT /users/{id} with only branch_id set to a branch of another project syncs project_id to P_BURGER. Sending a mismatched branch and project explicitly still returns 400. (4) The POST /auth/login user object no longer contains password_vault, but GET /auth/me still returns it (the one failing test). (5) Stale-response guard: I delayed project A's /tenant/invoice-settings response by 5s with page.route, switched A then B quickly, and the field showed B's value (PHONE-BBB). Regression passed in the UI: delivery-app-row/edit/delete testids on each assignment, the edit dialog prefilled with the salon project, choose-project-notice on the Payment and Callcenter tabs plus its chip selection, the users list filtered to the salon project, and the iter325 non-enterprise pytest tests.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "GET /api/auth/me", "issue": "The response still includes password_vault (the encrypted plain password). get_me only deletes 'password'. Add user.pop('password_vault', None) and user.pop('password_hash', None). The frontend has no reference to password_vault, so removing it is safe."},
+      {"endpoint": "POST /api/delivery-app-settings (move via original_project_id)", "issue": "Moving an assignment (e.g. toters general) to a project that already has its own toters doc deletes the source and silently overwrites the target project's commission. There is no conflict warning."},
+      {"endpoint": "_branch_project_id / PUT /users branch sync", "issue": "The branch lookup is not tenant-scoped (db.branches.find_one({'id': branch_id})). This is low risk but should filter by tenant_id."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Settings > Users (project filter)", "issues": ["The role badge for project_admin shows the raw key 'project_admin' in low-contrast grey. getRoleText has no mapping for it."]},
+      {"screen": "Settings > Delivery", "issues": ["The per-row commission Input has no data-testid. Its onBlur also fires a POST and a fetchData even when the value did not change."]}
+    ]
+  },
+  "test_report_links": ["/app/backend/tests/test_enterprise_project_settings_iter326.py", "/app/backend/tests/test_enterprise_project_settings_iter325.py", "/app/test_reports/pytest/iter326.xml"],
+  "action_items": [
+    "Strip password_vault (and password_hash) from the GET /api/auth/me response.",
+    "Optional: map project_admin in getRoleText and add a data-testid to the delivery commission input.",
+    "Optional: warn or block when moving a delivery assignment onto a project that already has that app."
+  ],
+  "critical_code_review_comments": [
+    "The stale guard compares localStorage selectedProjectId before and after the await. This is fine, but on a stale return the finally block in fetchInvoiceSettings still runs setInvoiceLoading(false) while the newer request is pending. This is cosmetic only.",
+    "server.py (18.7k lines) and Settings.js (8.2k lines) are still far over the size guidelines."
+  ],
+  "updated_files": ["/app/backend/tests/test_enterprise_project_settings_iter326.py"],
+  "success_rate": {"backend": "94% (17/18; the only failure is password_vault in /auth/me)", "frontend": "100% of requested flows"},
+  "seed_data_creation": "None kept. Temp test_it326 users and delivery apps were removed, the toters salon commission was set back to 17, and the temp invoice docs for P_A/P_B (tmp326) were deleted. The main-project payment_settings migrated doc was restored from a snapshot.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "test_credentials": "admin@maestroegp.com/admin123 (enterprise tenant default)",
+  "context_for_next_testing_agent": "For UI login, POST /api/auth/login with device_id e2e-tester-persistent, inject the token and cached_user into localStorage, then wait 14s. To test the stale guard, use page.route('**/api/tenant/invoice-settings**') and delay requests with header x-project-id == P_A. Delivery rows are keyed delivery-app-row-{app}-{project_id|all}. Run pytest with the backend .env exported plus REACT_APP_BACKEND_URL."
+}

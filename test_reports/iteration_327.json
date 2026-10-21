@@ -1,0 +1,39 @@
+{
+  "summary": "Tested project restriction for printers in enterprise mode, on the backend and in the UI. Backend: 17/17 new iter327 pytest tests pass, and the iter325/326 regression suites pass 18/18. Covered: POST /printers with project_id plus a matching branch saves project_id; a branch from another project returns 400; an unknown project returns 400; a printer with no branch keeps its project; GET /printers filters by X-Project-Id (by branch, or by project_id when there is no branch); PUT returns 400 when the branch does not match and saves when project and branch change together; agents-monitor filters branches by project via header or query param; non-enterprise tenants ignore project_id on create and update, and agents-monitor is unchanged. UI (enterprise admin): choosing a project in the project bar shows only that project's printers (burger shows 1, main shows 1) and its agent rows (burger shows 2, main shows 1). The agents panel refreshes when the project changes. In the add dialog, printer-project-select appears above the branch select, the branch list is limited to the chosen project (shawarma shows its 2 branches), and saving POSTs project_id. In the edit dialog the project is prefilled, changing it clears a mismatched branch, the branch list follows the new project, and PUT saves project_id and branch_id. Non-enterprise UI: no project bar or project select, no badges, creating a printer works, and the agents panel lists the tenant's branches. Regression: the Users, Delivery and Payment tabs load with no API errors. FAILED: the project badge on each printer row does not appear.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "POST /api/printers", "issue": "_validated_printer_project only checks the body's project_id. If the body has no project_id and the X-Project-Id header is P_BURGER, a branch from another project is accepted without a 400. The UI always sends project_id, so this is low risk."},
+      {"endpoint": "GET /api/print-queue/agents-monitor", "issue": "The heartbeats query ({last_seen >= 24h}) is not filtered by tenant_id or branch. This existed before and is harmless because results are matched per branch, but it scans every tenant's heartbeats."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "Settings > Printers list row", "issue": "The project color badge is missing from the printer rows. The ProjectBadge JSX was inserted in the wrong place: the printer chip list inside the PRODUCT dialog (Settings.js ~line 4790), not the Printers tab row (~line 5642, next to the printer name and branch name). Result: no [data-testid^=project-badge-] inside printer-row-* in the all-projects view.", "selector": "[data-testid^='printer-row-'] [data-testid^='project-badge-']", "priority": "HIGH"},
+      {"component": "Settings > Printers branch filter (stale state)", "issue": "printerBranchFilter is not reset when the project changes. Steps: select burger, click branch chip 'البرغر الملكي - المنصور', switch the project bar to مطعم الاختبار. The list shows 0 printers although that project has 1. Because the main project has only 1 branch, the filter bar is hidden (branches.length > 1), so the user cannot reset the filter.", "selector": "[data-testid^='printer-filter-']", "priority": "HIGH"},
+      {"component": "Add/Edit printer dialog when a specific project is selected in the bar", "issue": "branchesForProject() filters the already project-scoped `branches` state. If the user picks a different project in printer-project-select, the branch dropdown is empty (header=main, form=shawarma gives []). Either fetch branches for the chosen form project (as ensureProjectLists does for products) or lock the form project to the selected project.", "selector": "[data-testid='printer-branch-select']", "priority": "MEDIUM"}
+    ],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Settings > Printers", "issues": ["The add-printer button and the edit dialog's branch SelectTrigger have no data-testid (suggest add-printer-btn and edit-printer-branch-select)."]}
+    ]
+  },
+  "test_report_links": ["/app/backend/tests/test_enterprise_printers_iter327.py", "/app/test_reports/pytest/iter327.xml"],
+  "action_items": [
+    "Move the <ProjectBadge> for printers from the product dialog's printer chips (~L4790) into the Printers tab row next to printer.name (~L5642), shown only when enterpriseEnabled. Remove it from the product chips if it is not wanted there.",
+    "Reset printerBranchFilter to 'all' when selectedProjectId changes, or when the filtered branch is not in `branches`.",
+    "In the add/edit printer dialogs, load branches for the chosen form project when it differs from the selected bar project (or restrict the select to the selected project).",
+    "Optional: add data-testid to the add-printer button and the edit-printer branch select. Validate the header-derived project against the branch in POST /printers."
+  ],
+  "critical_code_review_comments": [
+    "Settings.js is over 6000 lines and should be split (the Printers tab should be its own component).",
+    "Inside AgentsMonitorPanel, projectKey is only used as a useCallback dependency. Project scoping comes implicitly from the global axios interceptor (localStorage). This works, but it is implicit and fragile."
+  ],
+  "updated_files": ["/app/backend/tests/test_enterprise_printers_iter327.py"],
+  "success_rate": {"backend": "100% (17/17 new + 18/18 regression)", "frontend": "~75% (badge missing, stale branch filter, cross-project branch list empty)"},
+  "seed_data_creation": "Temp printers TEST_it327_* and temp tenants test-it327-* (with users and branches) were created and deleted. The default tenant now has 0 printers, the same as before.",
+  "retest_needed": true,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Enterprise tenant 'default' project ids: main 52aee398 (branch 76f56acc), burger edc0531b (branches 2e19e95f, e92ba1be), shawarma 75dfb28d (branches ef8ab196, a05b3c1e). The UI sets the project via localStorage selectedProjectId before going to /settings. Click tabs with page.locator('[role=tab]', has_text=...); get_by_role name matching failed for some tabs. Non-enterprise UI tenant: insert tenants/users docs directly in mongo, as in the tests' ne fixture.",
+  "test_credentials": "admin@maestroegp.com/admin123 (enterprise). The super admin was not needed; the temp non-enterprise tenant was inserted directly into mongo."
+}

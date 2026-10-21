@@ -133,6 +133,7 @@ export const ProjectProvider = ({ children }) => {
       configLoaded,
       enterpriseEnabled,
       tenantEnterpriseActive,
+      isProjectLocked: !!(user?.project_id && !ENTERPRISE_WIDE_ROLES.includes(user?.role)),
       refreshProjects: fetchProjects,
     }}>
       {children}

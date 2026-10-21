@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { API_URL, BACKEND_URL } from '../utils/api';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
@@ -44,6 +44,8 @@ import {
   SelectValue,
 } from '../components/ui/select';
 import { showApiError } from '../utils/apiError';
+import { useProject } from '../context/ProjectContext';
+import { PageProjectBar, ProjectBadge } from '../components/ProjectScopeControls';
 
 const API = API_URL;
 
@@ -68,6 +70,13 @@ export default function Tables() {
   const [tables, setTables] = useState([]);
   const [branches, setBranches] = useState([]);
   const [selectedBranch, setSelectedBranch] = useState(null);
+  const { selectedProjectId, enterpriseEnabled } = useProject();
+  const firstProjectRender = useRef(true);
+  useEffect(() => {
+    if (firstProjectRender.current) { firstProjectRender.current = false; return; }
+    setSelectedBranch(null);
+    fetchData();
+  }, [selectedProjectId]); // eslint-disable-line react-hooks/exhaustive-deps
   const [loading, setLoading] = useState(true);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingTable, setEditingTable] = useState(null);
@@ -430,6 +439,7 @@ export default function Tables() {
           </div>
         </div>
       </header>
+      {enterpriseEnabled && <div className="max-w-7xl mx-auto px-4 sm:px-6 pt-4" data-testid="page-project-bar-wrap"><PageProjectBar /></div>}
 
       {/* Stats */}
       <div className="max-w-7xl mx-auto px-6 py-4">

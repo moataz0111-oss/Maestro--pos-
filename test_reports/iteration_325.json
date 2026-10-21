@@ -1,0 +1,43 @@
+{
+  "summary": "Tested the per-project Settings scoping for enterprise tenants on both backend and frontend, plus a non-enterprise regression. Backend: 11/11 pytest pass, but only after a backend restart. The running backend was stale: server.py was modified at 14:52:04 and the backend last started at 14:51:25. Before the restart, the lazy migration of general settings to the oldest project did not run. After the restart, all of these pass: users filter (X-Project-Id header and the project_id query param), create/update user project_id (save, clear with '', 400 for a branch from another project, 400 for an invalid project), customers filtered by project orders, delivery scope create/move (project to all to project) and scoped delete, payment/callcenter/invoice(strict) isolation, 400 when saving payment or callcenter with no project, migration to the oldest project (مطعم الاختبار), and the non-enterprise tenant ignores project ids. Frontend: every requested flow was verified (project bar filters users and branches, create/edit user project selects, delivery add/edit project selects and badges, choose-project-notice with chips, per-project form fields refresh, saving payment per project, non-enterprise tenant shows no project UI and saves normally).",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "_project_settings_doc (payment/callcenter/invoice lazy migration)", "issue": "insert_one is used without an upsert or unique guard. Concurrent first reads of the main project can insert duplicate migrated docs. Use update_one(..., {'$setOnInsert': copy}, upsert=True)."},
+      {"endpoint": "GET /api/delivery-apps (كل المشاريع)", "issue": "When one app_id has docs in more than one project, only the first is shown (settings_map.setdefault). The other project assignments do not appear in the all-projects view and cannot be edited from it."},
+      {"endpoint": "PUT /api/users/{id}", "issue": "Changing only branch_id to a branch of another project, without sending project_id, is not validated and does not sync user.project_id. This can leave a mismatched project and branch."},
+      {"endpoint": "POST /api/auth/login", "issue": "Pre-existing: the response user object includes password_vault (an encrypted plain password). It should be excluded from the login and user payloads."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [
+      {"flow": "Switching project on the Payment/Callcenter/Invoice tabs", "issue": "fetchData() refetches every Settings endpoint on each project change, and nothing ignores responses for a project that is no longer selected. Fields take about 3-4s to refresh. If the user switches quickly, an earlier project's response can overwrite the current one. Suggest per-tab fetches plus an abort or a stale-pid guard.", "affected_selectors": ["settings-project-select"]}
+    ],
+    "design_issues": [
+      {"screen": "Settings > Delivery / Users", "issues": ["Some interactive elements have no data-testid: the add-user button, the delivery edit and delete buttons per row, the delivery add-form save button, and the payment/callcenter/invoice inputs and save buttons."]}
+    ]
+  },
+  "test_report_links": ["/app/backend/tests/test_enterprise_project_settings_iter325.py", "/app/backend/tests/iter325_temp_tenant.py", "/app/test_reports/pytest/iter325.xml"],
+  "action_items": [
+    "Always run 'sudo supervisorctl restart backend' after server.py edits. The backend was running stale code when testing began.",
+    "Make the lazy migration idempotent: an upsert with $setOnInsert, or a unique index on (tenant_id, project_id) for payment_settings, callcenter_config and tenant_invoice_settings.",
+    "Optional: show every project assignment of the same delivery app in the all-projects view.",
+    "Optional: validate or sync project_id when only branch_id changes in PUT /users.",
+    "Optional: add data-testid to the add-user button, the delivery row edit/delete buttons, and the payment/callcenter/invoice inputs and save buttons.",
+    "Optional: drop password_vault from the login response."
+  ],
+  "critical_code_review_comments": [
+    "server.py is 18.7k lines and Settings.js is 8.2k lines. Both are far over the 700-line guideline.",
+    "Settings.js re-runs the full fetchData on each selectedProjectId change. This is heavy and race-prone.",
+    "PUT /tenant/invoice-settings saves with project_id=None for an enterprise tenant when no project is selected, which writes the general doc. Payment and callcenter return 400 in that case. The frontend hides the form, so this is only an API inconsistency."
+  ],
+  "updated_files": ["/app/backend/tests/test_enterprise_project_settings_iter325.py", "/app/backend/tests/iter325_temp_tenant.py"],
+  "success_rate": {"backend": "100% (11/11, after backend restart)", "frontend": "100% of requested flows"},
+  "seed_data_creation": "No permanent seed data. The temporary non-enterprise tenants, users, delivery apps and the P_A/P_B payment/callcenter/invoice docs were all removed. Expected side effect: payment_settings now holds a migrated copy (migrated_from_general=true) for the main project 52aee398 (مطعم الاختبار).",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "test_credentials": "admin@maestroegp.com/admin123 (enterprise tenant default). For a non-enterprise UI tenant, run 'python3 tests/iter325_temp_tenant.py up' to create test_ui325_admin@x.com/test1234 and 'down' to remove it.",
+  "context_for_next_testing_agent": "Settings tabs are role=tab buttons; select them by text, e.g. page.locator('[role=tab]', has_text='المستخدمين'). Switch projects with settings-project-select, then pick an option by name. Wait about 4s after a project switch because fetchData is slow. For UI login, inject the token and cached_user into localStorage with device_id e2e-tester-persistent, then wait 14s for the splash screen. Test write projects: P_A=3128cfc4 (مشروع رابع تجريبي) and P_B=18f5019d (عيادة الشفاء).",
+  "rca of the issue": "The main-project migration test failed at first because the uvicorn process had started before the last server.py edit (no reload). After a restart, the migration works."
+}

@@ -20,6 +20,7 @@ import {
   Card, CardContent, CardHeader, CardTitle, CardDescription,
 } from '../components/ui/card';
 import { Badge } from '../components/ui/badge';
+import { Switch } from '../components/ui/switch';
 import { ProjectLogoUpload, resolveImageUrl } from '../components/ProjectLogoUpload';
 import { Briefcase, Plus, Trash2, Edit, UserPlus, Store, Scissors, Stethoscope, ShoppingCart, Truck, Factory, Package, MoreHorizontal } from 'lucide-react';
 
@@ -106,6 +107,31 @@ export default function ProjectsSettings() {
   const navigate = useNavigate();
   const { user } = useAuth();
   const { projects, refreshProjects } = useProject();
+  const toggleAdminFlag = async (p, key, value) => {
+    try {
+      await axios.put(`${API_URL}/projects/${p.id}`, { [key]: value });
+      toast.success(value ? 'تم التفعيل' : 'تم الإيقاف');
+      refreshProjects();
+    } catch (e) { toast.error(e.response?.data?.detail || 'فشل الحفظ'); }
+  };
+  const [weeklyOn, setWeeklyOn] = useState(true);
+  useEffect(() => { axios.get(`${API_URL}/projects/owner-weekly-summary`).then(r => setWeeklyOn(r.data.enabled)).catch(() => {}); }, []);
+  const toggleWeekly = async (v) => {
+    try { await axios.put(`${API_URL}/projects/owner-weekly-summary`, { enabled: v }); setWeeklyOn(v); toast.success(v ? 'تم التفعيل' : 'تم الإيقاف'); }
+    catch (e) { toast.error(e.response?.data?.detail || 'فشل الحفظ'); }
+  };
+  const sendWeeklyNow = async () => {
+    try {
+      const res = await axios.post(`${API_URL}/projects/owner-weekly-summary/test`);
+      res.data.sent ? toast.success(res.data.message) : toast.warning(res.data.message);
+    } catch (e) { toast.error(e.response?.data?.detail || 'فشل الإرسال'); }
+  };
+  const sendSummaryNow = async (p) => {
+    try {
+      const res = await axios.post(`${API_URL}/projects/${p.id}/daily-summary/test`);
+      res.data.sent ? toast.success(res.data.message) : toast.warning(res.data.message);
+    } catch (e) { toast.error(e.response?.data?.detail || 'فشل الإرسال'); }
+  };
   const [dialogOpen, setDialogOpen] = useState(false);
   const [adminDialogOpen, setAdminDialogOpen] = useState(false);
   const [rateDialogOpen, setRateDialogOpen] = useState(false);
@@ -332,7 +358,12 @@ export default function ProjectsSettings() {
             كل مشروع = كيان مستقل تماماً (خزينة، موارد بشرية، مخزون، تقارير)
           </p>
         </div>
-        <div className="flex flex-wrap gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+        <div className="flex items-center gap-3 rounded-xl border bg-muted/30 px-3 py-2 text-xs" data-testid="owner-weekly-summary-box">
+          <span className="font-semibold">الملخص الأسبوعي لك (كل أحد 9 صباحاً)</span>
+          <Switch checked={weeklyOn} onCheckedChange={toggleWeekly} data-testid="owner-weekly-summary-switch" />
+          <button type="button" className="text-primary hover:underline" onClick={sendWeeklyNow} data-testid="owner-weekly-summary-send-now">أرسل الآن</button>
+        </div>
         <Button data-testid="add-project-btn" className="gap-2" onClick={openCreate}>
           <Plus className="h-4 w-4" />
           مشروع جديد
@@ -523,6 +554,34 @@ export default function ProjectsSettings() {
                   <div>المنطقة الزمنية: {p.timezone}</div>
                   {p.admin_user_id && <Badge variant="outline" className="text-xs">مدير مُعيّن</Badge>}
                 </div>
+                {p.admin_user_id && (
+                  <div className="rounded-lg border bg-muted/30 p-2.5 space-y-2 text-xs" data-testid={`project-admin-perms-${p.id}`}>
+                    <p className="font-semibold text-foreground">صلاحيات مدير المشروع</p>
+                    <label className="flex items-center justify-between gap-2 cursor-pointer">
+                      <span>تقارير المبيعات والمصاريف لمشروعه</span>
+                      <Switch checked={!!p.admin_reports_enabled} onCheckedChange={(v) => toggleAdminFlag(p, 'admin_reports_enabled', v)} data-testid={`admin-reports-switch-${p.id}`} />
+                    </label>
+                    <label className="flex items-center justify-between gap-2 cursor-pointer">
+                      <span>المخزون والتصنيع</span>
+                      <Switch checked={!!p.admin_inventory_enabled} onCheckedChange={(v) => toggleAdminFlag(p, 'admin_inventory_enabled', v)} data-testid={`admin-inventory-switch-${p.id}`} />
+                    </label>
+                    <label className="flex items-center justify-between gap-2 cursor-pointer">
+                      <span>المشتريات والموردين</span>
+                      <Switch checked={!!p.admin_purchases_enabled} onCheckedChange={(v) => toggleAdminFlag(p, 'admin_purchases_enabled', v)} data-testid={`admin-purchases-switch-${p.id}`} />
+                    </label>
+                    <div className="flex items-center justify-between gap-2">
+                      <span>تنبيه فرق الصندوق عند ≥ (0 = إيقاف)</span>
+                      <Input type="number" min="0" className="h-7 w-24 text-xs" defaultValue={p.cash_diff_alert_threshold ?? ((p.currency || 'IQD') === 'IQD' ? 10000 : 20)}
+                        onBlur={(e) => { const v = parseFloat(e.target.value); if (!isNaN(v) && v >= 0 && v !== p.cash_diff_alert_threshold) toggleAdminFlag(p, 'cash_diff_alert_threshold', v); }}
+                        data-testid={`cash-diff-threshold-${p.id}`} />
+                    </div>
+                    <label className="flex items-center justify-between gap-2 cursor-pointer">
+                      <span>ملخص الإغلاق اليومي على الواتساب (9 صباحاً)</span>
+                      <Switch checked={p.admin_daily_summary !== false} onCheckedChange={(v) => toggleAdminFlag(p, 'admin_daily_summary', v)} data-testid={`admin-summary-switch-${p.id}`} />
+                    </label>
+                    <button type="button" className="text-primary hover:underline" onClick={() => sendSummaryNow(p)} data-testid={`send-summary-now-${p.id}`}>إرسال ملخص الأمس الآن</button>
+                  </div>
+                )}
                 <div className="flex gap-2">
                   <Button
                     size="sm"

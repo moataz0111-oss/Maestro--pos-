@@ -79,3 +79,38 @@ See `/app/memory/test_credentials.md`
 ## 2026-06 — Project colors + strict enterprise gating
 - Project color: owner picks from 12-swatch palette or a custom color (projects.color, validated hex). Projects without a saved color get distinct automatic defaults (components/ProjectColor.jsx). Colors show on project cards, in selectors, in the enterprise dashboard and charts, and in the transfers log.
 - Enterprise Dashboard / Transfers Log are shown only when tenant enterprise_enabled=true (ProjectContext.tenantEnterpriseActive). Backend require_tenant_enterprise guards /enterprise/dashboard and /projects/inventory/log. enterprise_owner no longer bypasses the flag. Tested iteration_322-324 (all pass).
+
+## 2026-06: Per-project Settings (enterprise only)
+- Users: project filter (GET /users by project_id/branch), project field on create/edit (validated against branch). Editing the branch syncs project_id.
+- Customers are shared across projects; the filter shows customers who ordered from the selected project.
+- Delivery companies are scoped to one project or to all (scope_project_id/original_project_id). The all-projects view shows one row per assignment; moving onto an existing assignment returns 409.
+- Invoice, payment and call center settings are saved per project (tenant_id+project_id). The first read for the main project copies the old general settings (lazy upsert). General settings remain the runtime fallback. With "all projects" selected, the UI shows a ChooseProjectNotice.
+- Security: password_vault removed from login and /auth/me responses.
+- Non-enterprise tenants are unchanged (_enterprise_pid helper). Tested iteration_325-326.
+- Rule from user: every future change must appear ONLY for enterprise-activated tenants.
+
+## 2026-06: Printers per project (enterprise only)
+- Printer create/edit has a project field (shown only in the all-projects view; otherwise the project selected in the bar is used). Branch list is filtered by project; backend validates branch↔project (400). Each row has a project badge. The agents monitor filters branches by project. Forms and branch filter reset when the project changes. Tested iteration_327-329.
+- STANDING RULE (user): every past/future feature or fix must appear ONLY for enterprise-activated tenants; single-project tenants see no change. Apply automatically without asking.
+
+## 2026-06: Tables, drivers and project manager isolation (enterprise only)
+- Tables: project bar on /tables; project_id comes from the branch (validated). GET is filtered by project branches; project_admin guard on update/status/delete.
+- Drivers (the live routes are routes/drivers_routes.py, server.py /drivers are shadowed): project_id from the branch; GET by project_id or legacy branch; PUT/DELETE tenant-scoped and guarded. Project bar and badge on /delivery.
+- Project admin (role project_admin): get_current_user (server.py AND routes/shared.py) maps it to MANAGER + is_project_admin; /auth/me restores the role. RBAC middleware maps it to manager. They see their own project's settings tabs only (no projects/enterprise/system/inventory/audit tabs), and their project bar is locked. Creating users is forced to their project; they cannot create admin/GM roles. Guards via _project_admin_guard.
+- Tested iteration_330-331 plus a manual curl for driver isolation.
+
+## 2026-06: Shifts per project, project manager reports and daily summary (enterprise only)
+- GET /shifts is now tenant-scoped (it previously had no tenant filter) and project-scoped via apply_project_scope (shared.py: project_id OR legacy docs on the project's branches, kept in $and). Cash closing reports use the same scope. The Reports cash tab refetches when the project changes.
+- scoped_query_for_user is strict for project admins (uses _project_branch_ids injected in get_current_user).
+- Owner toggles on the project card (ProjectsSettings): admin_reports_enabled (default OFF) and admin_daily_summary (default ON). These are owner-only on PUT. rbac_middleware blocks /api/reports/, /api/smart-reports/ and /api/break-even for a project_admin without the flag. Login and /me return project_reports_enabled, and AuthContext.hasPermission('reports') uses it.
+- routes/project_daily_summary.py runs every 10 minutes (startup loop) and sends at 09:00 Baghdad time for yesterday's business_date via WhatsApp to project admins who have a phone. State in project_daily_summary_state is marked only on success. Manual send: POST /projects/{id}/daily-summary/test.
+- Tested iteration_332. Fixes applied after it: cash tab dependencies, manual send ignores the toggle, retry on failure, dashboard/stats no longer gated.
+- Contabo VPS 158.220.118.54: PHP is not installed (checked by the user), so the Oct 2026 PHP CVEs don't apply.
+
+## 2026-06: Expenses per project, project admin toggles, weekly owner summary, cash diff alert (enterprise only)
+- Expenses: GET uses apply_project_scope; POST project comes from the branch. Expenses page has a project bar, an 'all branches' option (enterprise default), and badges.
+- Owner toggles per project: admin_inventory_enabled and admin_purchases_enabled (default OFF), plus cash_diff_alert_threshold (default 10000 IQD / 20 other; 0 disables). rbac_middleware _PA_GATES blocks paths for project_admin. Login and /me return project_permissions. Dashboard tiles and AuthContext follow the toggles.
+- Weekly owner summary: run_owner_weekly_summaries runs Sunday 09:00 Baghdad time from closed shifts plus db.expenses per project, toggled by tenant.owner_weekly_summary. Endpoints: GET/PUT /projects/owner-weekly-summary and POST /projects/owner-weekly-summary/test (declared before /{project_id}).
+- Cash diff alert: send_cash_diff_alert is hooked into POST /cash-register/close (the real UI flow) and /shifts/{id}/close. It sends WhatsApp to the project admin and logs to db.cash_diff_alerts.
+- GET /raw-materials is project-scoped; POST sets project_id.
+- Tested iteration_333-334.

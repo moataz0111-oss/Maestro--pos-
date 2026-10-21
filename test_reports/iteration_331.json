@@ -1,0 +1,40 @@
+{
+  "summary": "Retested the iteration_330 failures: backend pytest (20 tests: 18 pass, 2 fail), a direct API probe, and the UI with Playwright. FIXED: the admin driver flow in routes/drivers_routes.py. (1) In the all-projects view, POST takes project_id from the branch (burger). (2) A body or header project that does not match the branch gives 400. (3) GET ?project_id includes legacy drivers that have no project but a branch in X (null or missing field), and the response includes project_id. (4) PUT with another project's branch plus a mismatching project_id gives 400. (5) PUT with only branch_id syncs project_id. (6) DELETE of another tenant's driver gives 404, and a cashier gets 403. Also FIXED for the project admin pmburger: POST /users with role cashier gives 200 and the project is forced to burger; a branch from another project gives 400; roles admin, general_manager and project_admin give 403; PUT /users with another project's branch gives 400 and the user is unchanged; PUT /tables/{other}/status gives 404 (his own table gives 200). GET /drivers for the project admin shows only burger drivers and legacy drivers on burger branches. The Settings project select is disabled (no listbox opens). The Tables and Delivery branch selects list only burger branches. The Delivery add-driver dialog now uses its own branch: header المنصور, dialog الكرادة, saved as الكرادة with project burger. A non-enterprise temp tenant has no page-project-bar-wrap and no badges on Tables or Delivery. Admin Settings still shows all 17 tabs, and tables per project still filter correctly. STILL FAILING: project-admin driver write isolation. ROOT CAUSE: drivers_routes.py imports get_current_user from routes/shared.py. That version does NOT apply the project_admin mapping that server.get_current_user does (server.py L3343-3345: role becomes MANAGER and is_project_admin=True). Inside drivers_routes, pmburger therefore has role='project_admin' and no is_project_admin flag, so _project_admin_guard is a no-op and the role allow-lists reject him.",
+  "backend_issues": {
+    "critical": [
+      {"endpoint": "PUT /api/drivers/{id} (project_admin)", "issue": "The project admin can edit a driver of ANOTHER project: 200, and the driver was renamed (reproduced; iter330 left a shawarma driver named 'hack', now deleted). _project_admin_guard returns early because current_user has no is_project_admin flag (routes.shared.get_current_user). update_driver also has no role check, so any authenticated user, including a cashier, can edit any driver in the tenant.", "priority": "CRITICAL"},
+      {"endpoint": "DELETE /api/drivers/{id} (project_admin)", "issue": "Returns 403 'غير مصرح' for both his own project's drivers and other projects' drivers, because role 'project_admin' is not in [ADMIN, GM, MANAGER, SUPER_ADMIN]. The spec expected 404 for another project and success for his own. Not a data leak, but the project admin cannot delete his own drivers.", "priority": "HIGH"},
+      {"endpoint": "POST /api/drivers (project_admin)", "issue": "Returns 403 'غير مصرح': the same role allow-list problem. The project admin cannot create drivers at all, so the Delivery add-driver dialog fails for him.", "priority": "HIGH"}
+    ],
+    "minor": [
+      {"endpoint": "routes/shared.get_current_user (35 route modules)", "issue": "It lacks the project_admin mapping and the password_changed_at token invalidation that server.get_current_user has. Any route module that imports it treats the project admin inconsistently. printer_routes works only because it imports from server."},
+      {"endpoint": "PUT /api/tables/{id}/status", "issue": "Returns 200 'تم التحديث' for a table id that does not exist (no 404), and it has no role check. This is existing behaviour."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [
+      {"flow": "Project admin adds a driver from /delivery", "issue": "Fails with 403 because of the backend issue above (not a frontend bug).", "affected_selectors": ["[data-testid=add-driver-btn]"]}
+    ],
+    "design_issues": []
+  },
+  "test_report_links": ["/app/backend/tests/test_enterprise_drivers_pa_iter331.py", "/app/test_reports/pytest/pytest_iter331.xml"],
+  "action_items": [
+    "In routes/drivers_routes.py, import get_current_user from server, or add the mapping to routes/shared.get_current_user: `if user.get('role')=='project_admin' and user.get('project_id'): user['role']=UserRole.MANAGER; user['is_project_admin']=True`. Prefer fixing shared.py so that all 35 route modules behave consistently, and check that nothing in them compares role=='project_admin' directly. Then retest: PA PUT/DELETE on another project's driver gives 404, PA POST and DELETE on his own drivers give 200.",
+    "Add a manager+ role check to PUT /api/drivers/{id}, or confirm that cashiers are meant to edit drivers.",
+    "Optional: PUT /tables/{id}/status should return 404 when the table does not exist."
+  ],
+  "critical_code_review_comments": [
+    "routes/shared.get_current_user and server.get_current_user have drifted apart (project_admin mapping and password-change token invalidation). Use a single implementation.",
+    "update_user calls _project_admin_guard twice (before and after the not-found check). Harmless, but redundant.",
+    "server.py still holds dead /api/drivers routes (around L16105-16335) that drivers_routes.py shadows. Remove them to avoid confusion."
+  ],
+  "updated_files": ["/app/frontend/src/pages/Delivery.js (added data-testid new-driver-branch-select and new-driver-branch-{id} to the add-driver dialog branch Select)", "/app/backend/tests/test_enterprise_drivers_pa_iter331.py"],
+  "success_rate": {"backend": "90% (18/20 pytest; project-admin driver write paths fail)", "frontend": "100% of the requested UI checks"},
+  "test_credentials": "admin@maestroegp.com/admin123, pmburger@test.com/Pm123456 (project_admin, burger), owner@maestroegp.com/owner123 secret 271018",
+  "seed_data_creation": "Created a temp tenant t331ne4cd4a (tier customer, non-enterprise) and TEST331_ drivers, users and tables (33101-33102). All are cleaned up, plus the 2 leftover 'hack' shawarma drivers (from iter330 and this run). pmburger kept.",
+  "retest_needed": true,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Run pytest tests/test_enterprise_drivers_pa_iter331.py. The 2 failing tests target the PA driver write paths. Caution: if the PA PUT bug still exists, the test renames a shawarma TEST331_shaw driver to 'hack', so clean up drivers named 'hack' afterwards. UI: login via the API, then set localStorage token, cached_user and selectedProjectId. The Delivery dialog branch select is [data-testid=new-driver-branch-select] with options new-driver-branch-{id}. The header branch is the 'header select' native select. Ids: burger edc0531b (branches 2e19e95f, e92ba1be), shawarma 75dfb28d (ef8ab196, a05b3c1e).",
+  "rca of the issue": "Reproduction: log in as pmburger, then PUT /api/drivers/{shawarma driver id} {name:'hack'} returns 200 and the DB is changed. Cause: drivers_routes.py uses `from routes.shared import get_current_user`, which returns the raw user (role='project_admin', no is_project_admin). server._project_admin_guard checks current_user.get('is_project_admin') and returns early. POST and DELETE check that role is in [ADMIN, GM, MANAGER, SUPER_ADMIN], so 'project_admin' gets 403. GET works only because it scopes on user.project_id plus role not in ER. Fix: apply the same project_admin to MANAGER mapping in shared.get_current_user."
+}

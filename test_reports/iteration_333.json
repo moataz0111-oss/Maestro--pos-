@@ -1,0 +1,47 @@
+{
+  "summary": "Tested the 4 enterprise features. Backend: 26 of 27 pytest tests pass (21 API tests plus 6 direct unit tests). Expenses: POST takes the project_id from the branch. A header/branch mismatch returns 400. GET ?project_id= is strictly scoped (legacy no-project docs on the project's branches are included) and the scope survives date filters. pmburger only sees burger expenses, even with ?project_id=shawarma. Owner toggles: inventory and purchases default OFF. With them OFF, pmburger gets 403 'هذه الصلاحية غير مفعّلة' on raw-materials, manufactured-products, inventory-stats, warehouse-transfers, suppliers and purchases-new. With them ON these return 200. /me project_permissions is correct, a project admin cannot set the flags, and a negative threshold returns 422. Weekly summary: GET/PUT persists tenant.owner_weekly_summary. send-now returns 200 {sent:0,'تعذّر الإرسال…'} with WhatsApp down and 400 with no owner phone. Project admin gets 403, non-enterprise 403, and the route order is correct. build_owner_weekly_summary lists every project sorted by sales with correct net. send_cash_diff_alert (called directly, WhatsApp stubbed): above the default 10000 threshold it sends and records a cash_diff_alerts doc; below it, with threshold 0, and for a non-enterprise tenant it returns 0 with no record; a custom threshold and 'زيادة'/'عجز' labels work. Frontend: the Settings > المشاريع perms box shows the 3 switches and the threshold input. Toggling and blur-save persist to the DB, and send-now shows a warning toast. pmburger dashboard tiles follow the flags. On the Expenses page, switching project refetches the branches and expenses with project_id. KEY GAPS: (a) the alert never fires from the real UI close flow. (b) The legacy /api/raw-materials leaks other projects' data. (c) The weekly summary ignores expenses that are not tied to a closing. (d) In 'all projects' mode the Expenses page is still limited to one branch, so the per-project badge view is never mixed.",
+  "backend_issues": {
+    "critical": [
+      {"endpoint": "POST /api/cash-register/close (routes/shifts_routes.py ~1892-2238)", "issue": "This is the ONLY close endpoint the frontend uses (Dashboard.js:1042). It never inserts cash_register_closings and never calls send_cash_diff_alert. The hook exists only in POST /api/shifts/{id}/close (line 1430), which no UI calls. Result: the instant cash-diff alert never fires for real shift closes. DB evidence: 19 closed shifts but only 9 have a closing record.", "priority": "HIGH"},
+      {"endpoint": "GET /api/raw-materials (routes/ocr_routes.py:286)", "issue": "No project scoping. With inventory ON, pmburger gets 4 raw materials from other projects (3 from مطعم الاختبار, 1 from صالون الأناقة). /raw-materials-new is scoped correctly. Inventory.js, PurchasesPage.js and PriceIncreaseReport.js use this legacy endpoint. Fix: apply apply_project_scope(current_user, query, project_id) to both the raw_materials and inventory fallback queries.", "priority": "HIGH"}
+    ],
+    "minor": [
+      {"endpoint": "build_owner_weekly_summary / _project_closings", "issue": "Expenses come only from cash_register_closings.total_expenses. Expenses in db.expenses that are not tied to a closing (owner or manager general expenses such as rent, which feature (1) now tags per project) are left out. Sales also miss shifts closed via /cash-register/close, which creates no closing doc (see the critical issue). Consider aggregating from shifts plus db.expenses by project_id/branch."},
+      {"endpoint": "_owner_phones", "issue": "Only counts admin users with an empty project_id. admin@maestroegp.com has project_id set (default project), so their phone is ignored and only tenant.owner_phone is used. Owners linked to the default project will get a 400 'no owner phone' if tenant.owner_phone is empty."},
+      {"endpoint": "GET /api/projects/owner-weekly-summary", "issue": "Has no owner/enterprise guard (PUT and POST do). Any user, including a project admin, can read it. Low risk, but inconsistent."},
+      {"endpoint": "POST /api/reports/cash-register-closing", "issue": "The second closing-insert path also sets no project_id and has no cash-diff alert hook."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "Expenses.js branch select", "issue": "No 'all branches' option. fetchData auto-selects branches[0], so in 'كل المشاريع' mode only الفرع الرئيسي is shown: the burger and shawarma expenses do not appear, and the per-expense ProjectBadge mixed view never shows other projects. With a project selected, only its first branch is shown, not all of the project's expenses. The select also lacks a data-testid.", "selector": "[data-testid=expenses-page] select", "priority": "MEDIUM"},
+      {"component": "Dashboard.js project_admin tiles", "issue": "With purchases/inventory OFF, the 'external-purchases-report' and 'price-increase-report' tiles still show. Their APIs (/api/external-purchases, /api/raw-materials) return 403. Gate them with pp.purchases / pp.inventory.", "selector": "[data-testid=quick-action-external-purchases-report], [data-testid=quick-action-price-increase-report]", "priority": "LOW"},
+      {"component": "Routes guard", "issue": "With inventory OFF, pmburger can open /warehouse-manufacturing directly; there is no redirect (unlike /reports). The page then hits 403s.", "selector": "/warehouse-manufacturing", "priority": "LOW"}
+    ],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "ProjectsSettings perms box", "issues": ["Changing the cash-diff threshold shows the toast 'تم التفعيل'. It should say something like 'تم الحفظ'.", "The 'أرسل الآن' link in the weekly box is small, low-emphasis text."]}
+    ]
+  },
+  "test_report_links": ["/app/backend/tests/test_iter333_enterprise_expenses_perms_alerts.py", "/app/backend/tests/test_iter333_cash_diff_alert_unit.py", "/app/test_reports/pytest/pytest_iter333.xml"],
+  "action_items": [
+    "Hook send_cash_diff_alert (and ideally a cash_register_closings insert with project_id) into POST /api/cash-register/close, the real UI close path.",
+    "Add project scoping to legacy GET /api/raw-materials (ocr_routes.py) for project admins and for the selected project.",
+    "Expenses page: add an 'all branches' option, or fetch without branch_id when no branch is chosen, so the project view lists all of the project's branches and 'all projects' shows a mixed list with badges.",
+    "Weekly owner summary: include db.expenses per project, and sales from shifts not covered by closings.",
+    "Gate the external-purchases-report and price-increase-report tiles for project_admin, and add route guards for inventory/purchases pages.",
+    "_owner_phones: also include tenant admins whose project_id is the default project, or document that tenant.owner_phone is required."
+  ],
+  "critical_code_review_comments": [
+    "rbac_middleware's _PA_GATES runs 2 extra DB reads per gated request for project_admin. Acceptable, but consider caching.",
+    "_PA_GATES '/api/stock' prefix also matches unrelated routes like /api/stock-alerts. Verify this is intended.",
+    "server.py is 18.8k lines and should be split."
+  ],
+  "updated_files": ["/app/backend/tests/test_iter333_enterprise_expenses_perms_alerts.py", "/app/backend/tests/test_iter333_cash_diff_alert_unit.py"],
+  "success_rate": {"backend": "96% (26/27)", "frontend": "85%"},
+  "seed_data_creation": "None persisted. TEST333 expenses and alerts were deleted. Burger inventory/purchases flags were reset to OFF, the threshold was unset, pmburger's phone was restored to '', and the tenant's owner_weekly_summary was unset.",
+  "retest_needed": true,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Burger project edc0531b, branches 2e19e95f (المنصور) and e92ba1be. Shawarma 75dfb28d, branches ef8ab196 and a05b3c1e. Logging pmburger in again invalidates earlier tokens (single session). The unit test stubs sys.modules['server'] to fake WhatsApp. Retest the cash-diff alert end-to-end via /api/cash-register/close once it is hooked.",
+  "rca of the issue": "Cash diff alert: the hook was added to close_shift (/shifts/{id}/close), but Dashboard close uses close_cash_register (/cash-register/close), which only updates shifts and calls _send_shift_close_report. Raw-materials leak: the legacy ocr_routes get_raw_materials uses only build_tenant_query, with no apply_project_scope."
+}
