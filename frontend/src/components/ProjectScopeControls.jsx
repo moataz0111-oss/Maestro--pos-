@@ -32,13 +32,13 @@ export const SettingsProjectBar = ({ className = '' }) => {
   );
 };
 
-export const ProjectFormSelect = ({ value, onChange, testId = 'form-project-select', allLabel, hint }) => {
+export const ProjectFormSelect = ({ value, onChange, testId = 'form-project-select', allLabel, hint, locked = false }) => {
   const { enterpriseEnabled, projects } = useProject();
   if (!enterpriseEnabled || !(projects || []).length) return null;
   return (
     <div>
       <Label className="text-foreground">المشروع {!allLabel && <span className="text-red-500">*</span>}</Label>
-      <Select value={value || (allLabel ? 'all' : '')} onValueChange={onChange}>
+      <Select value={value || (allLabel ? 'all' : '')} onValueChange={onChange} disabled={locked}>
         <SelectTrigger className="mt-1" data-testid={testId}>
           <SelectValue placeholder="اختر المشروع" />
         </SelectTrigger>
@@ -47,6 +47,7 @@ export const ProjectFormSelect = ({ value, onChange, testId = 'form-project-sele
           {projects.map(p => <SelectItem key={p.id} value={p.id}><span className="flex items-center gap-2"><ProjectColorDot color={projectColorOf(projects, p.id)} size={8} />{p.name}</span></SelectItem>)}
         </SelectContent>
       </Select>
+      {locked && <p className="text-xs text-muted-foreground mt-1" data-testid={`${testId}-locked-hint`}>يتبع المشروع المختار في الأعلى — لتغييره اختر "كل المشاريع" من شريط المشروع</p>}
       {hint && <p className="text-xs text-muted-foreground mt-1">{hint}</p>}
     </div>
   );

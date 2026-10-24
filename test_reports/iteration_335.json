@@ -1,0 +1,23 @@
+{
+  "summary": "Frontend-only retest of the always-visible ProjectFormSelect in Settings. Everything requested passed (100%). (1) Users with burger selected in the bar: the add-user user-project-select is visible, disabled and shows 'مطعم البرغر الملكي', and its locked hint shows. The branch list shows only the 2 burger branches. Creating a cashier sent POST /api/users with project_id=edc0531b (burger), and the DB record had the burger project. The user was then deleted. (2) With 'كل المشاريع' selected, user-project-select is editable with no hint and lists all 9 projects. Picking shawarma filters the branch list to its 2 branches. (3) Printers: printer-project-select is locked with the hint when burger is selected, and the branch list is burger only. Creating a printer saved project_id=burger. edit-printer-project-select is locked when burger is selected and editable under 'كل المشاريع'. (4) edit-user-project-select is locked with the hint under burger and editable under 'كل المشاريع'. (5) A non-enterprise tenant shows no project bar and no project field in the add-user or add-printer dialogs. ENV NOTE: at start the backend was FATAL ('No module named uvicorn': the system python had lost all packages) and mongod was not running. I reinstalled backend/requirements.txt and started mongod (dbpath /data/db) manually. Nothing in the supervisor config starts mongod.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [],
+  "action_items": [
+    "Optional: in the edit dialogs, the locked select shows the record's own project_id, not the bar project. A legacy user or printer with no project_id would show a locked 'كل المشاريع (بدون تقييد)' or a placeholder and cannot be assigned while a project is selected. Consider falling back to defaultFormProject when locked."
+  ],
+  "critical_code_review_comments": [
+    "Settings.js is far beyond 700 lines (~6000) and should be split per tab.",
+    "The add-user and add-printer dialog inputs (username, full name, email, password, printer name, IP, create/submit buttons) lack data-testid attributes."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "N/A (frontend only)", "frontend": "100%"},
+  "seed_data_creation": "Temporary data, all cleaned up: the user test_burger_cashier, the printer TEST_Burger_Printer, and a temp admin test_ne_admin@example.com in non-enterprise tenant 0d84ca6f (iter309 test tenant). That tenant's expires_at was extended during the test and then restored to 2026-07-26.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "If the backend 502s, check 'sudo supervisorctl status': the backend may be FATAL because uvicorn or fastapi are missing from /usr/local/bin/python3 (fix: /usr/local/bin/python3 -m pip install -r /app/backend/requirements.txt), and mongod may not be running (fix: nohup mongod --dbpath /data/db --bind_ip 127.0.0.1 &). UI login: fill [data-testid=login-email] and [data-testid=login-password], then click the 'تسجيل الدخول' button. A splash overlay can show in screenshots but the DOM is usable. Burger edc0531b has branches 2e19e95f and e92ba1be; shawarma 75dfb28d has ef8ab196 and a05b3c1e. Non-enterprise tenants have no admin users and expired subscriptions, so create a temp admin and extend expires_at to test them."
+}

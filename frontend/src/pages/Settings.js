@@ -3329,7 +3329,7 @@ export default function Settings() {
                                   </Select>
                                 </div>
                                 {/* ⭐ يختفي حقل الفرع للأدوار المركزية + للمالك والمدير العام (كل الفروع) */}
-                                {needProject && <ProjectFormSelect value={(needProject ? userForm.project_id : defaultFormProject)} onChange={(v) => setUserForm({ ...userForm, project_id: v, branch_id: '' })} testId="user-project-select" />}
+                                <ProjectFormSelect value={(needProject ? userForm.project_id : defaultFormProject)} onChange={(v) => setUserForm({ ...userForm, project_id: v, branch_id: '' })} testId="user-project-select" locked={!needProject} />
                                 {!['warehouse_keeper', 'manufacturer', 'purchasing', 'admin', 'general_manager'].includes(userForm.role) && (
                                 <div>
                                   <Label className="text-foreground">{t('الفرع')}</Label>
@@ -3606,7 +3606,7 @@ export default function Settings() {
                                 </Select>
                               </div>
                               {/* ⭐ يختفي حقل الفرع للأدوار المركزية + للمالك والمدير العام (كل الفروع) */}
-                              {needProject && <ProjectFormSelect value={editUserForm.project_id} allLabel="كل المشاريع (بدون تقييد)" onChange={(v) => setEditUserForm(prev => ({ ...prev, project_id: v === 'all' ? '' : v, branch_id: v === 'all' || (branches.find(b => b.id === prev.branch_id) || {}).project_id === v ? prev.branch_id : '' }))} testId="edit-user-project-select" />}
+                              <ProjectFormSelect value={editUserForm.project_id} allLabel="كل المشاريع (بدون تقييد)" onChange={(v) => setEditUserForm(prev => ({ ...prev, project_id: v === 'all' ? '' : v, branch_id: v === 'all' || (branches.find(b => b.id === prev.branch_id) || {}).project_id === v ? prev.branch_id : '' }))} testId="edit-user-project-select" locked={!needProject} />
                               {!['warehouse_keeper', 'manufacturer', 'purchasing', 'admin', 'general_manager'].includes(editUserForm.role) && (
                               <div>
                                 <Label className="text-foreground">{t('الفرع')}</Label>
@@ -5410,7 +5410,7 @@ export default function Settings() {
                           </div>
                         </div>
                         )}
-                        {needProject && <ProjectFormSelect value={(needProject ? printerForm.project_id : defaultFormProject)} onChange={(v) => setPrinterForm({ ...printerForm, project_id: v, branch_id: '' })} testId="printer-project-select" />}
+                        <ProjectFormSelect value={(needProject ? printerForm.project_id : defaultFormProject)} onChange={(v) => setPrinterForm({ ...printerForm, project_id: v, branch_id: '' })} testId="printer-project-select" locked={!needProject} />
                         <div className="grid grid-cols-2 gap-4">
                           <div>
                             <Label className="text-foreground">{t('الفرع')}</Label>
@@ -5829,7 +5829,7 @@ export default function Settings() {
                         </div>
                       </div>
                       )}
-                      {needProject && <ProjectFormSelect value={editPrinterForm.project_id} onChange={(v) => setEditPrinterForm({ ...editPrinterForm, project_id: v, branch_id: (branches.find(b => b.id === editPrinterForm.branch_id) || {}).project_id === v ? editPrinterForm.branch_id : '' })} testId="edit-printer-project-select" />}
+                      <ProjectFormSelect value={editPrinterForm.project_id} onChange={(v) => setEditPrinterForm({ ...editPrinterForm, project_id: v, branch_id: (branches.find(b => b.id === editPrinterForm.branch_id) || {}).project_id === v ? editPrinterForm.branch_id : '' })} testId="edit-printer-project-select" locked={!needProject} />
                       <div>
                         <Label className="text-foreground">{t('الفرع')}</Label>
                         <Select value={editPrinterForm.branch_id} onValueChange={(v) => setEditPrinterForm({ ...editPrinterForm, branch_id: v })}>
