@@ -5,6 +5,8 @@ Print Queue - نظام طابور الطباعة
 """
 from fastapi import APIRouter, Depends, Query, Request, HTTPException
 from datetime import datetime, timezone
+import logging
+logger = logging.getLogger(__name__)
 import uuid
 import hashlib
 
@@ -29,6 +31,29 @@ async def verify_print_agent(request: Request):
         raise HTTPException(status_code=403, detail="Unauthorized print agent")
     return True
 
+
+
+async def ensure_print_queue_indexes_and_cleanup():
+    """🖨️ سبب بطء الطباعة: طابور بلا فهارس + آلاف الأوامر القديمة (كل أمر يحمل صورة ~100KB)
+    → كل سحب للوسيط (كل 100ms لكل فرع) يمسح المجموعة كاملة. الحل: تنظيف دوري + فهارس."""
+    from datetime import timedelta
+    db = get_database()
+    now = datetime.now(timezone.utc)
+    r1 = await db.print_queue.delete_many({"status": {"$in": ["completed", "failed"]},
+                                           "created_at": {"$lt": (now - timedelta(hours=2)).isoformat()}})
+    r2 = await db.print_queue.delete_many({"created_at": {"$lt": (now - timedelta(days=1)).isoformat()}})
+    for keys in ([("status", 1), ("branch_id", 1), ("created_at", 1)], [("id", 1)], [("claim_token", 1)],
+                 [("fingerprint", 1), ("created_at", -1)], [("status", 1), ("claimed_at", 1)]):
+        try:
+            await db.print_queue.create_index(keys, background=True)
+        except Exception as e:
+            logger.warning(f"print_queue index {keys}: {e}")
+    try:
+        await db.agent_heartbeats.create_index([("heartbeat_key", 1)], background=True)
+    except Exception:
+        pass
+    if r1.deleted_count or r2.deleted_count:
+        logger.info(f"🖨️ print_queue cleanup: {r1.deleted_count} done/failed + {r2.deleted_count} stale")
 
 
 @router.post("/print-queue")
@@ -152,7 +177,7 @@ async def get_pending_jobs(
     
     # Long-polling loop: نتحقق كل 100ms حتى يظهر job أو ينتهي wait
     max_wait = max(0, min(int(wait or 0), 30))  # حد أقصى 30 ثانية
-    check_interval = 0.1  # 100ms
+    check_interval = 0.25  # 250ms (مع الفهارس: استعلام شبه فوري)
     elapsed = 0.0
     
     async def _fetch_and_claim():
@@ -261,9 +286,10 @@ async def complete_print_job(job_id: str, result: dict = None, _auth: bool = Dep
     if result:
         update["result"] = result.get("message", "OK")
     
+    # حذف الصورة/البيانات الثقيلة فور الطباعة — يبقي الطابور خفيفاً وسريعاً
     await db.print_queue.update_one(
         {"id": job_id},
-        {"$set": update}
+        {"$set": update, "$unset": {"raw_data": "", "order_data": "", "printer_config": ""}}
     )
     return {"success": True}
 

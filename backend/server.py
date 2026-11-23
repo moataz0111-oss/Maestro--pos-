@@ -7316,14 +7316,19 @@ async def create_order(order: OrderCreate, current_user: dict = Depends(get_curr
             "status": {"$nin": ["cancelled", "canceled", "deleted", "refunded"]},
             **({"tenant_id": tenant_id} if tenant_id else {}),
         }
-        if _company_keys:
-            _ext_q["$or"] = [
-                {"delivery_app": {"$in": _company_keys}},
-                {"delivery_company_id": {"$in": _company_keys}},
-                {"delivery_company": {"$in": _company_keys}},
-                {"delivery_app_name": {"$in": _company_keys}},
-                {"delivery_company_name": {"$in": _company_keys}},
-            ]
+        # 🚚 رقم الطلب فريد داخل نفس الشركة فقط — نفس الرقم لشركة أخرى مسموح
+        _app_id = getattr(order, "delivery_app", None) or getattr(order, "delivery_company_id", None)
+        _app_name = getattr(order, "delivery_app_name", None) or getattr(order, "delivery_company_name", None)
+        if _app_id:
+            _ext_q["$or"] = [{"delivery_app": _app_id}, {"delivery_company_id": _app_id}]
+        elif _app_name:
+            _ext_q["$or"] = [{"delivery_app_name": _app_name}, {"delivery_company_name": _app_name}]
+        else:
+            _ext_q["delivery_app"] = {"$in": [None, ""]}
+            _ext_q["delivery_company_id"] = {"$in": [None, ""]}
+        _self_ids = [x for x in [getattr(order, "offline_id", None)] if x]
+        if _self_ids:
+            _ext_q["offline_id"] = {"$nin": _self_ids}
         existing_ext = await db.orders.find_one(_ext_q, {"_id": 0})
         if existing_ext:
             logger.info(f"Duplicate delivery order blocked: ext_ref={incoming_ext_ref} -> existing #{existing_ext.get('order_number')}")
@@ -14536,6 +14541,23 @@ async def start_forgotten_shifts_scheduler():
     
     asyncio.create_task(_loop())
     logger.info("🚨 Forgotten shifts alert scheduler started (every 30 min)")
+
+
+@app.on_event("startup")
+async def start_print_queue_maintenance():
+    """🖨️ صيانة طابور الطباعة: فهارس + تنظيف كل 10 دقائق (يمنع تأخر الطباعة مع تراكم الأوامر)."""
+    if not is_scheduler_worker():
+        return
+    async def _loop():
+        await asyncio.sleep(15)
+        while True:
+            try:
+                from routes.print_queue import ensure_print_queue_indexes_and_cleanup
+                await ensure_print_queue_indexes_and_cleanup()
+            except Exception as e:
+                logger.warning(f"print queue maintenance error: {e}")
+            await asyncio.sleep(600)
+    asyncio.create_task(_loop())
 
 
 @app.on_event("startup")

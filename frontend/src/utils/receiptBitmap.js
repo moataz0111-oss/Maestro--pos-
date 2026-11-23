@@ -269,8 +269,13 @@ async function renderReceipt(order) {
   if (typeText) { y += drawC(x, typeText, y, 24, true); y += 2; }
 
   // Delivery company name ONLY (centered, no label)
-  if (order.delivery_company) {
-    y += drawC(x, order.delivery_company, y, 22, true);
+  const _rDeliveryName = order.delivery_company || order.delivery_app_name || '';
+  if (_rDeliveryName) {
+    y += drawC(x, _rDeliveryName, y, 22, true);
+  }
+  // 🚚 رقم طلب شركة التوصيل تحت اسم الشركة
+  if (order.delivery_company_order_id) {
+    y += drawC(x, `${order.delivery_company_order_id} :رقم طلب الشركة`, y, 22, true);
   }
 
   // Table / Customer info
@@ -666,6 +671,8 @@ async function renderKitchen(order) {
       y += kC(order.driver_name, y, 20, true);
     }
   }
+  // 🚚 رقم طلب شركة التوصيل تحت اسم الشركة (للمطبخ)
+  if (order.delivery_company_order_id) y += kC(`${order.delivery_company_order_id} :رقم طلب الشركة`, y, 22, true);
 
   // ===== TABLE NUMBER =====
   if (order.table_number) y += kC(`${order.table_number} :الطاولة`, y, 22, true);

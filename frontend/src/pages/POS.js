@@ -1690,6 +1690,7 @@ export default function POS() {
       driver_name: driverObj?.name || '',
       delivery_company: deliveryAppObj?.name || '',
       delivery_app_name: deliveryAppObj?.name || '',
+      delivery_company_order_id: orderType === 'delivery' ? (deliveryCompanyOrderId?.trim() || '') : '',
       language: localStorage.getItem('language') || 'ar',
       // Invoice settings - استخدم بيانات الفرع الحالي أولاً (كل فرع له عنوان وهاتف خاص)
       phone: currentBranch?.phone || invoiceSettings?.phone || '',
@@ -3675,6 +3676,32 @@ export default function POS() {
                 </p>
               )}
                 </>
+              )}
+            </div>
+          )}
+
+          {orderType === 'dine_in' && (
+            <div className="relative mt-2">
+              <Input
+                placeholder={t('اسم الزبون أو الكوبون (اختياري)')}
+                value={customerName}
+                onChange={(e) => setCustomerName(e.target.value)}
+                onFocus={() => couponSuggestions.length > 0 && setShowCouponSuggestions(true)}
+                onBlur={() => setTimeout(() => setShowCouponSuggestions(false), 200)}
+                data-testid="dine-in-customer-name"
+              />
+              {showCouponSuggestions && couponSuggestions.length > 0 && (
+                <div className="absolute top-full left-0 right-0 z-50 mt-1 max-h-56 overflow-y-auto rounded-md border border-emerald-500/40 bg-popover shadow-lg" data-testid="coupon-suggestions-dine-in">
+                  <div className="px-3 py-1 text-xs text-muted-foreground bg-emerald-500/5 border-b">{t('كوبونات متاحة')}</div>
+                  {couponSuggestions.map((c) => (
+                    <button key={c.id} type="button" onClick={() => selectCouponSuggestion(c)}
+                      className="w-full text-right px-3 py-2 hover:bg-emerald-500/10 border-b last:border-b-0 flex items-center justify-between gap-2"
+                      data-testid={`coupon-suggestion-dine-in-${c.id}`}>
+                      <span className="text-emerald-500 font-bold tabular-nums text-sm">{c.discount_type === 'percentage' ? `${c.discount_value}%` : `-${c.discount_value}`}</span>
+                      <span className="text-sm">🎟️ <span className="font-medium">{c.customer_name || c.name}</span>{c.customer_name ? ` — ${c.name}` : ''}</span>
+                    </button>
+                  ))}
+                </div>
               )}
             </div>
           )}
