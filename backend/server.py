@@ -7320,7 +7320,8 @@ async def create_order(order: OrderCreate, current_user: dict = Depends(get_curr
         _app_id = getattr(order, "delivery_app", None) or getattr(order, "delivery_company_id", None)
         _app_name = getattr(order, "delivery_app_name", None) or getattr(order, "delivery_company_name", None)
         if _app_id:
-            _ext_q["$or"] = [{"delivery_app": _app_id}, {"delivery_company_id": _app_id}]
+            _ext_q["$or"] = [{"delivery_app": _app_id}, {"delivery_company_id": _app_id},
+                             *([{"delivery_app": {"$in": [None, ""]}, "delivery_app_name": _app_name}] if _app_name else [])]
         elif _app_name:
             _ext_q["$or"] = [{"delivery_app_name": _app_name}, {"delivery_company_name": _app_name}]
         else:

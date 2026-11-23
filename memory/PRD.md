@@ -114,3 +114,12 @@ See `/app/memory/test_credentials.md`
 - Cash diff alert: send_cash_diff_alert is hooked into POST /cash-register/close (the real UI flow) and /shifts/{id}/close. It sends WhatsApp to the project admin and logs to db.cash_diff_alerts.
 - GET /raw-materials is project-scoped; POST sets project_id.
 - Tested iteration_333-334.
+
+## 2026-06: Printing delay, delivery order numbers, dine-in coupons
+- Print delay root cause: print_queue had NO indexes and NO automatic cleanup. Each job keeps a ~100KB bitmap, and agents poll every 300ms per branch, so every poll scanned the whole collection, getting slower as jobs piled up. Fix: ensure_print_queue_indexes_and_cleanup() (startup and every 10 minutes) adds indexes and deletes done/failed jobs older than 2h and any job older than 2h. /complete unsets raw_data/order_data. Long-poll interval is 250ms.
+- verify_print_agent accepts the key OR a real branch_id OR a claimed job_id (installed agents never send X-Print-Key → 403 risk if PRINT_AGENT_KEY is set in prod).
+- Delivery company order number is unique per company only (POST /orders and /sync/orders). The receipt and kitchen ticket show 'رقم طلب الشركة' under the company name (receiptBitmap.js; POS buildPrintOrderData passes delivery_company_order_id).
+- POS dine-in now has a customer/coupon input with suggestions (dine-in-customer-name).
+- order-notifications 422 fixed (order_number int→str). sw-offline.js clone bug fixed (v40).
+- ENV: the preview pod sometimes loses python packages and mongod (not supervised). Fix: pip install -r requirements.txt and run mongod --dbpath /data/db manually.
+- Tested iteration_336.

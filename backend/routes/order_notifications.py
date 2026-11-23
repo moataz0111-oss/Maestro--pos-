@@ -5,7 +5,7 @@
 - الطباعة التلقائية للفواتير
 """
 from fastapi import APIRouter, HTTPException, Depends, Query
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 from typing import Optional, List
 from datetime import datetime, timezone, timedelta
 from motor.motor_asyncio import AsyncIOMotorClient
@@ -25,6 +25,11 @@ class OrderNotificationCreate(BaseModel):
     order_id: str
     order_number: str
     branch_id: str
+
+    @field_validator("order_number", "branch_id", mode="before")
+    @classmethod
+    def _to_str(cls, v):
+        return "" if v is None else str(v)  # رقم الطلب يصل كرقم من الواجهة (كان يسبب 422)
     order_type: str  # delivery, takeaway, dine_in
     customer_name: Optional[str] = None
     customer_phone: Optional[str] = None

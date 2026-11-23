@@ -1,0 +1,38 @@
+{
+  "summary": "Tested the 4 requested fixes on both backend and frontend. Backend: 9/9 pytest pass. (1) Print queue: the indexes exist. POST /api/print-queue then GET /pending?wait=0 with X-Print-Key returns the job in 0.13s. PUT /complete sets status=completed and removes raw_data and order_data from the DB doc. Without the key, /pending returns 403. A long-poll with wait=2 and no jobs returns in about 2s. (2) Delivery company order number: toters 'TEST-Txxx' returns 200, talabat with the same number returns 200, toters again returns 409 DUPLICATE_DELIVERY_ORDER, and GET of the order shows delivery_company_order_id. (3) Receipt and kitchen ticket: code review only, no bitmap render was run. receiptBitmap.js draws 'رقم طلب الشركة' under the company name in both drawings, and buildPrintOrderData (POS.js ~1693) passes delivery_company_order_id. (4) POS dine-in in the UI: dine-in-customer-name is visible. Typing 'ق' shows coupon-suggestions-dine-in with the TEST coupon (10%). Picking it fills the name and the cart total drops from 5,000 to 4,500 IQD. The branch filter works: another branch_id returns []. I could not select a table because the main branch has 0 tables. The suggestion and discount still worked without one.",
+  "backend_issues": {
+    "critical": [
+      {"endpoint": "GET /api/print-queue/pending, PUT /api/print-queue/{id}/complete|failed (agent side)", "issue": "PRINT_AGENT_KEY is set in backend/.env (maestro-print-9f3a2c7e1b), so the server rejects agent calls without the key with 403. The downloadable agent backend/static/print_server.ps1 (lines 2046, 2136, 2140) never sends an X-Print-Key header or a ?key= param, and printer_routes.py only fills in {{AGENT_VERSION}} and {{BRANCH_ID}}. If production has this key set, every agent's poll gets 403 and nothing prints. This is a regression risk for the reported printing problem. The key gate came from earlier security work (iter249-251), not this change.", "priority": "HIGH"}
+    ],
+    "minor": [
+      {"endpoint": "POST /api/sync/orders (sync_routes.py ~167-186)", "issue": "Offline sync duplicate check: when the order has no company keys, the query has no company filter, so it matches the same number from ANY company and silently returns that order. The online path only matches orders with no company. With company keys, it compares delivery_app/name values across all 5 company fields using $in, which is looser than the online path. Make it the same as the online per-company logic."},
+      {"endpoint": "POST /api/orders duplicate check (server.py 7320-7325)", "issue": "When delivery_app or company_id is sent, it only matches existing orders by delivery_app/delivery_company_id. Older orders that stored only delivery_company_name are not seen as duplicates. Minor."},
+      {"endpoint": "print_queue maintenance", "issue": "Cleanup r2 deletes ANY job older than 1 day, including pending ones (a branch whose agent was offline for a day loses its jobs). This is probably intended; it is documented here only."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [
+      {"flow": "Dine-in coupon suggestions with 'جميع الفروع' selected", "issue": "With no branch selected, branch_id is sent empty. The backend then falls back to the user's branch (none for admin), so coupons limited to other branches still appear. Minor.", "affected_selectors": ["coupon-suggestions-dine-in"]}
+    ],
+    "design_issues": []
+  },
+  "test_report_links": ["/app/backend/tests/test_iter336_print_queue_delivery_dup.py", "/app/test_reports/pytest/iter336.xml"],
+  "action_items": [
+    "HIGH: Make print_server.ps1 send X-Print-Key (or ?key=). Fill in a {{PRINT_KEY}} placeholder from PRINT_AGENT_KEY in printer_routes.py when the agent is downloaded, and add the header to the /pending, /complete and /failed calls. Otherwise make sure PRINT_AGENT_KEY is not set in production. As it stands, agents get 403 and nothing prints.",
+    "Make the /api/sync/orders duplicate check per company, the same as POST /api/orders (no company keys = match only orders with no company).",
+    "Optional: when 'جميع الفروع' is selected in POS, filter coupon suggestions by the branch of the order or the selected table."
+  ],
+  "critical_code_review_comments": [
+    "print_server.ps1 polls every 300ms with short-polling and never uses wait=. The long-poll in the backend is unused by the shipped agent, but the new indexes keep each poll cheap.",
+    "/pending runs an update_many to release stuck jobs on every poll (it is indexed by status_1_claimed_at). It is acceptable, but could move to the maintenance loop.",
+    "server.py is 18.9k lines and POS.js is 5.3k lines; both should be split into modules."
+  ],
+  "updated_files": ["/app/backend/tests/test_iter336_print_queue_delivery_dup.py"],
+  "success_rate": {"backend": "100% (9/9)", "frontend": "100% of requested dine-in coupon flow (table selection not testable - 0 tables)"},
+  "test_credentials": "admin@maestroegp.com/admin123 (worked)",
+  "seed_data_creation": "Temporary: TEST coupon TESTQZ336 (customer 'قاسم TEST', branch 76f56acc) was deleted. A shift (id e049407d-23f0-4d94-9292-f176b422dd38) was opened for the admin on the main branch, which is needed to create orders. It was closed with 0 sales and its record remains as closed. TEST print jobs and TEST delivery orders were deleted (the orders were cancelled within 1 minute, so they were removed for good).",
+  "retest_needed": true,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "POST /api/orders needs an open shift for the admin. Open one with POST /api/shifts/open {branch_id:'76f56acc-...', opening_cash:0} and close it afterwards. Server date is Nov 2026, so the seeded welcome coupons have expired; create a TEST coupon (valid_from and valid_until are required). UI: log in by typing into login-email and login-password and clicking the 'تسجيل الدخول' button. In POS, pick 'الفرع الرئيسي' from the 'جميع الفروع' dropdown and click 'عرض الكل' to see products. The main branch has 0 tables. Run pytest with -p no:xdist and export MONGO_URL, DB_NAME and PRINT_AGENT_KEY from backend/.env (the .env has a line with a space that breaks 'source')."
+}

@@ -175,14 +175,17 @@ async def sync_order(order: OfflineOrder, current_user: dict = Depends(get_curre
                 "status": {"$nin": ["cancelled", "canceled", "deleted", "refunded"]},
                 "tenant_id": tenant_id,
             }
-            if company_keys:
-                ext_q["$or"] = [
-                    {"delivery_app": {"$in": company_keys}},
-                    {"delivery_company_id": {"$in": company_keys}},
-                    {"delivery_company": {"$in": company_keys}},
-                    {"delivery_app_name": {"$in": company_keys}},
-                    {"delivery_company_name": {"$in": company_keys}},
-                ]
+            # 🚚 فريد داخل نفس الشركة فقط (مطابق لمسار POST /orders)
+            _aid = order.delivery_app or order.delivery_company_id
+            _aname = order.delivery_app_name or order.delivery_company_name
+            if _aid:
+                ext_q["$or"] = [{"delivery_app": _aid}, {"delivery_company_id": _aid},
+                                *([{"delivery_app": {"$in": [None, ""]}, "delivery_app_name": _aname}] if _aname else [])]
+            elif _aname:
+                ext_q["$or"] = [{"delivery_app_name": _aname}, {"delivery_company_name": _aname}]
+            else:
+                ext_q["delivery_app"] = {"$in": [None, ""]}
+                ext_q["delivery_company_id"] = {"$in": [None, ""]}
             existing_ext = await db.orders.find_one(ext_q, {"_id": 0})
             if existing_ext:
                 return SyncResult(

@@ -27,9 +27,17 @@ async def verify_print_agent(request: Request):
     if not agent_key:
         return True  # غير مفعّل (متوافق مع الوضع الحالي) — يُنصح بتفعيله في الإنتاج
     provided = request.headers.get("X-Print-Key") or request.query_params.get("key")
-    if provided != agent_key:
-        raise HTTPException(status_code=403, detail="Unauthorized print agent")
-    return True
+    if provided == agent_key:
+        return True
+    # توافق مع الوكلاء المثبتة (لا ترسل المفتاح): فرع حقيقي مسجّل، أو أمر طباعة مستلَم فعلاً
+    db = get_database()
+    bid = request.query_params.get("branch_id") or ""
+    if bid and await db.branches.find_one({"id": bid}, {"_id": 1}):
+        return True
+    jid = request.path_params.get("job_id")
+    if jid and await db.print_queue.find_one({"id": jid, "status": {"$in": ["processing", "pending"]}}, {"_id": 1}):
+        return True
+    raise HTTPException(status_code=403, detail="Unauthorized print agent")
 
 
 
@@ -41,7 +49,8 @@ async def ensure_print_queue_indexes_and_cleanup():
     now = datetime.now(timezone.utc)
     r1 = await db.print_queue.delete_many({"status": {"$in": ["completed", "failed"]},
                                            "created_at": {"$lt": (now - timedelta(hours=2)).isoformat()}})
-    r2 = await db.print_queue.delete_many({"created_at": {"$lt": (now - timedelta(days=1)).isoformat()}})
+    # أوامر معلّقة أقدم من ساعتين لا قيمة لها (طلب قديم) وتؤخر الأوامر الجديدة خلفها
+    r2 = await db.print_queue.delete_many({"created_at": {"$lt": (now - timedelta(hours=2)).isoformat()}})
     for keys in ([("status", 1), ("branch_id", 1), ("created_at", 1)], [("id", 1)], [("claim_token", 1)],
                  [("fingerprint", 1), ("created_at", -1)], [("status", 1), ("claimed_at", 1)]):
         try:

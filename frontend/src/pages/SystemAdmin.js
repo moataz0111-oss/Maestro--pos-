@@ -28,6 +28,7 @@ const getAuthHeaders = () => {
   return token ? { Authorization: `Bearer ${token}` } : {};
 };
 export default function SystemAdmin() {
+  const { t } = useTranslation();
   const [health, setHealth] = useState(null);
   const [stats, setStats] = useState(null);
   const [backups, setBackups] = useState([]);

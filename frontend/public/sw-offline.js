@@ -1,7 +1,7 @@
 // Service Worker for Offline Support - V6 (Network-First for hashed assets)
 // يدعم العمل بدون إنترنت لجميع الصفحات مع تحديث فوري عند النشر
 
-const CACHE_VERSION = 'v39';
+const CACHE_VERSION = 'v40';
 const CACHE_NAME = `maestro-offline-${CACHE_VERSION}`;
 const STATIC_CACHE = `maestro-static-${CACHE_VERSION}`;
 const DATA_CACHE = `maestro-data-${CACHE_VERSION}`;
@@ -206,11 +206,12 @@ self.addEventListener('fetch', (event) => {
         .then((networkResponse) => {
           if (networkResponse && networkResponse.ok) {
             const responseClone = networkResponse.clone();
+            const indexClone = networkResponse.clone();
             caches.open(CACHE_NAME).then((cache) => {
               cache.put(request, responseClone);
               // أيضاً خزّن كـ index.html
-              cache.put(new Request('/index.html'), responseClone.clone());
-            });
+              cache.put(new Request('/index.html'), indexClone);
+            }).catch(() => {});
           }
           return networkResponse;
         })
