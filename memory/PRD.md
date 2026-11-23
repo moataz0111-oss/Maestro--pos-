@@ -123,3 +123,7 @@ See `/app/memory/test_credentials.md`
 - order-notifications 422 fixed (order_number int→str). sw-offline.js clone bug fixed (v40).
 - ENV: the preview pod sometimes loses python packages and mongod (not supervised). Fix: pip install -r requirements.txt and run mongod --dbpath /data/db manually.
 - Tested iteration_336.
+
+## 2026-06: Fix — POS delivery orders showed the "طلب جديد وارد" popup
+- Cause: after the 422 fix on POST /order-notifications, notifications from POS orders started saving with type new_order_cashier, the same type IncomingOrderCall uses for customer-app orders.
+- Fix: POS cashier notifications are now type pos_order_cashier, source pos, is_read True. A startup migration re-tags old POS ones (id suffix _cashier). Customer-app notifications (uuid ids) are unchanged. Verified with curl.

@@ -14545,6 +14545,19 @@ async def start_forgotten_shifts_scheduler():
 
 
 @app.on_event("startup")
+async def fix_pos_notifications_as_incoming():
+    """إصلاح: إشعارات طلبات نقطة البيع ظهرت كـ'طلب جديد وارد' — تُعلَّم مقروءة وتُصنّف pos"""
+    try:
+        r = await db.order_notifications.update_many(
+            {"type": "new_order_cashier", "id": {"$regex": "_cashier$"}, "source": {"$exists": False}},
+            {"$set": {"type": "pos_order_cashier", "source": "pos", "is_read": True}})
+        if r.modified_count:
+            logger.info(f"fixed {r.modified_count} POS notifications shown as incoming orders")
+    except Exception as e:
+        logger.warning(f"pos notif fix: {e}")
+
+
+@app.on_event("startup")
 async def start_print_queue_maintenance():
     """🖨️ صيانة طابور الطباعة: فهارس + تنظيف كل 10 دقائق (يمنع تأخر الطباعة مع تراكم الأوامر)."""
     if not is_scheduler_worker():

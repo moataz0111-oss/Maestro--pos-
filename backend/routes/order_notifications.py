@@ -71,7 +71,9 @@ async def create_order_notification(notification: OrderNotificationCreate, _staf
     # إشعار للكاشير في الفرع
     cashier_notification = {
         "id": f"notif_{now.timestamp()}_{notification.order_id}_cashier",
-        "type": "new_order_cashier",
+        # 🛑 طلب أنشأه الكاشير من نقطة البيع — ليس طلباً وارداً من تطبيق الزبائن (لا نافذة "طلب جديد وارد")
+        "type": "pos_order_cashier",
+        "source": "pos",
         "order_id": notification.order_id,
         "order_number": notification.order_number,
         "branch_id": notification.branch_id,
@@ -82,7 +84,7 @@ async def create_order_notification(notification: OrderNotificationCreate, _staf
         "total_amount": notification.total_amount,
         "items_count": notification.items_count,
         "notes": notification.notes,
-        "is_read": False,
+        "is_read": True,
         "is_printed": False,
         "created_at": now.isoformat()
     }
